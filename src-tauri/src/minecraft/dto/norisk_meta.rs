@@ -1,8 +1,0 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use crate::minecraft::dto::piston_meta::AssetObject;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NoriskAssets {
-    pub objects: HashMap<String, AssetObject>,
-} 
