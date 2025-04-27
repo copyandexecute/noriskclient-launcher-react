@@ -2,12 +2,16 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "noriskclient-launcher-v3",
   "version": "0.1.0",
-  "identifier": "NoRiskClientV3",
+  "identifier": "gg.norisk.NoRiskClientLauncherV3",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "frontendDist": "../build"
+  },
+  "plugins": {
+    "minecraft_auth": {
+    }
   },
   "app": {
     "windows": [
@@ -18,7 +22,14 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "requireLiteralLeadingDot": false,
+          "allow": ["**/*"]
+        }
+      }
     }
   },
   "bundle": {
