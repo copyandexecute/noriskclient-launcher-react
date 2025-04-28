@@ -222,7 +222,7 @@ impl NoRiskApi {
         is_experimental: bool,
     ) -> Result<NoriskAssets> {
         Self::get_from_norisk_endpoint(
-            &format!("launcher/branch/{}", pack),
+            &format!("launcher/pack/{}", pack),
             norisk_token,
             Some(request_uuid),
             is_experimental,

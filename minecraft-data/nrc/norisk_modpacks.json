@@ -130,15 +130,19 @@
     "cobblemon": {
       "displayName": "Cobblemon Pack (Test)",
       "description": "Cobblemon basierend auf Norisk Prod, ohne Silk.",
-      "inheritsFrom": ["norisk-prod"],
-      "excludeMods": ["silk"],
+      "inheritsFrom": [
+        "norisk-prod"
+      ],
+      "excludeMods": [
+        "silk"
+      ],
       "mods": [
         {
           "id": "cobblemon",
           "displayName": "Cobblemon",
           "source": {
-            "type": "modrinth", 
-            "projectId": "MdwFAVRL", 
+            "type": "modrinth",
+            "projectId": "MdwFAVRL",
             "projectSlug": "cobblemon"
           },
           "compatibility": {
@@ -153,6 +157,10 @@
     },
     "norisk-dev": {
       "displayName": "Norisk Dev",
+      "assets": [
+        "norisk-prod",
+        "norisk-dev"
+      ],
       "description": "Development Version mit allen Mods aus der alten Struktur.",
       "mods": [
         {
@@ -226,7 +234,7 @@
           "source": {
             "type": "modrinth",
             "projectId": "aTaCgKLW",
-            "projectSlug": "silk" 
+            "projectSlug": "silk"
           },
           "compatibility": {
             "1.21": {
