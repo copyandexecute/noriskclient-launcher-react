@@ -1018,7 +1018,7 @@ pub async fn refresh_norisk_packs(
     let state = State::get().await?;
    
     match state.norisk_pack_manager
-        .fetch_and_update_config(&"", false)
+        .fetch_and_update_config(&"", true)
         .await 
     {
         Ok(_) => {

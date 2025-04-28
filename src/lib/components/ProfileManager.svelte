@@ -151,7 +151,21 @@
         console.log('Versions loading attempted.');
         await loadProfilesFromStore(); // Load profiles first
         console.log('Profiles loaded into store');
-        await loadNoriskPacks(); // Load Norisk packs
+        await loadNoriskPacks(); // Load Norisk packs (cached first)
+
+        // --- Refresh packs from API (no auth needed as per user) ---
+        try {
+            console.log("Attempting to refresh Norisk packs on mount...");
+            await invoke('refresh_norisk_packs'); // Call the simplified command
+            console.log("Norisk packs refresh request sent successfully.");
+            // Reload the config from the manager to reflect the updated cache
+            await loadNoriskPacks(); 
+        } catch (error) {
+            console.error("Failed to refresh Norisk packs on mount:", error);
+            // Handle the error - maybe show a message, but continue with cached data
+            errorMessage = `Could not refresh modpack list from server. Using cached data. Error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+        // --- End refresh logic ---
 
         // --- Load initial data AFTER profiles are available ---
         if ($profiles.length > 0) {
