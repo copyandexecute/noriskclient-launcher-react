@@ -7,6 +7,7 @@
         error as accountError,
         initializeAccounts
     } from '$lib/stores/accountStore';
+    import type { CapesBrowseResponse, PaginationInfo, CosmeticCape } from '$lib/types/noriskCapes';
     import { notificationStore } from '$lib/stores/notificationStore';
     import type { MinecraftProfile } from '$lib/types/minecraft';
     import PlayerHead from '$lib/components/PlayerHead.svelte';
@@ -17,29 +18,6 @@
     function generateRequestId(): string {
         return Math.random().toString(36).substring(2, 15) + 
                Math.random().toString(36).substring(2, 15);
-    }
-
-    // Define interfaces for cape data
-    interface CosmeticCape {
-        _id: string; // String in Rust, renamed from "_id" in JSON
-        accepted: boolean; // bool in Rust
-        uses: number; // i32 in Rust
-        firstSeen: string; // Uuid in Rust, renamed from "firstSeen" in JSON
-        moderatorMessage: string; // String in Rust, renamed from "moderatorMessage" in JSON
-        creationDate: number; // i64 in Rust, renamed from "creationDate" in JSON
-        elytra: boolean; // bool in Rust
-    }
-
-    interface PaginationInfo {
-        currentPage: number; // i32 in Rust, renamed from "currentPage" in JSON
-        pageSize: number; // i32 in Rust, renamed from "pageSize" in JSON
-        totalItems: number; // i32 in Rust, renamed from "totalItems" in JSON
-        totalPages: number; // i32 in Rust, renamed from "totalPages" in JSON
-    }
-
-    interface CapesBrowseResponse {
-        capes: CosmeticCape[];
-        pagination: PaginationInfo;
     }
 
     // State variables
