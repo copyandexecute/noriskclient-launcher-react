@@ -1,14 +1,7 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
-
-  interface LauncherConfig {
-    version: number;
-    is_experimental: boolean;
-    auto_check_updates: boolean;
-    concurrent_downloads: number;
-    enable_discord_presence: boolean;
-  }
+  import type { LauncherConfig } from "$lib/types/launcher";
 
   let config: LauncherConfig | null = $state(null);
   let tempConfig: LauncherConfig | null = $state(null); // Temporäre Konfiguration für Änderungen
