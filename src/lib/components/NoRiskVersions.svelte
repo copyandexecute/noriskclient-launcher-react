@@ -140,39 +140,42 @@
             addDebugLog("Component mounted, fetching standard profiles config...");
             isLoading = true;
             
+            // --- Initial Load of Cached/Existing Profiles --- 
             try {
                 launcherDir = await appLocalDataDir();
                 addDebugLog(`Launcher directory: ${launcherDir}`);
-            } catch (e) {
-                addDebugLog(`Failed to get launcher directory: ${e}`);
-            }
-            
-            addDebugLog("Calling invoke('get_standard_profiles')");
-            const config = await invoke<NoriskVersionsConfig>("get_standard_profiles");
-            
-            addDebugLog(`Received config type: ${typeof config}`);
-            
-            if (config === undefined || config === null) {
-                addDebugLog("WARNING: Config is undefined/null, initializing profiles to empty array");
-                standardProfiles = [];
-            } else {
-                addDebugLog(`Config object: ${JSON.stringify(config)}`);
                 
-                if (config.profiles && Array.isArray(config.profiles)) {
-                    addDebugLog(`Config contains ${config.profiles.length} standard profiles`);
-                    standardProfiles = config.profiles;
-                    
-                    if (config.profiles.length > 0) {
-                        addDebugLog(`First profile: ${JSON.stringify(config.profiles[0])}`);
-                    } else {
-                        addDebugLog("Received empty array of standard profiles");
-                    }
-                } else {
-                    addDebugLog("WARNING: Config does not contain standard_profiles array, using empty array");
-                    standardProfiles = [];
-                }
+                addDebugLog("Calling invoke('get_standard_profiles') for initial load");
+                const initialConfig = await invoke<NoriskVersionsConfig>("get_standard_profiles");
+                updateProfilesFromConfig(initialConfig); // Use helper to set profiles
+
+            } catch (error) {
+                console.error("[NoRiskVersions] Failed to load initial standard profiles:", error);
+                const errorStr = error instanceof Error ? error.message : String(error);
+                addDebugLog(`Error loading initial profiles: ${errorStr}`);
+                notificationStore.error(`Fehler beim initialen Laden der Standard Profile: ${errorStr}`);
+                standardProfiles = []; // Ensure it's empty on critical initial load failure
             }
-            
+            // --- End Initial Load ---
+
+            // --- Attempt to Refresh Profiles from API --- 
+            try {
+                addDebugLog("Attempting to refresh standard versions from API...");
+                await invoke('refresh_standard_versions'); // Call the refresh command
+                addDebugLog("Refresh command sent successfully. Reloading profiles...");
+                const updatedConfig = await invoke<NoriskVersionsConfig>("get_standard_profiles"); // Fetch again
+                updateProfilesFromConfig(updatedConfig); // Update state with refreshed data
+                addDebugLog("Profiles reloaded after refresh.");
+            } catch (error) {
+                console.warn("[NoRiskVersions] Failed to refresh standard profiles from API:", error);
+                const errorStr = error instanceof Error ? error.message : String(error);
+                addDebugLog(`Error refreshing profiles (will use cached/initial data): ${errorStr}`);
+                // Optionally notify user, but don't overwrite already loaded profiles
+                // notificationStore.warning(`Konnte Standard Profile nicht aktualisieren: ${errorStr}`);
+            }
+            // --- End Refresh Logic ---
+
+            // --- Post-Load Processing --- 
             if (standardProfiles.length > 0) {
                 addDebugLog("Pre-resolving profile backgrounds...");
                 for (const profile of standardProfiles) {
@@ -278,6 +281,29 @@
     async function addTestProfiles() {
         addDebugLog("Adding test profiles for debugging");
         addDebugLog(`Added ${standardProfiles.length} test profiles`);
+    }
+
+    // Helper function to process fetched config and update state
+    function updateProfilesFromConfig(config: NoriskVersionsConfig | null | undefined) {
+        addDebugLog(`Updating profiles from received config type: ${typeof config}`);
+        if (config === undefined || config === null) {
+            addDebugLog("WARNING: Config is undefined/null, setting profiles to empty array");
+            standardProfiles = [];
+        } else {
+            addDebugLog(`Config object: ${JSON.stringify(config)}`);
+            if (config.profiles && Array.isArray(config.profiles)) {
+                addDebugLog(`Config contains ${config.profiles.length} standard profiles`);
+                standardProfiles = config.profiles;
+                if (config.profiles.length > 0) {
+                    addDebugLog(`First profile: ${JSON.stringify(config.profiles[0])}`);
+                } else {
+                    addDebugLog("Received empty array of standard profiles");
+                }
+            } else {
+                addDebugLog("WARNING: Config does not contain standard_profiles array, using empty array");
+                standardProfiles = [];
+            }
+        }
     }
 </script>
 
