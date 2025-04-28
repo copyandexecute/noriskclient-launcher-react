@@ -1017,6 +1017,7 @@ pub async fn refresh_norisk_packs(
     info!("Refreshing Norisk packs via command...");
     let state = State::get().await?;
    
+   //TODO hier später von der config holen
     match state.norisk_pack_manager
         .fetch_and_update_config(&"", true)
         .await 
@@ -1027,6 +1028,30 @@ pub async fn refresh_norisk_packs(
         },
         Err(e) => {
             error!("Failed to refresh Norisk packs via command: {}", e);
+            Err(CommandError::from(e))
+        }
+    }
+}
+
+/// Fetches the latest standard version profiles from the API and updates the local cache.
+#[tauri::command]
+pub async fn refresh_standard_versions(
+) -> Result<(), CommandError> {
+    info!("Refreshing standard versions via command...");
+    let state = State::get().await?;
+
+    // Call the manager's fetch and update method
+       //TODO hier später von der config holen
+    match state.norisk_version_manager
+        .fetch_and_update_config(&"", true) // Call the new method
+        .await 
+    {
+        Ok(_) => {
+            info!("Successfully refreshed standard versions via command.");
+            Ok(())
+        },
+        Err(e) => {
+            error!("Failed to refresh standard versions via command: {}", e);
             Err(CommandError::from(e))
         }
     }
