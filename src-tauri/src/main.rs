@@ -41,7 +41,7 @@ use commands::profile_command::{
     get_standard_profiles, get_system_ram_mb, import_local_mods, import_profile_from_file,
     launch_profile, abort_profile_launch, is_profile_launching, list_profiles, open_profile_folder, search_profiles, set_custom_mod_enabled,
     set_norisk_mod_status, set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
-    get_profile_directory_structure, copy_profile, export_profile,
+    get_profile_directory_structure, copy_profile, export_profile, refresh_norisk_packs
 };
 
 // Use statements for registered commands only
@@ -275,7 +275,8 @@ async fn main() {
             equip_cape,
             delete_cape,
             upload_cape,
-            unequip_cape
+            unequip_cape,
+            refresh_norisk_packs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
