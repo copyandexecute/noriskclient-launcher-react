@@ -2,37 +2,41 @@
 
 // Types matching backend Rust structures for Norisk Packs
 
-// Represents a single mod definition within a Norisk Pack
-export interface NoriskPackMod {
+// Corresponds to Rust struct CompatibilityTarget
+export interface CompatibilityTarget {
+    identifier: string;
+    filename: string | null;
+}
+
+// Corresponds to Rust enum NoriskModSourceDefinition
+export type NoriskModSourceDefinition =
+    | { type: 'modrinth'; project_id: string; project_slug: string } // Renamed fields to snake_case
+    | { type: 'maven'; repository_ref: string; group_id: string; artifact_id: string } // Renamed fields to snake_case
+    | { type: 'url' };
+
+// Corresponds to Rust struct NoriskModEntryDefinition (previously NoriskPackMod)
+export interface NoriskModEntryDefinition { // Renamed from NoriskPackMod
     id: string;
-    displayName: string;
-    source: { 
-        type: string;
-        // Include other source fields if needed for display later
-        projectId?: string;
-        projectSlug?: string;
-        repositoryRef?: string;
-        groupId?: string;
-        artifactId?: string;
-    };
-    // compatibility field structure: Record<GameVersion, Record<Loader, Details>>
-    compatibility?: Record<string, 
-        Record<string, {
-            identifier: string;
-            filename: string | null;
-            // Potentially add other fields like required java version etc.
-        }>
+    displayName?: string | null; // Made optional
+    source: NoriskModSourceDefinition; // Updated type
+    // compatibility field structure: Record<GameVersion, Record<Loader, CompatibilityTarget>>
+    compatibility?: Record<string,
+        Record<string, CompatibilityTarget> // Updated inner type
     >;
 }
 
+// Corresponds to Rust struct NoriskPackDefinition
 export interface NoriskPackDefinition {
-    // name?: string; // Original field name if it might exist
-    displayName: string; // Field name confirmed from console output
-    description: string;
-    mods?: NoriskPackMod[]; // Use the more specific type here
-    // Add other potential fields like versions, logo_url etc. if available/needed
+    displayName: string; // Correct
+    description: string; // Correct
+    inheritsFrom?: string[] | null; // Added field
+    excludeMods?: string[] | null; // Added field
+    mods?: NoriskModEntryDefinition[]; // Updated type used
+    assets?: string[]; // Added field
+    isExperimental?: boolean; // Added field
 }
 
+// Corresponds to Rust struct NoriskModpacksConfig
 export interface NoriskModpacksConfig {
     packs: Record<string, NoriskPackDefinition>; // Maps pack ID (string) to definition
     repositories: Record<string, string>; // Maps repository reference (string) to URL (string)
