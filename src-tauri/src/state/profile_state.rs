@@ -115,6 +115,8 @@ pub struct Profile {
 pub struct NoriskInformation {
     #[serde(default)]
     pub keep_local_assets: bool,
+    #[serde(default)]
+    pub is_experimental: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Deserialize, Serialize, Hash)]

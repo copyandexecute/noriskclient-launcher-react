@@ -45,6 +45,12 @@ pub struct NoriskPackDefinition {
     /// Optional: List of mods specifically defined for this pack. These override inherited mods.
     #[serde(default)]
     pub mods: Vec<NoriskModEntryDefinition>,
+    /// Optional: List of asset IDs to download for this pack.
+    #[serde(rename = "assets", default)]
+    pub assets: Vec<String>,
+    /// Optional: Whether this pack is experimental.
+    #[serde(rename = "isExperimental", default)]
+    pub is_experimental: bool,
 }
 
 /// Defines a single mod entry within a Norisk pack definition.
@@ -413,6 +419,8 @@ impl NoriskModpacksConfig {
             inherits_from: base_definition.inherits_from.clone(), // Keep original inheritance info
             exclude_mods: base_definition.exclude_mods.clone(),   // Keep original exclusion info
             mods: resolved_mods_vec, // Use the fully resolved list here
+            assets: base_definition.assets.clone(), // Added missing field
+            is_experimental: base_definition.is_experimental, // Added missing field
         })
     }
 
