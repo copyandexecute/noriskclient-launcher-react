@@ -9,6 +9,7 @@ use crate::state::profile_state::Profile;
 use crate::state::State;
 use futures::stream::{iter, StreamExt};
 use log::{debug, error, info, trace, warn};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -117,7 +118,7 @@ impl NoriskClientAssetsDownloadService {
 
         // --- Get Resolved Pack Definition ---
         info!("[NRC Assets Download] Getting Norisk packs config...");
-        let norisk_packs_config = state.norisk_pack_manager.get_config().await; // Use ? to handle potential error
+        let norisk_packs_config = state.norisk_pack_manager.get_config().await;
 
         info!(
             "[NRC Assets Download] Resolving pack definition for main pack: {}",
@@ -137,11 +138,10 @@ impl NoriskClientAssetsDownloadService {
             })?;
 
         // --- Collect All Asset Groups to Process ---
-        let mut asset_ids_to_process = vec![]; // Start with the main pack ID
-        asset_ids_to_process.extend(resolved_pack_definition.assets.iter().cloned()); // Add assets from the pack definition
+        let mut asset_ids_to_process = vec![];
+        asset_ids_to_process.extend(resolved_pack_definition.assets.iter().cloned());
         let unique_asset_ids: Vec<String> = {
-            // Ensure uniqueness while preserving order somewhat
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = HashSet::new();
             asset_ids_to_process
                 .into_iter()
                 .filter(|id| seen.insert(id.clone()))
@@ -153,8 +153,8 @@ impl NoriskClientAssetsDownloadService {
             unique_asset_ids
         );
         let total_groups = unique_asset_ids.len();
+        let target_base_dir = game_directory.join("NoRiskClient").join("assets");
 
-        // Emit initial overall event
         self.emit_progress_event(
             &state,
             profile.id,
@@ -162,15 +162,17 @@ impl NoriskClientAssetsDownloadService {
                 "Starting NoRiskClient asset processing for {} groups...",
                 total_groups
             ),
-            0.01, // Small initial progress
+            0.01,
             None,
         )
         .await?;
 
         // --- Process Each Asset Group ---
+        let mut all_expected_target_paths: HashSet<PathBuf> = HashSet::new();
+
         for (index, asset_id) in unique_asset_ids.iter().enumerate() {
-            let group_progress_start = (index as f64 / total_groups as f64) * 0.95 + 0.01; // Scale progress from 1% to 96%
-            let group_progress_end = ((index + 1) as f64 / total_groups as f64) * 0.95 + 0.01;
+            let group_progress_start = (index as f64 / total_groups as f64) * 0.9 + 0.01; // Scale 0.01 to 0.91
+            let group_progress_end = ((index + 1) as f64 / total_groups as f64) * 0.9 + 0.01;
 
             info!(
                 "--- Processing Asset Group {}/{} ('{}') ---",
@@ -183,7 +185,7 @@ impl NoriskClientAssetsDownloadService {
                 .process_asset_group(
                     &state,
                     profile.id,
-                    asset_id, // The ID of the group to process (can be main pack or an asset ID)
+                    asset_id,
                     &norisk_token,
                     &request_uuid,
                     is_experimental,
@@ -194,24 +196,24 @@ impl NoriskClientAssetsDownloadService {
                 )
                 .await
             {
-                Ok(_) => {
+                Ok(expected_paths_for_group) => {
                     info!(
-                        "--- Successfully finished processing asset group '{}' ---",
-                        asset_id
+                        "--- Successfully finished processing asset group '{}' ({} expected paths) ---",
+                         asset_id, expected_paths_for_group.len()
                     );
+                    // Merge the expected paths from this group
+                    all_expected_target_paths.extend(expected_paths_for_group);
                 }
                 Err(e) => {
-                    // Log the error from the helper, but continue to the next group
                     error!(
                         "--- Error processing asset group '{}': {}. Continuing... ---",
                         asset_id, e
                     );
-                    // Optionally emit a specific error event for this group failure if needed
                     self.emit_progress_event(
                         &state,
                         profile.id,
                         &format!("Error processing asset group: {}", asset_id),
-                        group_progress_end, // Mark end of this group's progress slot
+                        group_progress_end,
                         Some(e.to_string()),
                     )
                     .await?;
@@ -219,8 +221,48 @@ impl NoriskClientAssetsDownloadService {
             }
         }
 
+        // --- Cleanup Orphan Assets (only if keep_local_assets is false) ---
+        if !keep_local_assets {
+            info!(
+                "[NRC Assets Cleanup] Cleaning up orphan files in target directory: {}",
+                target_base_dir.display()
+            );
+            self.emit_progress_event(
+                &state,
+                profile.id,
+                "Cleaning up old asset files...",
+                0.95, // Progress for cleanup phase
+                None,
+            )
+            .await?;
+
+            match self
+                .cleanup_orphan_assets(&target_base_dir, &all_expected_target_paths)
+                .await
+            {
+                Ok(deleted_count) => info!(
+                    "[NRC Assets Cleanup] Successfully cleaned up {} orphan items.",
+                    deleted_count
+                ),
+                Err(e) => {
+                    error!("[NRC Assets Cleanup] Failed during cleanup: {}", e);
+                    // Emit cleanup error event, but proceed to final completion event
+                    self.emit_progress_event(
+                        &state,
+                        profile.id,
+                        "Error during asset cleanup",
+                        0.98, // Mark cleanup error progress
+                        Some(e.to_string()),
+                    )
+                    .await?;
+                }
+            }
+        } else {
+            info!("[NRC Assets Cleanup] Skipping cleanup because keep_local_assets is enabled.");
+        }
+
         // --- Final Progress Update ---
-        info!("[NRC Assets Download] All asset groups processed.");
+        info!("[NRC Assets Download] All asset groups processed and cleanup attempted.");
         self.emit_progress_event(
             &state,
             profile.id,
@@ -234,11 +276,12 @@ impl NoriskClientAssetsDownloadService {
     }
 
     /// Processes a single asset group: Fetches metadata, downloads assets, copies to game dir.
+    /// Returns the set of expected target paths for cleanup.
     async fn process_asset_group(
         &self,
         state: &State,
         profile_id: Uuid,
-        asset_id: &str, // ID of the group to process (e.g., "norisk-prod" or "shared-textures")
+        asset_id: &str,
         norisk_token: &str,
         request_uuid: &str,
         is_experimental: bool,
@@ -246,15 +289,16 @@ impl NoriskClientAssetsDownloadService {
         game_directory: &PathBuf,
         progress_start: f64,
         progress_end: f64,
-    ) -> Result<()> {
+    ) -> Result<HashSet<PathBuf>> {
         let progress_range = progress_end - progress_start;
+        let target_base_dir = game_directory.join("NoRiskClient").join("assets");
 
-        // 1. Fetch assets for the current asset_id
+        // 1. Fetch assets
         self.emit_progress_event(
             state,
             profile_id,
             &format!("Fetching assets for group: {}...", asset_id),
-            progress_start + progress_range * 0.05, // 5% into this group's range
+            progress_start + progress_range * 0.05,
             None,
         )
         .await?;
@@ -274,7 +318,6 @@ impl NoriskClientAssetsDownloadService {
                             "[NRC Assets Group '{}'] No assets found. Skipping download/copy.",
                             asset_id
                         );
-                        // Emit completion event for this empty group
                         self.emit_progress_event(
                             state,
                             profile_id,
@@ -283,7 +326,8 @@ impl NoriskClientAssetsDownloadService {
                             None,
                         )
                         .await?;
-                        return Ok(()); // Successfully processed (did nothing)
+                        // Return empty set as no paths are expected
+                        return Ok(HashSet::new());
                     }
                     if let Some((key, obj)) = fetched_assets.objects.iter().next() {
                         debug!(
@@ -306,7 +350,6 @@ impl NoriskClientAssetsDownloadService {
                         Some(e.to_string()),
                     )
                     .await?;
-                    // Return error to signal failure for this group
                     return Err(AppError::Download(format!(
                         "Failed to fetch assets for {}: {}",
                         asset_id, e
@@ -314,8 +357,33 @@ impl NoriskClientAssetsDownloadService {
                 }
             };
 
-        // 2. Download the assets for the current asset_id
-        // Event emission for starting download (inside download_nrc_assets is more detailed)
+        // --- Calculate Expected Paths Before Download/Copy ---
+        let mut expected_paths_for_group: HashSet<PathBuf> = HashSet::new();
+        for name in assets.objects.keys() {
+            let target_path = target_base_dir.join(name);
+            // Add the file path itself
+            expected_paths_for_group.insert(target_path.clone());
+            // Add all parent directories recursively up to the target base directory
+            let mut current_parent = target_path.parent();
+            while let Some(parent) = current_parent {
+                if parent == target_base_dir
+                    || parent.starts_with(&target_base_dir)
+                        && parent.components().count() > target_base_dir.components().count()
+                {
+                    if expected_paths_for_group.insert(parent.to_path_buf()) {
+                        current_parent = parent.parent(); // Continue upwards only if path was newly inserted
+                    } else {
+                        break; // Stop if parent was already added (avoids redundant checks)
+                    }
+                } else {
+                    break; // Stop if we reached or went above the target base dir
+                }
+            }
+        }
+        // Add the base target directory itself if it exists or needs to be created
+        expected_paths_for_group.insert(target_base_dir.clone());
+
+        // 2. Download assets
         self.emit_progress_event(
             state,
             profile_id,
@@ -324,12 +392,11 @@ impl NoriskClientAssetsDownloadService {
                 asset_id,
                 assets.objects.len()
             ),
-            progress_start + progress_range * 0.1, // 10% into this group's range
+            progress_start + progress_range * 0.1,
             None,
         )
         .await?;
 
-        // Use asset_id for the subdirectory within NORISK_ASSETS_DIR
         match self
             .download_nrc_assets(
                 asset_id,
@@ -349,28 +416,27 @@ impl NoriskClientAssetsDownloadService {
                     "[NRC Assets Group '{}'] Failed to download assets: {}. Skipping copy.",
                     asset_id, e
                 );
-                // Error event likely emitted by download_nrc_assets, but return error to main loop
                 return Err(e);
             }
         }
 
-        // 3. Copy assets to game directory for the current asset_id
+        // 3. Copy assets
         self.emit_progress_event(
             state,
             profile_id,
             &format!("Copying assets for group: {}...", asset_id),
-            progress_start + progress_range * 0.9, // 90% into this group's range
+            progress_start + progress_range * 0.9,
             None,
         )
         .await?;
 
-        // Use asset_id to find the correct source directory
+        // Pass target_base_dir to copy function
         match self
             .copy_assets_to_game_dir(
                 asset_id,
                 &assets,
                 keep_local_assets,
-                game_directory.clone(),
+                &target_base_dir,
                 Some(profile_id),
             )
             .await
@@ -381,15 +447,15 @@ impl NoriskClientAssetsDownloadService {
             ),
             Err(e) => {
                 error!(
-                    "[NRC Assets Group '{}'] Failed to copy assets: {}.",
+                    "[NRC Assets Group '{}'] Failed to copy assets: {}. Skipping cleanup for this group's contribution.",
                     asset_id, e
                 );
-                // Error event likely emitted by copy_assets_to_game_dir, but return error
+                // Return error, main loop will handle it, but DON'T return the expected paths set
+                // as the copy failed. Or maybe return empty set? Let's return error.
                 return Err(e);
             }
         }
 
-        // Emit completion event for this group
         self.emit_progress_event(
             state,
             profile_id,
@@ -399,14 +465,14 @@ impl NoriskClientAssetsDownloadService {
         )
         .await?;
 
-        Ok(())
+        // Return the calculated expected paths for this group
+        Ok(expected_paths_for_group)
     }
 
     /// Downloads NoRisk client assets for a specific asset ID (pack or asset group).
-    /// (Internal function called by process_asset_group)
-    pub async fn download_nrc_assets(
+    async fn download_nrc_assets(
         &self,
-        asset_id: &str, // Use the specific asset_id for pathing
+        asset_id: &str,
         assets: &NoriskAssets,
         is_experimental: bool,
         norisk_token: &str,
@@ -416,8 +482,6 @@ impl NoriskClientAssetsDownloadService {
             "[NRC Assets Download '{}'] Starting download process",
             asset_id
         );
-
-        // Use asset_id to create the specific subdirectory path
         let assets_path = self.base_path.join(NORISK_ASSETS_DIR).join(asset_id);
         if !fs::try_exists(&assets_path).await? {
             fs::create_dir_all(&assets_path).await?;
@@ -435,8 +499,7 @@ impl NoriskClientAssetsDownloadService {
             .collect();
 
         let mut downloads = Vec::new();
-        let task_counter = Arc::new(AtomicUsize::new(1)); // Start counter at 1
-        let total_assets = assets_list.len();
+        let task_counter = Arc::new(AtomicUsize::new(1));
         let completed_counter = Arc::new(AtomicUsize::new(0));
         let total_to_download = Arc::new(AtomicUsize::new(0));
 
@@ -448,21 +511,22 @@ impl NoriskClientAssetsDownloadService {
         let mut job_count = 0;
 
         let state = if profile_id.is_some() {
-            Some(State::get().await?)
+            State::get().await.ok() // Change to ok() to allow optional state
         } else {
             None
         };
+        // Clone state before the closure so the original `state` remains available after the loop
+        let state_clone_for_inspect = state.clone();
 
         for (name, asset) in assets_list {
             let hash = asset.hash.clone();
             let size = asset.size;
-            // Target path includes the asset_id specific directory
             let target_path = assets_path.join(&name);
-            let name_clone = name.clone(); // Clone name for the async block
+            let name_clone = name.clone();
             let task_counter_clone = Arc::clone(&task_counter);
             let completed_counter_clone = Arc::clone(&completed_counter);
             let total_to_download_clone = Arc::clone(&total_to_download);
-            let asset_id_clone = asset_id.to_string(); // Clone asset_id for async block
+            let asset_id_clone = asset_id.to_string();
             let norisk_token_clone = norisk_token.to_string();
 
             if fs::try_exists(&target_path).await? {
@@ -473,9 +537,10 @@ impl NoriskClientAssetsDownloadService {
                             asset_id_clone,
                             name_clone
                         );
-                        continue; // Skip this asset
+                        continue;
                     }
-                    warn!("[NRC Assets Download '{}'] Asset {} size mismatch (expected {}, got {}), redownloading.",
+                    warn!(
+                        "[NRC Assets Download '{}'] Asset {} size mismatch (expected {}, got {}), redownloading.",
                           asset_id_clone, name_clone, size, metadata.len());
                 }
             }
@@ -486,7 +551,7 @@ impl NoriskClientAssetsDownloadService {
                 let task_id = task_counter_clone.fetch_add(1, Ordering::SeqCst);
                 trace!("[NRC Assets Download '{}' Task {}] Starting download for: {}", asset_id_clone, task_id, name_clone);
 
-                // URL now uses asset_id_clone dynamically
+                // Use updated URL format from user edit
                 let url = format!(
                     "{}/{}/assets/{}",
                     "https://cdn.norisk.gg/assets", asset_id_clone, name_clone
@@ -559,13 +624,12 @@ impl NoriskClientAssetsDownloadService {
                 asset_id
             );
             if let (Some(state_ref), Some(profile_id_val)) = (&state, profile_id) {
-                // Use the specific asset_id in the message
                 self.emit_progress_event(
                     state_ref,
                     profile_id_val,
                     &format!("Assets for group '{}' are up to date!", asset_id),
                     0.8,
-                    None, // Adjust progress? Needs context from caller.
+                    None,
                 )
                 .await?;
             }
@@ -577,33 +641,25 @@ impl NoriskClientAssetsDownloadService {
             asset_id, self.concurrent_downloads
         );
 
-        let total_downloads = job_count;
         let completed_ref = Arc::clone(&completed_counter);
-        let asset_id_clone = asset_id.to_string(); // Clone for inspect closure
-                                                   // Clone state before the closure so the original `state` remains available after the loop
-        let state_clone_for_inspect = state.clone();
+        let asset_id_clone = asset_id.to_string();
 
         let results: Vec<Result<()>> = iter(downloads)
             .buffer_unordered(self.concurrent_downloads)
-            .inspect({ // Move asset_id_clone into the closure
+            .inspect({
                 let asset_id_inspect = asset_id_clone.clone();
+                 // Use the cloned state inside the closure
                 move |_| {
-                    // Use the cloned state inside the closure
                     if let (Some(state_ref), Some(profile_id_val)) = (&state_clone_for_inspect, profile_id) {
                         let completed = completed_ref.load(Ordering::SeqCst);
                         let total = total_to_download.load(Ordering::SeqCst);
                         if total > 0 {
-                            // TODO: This progress calculation (0.1-0.8) needs to be scaled by the caller's progress range
-                            let progress_within_download = 0.1 + (completed as f64 / total as f64) * 0.7; // Scale 0-1 -> 0.1-0.8
-
-                            // Clone asset_id_inspect here before moving it into the async block
+                            let progress_within_download = 0.1 + (completed as f64 / total as f64) * 0.7;
                             let asset_id_for_task = asset_id_inspect.clone();
                             tokio::spawn({
                                 let state = state_ref.clone();
-                                // Use the cloned value
                                 let message = format!("Downloading '{}' assets: {}/{} files", asset_id_for_task, completed, total);
                                 let profile_id = profile_id_val;
-
                                 async move {
                                     let event_id = Uuid::new_v4();
                                     if let Err(e) = state.emit_event(EventPayload {
@@ -611,10 +667,9 @@ impl NoriskClientAssetsDownloadService {
                                         event_type: EventType::DownloadingNoRiskClientAssets,
                                         target_id: Some(profile_id),
                                         message,
-                                        progress: Some(progress_within_download), // Use scaled progress
+                                        progress: Some(progress_within_download),
                                         error: None,
                                     }).await {
-                                         // Use the cloned value in the error log too
                                         error!("[NRC Assets Download '{}'] Failed to emit progress event: {}", asset_id_for_task, e);
                                     }
                                 }
@@ -642,6 +697,7 @@ impl NoriskClientAssetsDownloadService {
             for error_item in &errors {
                 error!("  - {}", error_item);
             }
+            // Use original state here, as it wasn't moved by the inspect closure
             if let (Some(state_ref), Some(profile_id_val)) = (&state, profile_id) {
                 self.emit_progress_event(
                     state_ref,
@@ -652,7 +708,7 @@ impl NoriskClientAssetsDownloadService {
                         errors.len()
                     ),
                     0.8,
-                    Some(errors[0].to_string()), // Adjust progress?
+                    Some(errors[0].to_string()),
                 )
                 .await?;
             }
@@ -662,13 +718,14 @@ impl NoriskClientAssetsDownloadService {
                 "[NRC Assets Download '{}'] All asset downloads completed successfully.",
                 asset_id
             );
+            // Use original state here
             if let (Some(state_ref), Some(profile_id_val)) = (&state, profile_id) {
                 self.emit_progress_event(
                     state_ref,
                     profile_id_val,
                     &format!("Asset download completed for group '{}'", asset_id),
                     0.8,
-                    None, // Adjust progress?
+                    None,
                 )
                 .await?;
             }
@@ -689,10 +746,10 @@ impl NoriskClientAssetsDownloadService {
         state
             .emit_event(EventPayload {
                 event_id,
-                event_type: EventType::DownloadingNoRiskClientAssets, // Consider a more general type?
+                event_type: EventType::DownloadingNoRiskClientAssets,
                 target_id: Some(profile_id),
                 message: message.to_string(),
-                progress: Some(progress.clamp(0.0, 1.0)), // Clamp progress
+                progress: Some(progress.clamp(0.0, 1.0)),
                 error,
             })
             .await?;
@@ -700,24 +757,22 @@ impl NoriskClientAssetsDownloadService {
     }
 
     /// Copy downloaded assets to the profile's game directory for a specific asset ID.
-    /// (Internal function called by process_asset_group)
-    pub async fn copy_assets_to_game_dir(
+    async fn copy_assets_to_game_dir(
         &self,
-        asset_id: &str, // Use the specific asset_id for source path
+        asset_id: &str,
         assets: &NoriskAssets,
         keep_local_assets: bool,
-        game_dir: PathBuf, // Target directory is the same regardless of asset_id
+        target_base_dir: &Path,
         profile_id: Option<Uuid>,
     ) -> Result<()> {
-        // Source directory depends on the asset_id
         let source_dir = self.base_path.join(NORISK_ASSETS_DIR).join(asset_id);
-        let target_dir = game_dir.join("NoRiskClient").join("assets"); // Target base is consistent
+        // target_base_dir is now passed in
 
         info!(
             "[NRC Assets Copy '{}'] Copying from {} to {}",
             asset_id,
             source_dir.display(),
-            target_dir.display()
+            target_base_dir.display() // Log the base dir
         );
 
         if !fs::try_exists(&source_dir).await? {
@@ -726,15 +781,15 @@ impl NoriskClientAssetsDownloadService {
                 asset_id,
                 source_dir.display()
             );
-            return Ok(()); // Not an error if source doesn't exist (maybe fetch failed)
+            return Ok(());
         }
 
-        if !fs::try_exists(&target_dir).await? {
-            fs::create_dir_all(&target_dir).await?;
+        if !fs::try_exists(target_base_dir).await? {
+            fs::create_dir_all(target_base_dir).await?;
             info!(
                 "[NRC Assets Copy '{}'] Created target directory: {}",
                 asset_id,
-                target_dir.display()
+                target_base_dir.display()
             );
         }
 
@@ -748,7 +803,7 @@ impl NoriskClientAssetsDownloadService {
         let mut skipped_count = 0;
         let total_assets = assets_list.len();
 
-        let state = State::get().await.ok(); // Ok if state fails, just won't emit events
+        let state = State::get().await.ok();
 
         if let (Some(state_ref), Some(profile_id_val)) = (&state, profile_id) {
             self.emit_copy_event(
@@ -759,7 +814,7 @@ impl NoriskClientAssetsDownloadService {
                     asset_id, total_assets
                 ),
                 0.0,
-                None, // Adjust progress?
+                None,
             )
             .await?;
         }
@@ -774,9 +829,9 @@ impl NoriskClientAssetsDownloadService {
             let mut batch_skipped = 0;
 
             for (name, _asset) in chunk {
-                // We don't need asset details here anymore, just the name
                 let source_path = source_dir.join(&name);
-                let target_path = target_dir.join(&name); // Target path uses the same relative name
+                // Calculate target path based on base dir
+                let target_path = target_base_dir.join(&name);
 
                 if !fs::try_exists(&source_path).await? {
                     warn!(
@@ -836,8 +891,7 @@ impl NoriskClientAssetsDownloadService {
             }
 
             if let (Some(state_ref), Some(profile_id_val)) = (&state, profile_id) {
-                // TODO: Scale progress based on caller's range
-                let progress_within_copy = (batch_count as f64 / total_batches as f64) * 0.9 + 0.1; // Scale 0-1 -> 0.1-1.0
+                let progress_within_copy = (batch_count as f64 / total_batches as f64) * 0.9 + 0.1;
                 self.emit_copy_event(
                     state_ref,
                     profile_id_val,
@@ -861,7 +915,7 @@ impl NoriskClientAssetsDownloadService {
                     asset_id, copied_count, skipped_count
                 ),
                 1.0,
-                None, // Adjust progress?
+                None,
             )
             .await?;
         }
@@ -886,14 +940,113 @@ impl NoriskClientAssetsDownloadService {
         state
             .emit_event(EventPayload {
                 event_id,
-                // Use a distinct event type for copying
                 event_type: EventType::CopyingNoRiskClientAssets,
                 target_id: Some(profile_id),
                 message: message.to_string(),
-                progress: Some(progress.clamp(0.0, 1.0)), // Clamp progress
+                progress: Some(progress.clamp(0.0, 1.0)),
                 error,
             })
             .await?;
         Ok(event_id)
+    }
+
+    /// Recursively deletes files and directories within `base_dir` that are not present in `expected_paths`.
+    /// Processes directories bottom-up to ensure empty directories can be removed.
+    async fn cleanup_orphan_assets(
+        &self,
+        base_dir: &Path,
+        expected_paths: &HashSet<PathBuf>,
+    ) -> Result<usize> {
+        if !base_dir.exists() {
+            info!(
+                "[NRC Assets Cleanup] Base directory {} does not exist. Nothing to clean.",
+                base_dir.display()
+            );
+            return Ok(0);
+        }
+
+        let mut entries_to_check = vec![base_dir.to_path_buf()];
+        let mut dirs_to_delete_later: Vec<PathBuf> = Vec::new();
+        let mut deleted_count = 0;
+
+        // Perform a breadth-first traversal to collect all paths
+        let mut all_paths = HashSet::new();
+        let mut queue = vec![base_dir.to_path_buf()];
+
+        while let Some(current_path) = queue.pop() {
+            if !current_path.exists() {
+                continue;
+            } // Skip if path was deleted during the process
+
+            if all_paths.insert(current_path.clone()) {
+                if current_path.is_dir() {
+                    let mut reader = match fs::read_dir(&current_path).await {
+                        Ok(r) => r,
+                        Err(e) => {
+                            warn!(
+                                "[NRC Assets Cleanup] Failed to read directory {}: {}. Skipping.",
+                                current_path.display(),
+                                e
+                            );
+                            continue;
+                        }
+                    };
+                    while let Some(entry_result) = reader.next_entry().await.transpose() {
+                        match entry_result {
+                            Ok(entry) => {
+                                queue.push(entry.path());
+                            }
+                            Err(e) => {
+                                warn!("[NRC Assets Cleanup] Failed to read entry in {}: {}. Skipping entry.", current_path.display(), e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort paths by depth (longest first) to process files/inner dirs before outer dirs
+        let mut sorted_paths: Vec<PathBuf> = all_paths.into_iter().collect();
+        sorted_paths.sort_by_key(|b| std::cmp::Reverse(b.components().count()));
+
+        for path in sorted_paths {
+            // Skip the base directory itself from deletion check if it's expected
+            if path == base_dir && expected_paths.contains(base_dir) {
+                continue;
+            }
+
+            if !expected_paths.contains(&path) {
+                if path.is_file() {
+                    debug!(
+                        "[NRC Assets Cleanup] Deleting orphan file: {}",
+                        path.display()
+                    );
+                    match fs::remove_file(&path).await {
+                        Ok(_) => deleted_count += 1,
+                        Err(e) => error!(
+                            "[NRC Assets Cleanup] Failed to delete file {}: {}",
+                            path.display(),
+                            e
+                        ),
+                    }
+                } else if path.is_dir() {
+                    // Attempt to delete directory - might fail if not empty due to previous file deletion errors
+                    debug!(
+                        "[NRC Assets Cleanup] Deleting orphan directory: {}",
+                        path.display()
+                    );
+                    match fs::remove_dir(&path).await {
+                        Ok(_) => deleted_count += 1,
+                        Err(e) => {
+                            // Log error (likely dir not empty or permission issue)
+                            // Don't stop the whole process, just log it.
+                            warn!("[NRC Assets Cleanup] Failed to delete directory {} (may not be empty?): {}", path.display(), e);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(deleted_count)
     }
 }
