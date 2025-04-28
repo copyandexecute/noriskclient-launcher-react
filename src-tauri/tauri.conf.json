@@ -16,9 +16,16 @@
   "app": {
     "windows": [
       {
-        "title": "noriskclient-launcher-v3",
-        "width": 800,
-        "height": 600
+        "fullscreen": false,
+        "resizable": true,
+        "title": "NoRiskClient",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 930,
+        "minHeight": 700,
+        "decorations": false,
+        "transparent": true,
+        "center": true
       }
     ],
     "security": {

@@ -1,0 +1,50 @@
+.titlebar {
+    height: 32px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    user-select: none;
+    cursor: move;
+}
+
+.titlebar-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.titlebar-button:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.titlebar-button-borderless {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+#titlebar-close:hover {
+    color: rgb(239, 68, 68);
+}
+
+.titlebar-button img,
+.titlebar-button svg,
+.titlebar-button-borderless img,
+.titlebar-button-borderless svg {
+    width: 16px;
+    height: 16px;
+}
