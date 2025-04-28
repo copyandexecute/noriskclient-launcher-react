@@ -13,35 +13,27 @@
         TexturesData, 
         TexturesDictionary
     } from '$lib/types/minecraft';
-
-    // Define interface for local skin type
-    interface LocalSkin {
-        id: string;
-        name: string;
-        base64_data: string;
-        variant: string;
-        description: string;
-        added_at: string;
-    }
+    // Import the new types
+    import type { MinecraftSkin, SkinVariant } from '$lib/types/minecraftSkin';
 
     let skinData: MinecraftProfile | null = $state(null);
     let skinUrl: string | null = $state(null);
     let skinModel: string | null = $state(null);
-    let skinVariant: string = $state("classic"); // "classic" or "slim"
+    let skinVariant: SkinVariant = $state("classic"); // Use SkinVariant type
     let loading: boolean = $state(false);
     let error: string | null = $state(null);
     let successMessage: string | null = $state(null);
 
-    // Local skins state
-    let localSkins: LocalSkin[] = $state([]);
+    // Local skins state - use MinecraftSkin type
+    let localSkins: MinecraftSkin[] = $state([]);
     let localSkinsLoading: boolean = $state(false);
     let localSkinsError: string | null = $state(null);
-    let selectedLocalSkin: LocalSkin | null = $state(null);
+    let selectedLocalSkin: MinecraftSkin | null = $state(null); // Use MinecraftSkin type
 
-    // Editing state
-    let editingSkin: LocalSkin | null = $state(null);
+    // Editing state - use MinecraftSkin type
+    let editingSkin: MinecraftSkin | null = $state(null); // Use MinecraftSkin type
     let editSkinName: string = $state("");
-    let editSkinVariant: string = $state("classic");
+    let editSkinVariant: SkinVariant = $state("classic"); // Use SkinVariant type
 
     onMount(async () => {
         // Initialize accounts if not already loaded
@@ -128,7 +120,7 @@
             await invoke("upload_skin", {
                 uuid: $activeAccount.id,
                 accessToken: $activeAccount.access_token,
-                skinVariant
+                skinVariant // Type is now SkinVariant
             });
 
             successMessage = "Skin updated successfully and added to your local library!";
@@ -190,7 +182,8 @@
         localSkinsError = null;
 
         try {
-            const skins = await invoke<LocalSkin[]>("get_all_skins");
+            // Use MinecraftSkin in invoke
+            const skins = await invoke<MinecraftSkin[]>("get_all_skins");
             localSkins = skins;
             console.log(`Loaded ${skins.length} local skins`);
         } catch (err) {
@@ -202,7 +195,8 @@
     }
 
     // Apply a local skin to the current user
-    async function applyLocalSkin(skin: LocalSkin) {
+    // Use MinecraftSkin in function parameter
+    async function applyLocalSkin(skin: MinecraftSkin) {
         if (!$activeAccount) {
             error = "You must be logged in to apply a skin";
             return;
@@ -242,7 +236,8 @@
     }
 
     // Start editing a skin
-    function startEditSkin(skin: LocalSkin, event: MouseEvent) {
+    // Use MinecraftSkin in function parameter
+    function startEditSkin(skin: MinecraftSkin, event: MouseEvent) {
         // Prevent the click from triggering the parent's click handler (applyLocalSkin)
         event.stopPropagation();
 
@@ -267,10 +262,11 @@
 
         try {
             // Call the backend to update the skin properties
-            const updatedSkin = await invoke<LocalSkin | null>("update_skin_properties", {
+            // Use MinecraftSkin in invoke
+            const updatedSkin = await invoke<MinecraftSkin | null>("update_skin_properties", {
                 id: editingSkin.id,
                 name: editSkinName,
-                variant: editSkinVariant
+                variant: editSkinVariant // Type is now SkinVariant
             });
 
             if (updatedSkin) {
