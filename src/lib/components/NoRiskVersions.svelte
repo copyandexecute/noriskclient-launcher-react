@@ -9,15 +9,7 @@
     import { appLocalDataDir } from '@tauri-apps/api/path';
     import { listen } from '@tauri-apps/api/event';
     import { notificationStore } from '$lib/stores/notificationStore';
-
-    interface EventPayload {
-        event_id: string;
-        event_type: string;
-        target_id: string | null;
-        message: string;
-        progress: number | null;
-        error: string | null;
-    }
+    import type { EventPayload } from '$lib/types/events';
     
     let standardProfiles: Profile[] = $state([]);
     let isLoading = $state(true);

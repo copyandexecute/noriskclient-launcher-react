@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, onDestroy } from 'svelte';
+  import type { ResourcePackInfo, ShaderPackInfo } from '$lib/types/modrinth';
 
   // Properties
   export let profileId: string | null = null;
@@ -8,40 +9,6 @@
   // Tab states
   let activeTab: 'mods' | 'resourcepacks' | 'shaderpacks' = 'mods';
   
-  // Data structures matching backend
-  interface ResourcePackModrinthInfo {
-    project_id: string;
-    version_id: string;
-    name: string;
-    version_number: string;
-    download_url: string;
-  }
-
-  interface ResourcePackInfo {
-    filename: string;
-    path: string;
-    sha1_hash: string | null;
-    file_size: number;
-    is_disabled: boolean;
-    modrinth_info: ResourcePackModrinthInfo | null;
-  }
-
-  interface ShaderPackModrinthInfo {
-    project_id: string;
-    version_id: string;
-    name: string;
-    version_number: string;
-    download_url: string;
-  }
-
-  interface ShaderPackInfo {
-    filename: string;
-    path: string;
-    sha1_hash: string | null;
-    file_size: number;
-    is_disabled: boolean;
-    modrinth_info: ShaderPackModrinthInfo | null;
-  }
 
   // State
   let resourcePacks: ResourcePackInfo[] = [];

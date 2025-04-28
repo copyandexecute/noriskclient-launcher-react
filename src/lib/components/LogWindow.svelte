@@ -6,16 +6,7 @@
     import type { ProcessState, ProcessMetadata } from '$lib/types';
     import { tick } from 'svelte';
     import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-
-    // --- Define Interfaces ---
-    interface EventPayload {
-        event_id: string;
-        event_type: string;
-        target_id: string | null;
-        message: string;
-        progress: number | null;
-        error: string | null;
-    }
+    import type { EventPayload } from '$lib/types/events';
 
     // --- State ---
     let processes = $state<ProcessMetadata[]>([]);

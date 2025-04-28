@@ -73,3 +73,11 @@ export interface TextureMetadata {
     /** Skin model type ("slim" or "default") */
     model?: string;
 } 
+
+export interface MinecraftVersion {
+    id: string;
+    type: string;
+    url: string;
+    time: string;
+    releaseTime: string;
+}

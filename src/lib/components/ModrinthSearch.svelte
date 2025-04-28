@@ -5,84 +5,13 @@
   import { loadProfiles, selectedProfile, profiles } from '$lib/stores/profileStore'; // Import selectedProfile store
   import ProfileSelect from '$lib/components/ProfileSelect.svelte'; // Import ProfileSelect
   import ModrinthProfileDropdown from '$lib/components/ModrinthProfileDropdown.svelte';
+  import type { ModrinthSearchHit, ModrinthSearchResponse, ModrinthVersion, ModrinthFile, ModrinthProjectType, ModrinthSortType } from '$lib/types/modrinth';
 
   // --- Props --- 
   // targetProfileId is now implicitly handled via the selectedProfile store
   // export let targetProfileId: string | null = null; 
 
   // --- Interfaces matching Rust structs --- 
-
-  // Project types enum matching backend
-  type ModrinthProjectType = "mod" | "modpack" | "resourcepack" | "shader" | "datapack";
-
-  // Sort type enum matching backend
-  type ModrinthSortType = "relevance" | "downloads" | "follows" | "newest" | "updated";
-
-  interface ModrinthSearchResponse {
-    hits: ModrinthSearchHit[];
-    offset: number;
-    limit: number;
-    total_hits: number;
-  }
-
-  interface ModrinthSearchHit {
-    project_id: string;
-    project_type: string;
-    slug: string;
-    title: string;
-    description: string;
-    author: string | null;
-    icon_url: string | null;
-    downloads: number;
-    follows: number;
-    latest_version: string | null;
-    versions?: string[] | null;
-    // Add other fields if needed
-  }
-
-  // Based on src-tauri/src/integrations/modrinth.rs
-  interface ModrinthHashes {
-      sha512: string | null;
-      sha1: string | null;
-  }
-
-  interface ModrinthFile {
-      hashes: ModrinthHashes;
-      url: string;
-      filename: string;
-      primary: boolean;
-      size: number; // u64 in Rust might exceed JS Number limits, but ok for typical file sizes
-      file_type: string | null;
-  }
-
-  // Use string literals for enums for simplicity in TS
-  type ModrinthVersionType = "release" | "beta" | "alpha";
-  type ModrinthDependencyType = "required" | "optional" | "incompatible" | "embedded";
-
-  interface ModrinthDependency {
-      version_id: string | null;
-      project_id: string | null;
-      file_name: string | null;
-      dependency_type: ModrinthDependencyType;
-  }
-
-  interface ModrinthVersion {
-      id: string;
-      project_id: string;
-      author_id: string | null;
-      featured: boolean;
-      name: string;
-      version_number: string;
-      changelog: string | null;
-      dependencies: ModrinthDependency[];
-      game_versions: string[];
-      version_type: ModrinthVersionType;
-      loaders: string[];
-      files: ModrinthFile[];
-      date_published: string;
-      downloads: number; // u64 in Rust
-      search_hit?: ModrinthSearchHit;
-  }
 
   // --- Component State --- 
 
@@ -438,7 +367,7 @@
 </script>
 
 <div class="modrinth-search-container">
-  <h2>Search on Modrinth</h2>
+  <h2>Search on Modrinth adawdwa</h2>
 
   <div class="search-bar">
     <input

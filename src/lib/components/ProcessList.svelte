@@ -8,15 +8,7 @@
     import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
     // --- Define Interfaces ---
     // Define EventPayload locally (ideally move to a shared types file)
-    interface EventPayload {
-        event_id: string;
-        event_type: string;
-        target_id: string | null;
-        message: string;
-        progress: number | null;
-        error: string | null;
-    }
-
+    import type { EventPayload } from '$lib/types/events';
     // --- State ---
     let processes = $state<ProcessMetadata[]>([]);
     let isLoading = $state(true);

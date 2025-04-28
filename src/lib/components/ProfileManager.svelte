@@ -19,36 +19,9 @@
     // Import Modrinth types
     import type { ModrinthVersion, ModrinthProjectContext, ModrinthAllVersionsResult } from '$lib/types/modrinth';
     // REMOVED: import type { CustomModInfo } from '$lib/types'; // Assuming CustomModInfo is moved or copied to $lib/types
-
-    // --- Local Definition for CustomModInfo ---
-    interface CustomModInfo {
-        filename: string;
-        is_enabled: boolean;
-        path: string; // Note: PathBuf in Rust becomes string in JS/TS via Tauri
-    }
-    // --- End Local Definition ---
-
-    interface EventPayload {
-        event_id: string;
-        event_type: string;
-        target_id: string | null;
-        message: string;
-        progress: number | null;
-        error: string | null;
-    }
-
-    interface DebugEvent {
-        timestamp: string;
-        message: string;
-    }
-
-    interface MinecraftVersion {
-        id: string;
-        type: string;
-        url: string;
-        time: string;
-        releaseTime: string;
-    }
+    import type { CustomModInfo } from '$lib/types/profile';
+    import type { EventPayload } from '$lib/types/events';
+    import type { MinecraftVersion } from '$lib/types/minecraft';
 
     let minecraftVersions: MinecraftVersion[] = $state([]);
     let selectedType = $state<string>("release");

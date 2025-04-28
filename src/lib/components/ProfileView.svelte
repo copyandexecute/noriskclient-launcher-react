@@ -16,23 +16,8 @@
     import { invoke } from "@tauri-apps/api/core";
     import { copyProfile } from "$lib/api/profiles";
     import ProfileExport from "./ProfileExport.svelte"; // Import ProfileExport
-
-    // Local definition until $lib/types is fixed
-    interface CustomModInfo {
-        filename: string;
-        is_enabled: boolean;
-        path: string;
-    }
-
-    // Local definition for EventPayload
-    interface EventPayload {
-        event_id: string;
-        event_type: string;
-        target_id: string | null;
-        message: string;
-        progress: number | null;
-        error: string | null;
-    }
+    import type { EventPayload } from "$lib/types/events";
+    import type { CustomModInfo } from "$lib/types/profile";
 
     // Define props passed from ProfileManager
     let {

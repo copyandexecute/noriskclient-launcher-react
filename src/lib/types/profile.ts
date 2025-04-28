@@ -136,6 +136,13 @@ export interface NoriskInformation {
   is_experimental: boolean;
 }
 
+// Local definition until $lib/types is fixed
+export interface CustomModInfo {
+  filename: string;
+  is_enabled: boolean;
+  path: string;
+}
+
 
 // --- Main Profile Interface ---
 

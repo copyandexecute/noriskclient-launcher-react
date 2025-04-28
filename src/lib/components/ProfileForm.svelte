@@ -9,13 +9,7 @@
     import type { ProfileSettings, MemorySettings } from '$lib/types/settings';
     import type { FabricVersionInfo } from '$lib/types/fabric'; // Import Fabric type
     import type { QuiltVersionInfo } from '$lib/types/quilt'; // Import Quilt type
-
-    // Local interface matching the expected prop type
-    interface MinecraftVersion {
-        id: string;
-        type: string;
-        // Remove url, time, releaseTime if not strictly needed by this component
-    }
+    import type { MinecraftVersion } from '$lib/types/minecraft';
 
     // Define Props type using the local MinecraftVersion interface
     interface Props {
