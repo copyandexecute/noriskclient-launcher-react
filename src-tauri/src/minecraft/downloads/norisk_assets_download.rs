@@ -437,6 +437,7 @@ impl NoriskClientAssetsDownloadService {
                 &assets,
                 keep_local_assets,
                 &target_base_dir,
+                game_directory,
                 Some(profile_id),
             )
             .await
@@ -763,6 +764,7 @@ impl NoriskClientAssetsDownloadService {
         assets: &NoriskAssets,
         keep_local_assets: bool,
         target_base_dir: &Path,
+        minecraft_dir: &Path,
         profile_id: Option<Uuid>,
     ) -> Result<()> {
         let source_dir = self.base_path.join(NORISK_ASSETS_DIR).join(asset_id);
@@ -830,8 +832,16 @@ impl NoriskClientAssetsDownloadService {
 
             for (name, _asset) in chunk {
                 let source_path = source_dir.join(&name);
-                // Calculate target path based on base dir
-                let target_path = target_base_dir.join(&name);
+                
+                // Special handling for override assets
+                let (target_path, is_override) = if name.starts_with("overrides/") {
+                    // For overrides, copy to Minecraft directory and strip the "overrides/" prefix
+                    let relative_path = name.strip_prefix("overrides/").unwrap_or(name);
+                    (minecraft_dir.join(relative_path), true)
+                } else {
+                    // Normal assets go to the target base directory
+                    (target_base_dir.join(&name), false)
+                };
 
                 if !fs::try_exists(&source_path).await? {
                     warn!(
@@ -843,7 +853,14 @@ impl NoriskClientAssetsDownloadService {
                 }
 
                 let needs_copy = if fs::try_exists(&target_path).await? {
-                    if keep_local_assets {
+                    if is_override {
+                        // For override files, skip if the file already exists
+                        debug!(
+                            "[NRC Assets Copy '{}'] Skipping override file {} (already exists)",
+                            asset_id, name
+                        );
+                        false
+                    } else if keep_local_assets {
                         debug!(
                             "[NRC Assets Copy '{}'] Keeping local asset {} (keep_local_assets)",
                             asset_id, name
@@ -868,10 +885,17 @@ impl NoriskClientAssetsDownloadService {
                         }
                     }
                 } else {
-                    debug!(
-                        "[NRC Assets Copy '{}'] Target doesn't exist for {}, needs copy",
-                        asset_id, name
-                    );
+                    if is_override {
+                        debug!(
+                            "[NRC Assets Copy '{}'] Override file doesn't exist for {}, copying to Minecraft dir",
+                            asset_id, name
+                        );
+                    } else {
+                        debug!(
+                            "[NRC Assets Copy '{}'] Target doesn't exist for {}, needs copy",
+                            asset_id, name
+                        );
+                    }
                     true
                 };
 
