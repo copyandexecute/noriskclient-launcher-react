@@ -6,7 +6,7 @@
     // Import Norisk Pack types from the new file
     import type { NoriskModpacksConfig, NoriskPackDefinition } from '$lib/types/noriskPacks';
     // Import the new settings types from the correct file
-    import type { ProfileSettings, MemorySettings } from '$lib/types/settings';
+    import type { ProfileSettings, MemorySettings } from '$lib/types/profile';
     import type { FabricVersionInfo } from '$lib/types/fabric'; // Import Fabric type
     import type { QuiltVersionInfo } from '$lib/types/quilt'; // Import Quilt type
     import type { MinecraftVersion } from '$lib/types/minecraft';
