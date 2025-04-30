@@ -25,6 +25,11 @@
   let loadingModrinthProjects = $state(false);
   let modrinthProjectsError = $state<string | null>(null);
   
+  // State for locally extracted icons (Base64)
+  let localPackIcons = $state<Record<string, string>>({});
+  let loadingLocalIcons = $state(false);
+  let localIconsError = $state<string | null>(null);
+  
   // Interval for auto-refresh
   let refreshInterval: number | null = null;
   
@@ -106,60 +111,93 @@
     }
   }
 
-  // NEW: Effect to fetch Modrinth details when packs change
+  // NEW: Effect to fetch Modrinth details AND local icons when packs change
   $effect(() => {
-    // Run this effect whenever resourcePacks or shaderPacks arrays are updated
-    if (resourcePacks.length > 0 || shaderPacks.length > 0) {
-      console.log('[ProfileContent] Pack list updated, fetching Modrinth details...');
-      fetchModrinthProjectDetails();
+    // Combine packs for easier processing
+    const allPacks = [...resourcePacks, ...shaderPacks];
+
+    if (allPacks.length > 0) {
+      console.log('[ProfileContent] Pack lists updated, fetching details/icons...');
+
+      // 1. Fetch Modrinth Details (for packs with modrinth_info)
+      const modrinthProjectIds = allPacks
+        .map(p => p.modrinth_info?.project_id)
+        .filter((id): id is string => !!id); // Filter out undefined/null and ensure type string
+      
+      if (modrinthProjectIds.length > 0) {
+        fetchModrinthProjectDetails(modrinthProjectIds);
+      }
+
+      // 2. Fetch Local Icons (for packs WITHOUT modrinth_info)
+      const localArchivePaths = allPacks
+        .filter(p => !p.modrinth_info) // Only packs without modrinth info
+        .map(p => p.path);
+        
+      if (localArchivePaths.length > 0) {
+        fetchLocalPackIcons(localArchivePaths);
+      }
     }
   });
 
-  // Function to fetch Modrinth project details for resourcepacks and shaderpacks
-  async function fetchModrinthProjectDetails() {
-    // Collect all Modrinth project IDs from both resource packs and shader packs
-    const modrinthProjectIds: string[] = [];
-    
-    // Add IDs from resource packs
-    if (resourcePacks && resourcePacks.length > 0) {
-      resourcePacks.forEach(pack => {
-        if (pack.modrinth_info?.project_id) {
-          modrinthProjectIds.push(pack.modrinth_info.project_id);
-        }
-      });
-    }
-    
-    // Add IDs from shader packs
-    if (shaderPacks && shaderPacks.length > 0) {
-      shaderPacks.forEach(pack => {
-        if (pack.modrinth_info?.project_id) {
-          modrinthProjectIds.push(pack.modrinth_info.project_id);
-        }
-      });
-    }
-    
-    if (modrinthProjectIds.length === 0) return;
+  // Function to fetch Modrinth project details for given IDs
+  async function fetchModrinthProjectDetails(ids: string[]) {
+    if (ids.length === 0) return;
     
     loadingModrinthProjects = true;
     modrinthProjectsError = null;
-    
+    console.log(`[ProfileContent] Fetching Modrinth project details for ${ids.length} IDs...`);
+
     try {
       const projectDetails = await invoke<ModrinthProject[]>("get_modrinth_project_details", {
-        ids: modrinthProjectIds
+        ids
       });
       
-      // Convert to record for easy lookup
-      const projectsMap: Record<string, ModrinthProject> = {};
+      // Update the existing map, don't overwrite
+      const currentProjects = $state.snapshot(modrinthProjects);
       for (const project of projectDetails) {
-        projectsMap[project.id] = project;
+        currentProjects[project.id] = project;
       }
-      
-      modrinthProjects = projectsMap;
+      modrinthProjects = currentProjects; // Assign the updated map back
+      console.log('[ProfileContent] Modrinth project details fetched successfully.');
+
     } catch (error) {
       console.error("Error fetching Modrinth project details:", error);
       modrinthProjectsError = error instanceof Error ? error.message : "Error fetching icons";
     } finally {
       loadingModrinthProjects = false;
+    }
+  }
+
+  // NEW: Function to fetch icons for local archives
+  async function fetchLocalPackIcons(paths: string[]) {
+    if (paths.length === 0) return;
+
+    loadingLocalIcons = true;
+    localIconsError = null;
+    console.log(`[ProfileContent] Fetching local icons for ${paths.length} archives...`);
+
+    try {
+      // Type assertion needed because HashMap<String, Option<String>> isn't directly representable
+      const iconsResult = await invoke<Record<string, string | null>>('get_icons_for_archives', {
+        archivePaths: paths
+      });
+
+      const currentLocalIcons = $state.snapshot(localPackIcons);
+      let iconsFoundCount = 0;
+      for (const [path, base64Icon] of Object.entries(iconsResult)) {
+        if (base64Icon) { // Only add if an icon was found (not null)
+          currentLocalIcons[path] = base64Icon;
+          iconsFoundCount++;
+        }
+      }
+      localPackIcons = currentLocalIcons; // Assign the updated map back
+      console.log(`[ProfileContent] Local icons fetched. Found ${iconsFoundCount} icons.`);
+
+    } catch (error) {
+      console.error("Error fetching local archive icons:", error);
+      localIconsError = error instanceof Error ? error.message : "Error fetching local icons";
+    } finally {
+      loadingLocalIcons = false;
     }
   }
 
@@ -329,13 +367,23 @@
                 </div>
                 <div class="pack-icon">
                   {#if pack.modrinth_info?.project_id && modrinthProjects[pack.modrinth_info.project_id]?.icon_url}
+                    <!-- Modrinth Icon -->
                     <img 
                       src={modrinthProjects[pack.modrinth_info.project_id].icon_url} 
-                      alt="Resource pack icon" 
+                      alt="Modrinth resource pack icon" 
+                      class="pack-icon-img" 
+                      loading="lazy"
+                    />
+                  {:else if localPackIcons[pack.path]}
+                    <!-- Local Icon -->
+                    <img 
+                      src="data:image/png;base64,{localPackIcons[pack.path]}" 
+                      alt="Local resource pack icon" 
                       class="pack-icon-img" 
                       loading="lazy"
                     />
                   {:else}
+                    <!-- Default Icon -->
                     <div class="default-icon">🖼️</div>
                   {/if}
                 </div>
@@ -410,13 +458,23 @@
                 </div>
                 <div class="pack-icon">
                   {#if pack.modrinth_info?.project_id && modrinthProjects[pack.modrinth_info.project_id]?.icon_url}
+                    <!-- Modrinth Icon -->
                     <img 
                       src={modrinthProjects[pack.modrinth_info.project_id].icon_url} 
-                      alt="Shader pack icon" 
+                      alt="Modrinth shader pack icon" 
+                      class="pack-icon-img" 
+                      loading="lazy"
+                    />
+                  {:else if localPackIcons[pack.path]}
+                    <!-- Local Icon -->
+                    <img 
+                      src="data:image/png;base64,{localPackIcons[pack.path]}" 
+                      alt="Local shader pack icon" 
                       class="pack-icon-img" 
                       loading="lazy"
                     />
                   {:else}
+                    <!-- Default Icon -->
                     <div class="default-icon">🌈</div>
                   {/if}
                 </div>
