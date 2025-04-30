@@ -84,7 +84,7 @@ async fn main() {
         eprintln!("FEHLER: Logging konnte nicht initialisiert werden: {}", e);
     }
 
-    info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
+    /*info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
     let query = "fabric".to_string();
     let game_version_filter = Some("1.20.1".to_string());
     let loader_filter = Some("fabric".to_string());
@@ -160,7 +160,7 @@ async fn main() {
             error!("Modrinth search failed: {:?}", e);
         }
     }
-    info!("--- Finished Test Modrinth Search --- DONT FORGET TO REMOVE");
+    info!("--- Finished Test Modrinth Search --- DONT FORGET TO REMOVE");*/
 
     match integrations::modrinth::get_multiple_projects(vec![
         "AANobbMI".to_string(),
@@ -180,6 +180,8 @@ async fn main() {
     }
 
     info!("Starting NoRiskClient Launcher...");
+
+    utils::file_utils::get_jar_icon_test().await;
 
     tauri::Builder::default()
         //TODO .plugin(minecraft_auth_command::init())
