@@ -1,0 +1,53 @@
+{
+    "id": "7d4d1b60-ca1d-4cae-a534-cd15ac0b09dc",
+    "name": "Chinese Dragon",
+    "creator": "Doenermann",
+    "price": 1000,
+    "type": "PET",
+    "path": "dragon_pet",
+    "dateAdded": "2025-01-29",
+    "defaultSettings": {
+        "color": null,
+        "scale": 1.0,
+        "previewScale": 2.10,
+        "offset": {
+            "x": -0.2361111,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "previewOffset": {
+            "x": 0.8,
+            "y": -2.3,
+            "z": 0.0
+        },
+        "adjustRotationWhenSwimmingOrFlying": false,
+        "adjustPositionWhenSkeaking": false,
+        "sneakingPositionOffset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "renderMode": "ORIGINAL",
+        "hash": null
+    },
+    "layers": [],
+    "features": [
+        {
+            "range": {
+                "start": -1.0,
+                "endInclusive": 1.0
+            },
+            "type": "X_AXIS"
+        },
+        {
+            "range": {
+                "start": -1.0,
+                "endInclusive": 1.0
+            },
+            "type": "Y_AXIS"
+        }
+    ],
+    "compatibleCosmetics": [],
+    "rarity": "EPIC",
+    "isExclusive": false
+}

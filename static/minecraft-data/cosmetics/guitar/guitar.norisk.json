@@ -1,0 +1,37 @@
+{
+    "id": "15d47615-c426-48d2-9f18-46951e312819",
+    "name": "Guitar",
+    "creator": "Jakob",
+    "price": 600,
+    "type": "BACK",
+    "path": "guitar",
+    "defaultSettings": {
+        "color": null,
+        "scale": 0.55,
+        "previewScale": 4.42,
+        "offset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "previewOffset": {
+            "x": -0.05,
+            "y": -0.75,
+            "z": 0.0
+        },
+        "adjustRotationWhenSwimmingOrFlying": false,
+        "adjustPositionWhenSkeaking": true,
+        "sneakingPositionOffset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "renderMode": null,
+        "hash": null
+    },
+    "layers": [],
+    "features": [],
+    "compatibleCosmetics": [],
+    "rarity": "UNCOMMON",
+    "isExclusive": false
+}

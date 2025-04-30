@@ -65,6 +65,7 @@ impl NoriskPackManager {
         is_experimental: bool,
     ) -> Result<()> {
         info!("Fetching latest Norisk packs config from API...");
+        return Ok(());
 
         match NoRiskApi::get_modpacks(norisk_token, is_experimental).await {
             Ok(new_config) => {

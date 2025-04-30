@@ -12,6 +12,7 @@
     import LauncherSettings from './LauncherSettings.svelte'; // Import the LauncherSettings component
     import SkinChanger from './SkinChanger.svelte'; // Import the SkinChanger component
     import CapeBrowser from './CapeBrowser.svelte'; // Import the CapeBrowser component
+    import GeoJsonRenderer from './GeoJsonRenderer.svelte'; // <-- Import the GeoJsonRenderer
     import { profiles, loadProfiles as loadProfilesFromStore, selectedProfileId } from '$lib/stores/profileStore';
     import type { Profile, Mod, NoriskModIdentifier } from '$lib/stores/profileStore';
     // Import Norisk Pack types from the new file
@@ -52,6 +53,7 @@
     let showModrinthSearch = $state(false);
     let noriskPacksConfig = $state<NoriskModpacksConfig | null>(null);
     let isLoadingPacks = $state(true);
+    let showModelViewer = $state(false); // <-- State to control model viewer visibility
 
     // --- Custom Mods State ---
     let customModsMap = $state<Map<string, CustomModInfo[]>>(new Map());
@@ -1196,6 +1198,65 @@
     <!-- Debug Events Section - Replaced with component -->
     <DebugEvents {activeEvents} />
 
+        <!-- Button to toggle Model Viewer -->
+        <button onclick={() => showModelViewer = !showModelViewer}>
+            {showModelViewer ? 'Hide' : 'Show'} Model Viewer
+        </button>
+    
+        <!-- Conditionally render the GeoJsonRenderer -->
+        {#if showModelViewer}
+            <!--<div class="model-viewer-section">
+                <h3>GeoJSON Model Viewer (Cube Example)</h3>
+                <GeoJsonRenderer 
+                    geoJsonUrl="/minecraft-data/cosmetics/cube/cube.geo.json"
+                    textureUrl="/minecraft-data/cosmetics/cube/cube.png"
+                    width={600}
+                    height={400}
+                    autoRotate={true}
+                />
+            </div>
+               <div class="model-viewer-section">
+                <h3>GeoJSON Model Viewer (dragon_pet Example)</h3>
+                <GeoJsonRenderer 
+                    geoJsonUrl="/minecraft-data/cosmetics/dragon_pet/dragon_pet.geo.json"
+                    textureUrl="/minecraft-data/cosmetics/dragon_pet/dragon_pet.png"
+                    width={600}
+                    height={400}
+                    autoRotate={true}
+                />
+            </div>-->
+                  <div class="model-viewer-section">
+                <h3>GeoJSON Model Viewer (Guitar Example)</h3>
+                <GeoJsonRenderer 
+                    geoJsonUrl="/minecraft-data/cosmetics/guitar/guitar.geo.json"
+                    textureUrl="/minecraft-data/cosmetics/guitar/guitar.png"
+                    width={600}
+                    height={400}
+                    autoRotate={true}
+                />
+            </div>
+            <div class="model-viewer-section">
+                <h3>GeoJSON Model Viewer (Guitar Example)</h3>
+                <GeoJsonRenderer 
+                    geoJsonUrl="/minecraft-data/cosmetics/bee_beanie/bee_beanie.geo.json"
+                    textureUrl="/minecraft-data/cosmetics/bee_beanie/bee_beanie.png"
+                    width={600}
+                    height={400}
+                    autoRotate={true}
+                />
+            </div>
+            <div class="model-viewer-section">
+                <h3>GeoJSON Model Viewer (Guitar Example)</h3>
+                <GeoJsonRenderer 
+                    geoJsonUrl="/minecraft-data/cosmetics/samurai_hat/samurai_hat.geo.json"
+                    textureUrl="/minecraft-data/cosmetics/samurai_hat/samurai_hat.png"
+                    width={600}
+                    height={400}
+                    autoRotate={true}
+                />
+            </div>
+        {/if}
+
     <div class="process-section">
         <ProcessList />
     </div>
@@ -1262,23 +1323,23 @@
                         versionsForCurrentDropdown={versionsForCurrentDropdown} 
                         errorForCurrentDropdown={errorForCurrentDropdown}
                         hasAlternativeVersions={hasAlternativeVersions}
-                        isDropdownOpenForThisMod={(modId) => isDropdownOpenForMod(profile.id, modId)}
-                        doAlternativesExistForThisMod={(modId) => checkAlternativesForMod(profile.id, modId)}
+                        isDropdownOpenForThisMod={(modId: string) => isDropdownOpenForMod(profile.id, modId)}
+                        doAlternativesExistForThisMod={(modId: string) => checkAlternativesForMod(profile.id, modId)}
                         profileEvents={getProfileEvents(profile.id)}
 
                         on:launch={() => launchGame(profile.id)}
                         on:edit={() => editProfile(profile)}
                         on:delete={() => deleteProfile(profile.id)}
                         on:openFolder={() => openProfileFolder(profile.id)}
-                        on:toggleMod={(event) => toggleModEnabled(profile.id, event.detail.modId, event.detail.originalEvent)}
-                        on:deleteMod={(event) => deleteMod(profile.id, event.detail.modId)}
-                        on:toggleNoriskMod={(event) => toggleNoriskModDisabled(profile, event.detail.packModId, event.detail.originalEvent)}
-                        on:toggleCustomMod={(event) => toggleCustomModEnabled(profile.id, event.detail.filename, event.detail.originalEvent)}
-                        on:openVersionDropdown={(event) => openVersionDropdown(profile.id, event.detail.modId)}
-                        on:changeVersion={(event) => handleVersionChange(profile, event.detail.mod, event.detail.originalEvent)}
+                        on:toggleMod={(event: CustomEvent<{ modId: string; originalEvent: Event }>) => toggleModEnabled(profile.id, event.detail.modId, event.detail.originalEvent)}
+                        on:deleteMod={(event: CustomEvent<{ modId: string }>) => deleteMod(profile.id, event.detail.modId)}
+                        on:toggleNoriskMod={(event: CustomEvent<{ packModId: string; originalEvent: Event }>) => toggleNoriskModDisabled(profile, event.detail.packModId, event.detail.originalEvent)}
+                        on:toggleCustomMod={(event: CustomEvent<{ filename: string; originalEvent: Event }>) => toggleCustomModEnabled(profile.id, event.detail.filename, event.detail.originalEvent)}
+                        on:openVersionDropdown={(event: CustomEvent<{ modId: string }>) => openVersionDropdown(profile.id, event.detail.modId)}
+                        on:changeVersion={(event: CustomEvent<{ mod: Mod; originalEvent: Event }>) => handleVersionChange(profile, event.detail.mod, event.detail.originalEvent)}
                         on:cancelVersionChange={cancelVersionChange}
                         on:importLocalMods={() => handleImportLocalMods(profile.id)}
-                        on:deleteCustomMod={(event) => handleDeleteCustomMod(profile.id, event.detail.filename)}
+                        on:deleteCustomMod={(event: CustomEvent<{ filename: string }>) => handleDeleteCustomMod(profile.id, event.detail.filename)}
                     />
                 {/each} 
             </div>
@@ -1287,8 +1348,8 @@
 
     <!-- Edit Profile Modal -->
     {#if isEditing && editingProfile}
-        <div class="modal-overlay" on:click={handleFormCancel}>
-            <div class="modal-content" on:click|stopPropagation>
+        <div class="modal-overlay" onclick={handleFormCancel}>
+            <div class="modal-content">
                 <h3>Profil bearbeiten</h3>
                 <ProfileForm
                     minecraftVersions={minecraftVersions}
@@ -1389,102 +1450,6 @@
         margin-bottom: 15px;
     }
 
-    .profile-item {
-        padding: 1em;
-        margin-bottom: 1em;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        cursor: default;
-    }
-
-    .profile-item.selected {
-        background-color: transparent;
-        border-color: #ccc;
-    }
-
-    .profile-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-    }
-
-    .profile-details {
-        flex: 1;
-    }
-
-    .profile-details h4 {
-        margin: 0 0 10px 0;
-        font-size: 18px;
-    }
-
-    .profile-details p {
-        margin: 5px 0;
-        color: #666;
-    }
-
-    .profile-actions {
-        display: grid; /* Use grid */
-        grid-template-columns: repeat(3, auto); /* Max 3 columns, auto width */
-        gap: 10px;
-    }
-
-    .profile-actions button {
-        /* Adjust padding/margins if needed */
-    }
-
-    .profile-actions button:first-child {
-        background-color: #2ecc71;
-    }
-
-    .profile-actions button:first-child:hover {
-        background-color: #27ae60;
-    }
-
-    .profile-actions button:nth-child(2) {
-        background-color: #f39c12;
-    }
-
-    .profile-actions button:nth-child(2):hover {
-        background-color: #d35400;
-    }
-
-    .profile-actions button:nth-child(3) {
-        background-color: #e74c3c;
-    }
-
-    .profile-actions button:nth-child(3):hover {
-        background-color: #c0392b;
-    }
-
-    /* 4th button (Open Folder) - specific style */
-    .profile-actions button:nth-child(4) {
-        background-color: #3498db; /* Blue */
-    }
-
-    .profile-actions button:nth-child(4):hover {
-        background-color: #2980b9;
-    }
-
-    .last-event {
-        margin-top: 10px;
-        padding: 8px;
-        background-color: #f8f9fa;
-        border-radius: 4px;
-    }
-
-    .event-message {
-        margin: 0;
-        font-size: 14px;
-        color: #333;
-    }
-
-    .no-event {
-        margin: 0;
-        font-size: 14px;
-        color: #666;
-        font-style: italic;
-    }
-
     .modal-overlay {
         position: fixed;
         top: 0;
@@ -1507,195 +1472,8 @@
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     }
 
-    .modal-actions {
-        display: flex;
-        gap: 10px;
-        margin-top: 20px;
-    }
-
-    .modal-actions button {
-        flex: 1;
-    }
-
-    .modal-actions button:last-child {
-        background-color: #e74c3c;
-    }
-
-    .modal-actions button:last-child:hover {
-        background-color: #c0392b;
-    }
-
     .process-section {
         margin-top: 1rem;
-    }
-
-    .mods-section {
-        margin-top: 0.8em;
-        padding-top: 0.8em;
-        border-top: 1px dashed #ddd;
-    }
-
-    .mods-section h4 {
-        margin: 0 0 0.5em 0;
-        font-size: 0.95em;
-        color: #333;
-    }
-
-    .mods-list {
-        list-style: none;
-        padding-left: 1em;
-        margin: 0;
-        font-size: 0.9em;
-        max-height: 150px; /* Optional: Limit height and make scrollable */
-        overflow-y: auto; /* Optional: Add scrollbar if list is long */
-        padding-right: 5px; /* Space for scrollbar */
-    }
-
-    .mod-item {
-        margin-bottom: 0.3em;
-        display: flex; /* Use flex for alignment */
-        align-items: center; /* Align checkbox and text vertically */
-        gap: 0.5em; /* Space between checkbox and text */
-         /* Make flex container wrap if needed, though less likely here */
-        flex-wrap: wrap; 
-    }
-
-    .mod-item.disabled {
-        color: #888;
-        font-style: italic;
-    }
-
-    .mod-item .mod-name {
-        flex-grow: 1; /* Allow name to take remaining space */
-         margin-right: 10px; /* Add space before version changer/delete button */
-    }
-
-    .mod-toggle-checkbox {
-        flex-shrink: 0; /* Prevent checkbox from shrinking */
-        margin: 0;
-        cursor: pointer;
-    }
-
-    .mod-version-changer {
-        display: inline-flex; /* Changed to inline-flex */
-        align-items: center;
-        gap: 5px;
-        margin-left: auto; /* Push to the right, after name */
-        margin-right: 5px; /* Space before delete button */
-        font-size: 0.9em;
-    }
-
-    .version-info {
-        color: #555;
-        padding: 2px 4px;
-        background-color: #eee;
-        border-radius: 3px;
-        white-space: nowrap; /* Prevent wrapping */
-    }
-    .version-info.loading {
-        font-style: italic;
-        color: #888;
-    }
-    .version-info.error {
-        color: #e74c3c;
-        background-color: #fbeae8;
-        cursor: help; /* Indicate hover for title */
-    }
-
-
-    .change-version-btn, .cancel-version-btn {
-        padding: 1px 5px;
-        font-size: 0.9em;
-        line-height: 1;
-        background-color: #eee;
-        color: #333;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.2s, border-color 0.2s;
-    }
-    .change-version-btn:hover, .cancel-version-btn:hover {
-        background-color: #ddd;
-        border-color: #bbb;
-    }
-    .cancel-version-btn {
-        color: #e74c3c;
-        background-color: #fbeae8;
-        border-color: #e74c3c;
-    }
-     .cancel-version-btn:hover {
-        background-color: #f8d7da;
-        border-color: #d9534f;
-    }
-
-    .version-select {
-        padding: 2px 5px;
-        font-size: 0.9em;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        max-width: 250px; /* Limit width */
-    }
-    .version-select option {
-        font-size: 1em; /* Reset font size for options if needed */
-    }
-
-
-    .delete-mod-button {
-       /* Keep existing style, ensure it doesn't interfere with version changer */
-       flex-shrink: 0; /* Prevent shrinking */
-       margin-left: 0; /* Remove margin-left: auto if version changer is present */
-    }
-
-    .delete-mod-button:hover {
-        background-color: #fbeae8; /* Light red background on hover */
-        border-color: #e74c3c;
-        color: #c0392b; /* Darker red on hover */
-    }
-
-    .mod-item.disabled .mod-name {
-        /* Keep existing disabled style */
-        color: #888;
-        font-style: italic;
-        text-decoration: line-through; /* Add line-through for clarity */
-    }
-
-    .mods-section.no-mods p {
-        font-style: italic;
-        color: #666;
-        font-size: 0.9em;
-        margin: 0;
-    }
-
-    .mods-section.user-mods {
-        /* Existing styles apply, maybe add slight distinction if needed */
-        /* border-color: #eee; */ 
-    }
-
-    .mods-section.pack-mods {
-        margin-top: 0.5em; /* Smaller gap before pack mods */
-        padding-top: 0.5em;
-        border-top: 1px dotted #ccc; /* Dotted border to differentiate */
-    }
-
-    .mods-section.pack-mods h4 {
-        font-size: 0.9em; /* Slightly smaller heading */
-        font-style: italic;
-        color: #555;
-    }
-
-    .mod-item.pack-mod-item {
-        /* Specific styles for pack mods if needed */
-    }
-
-    .mod-item.pack-mod-item.disabled .mod-name {
-        /* Style for disabled pack mod names */
-        color: #888;
-        font-style: italic;
-        text-decoration: line-through; 
-    }
-
-    .mod-item.pack-mod-item .mod-name {
-        /* Style for pack mod names */
     }
 
     .error-message {
@@ -1707,72 +1485,21 @@
         margin-bottom: 15px;
     }
 
-    .update-check-btn {
-        background-color: #f39c12; /* Orange perhaps? */
-        font-size: 0.9em;
-        padding: 6px 10px;
-    }
-    .update-check-btn:hover:not(:disabled) {
-        background-color: #e67e22;
-    }
-    .update-check-btn:disabled {
-        background-color: #f9e79f;
-        cursor: wait;
+    .model-viewer-section {
+        margin-top: 20px;
+        margin-bottom: 30px;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
     }
 
-    .update-indicator {
-        color: #2ecc71; /* Green for update */
-        font-weight: bold;
-        margin-left: 5px;
-        cursor: default; /* Or help if title is useful */
+    .model-viewer-section h3 {
+        margin-bottom: 15px;
     }
 
-    .error-message.profile-error {
-        font-size: 0.9em;
-        padding: 5px 10px;
-        margin-top: 10px;
-        margin-bottom: 0;
-    }
-
-    /* Ensure spacing in mod item */
-    .mod-item {
-        /* existing styles like display:flex, gap, align-items */
-    }
-    .mod-name {
-        /* existing flex-grow */
-    }
-    .update-indicator {
-        /* order might need adjustment or use margin */
-        margin-left: auto; /* Try pushing indicator before version changer/delete */
-        margin-right: 5px;
-    }
-    .mod-version-changer {
-       margin-left: 0; /* Remove margin-left: auto */
-    }
-    .delete-mod-button {
-        margin-left: 5px; /* Adjust spacing */
-    }
-
-    .mods-section.custom-mods {
-        margin-top: 0.5em; /* Smaller gap */
-        padding-top: 0.5em;
-        border-top: 1px dotted #aaa; /* Different border */
-    }
-
-    .mods-section.custom-mods h4 {
-        font-size: 0.9em;
-        font-style: italic;
-        color: #444;
-    }
-
-    .mod-item.local-mod-item {
-        /* Specific styles if needed */
-    }
-
-    .mod-item.local-mod-item.disabled .mod-name {
-        color: #888;
-        font-style: italic;
-        text-decoration: line-through; 
+    /* Style for the toggle button */
+    .profile-manager > button {
+        margin-bottom: 20px;
     }
 
     .loading-text {
@@ -1783,5 +1510,4 @@
         font-size: 0.9em;
         padding: 5px 8px;
     }
-
 </style>

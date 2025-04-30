@@ -1,0 +1,52 @@
+{
+    "id": "53d19fc3-fa09-4c34-b4c3-288f4ef3fffb",
+    "name": "Cube",
+    "creator": "NoRiskk",
+    "price": 800,
+    "type": "PET",
+    "path": "cube",
+    "defaultSettings": {
+        "color": null,
+        "scale": 1.0,
+        "previewScale": 2.23,
+        "offset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "previewOffset": {
+            "x": 0.56,
+            "y": -2.71,
+            "z": 0.0
+        },
+        "adjustRotationWhenSwimmingOrFlying": false,
+        "adjustPositionWhenSkeaking": false,
+        "sneakingPositionOffset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "renderMode": "ORIGINAL",
+        "hash": null
+    },
+    "layers": [],
+    "features": [
+        {
+            "range": {
+                "start": -1.0,
+                "endInclusive": 1.0
+            },
+            "type": "X_AXIS"
+        },
+        {
+            "range": {
+                "start": -1.0,
+                "endInclusive": 1.0
+            },
+            "type": "Y_AXIS"
+        }
+    ],
+    "compatibleCosmetics": [],
+    "rarity": "RARE",
+    "isExclusive": false
+}

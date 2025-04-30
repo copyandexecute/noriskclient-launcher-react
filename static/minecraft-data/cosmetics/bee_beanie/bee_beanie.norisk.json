@@ -1,0 +1,48 @@
+{
+    "id": "aca1bf56-b591-41ef-8680-f8f5f63be142",
+    "name": "Bee Beanie",
+    "creator": "Bryan&Döner",
+    "price": 700,
+    "type": "HAT",
+    "dateAdded": "2025-03-21",
+    "path": "bee_beanie",
+    "defaultSettings": {
+        "color": null,
+        "scale": 1.0,
+        "previewScale": 2.8,
+        "offset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "previewOffset": {
+            "x": 0.0,
+            "y": -0.25,
+            "z": 0.0
+        },
+        "adjustRotationWhenSwimmingOrFlying": false,
+        "adjustPositionWhenSkeaking": true,
+        "sneakingPositionOffset": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        },
+        "renderMode": null,
+        "hash": null
+    },
+    "layers": [],
+    "features": [
+        {
+            "range": {
+                "start": -1.5,
+                "endInclusive": 1.5
+            },
+            "type": "Y_AXIS"
+        }
+    ],
+    "compatibleCosmetics": [
+        "06978237-757a-4a58-a682-d146a396fd52"
+    ],
+    "rarity": "RARE",
+    "isExclusive": false
+}

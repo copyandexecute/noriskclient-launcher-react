@@ -1,0 +1,32 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"nrc.idle": {
+			"loop": true,
+			"animation_length": 14.3333,
+			"bones": {
+				"R": {
+					"rotation": [0, 0, "math.cos(query.anim_time*100)*10"]
+				},
+				"L": {
+					"rotation": [0, 0, "math.cos(query.anim_time*100+180)*10"]
+				},
+				"fuehler1": {
+					"rotation": ["-math.cos(query.anim_time*100)*1", 0, 0]
+				},
+				"fuehler2": {
+					"rotation": ["-math.cos(query.anim_time*100)*1", 0, 0]
+				},
+				"augen": {
+					"position": {
+						"0.0": [0, 0, 0],
+						"2.3333": [0, 0, 0],
+						"2.5833": [0, -0.5, 0],
+						"2.8333": [0, 0, 0],
+						"6.0": [0, 0, 0]
+					}
+				}
+			}
+		}
+	}
+}

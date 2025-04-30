@@ -1,0 +1,49 @@
+{
+  "id": "f9437dd5-1b5a-4b1f-9761-99e9aa99992c",
+  "name": "SamuraiHat",
+  "creator": "Bryan",
+  "price": 500,
+  "type": "HAT",
+  "path": "samurai_hat",
+  "dateAdded": "2024-12-26",
+  "defaultSettings": {
+    "color": null,
+    "scale": 1.0,
+    "previewScale": 2.42,
+    "offset": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "previewOffset": {
+      "x": -0.0,
+      "y": -0.17,
+      "z": 0.0
+    },
+    "adjustRotationWhenSwimmingOrFlying": false,
+    "adjustPositionWhenSkeaking": true,
+    "sneakingPositionOffset": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0
+    },
+    "renderMode": null,
+    "hash": null
+  },
+  "layers": [],
+  "features": [
+    {
+      "range": {
+        "start": -1.0,
+        "endInclusive": 1.5
+      },
+      "type": "Y_AXIS"
+    }
+  ],
+  "compatibleCosmetics": [],
+  "rarity": "UNCOMMON",
+  "disabledBodyParts": [
+    "HAT"
+  ],
+  "isExclusive": false
+}

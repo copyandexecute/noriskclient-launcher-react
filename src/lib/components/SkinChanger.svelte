@@ -14,7 +14,7 @@
         TexturesDictionary
     } from '$lib/types/minecraft';
     // Import the new types
-    import type { MinecraftSkin, SkinVariant } from '$lib/types/minecraftSkin';
+    import type { MinecraftSkin, SkinVariant } from '$lib/types/localSkin';
 
     let skinData: MinecraftProfile | null = $state(null);
     let skinUrl: string | null = $state(null);
