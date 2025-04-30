@@ -4,6 +4,8 @@ use crate::{
     config::HTTP_CLIENT,
     error::{AppError, Result},
 };
+use crate::integrations::norisk_packs::NoriskModpacksConfig;
+use crate::integrations::norisk_versions::NoriskVersionsConfig;
 use log::{debug, error, info};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -220,9 +222,45 @@ impl NoRiskApi {
         is_experimental: bool,
     ) -> Result<NoriskAssets> {
         Self::get_from_norisk_endpoint(
-            &format!("launcher/branch/{}", pack),
+            &format!("launcher/pack/{}", pack),
             norisk_token,
             Some(request_uuid),
+            is_experimental,
+        )
+        .await
+    }
+
+    /// Fetches the complete modpack configuration from the NoRisk API.
+    pub async fn get_modpacks(
+        norisk_token: &str,
+        is_experimental: bool,
+    ) -> Result<NoriskModpacksConfig> {
+        debug!(
+            "[NoRisk API] Fetching modpack configuration. Experimental: {}",
+            is_experimental
+        );
+        Self::get_from_norisk_endpoint(
+            "launcher/modpacks",
+            norisk_token,
+            None,
+            is_experimental,
+        )
+        .await
+    }
+
+    /// Fetches the standard version profiles from the NoRisk API.
+    pub async fn get_standard_versions(
+        norisk_token: &str,
+        is_experimental: bool,
+    ) -> Result<NoriskVersionsConfig> {
+        debug!(
+            "[NoRisk API] Fetching standard version profiles. Experimental: {}",
+            is_experimental
+        );
+        Self::get_from_norisk_endpoint(
+            "launcher/versions",
+            norisk_token,
+            None,
             is_experimental,
         )
         .await

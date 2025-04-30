@@ -163,3 +163,17 @@ pub async fn download_and_install_modrinth_modpack(
     // Return the new profile ID
     Ok(profile_id)
 }
+
+/// Fetches details for multiple Modrinth projects based on their IDs or slugs.
+#[tauri::command]
+pub async fn get_modrinth_project_details(
+    ids: Vec<String>
+) -> Result<Vec<modrinth::ModrinthProject>, CommandError> {
+    log::debug!(
+        "Received get_modrinth_project_details_bulk command for {} project IDs/slugs",
+        ids.len()
+    );
+
+    let result = modrinth::get_multiple_projects(ids).await?;
+    Ok(result)
+}

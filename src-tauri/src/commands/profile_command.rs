@@ -11,8 +11,7 @@ use crate::state::state_manager::State;
 use crate::utils::path_utils::find_unique_profile_segment;
 use crate::utils::{profile_utils, resourcepack_utils, shaderpack_utils, path_utils};
 use chrono::Utc;
-use log::info;
-use log::error;
+use log::{info, error, warn};
 use noriskclient_launcher_v3_lib::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use sanitize_filename::sanitize;
 use serde::Deserialize;
@@ -1009,5 +1008,52 @@ pub async fn export_profile(app_handle: tauri::AppHandle, params: ExportProfileP
 pub async fn is_profile_launching(profile_id: Uuid) -> Result<bool, CommandError> {
     let state = State::get().await?;
     Ok(state.process_manager.has_launching_process(profile_id))
+}
+
+/// Fetches the latest Norisk packs configuration from the API and updates the local cache.
+#[tauri::command]
+pub async fn refresh_norisk_packs(
+) -> Result<(), CommandError> {
+    info!("Refreshing Norisk packs via command...");
+    let state = State::get().await?;
+   
+   //TODO hier später von der config holen
+    match state.norisk_pack_manager
+        .fetch_and_update_config(&"", true)
+        .await 
+    {
+        Ok(_) => {
+            info!("Successfully refreshed Norisk packs via command.");
+            Ok(())
+        },
+        Err(e) => {
+            error!("Failed to refresh Norisk packs via command: {}", e);
+            Err(CommandError::from(e))
+        }
+    }
+}
+
+/// Fetches the latest standard version profiles from the API and updates the local cache.
+#[tauri::command]
+pub async fn refresh_standard_versions(
+) -> Result<(), CommandError> {
+    info!("Refreshing standard versions via command...");
+    let state = State::get().await?;
+
+    // Call the manager's fetch and update method
+       //TODO hier später von der config holen
+    match state.norisk_version_manager
+        .fetch_and_update_config(&"", true) // Call the new method
+        .await 
+    {
+        Ok(_) => {
+            info!("Successfully refreshed standard versions via command.");
+            Ok(())
+        },
+        Err(e) => {
+            error!("Failed to refresh standard versions via command: {}", e);
+            Err(CommandError::from(e))
+        }
+    }
 }
 

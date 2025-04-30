@@ -12,59 +12,71 @@ mod logging;
 mod minecraft;
 mod state;
 mod utils;
-use log::{error, info, debug, warn};
-use rand::seq::SliceRandom;
-use tauri::Listener;
-use std::sync::Arc;
-use crate::integrations::norisk_versions;   
 use crate::integrations::norisk_packs;
+use crate::integrations::norisk_versions;
+use log::{debug, error, info, warn};
+use rand::seq::SliceRandom;
+use std::sync::Arc;
+use tauri::Listener;
 
 use crate::commands::process_command::{
-    get_full_log, get_process, get_processes, get_processes_by_profile, stop_process, open_log_window,
-    set_discord_state,
+    get_full_log, get_process, get_processes, get_processes_by_profile, open_log_window,
+    set_discord_state, stop_process,
 };
 use commands::minecraft_auth_command::{
     begin_login, get_accounts, get_active_account, remove_account, set_active_account,
 };
 use commands::minecraft_command::{
-    get_fabric_loader_versions, get_forge_versions, get_minecraft_versions, get_neoforge_versions,
-    get_quilt_loader_versions, upload_log_to_mclogs_command,
-    // Skin management commands
-    get_user_skin_data, upload_skin, reset_skin, apply_skin_from_base64,
+    add_skin,
+    apply_skin_from_base64,
     // Local skin database commands
-    get_all_skins, get_skin_by_id, add_skin, remove_skin, update_skin_properties
+    get_all_skins,
+    get_fabric_loader_versions,
+    get_forge_versions,
+    get_minecraft_versions,
+    get_neoforge_versions,
+    get_quilt_loader_versions,
+    get_skin_by_id,
+    // Skin management commands
+    get_user_skin_data,
+    remove_skin,
+    reset_skin,
+    update_skin_properties,
+    upload_log_to_mclogs_command,
+    upload_skin,
 };
 use commands::profile_command::{
-    add_modrinth_content_to_profile, add_modrinth_mod_to_profile, create_profile,
-    delete_custom_mod, delete_mod_from_profile, delete_profile, get_custom_mods,
-    get_local_resourcepacks, get_local_shaderpacks, get_norisk_packs, get_profile,
-    get_standard_profiles, get_system_ram_mb, import_local_mods, import_profile_from_file,
-    launch_profile, abort_profile_launch, is_profile_launching, list_profiles, open_profile_folder, search_profiles, set_custom_mod_enabled,
-    set_norisk_mod_status, set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
-    get_profile_directory_structure, copy_profile, export_profile,
+    abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
+    copy_profile, create_profile, delete_custom_mod, delete_mod_from_profile, delete_profile,
+    export_profile, get_custom_mods, get_local_resourcepacks, get_local_shaderpacks,
+    get_norisk_packs, get_profile, get_profile_directory_structure, get_standard_profiles,
+    get_system_ram_mb, import_local_mods, import_profile_from_file, is_profile_launching,
+    launch_profile, list_profiles, open_profile_folder, refresh_norisk_packs,
+    refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
+    set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
 };
 
 // Use statements for registered commands only
 use commands::modrinth_commands::{
     download_and_install_modrinth_modpack, get_all_modrinth_versions_for_contexts,
-    get_modrinth_mod_versions, search_modrinth_mods, search_modrinth_projects,
+    get_modrinth_mod_versions, get_modrinth_project_details, search_modrinth_mods,
+    search_modrinth_projects,
 }; // Remove or comment out if not needed
 
-use commands::file_command::{delete_file, open_file_directory, set_file_enabled};
+use commands::file_command::{
+    delete_file, get_icons_for_archives, open_file_directory, set_file_enabled,
+    get_icons_for_norisk_mods,
+};
 
 // Import config commands
-use commands::config_commands::{
-    get_launcher_config, set_launcher_config
-};
+use commands::config_commands::{get_launcher_config, set_launcher_config};
 
 // Import path commands
-use commands::path_commands::{
-    get_launcher_directory, resolve_image_path
-};
+use commands::path_commands::{get_launcher_directory, resolve_image_path};
 
 // Import cape commands
 use commands::cape_command::{
-    browse_capes, get_player_capes, equip_cape, delete_cape, upload_cape, unequip_cape
+    browse_capes, delete_cape, equip_cape, get_player_capes, unequip_cape, upload_cape,
 };
 
 use tauri::Manager;
@@ -75,7 +87,7 @@ async fn main() {
         eprintln!("FEHLER: Logging konnte nicht initialisiert werden: {}", e);
     }
 
-    info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
+    /*info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
     let query = "fabric".to_string();
     let game_version_filter = Some("1.20.1".to_string());
     let loader_filter = Some("fabric".to_string());
@@ -151,9 +163,28 @@ async fn main() {
             error!("Modrinth search failed: {:?}", e);
         }
     }
-    info!("--- Finished Test Modrinth Search --- DONT FORGET TO REMOVE");
+    info!("--- Finished Test Modrinth Search --- DONT FORGET TO REMOVE");*/
+
+    match integrations::modrinth::get_multiple_projects(vec![
+        "AANobbMI".to_string(),
+        "P7dR8mSH".to_string(),
+    ])
+    .await
+    {
+        Ok(projects) => {
+            info!("Found {} projects.", projects.len());
+            for project in projects {
+                info!("Project: {}", project.title);
+            }
+        }
+        Err(e) => {
+            error!("Failed to get projects: {:?}", e);
+        }
+    }
 
     info!("Starting NoRiskClient Launcher...");
+
+    utils::file_utils::get_jar_icon_test().await;
 
     tauri::Builder::default()
         //TODO .plugin(minecraft_auth_command::init())
@@ -224,6 +255,8 @@ async fn main() {
             get_modrinth_mod_versions,
             add_modrinth_mod_to_profile,
             add_modrinth_content_to_profile,
+            get_modrinth_project_details,
+            get_icons_for_archives,
             set_profile_mod_enabled,
             delete_mod_from_profile,
             get_norisk_packs,
@@ -247,6 +280,7 @@ async fn main() {
             get_quilt_loader_versions,
             set_file_enabled,
             delete_file,
+            get_icons_for_norisk_mods,
             open_file_directory,
             download_and_install_modrinth_modpack,
             get_standard_profiles,
@@ -275,7 +309,9 @@ async fn main() {
             equip_cape,
             delete_cape,
             upload_cape,
-            unequip_cape
+            unequip_cape,
+            refresh_norisk_packs,
+            refresh_standard_versions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

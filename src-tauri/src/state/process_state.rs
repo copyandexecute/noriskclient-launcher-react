@@ -60,12 +60,6 @@ struct Process {
     last_log_position: Arc<Mutex<u64>>,
 }
 
-#[derive(Clone, serde::Serialize)]
-struct ProcessLogEvent {
-    process_id: Uuid,
-    line: String,
-}
-
 impl ProcessManager {
     pub async fn new(processes_file_path: PathBuf) -> Result<Self> {
         log::info!(

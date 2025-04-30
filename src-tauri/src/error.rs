@@ -139,6 +139,15 @@ pub enum AppError {
     
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
+
+    #[error("File not found: {0:?}")]
+    FileNotFound(std::path::PathBuf),
+
+    #[error("Archive read error: {0}")]
+    ArchiveReadError(String),
+
+    #[error("PNG not found in archive: {0:?}")]
+    PngNotFoundInArchive(std::path::PathBuf),
 }
 
 #[derive(Serialize)]
