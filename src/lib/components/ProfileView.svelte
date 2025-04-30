@@ -4,7 +4,7 @@
         Mod,
         NoriskModIdentifier,
     } from "$lib/stores/profileStore";
-    import type { ModrinthVersion } from "$lib/types/modrinth";
+    import type { ModrinthVersion, ModrinthProject } from "$lib/types/modrinth";
     import type {
         NoriskModpacksConfig,
         NoriskPackDefinition,
@@ -17,7 +17,8 @@
     import { copyProfile } from "$lib/api/profiles";
     import ProfileExport from "./ProfileExport.svelte"; // Import ProfileExport
     import type { EventPayload } from "$lib/types/events";
-    import type { CustomModInfo } from "$lib/types/profile";
+    import type { CustomModInfo, ModSourceModrinth } from "$lib/types/profile";
+    import { onMount } from "svelte";
 
     // Define props passed from ProfileManager
     let {
@@ -63,7 +64,7 @@
     let showFileViewerModal = $state(false);
 
     // Event dispatcher
-    import { createEventDispatcher, onMount } from "svelte";
+    import { createEventDispatcher } from "svelte";
     const dispatch = createEventDispatcher();
 
     // State for Copy Profile modal
@@ -74,6 +75,45 @@
 
     // Füge zur Statusverfolgung hinzu
     let isLaunching = $state(false);
+
+    // State for mod icons
+    let modrinthProjects = $state<Record<string, ModrinthProject>>({});
+    let loadingModrinthProjects = $state(false);
+    let modrinthProjectsError = $state<string | null>(null);
+
+    // Function to fetch Modrinth project details for all mods
+    async function fetchModrinthProjectDetails() {
+        if (!profile.mods || profile.mods.length === 0) return;
+        
+        // Extract Modrinth project IDs from mods
+        const modrinthProjectIds = profile.mods
+            .filter((mod: Mod) => mod.source.type === "modrinth")
+            .map((mod: Mod) => (mod.source as ModSourceModrinth).project_id);
+        
+        if (modrinthProjectIds.length === 0) return;
+        
+        loadingModrinthProjects = true;
+        modrinthProjectsError = null;
+        
+        try {
+            const projectDetails = await invoke<ModrinthProject[]>("get_modrinth_project_details", {
+                ids: modrinthProjectIds
+            });
+            
+            // Convert to record for easy lookup
+            const projectsMap: Record<string, ModrinthProject> = {};
+            for (const project of projectDetails) {
+                projectsMap[project.id] = project;
+            }
+            
+            modrinthProjects = projectsMap;
+        } catch (error) {
+            console.error("Error fetching Modrinth project details:", error);
+            modrinthProjectsError = error instanceof Error ? error.message : "Error fetching mod icons";
+        } finally {
+            loadingModrinthProjects = false;
+        }
+    }
 
     // Überprüfe den Status beim Laden der Komponente
     onMount(async () => {
@@ -86,8 +126,11 @@
             if (isLaunching) {
                 pollLaunchingStatus();
             }
+            
+            // Fetch Modrinth project details for icons
+            await fetchModrinthProjectDetails();
         } catch (error) {
-            console.error("Error checking initial launch status:", error);
+            console.error("Error during component initialization:", error);
         }
     });
 
@@ -517,6 +560,19 @@
                             on:change={(event) =>
                                 handleToggleMod(mod.id, event)}
                         />
+                        
+                        <!-- Add mod icon if available -->
+                        {#if mod.source.type === "modrinth" && modrinthProjects[(mod.source as ModSourceModrinth).project_id]?.icon_url}
+                            <img 
+                                src={modrinthProjects[(mod.source as ModSourceModrinth).project_id].icon_url} 
+                                alt="Mod icon" 
+                                class="mod-icon" 
+                                loading="lazy"
+                            />
+                        {:else}
+                            <div class="mod-icon mod-icon-placeholder"></div>
+                        {/if}
+                        
                         <span class="mod-name">{getModDisplayName(mod)}</span>
 
                         {#if hasUpdate}
@@ -1095,5 +1151,33 @@
         margin-top: 2rem;
         border-top: 1px solid #ddd;
         padding-top: 1rem;
+    }
+
+    /* Add styles for mod icons */
+    .mod-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        object-fit: cover;
+        margin-right: 8px;
+        flex-shrink: 0;
+    }
+    
+    .mod-icon-placeholder {
+        background-color: #e0e0e0;
+        width: 24px;
+        height: 24px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        margin-right: 8px;
+    }
+    
+    /* Update mod item to align with icons */
+    .mod-item {
+        margin-bottom: 0.3em;
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        flex-wrap: wrap;
     }
 </style>
