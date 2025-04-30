@@ -81,6 +81,11 @@
     let loadingModrinthProjects = $state(false);
     let modrinthProjectsError = $state<string | null>(null);
 
+    // State für Norisk Mod Icons
+    let noriskModIcons = $state<Record<string, string>>({});
+    let loadingNoriskModIcons = $state(false);
+    let noriskModIconsError = $state<string | null>(null);
+
     // Function to fetch Modrinth project details for all mods
     async function fetchModrinthProjectDetails() {
         if (!profile.mods || profile.mods.length === 0) return;
@@ -129,6 +134,11 @@
             
             // Fetch Modrinth project details for icons
             await fetchModrinthProjectDetails();
+            
+            // Fetch Norisk mod icons wenn ein Norisk Pack ausgewählt ist
+            if (profile.selected_norisk_pack_id && noriskPacksConfig?.packs) {
+                await fetchNoriskModIcons();
+            }
         } catch (error) {
             console.error("Error during component initialization:", error);
         }
@@ -443,6 +453,51 @@
             }
         }
     }
+
+    // Function to fetch icons for Norisk mods
+    async function fetchNoriskModIcons() {
+        if (!profile.selected_norisk_pack_id || !noriskPacksConfig?.packs) return;
+        
+        const packDef = getNoriskPackDefinition(profile.selected_norisk_pack_id);
+        if (!packDef || !packDef.mods || packDef.mods.length === 0) return;
+        
+        // Filter only compatible mods
+        const compatibleMods = packDef.mods.filter(mod => {
+            return mod.compatibility?.[profile.game_version]?.[profile.loader];
+        });
+        
+        if (compatibleMods.length === 0) return;
+        
+        loadingNoriskModIcons = true;
+        noriskModIconsError = null;
+        
+        try {
+            console.log(`Fetching icons for ${compatibleMods.length} Norisk mods...`);
+            
+            const iconsResult = await invoke<Record<string, string | null>>("get_icons_for_norisk_mods", {
+                mods: compatibleMods,
+                minecraftVersion: profile.game_version,
+                loader: profile.loader
+            });
+            
+            // Konvertiere in unser Format (nur gültige Icons)
+            const icons: Record<string, string> = {};
+            for (const [modId, base64Icon] of Object.entries(iconsResult)) {
+                if (base64Icon) {
+                    icons[modId] = base64Icon;
+                }
+            }
+            
+            noriskModIcons = icons;
+            console.log(`Loaded ${Object.keys(icons).length} Norisk mod icons.`);
+            
+        } catch (error) {
+            console.error("Error fetching Norisk mod icons:", error);
+            noriskModIconsError = error instanceof Error ? error.message : "Error fetching Norisk mod icons";
+        } finally {
+            loadingNoriskModIcons = false;
+        }
+    }
 </script>
 
 <!-- Moved HTML structure for a single profile item here -->
@@ -715,6 +770,19 @@
                                 on:change={(event) =>
                                     handleToggleNoriskMod(packMod.id, event)}
                             />
+                            
+                            <!-- Norisk Mod Icon -->
+                            {#if noriskModIcons[packMod.id]}
+                                <img
+                                    src="data:image/png;base64,{noriskModIcons[packMod.id]}"
+                                    alt="Mod icon" 
+                                    class="mod-icon" 
+                                    loading="lazy"
+                                />
+                            {:else}
+                                <div class="mod-icon mod-icon-placeholder"></div>
+                            {/if}
+                            
                             <span class="mod-name">{packMod.displayName}</span>
                         </li>
                     {/each}
