@@ -2,30 +2,39 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, onDestroy } from 'svelte';
   import type { ResourcePackInfo, ShaderPackInfo } from '$lib/types/modrinth';
+  import type { ModrinthProject } from '$lib/types/modrinth';
 
   // Properties
-  export let profileId: string | null = null;
+  let { profileId = null } = $props<{ profileId?: string | null }>();
 
   // Tab states
-  let activeTab: 'mods' | 'resourcepacks' | 'shaderpacks' = 'mods';
+  let activeTab = $state<'mods' | 'resourcepacks' | 'shaderpacks'>('mods');
   
 
   // State
-  let resourcePacks: ResourcePackInfo[] = [];
-  let shaderPacks: ShaderPackInfo[] = [];
+  let resourcePacks = $state<ResourcePackInfo[]>([]);
+  let shaderPacks = $state<ShaderPackInfo[]>([]);
   let loadingResourcePacks = false;
   let loadingShaderPacks = false;
   let errorResourcePacks: string | null = null;
   let errorShaderPacks: string | null = null;
   let loadingOperation = false;
   
+  // State for Modrinth project details
+  let modrinthProjects = $state<Record<string, ModrinthProject>>({});
+  let loadingModrinthProjects = $state(false);
+  let modrinthProjectsError = $state<string | null>(null);
+  
   // Interval for auto-refresh
   let refreshInterval: number | null = null;
   
   // Load data based on active tab
-  $: if (profileId && activeTab) {
-    loadTabData(activeTab);
-  }
+  $effect(() => {
+    console.log(`[ProfileContent] $effect triggered. profileId: ${profileId}, activeTab: ${activeTab}`);
+    if (profileId && activeTab) {
+      loadTabData(activeTab);
+    }
+  });
 
   // Format file size nicely
   function formatFileSize(bytes: number): string {
@@ -36,7 +45,11 @@
 
   // Load data for the active tab
   async function loadTabData(tab: string) {
-    if (!profileId) return;
+    console.log(`[ProfileContent] loadTabData called for tab: ${tab}, profileId: ${profileId}`);
+    if (!profileId) {
+      console.log('[ProfileContent] loadTabData aborted: profileId is null or undefined.');
+      return;
+    }
 
     if (tab === 'resourcepacks') {
       await loadResourcePacks();
@@ -57,6 +70,9 @@
         profileId
       });
       console.log(`Loaded ${resourcePacks.length} resource packs`);
+      
+      // Fetch Modrinth project details for icons - MOVED to separate effect
+      // await fetchModrinthProjectDetails();
     } catch (err) {
       console.error('Failed to load resource packs:', err);
       errorResourcePacks = `Error loading resource packs: ${err instanceof Error ? err.message : String(err)}`;
@@ -78,12 +94,72 @@
         profileId
       });
       console.log(`Loaded ${shaderPacks.length} shader packs`);
+      
+      // Fetch Modrinth project details for icons - MOVED to separate effect
+      // await fetchModrinthProjectDetails();
     } catch (err) {
       console.error('Failed to load shader packs:', err);
       errorShaderPacks = `Error loading shader packs: ${err instanceof Error ? err.message : String(err)}`;
       shaderPacks = [];
     } finally {
       loadingShaderPacks = false;
+    }
+  }
+
+  // NEW: Effect to fetch Modrinth details when packs change
+  $effect(() => {
+    // Run this effect whenever resourcePacks or shaderPacks arrays are updated
+    if (resourcePacks.length > 0 || shaderPacks.length > 0) {
+      console.log('[ProfileContent] Pack list updated, fetching Modrinth details...');
+      fetchModrinthProjectDetails();
+    }
+  });
+
+  // Function to fetch Modrinth project details for resourcepacks and shaderpacks
+  async function fetchModrinthProjectDetails() {
+    // Collect all Modrinth project IDs from both resource packs and shader packs
+    const modrinthProjectIds: string[] = [];
+    
+    // Add IDs from resource packs
+    if (resourcePacks && resourcePacks.length > 0) {
+      resourcePacks.forEach(pack => {
+        if (pack.modrinth_info?.project_id) {
+          modrinthProjectIds.push(pack.modrinth_info.project_id);
+        }
+      });
+    }
+    
+    // Add IDs from shader packs
+    if (shaderPacks && shaderPacks.length > 0) {
+      shaderPacks.forEach(pack => {
+        if (pack.modrinth_info?.project_id) {
+          modrinthProjectIds.push(pack.modrinth_info.project_id);
+        }
+      });
+    }
+    
+    if (modrinthProjectIds.length === 0) return;
+    
+    loadingModrinthProjects = true;
+    modrinthProjectsError = null;
+    
+    try {
+      const projectDetails = await invoke<ModrinthProject[]>("get_modrinth_project_details", {
+        ids: modrinthProjectIds
+      });
+      
+      // Convert to record for easy lookup
+      const projectsMap: Record<string, ModrinthProject> = {};
+      for (const project of projectDetails) {
+        projectsMap[project.id] = project;
+      }
+      
+      modrinthProjects = projectsMap;
+    } catch (error) {
+      console.error("Error fetching Modrinth project details:", error);
+      modrinthProjectsError = error instanceof Error ? error.message : "Error fetching icons";
+    } finally {
+      loadingModrinthProjects = false;
     }
   }
 
@@ -168,17 +244,18 @@
 
   // Setup auto-refresh on mount
   onMount(() => {
-    // Initial load
-    if (profileId) {
-      loadTabData(activeTab);
-    }
+    // Initial load - Handled by $effect now
+    // if (profileId) {
+    //   loadTabData(activeTab);
+    // }
 
-    // Setup refresh interval (every 10 seconds)
-    refreshInterval = window.setInterval(() => {
-      if (profileId) {
-        loadTabData(activeTab);
-      }
-    }, 10000);
+    // Setup refresh interval (every 10 seconds) - Temporarily disabled
+    // refreshInterval = window.setInterval(() => {
+    //   console.log(`[ProfileContent] Interval refresh triggered for tab: ${activeTab}, profileId: ${profileId}`);
+    //   if (profileId) {
+    //     loadTabData(activeTab);
+    //   }
+    // }, 10000);
   });
 
   // Cleanup on destroy
@@ -251,8 +328,16 @@
                   </label>
                 </div>
                 <div class="pack-icon">
-                  <!-- No icon available, use default -->
-                  <div class="default-icon">🖼️</div>
+                  {#if pack.modrinth_info?.project_id && modrinthProjects[pack.modrinth_info.project_id]?.icon_url}
+                    <img 
+                      src={modrinthProjects[pack.modrinth_info.project_id].icon_url} 
+                      alt="Resource pack icon" 
+                      class="pack-icon-img" 
+                      loading="lazy"
+                    />
+                  {:else}
+                    <div class="default-icon">🖼️</div>
+                  {/if}
                 </div>
                 <div class="pack-details">
                   <div class="pack-name">
@@ -324,8 +409,16 @@
                   </label>
                 </div>
                 <div class="pack-icon">
-                  <!-- No icon available, use default -->
-                  <div class="default-icon">🌈</div>
+                  {#if pack.modrinth_info?.project_id && modrinthProjects[pack.modrinth_info.project_id]?.icon_url}
+                    <img 
+                      src={modrinthProjects[pack.modrinth_info.project_id].icon_url} 
+                      alt="Shader pack icon" 
+                      class="pack-icon-img" 
+                      loading="lazy"
+                    />
+                  {:else}
+                    <div class="default-icon">🌈</div>
+                  {/if}
                 </div>
                 <div class="pack-details">
                   <div class="pack-name">
@@ -536,6 +629,13 @@
     border-radius: 4px;
     background-color: #e9ecef;
     overflow: hidden;
+  }
+
+  .pack-icon-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
   }
 
   .default-icon {
