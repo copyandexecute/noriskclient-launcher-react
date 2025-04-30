@@ -63,7 +63,7 @@ use commands::modrinth_commands::{
     search_modrinth_projects,
 }; // Remove or comment out if not needed
 
-use commands::file_command::{delete_file, open_file_directory, set_file_enabled};
+use commands::file_command::{delete_file, open_file_directory, set_file_enabled, get_icons_for_archives};
 
 // Import config commands
 use commands::config_commands::{get_launcher_config, set_launcher_config};
@@ -253,6 +253,7 @@ async fn main() {
             add_modrinth_mod_to_profile,
             add_modrinth_content_to_profile,
             get_modrinth_project_details,
+            get_icons_for_archives,
             set_profile_mod_enabled,
             delete_mod_from_profile,
             get_norisk_packs,

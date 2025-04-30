@@ -1,8 +1,10 @@
 use crate::error::{AppError, CommandError};
-use log::{debug, info};
-use std::path::{PathBuf};
+use log::{debug, info, error, warn};
+use std::path::{Path, PathBuf};
+use std::collections::HashMap;
 use tokio::fs;
 use tauri_plugin_opener::OpenerExt;
+use crate::utils::file_utils;
 
 /// Sets a file as enabled or disabled by adding or removing the .disabled extension
 #[tauri::command]
@@ -161,4 +163,54 @@ pub async fn open_file_directory(
             ))))
         }
     }
+}
+
+/// Fetches the first PNG icon found within a list of archive files (.zip, .jar) as Base64 strings.
+///
+/// # Arguments
+///
+/// * `archive_paths` - A vector of strings representing the paths to the archive files.
+///
+/// # Returns
+///
+/// A `Result` containing a `HashMap` where keys are the original file paths
+/// and values are `Option<String>`. The value is `Some(base64_string)` if a PNG
+/// was found, and `None` otherwise (or if an error occurred for that specific file).
+#[tauri::command]
+pub async fn get_icons_for_archives(
+    archive_paths: Vec<String>,
+) -> Result<HashMap<String, Option<String>>, CommandError> {
+    info!("Fetching icons for {} archives...", archive_paths.len());
+    let mut results_map: HashMap<String, Option<String>> = HashMap::new();
+
+    for path_str in archive_paths {
+        let archive_path = Path::new(&path_str);
+        let result = file_utils::find_first_png_in_archive_as_base64(archive_path).await;
+
+        match result {
+            Ok(base64_icon) => {
+                debug!("Icon found for: {}", path_str);
+                results_map.insert(path_str, Some(base64_icon));
+            }
+            Err(AppError::PngNotFoundInArchive(_)) => {
+                debug!("No PNG icon found in archive: {}", path_str);
+                results_map.insert(path_str, None);
+            }
+            Err(AppError::FileNotFound(_)) => {
+                warn!("Archive file not found: {}", path_str);
+                results_map.insert(path_str, None); // File not found is not an error, just no icon
+            }
+            Err(AppError::ArchiveReadError(msg)) => {
+                error!("Error reading archive {}: {}", path_str, msg);
+                results_map.insert(path_str, None); // Insert None on error for this specific file
+            }
+            Err(e) => {
+                error!("Unexpected error processing archive {}: {}", path_str, e);
+                results_map.insert(path_str, None); // Insert None on unexpected error
+            }
+        }
+    }
+
+    info!("Finished fetching icons. Returning {} results.", results_map.len());
+    Ok(results_map)
 }
