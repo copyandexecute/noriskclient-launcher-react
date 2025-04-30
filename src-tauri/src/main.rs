@@ -63,7 +63,10 @@ use commands::modrinth_commands::{
     search_modrinth_projects,
 }; // Remove or comment out if not needed
 
-use commands::file_command::{delete_file, open_file_directory, set_file_enabled, get_icons_for_archives};
+use commands::file_command::{
+    delete_file, get_icons_for_archives, open_file_directory, set_file_enabled,
+    get_icons_for_norisk_mods,
+};
 
 // Import config commands
 use commands::config_commands::{get_launcher_config, set_launcher_config};
@@ -277,6 +280,7 @@ async fn main() {
             get_quilt_loader_versions,
             set_file_enabled,
             delete_file,
+            get_icons_for_norisk_mods,
             open_file_directory,
             download_and_install_modrinth_modpack,
             get_standard_profiles,

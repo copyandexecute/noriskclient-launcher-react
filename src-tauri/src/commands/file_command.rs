@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use tokio::fs;
 use tauri_plugin_opener::OpenerExt;
 use crate::utils::file_utils;
+use crate::integrations::norisk_packs::NoriskModEntryDefinition;
+use crate::utils::path_utils;
 
 /// Sets a file as enabled or disabled by adding or removing the .disabled extension
 #[tauri::command]
@@ -212,5 +214,75 @@ pub async fn get_icons_for_archives(
     }
 
     info!("Finished fetching icons. Returning {} results.", results_map.len());
+    Ok(results_map)
+}
+
+/// Fetches the first PNG icon found within Norisk Pack mods as Base64 strings.
+///
+/// # Arguments
+///
+/// * `mods` - A vector of NoriskModEntryDefinition structs
+/// * `minecraft_version` - The Minecraft version to use for compatibility check
+/// * `loader` - The mod loader (fabric/forge) to use for compatibility check
+///
+/// # Returns
+///
+/// A `Result` containing a `HashMap` where keys are the mod IDs
+/// and values are `Option<String>`. The value is `Some(base64_string)` if a PNG
+/// was found, and `None` otherwise (or if an error occurred for that specific mod).
+#[tauri::command]
+pub async fn get_icons_for_norisk_mods(
+    mods: Vec<NoriskModEntryDefinition>,
+    minecraft_version: String,
+    loader: String,
+) -> Result<HashMap<String, Option<String>>, CommandError> {
+    info!("Fetching icons for {} Norisk Pack mods...", mods.len());
+    let mut results_map: HashMap<String, Option<String>> = HashMap::new();
+
+    // Sammle alle Mod-Cache-Pfade
+    let mut mod_paths: Vec<(String, String)> = Vec::new(); // (mod_id, file_path)
+    
+    for mod_entry in &mods {
+        match path_utils::get_norisk_mod_cache_path(
+            mod_entry,
+            &minecraft_version,
+            &loader
+        ) {
+            Ok(path) => {
+                mod_paths.push((mod_entry.id.clone(), path.to_string_lossy().to_string()));
+            },
+            Err(e) => {
+                warn!("Could not get cache path for mod {}: {}", mod_entry.id, e);
+                results_map.insert(mod_entry.id.clone(), None); // Mod nicht gefunden, kein Icon
+            }
+        }
+    }
+
+    // Extrahiere Icons für jeden Mod aus dem Cache
+    for (mod_id, path_str) in mod_paths {
+        let archive_path = Path::new(&path_str);
+        let result = file_utils::find_first_png_in_archive_as_base64(archive_path).await;
+
+        match result {
+            Ok(base64_icon) => {
+                debug!("Icon found for mod {}", mod_id);
+                results_map.insert(mod_id, Some(base64_icon));
+            }
+            Err(AppError::PngNotFoundInArchive(_)) => {
+                debug!("No PNG icon found in archive for mod {}", mod_id);
+                results_map.insert(mod_id, None);
+            }
+            Err(AppError::FileNotFound(_)) => {
+                warn!("Archive file not found for mod {}: {}", mod_id, path_str);
+                results_map.insert(mod_id, None); 
+            }
+            Err(e) => {
+                error!("Error processing archive for mod {}: {}", mod_id, e);
+                results_map.insert(mod_id, None); 
+            }
+        }
+    }
+
+    info!("Finished fetching Norisk mod icons. Returning {} results.", results_map.len());
     Ok(results_map)
 }
