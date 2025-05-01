@@ -1,5 +1,5 @@
 use crate::error::{CommandError, AppError};
-use crate::integrations::modrinth::{self, ModrinthProjectContext, search_mods, search_projects, ModrinthSearchHit, ModrinthSearchResponse, get_mod_versions as get_modrinth_versions_api, ModrinthVersion, ModrinthProjectType, ModrinthSortType};
+use crate::integrations::modrinth::{self, ModrinthProjectContext, search_mods, search_projects, ModrinthSearchHit, ModrinthSearchResponse, get_mod_versions as get_modrinth_versions_api, ModrinthVersion, ModrinthProjectType, ModrinthSortType, ModrinthBulkUpdateRequestBody};
 use crate::integrations::mrpack;
 use serde::Serialize;
 use uuid::Uuid;
@@ -176,4 +176,26 @@ pub async fn get_modrinth_project_details(
 
     let result = modrinth::get_multiple_projects(ids).await?;
     Ok(result)
+}
+
+/// Efficiently checks for updates to multiple mods using a single API call.
+/// Takes hashes of current mod files and returns the latest available versions.
+/// Mods without updates or not found on Modrinth are omitted from the results.
+#[tauri::command]
+pub async fn check_modrinth_updates(
+    request: ModrinthBulkUpdateRequestBody
+) -> Result<HashMap<String, ModrinthVersion>, CommandError> {
+    log::debug!(
+        "Received check_modrinth_updates command for {} mod hashes",
+        request.hashes.len()
+    );
+    
+    // Call the actual API function from the integrations module
+    let updates = modrinth::check_bulk_updates(request)
+        .await
+        .map_err(CommandError::from)?;
+    
+    log::info!("Found updates for {} mods", updates.len());
+    
+    Ok(updates)
 }

@@ -123,6 +123,23 @@ export interface ShaderPackInfo {
     modrinth_info: ShaderPackModrinthInfo | null;
 }
 
+export interface DataPackModrinthInfo {
+    project_id: string;
+    version_id: string;
+    name: string;
+    version_number: string;
+    download_url: string;
+}
+
+export interface DataPackInfo {
+    filename: string;
+    path: string;
+    sha1_hash: string | null;
+    file_size: number;
+    is_disabled: boolean;
+    modrinth_info: DataPackModrinthInfo | null;
+}
+
 // --- Structures for Bulk Project Lookup --- 
 
 // Corresponds to ModrinthModeratorMessage in Rust
@@ -187,4 +204,15 @@ export interface ModrinthProject {
     gallery: ModrinthGalleryImage[];
     game_versions?: string[] | null; // Added based on Rust struct
     loaders?: string[] | null; // Added based on Rust struct
+}
+
+// Allowed hash algorithms for Modrinth API requests
+export type ModrinthHashAlgorithm = "sha1" | "sha512";
+
+// Request body for checking mod updates via the bulk API
+export interface ModrinthBulkUpdateRequestBody {
+    hashes: string[];      // SHA1 or SHA512 hashes of the currently installed mod files
+    algorithm: ModrinthHashAlgorithm; // Use the specific type
+    loaders: string[];     // List of mod loaders to filter by (e.g., ["fabric", "quilt"])
+    game_versions: string[]; // List of game versions to filter by (e.g., ["1.20.1"])
 }

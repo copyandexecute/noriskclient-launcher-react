@@ -1,7 +1,7 @@
 use crate::error::{AppError, Result};
 use crate::integrations::modrinth::{ModrinthProjectType, ModrinthVersion};
 use crate::state::profile_state::Profile;
-use crate::utils::{resourcepack_utils, shaderpack_utils, hash_utils};
+use crate::utils::{resourcepack_utils, shaderpack_utils, datapack_utils, hash_utils};
 use log::{debug, info};
 use std::path::{Path, PathBuf};
 use tokio::fs;
@@ -166,23 +166,8 @@ async fn get_content_directory(profile: &Profile, content_type: &ContentType) ->
     match content_type {
         ContentType::ResourcePack => resourcepack_utils::get_resourcepacks_dir(profile).await,
         ContentType::ShaderPack => shaderpack_utils::get_shaderpacks_dir(profile).await,
-        ContentType::DataPack => get_datapacks_dir(profile).await,
+        ContentType::DataPack => datapack_utils::get_datapacks_dir(profile).await,
     }
-}
-
-/// Helper function to get the datapacks directory for a profile
-async fn get_datapacks_dir(profile: &Profile) -> Result<PathBuf> {
-    let state = crate::state::state_manager::State::get().await?;
-    let base_profiles_dir = state
-        .profile_manager
-        .calculate_instance_path_for_profile(profile)?;
-    let datapacks_dir = base_profiles_dir.join("saves").join("datapacks");
-    debug!(
-        "Datapacks directory for profile {}: {}",
-        profile.id,
-        datapacks_dir.display()
-    );
-    Ok(datapacks_dir)
 }
 
 /// Converts ContentType to a string representation
