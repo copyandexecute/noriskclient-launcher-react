@@ -152,6 +152,14 @@ pub async fn get_datapacks_for_profile(profile: &Profile) -> Result<Vec<DataPack
                             continue;
                         }
                         
+                        // Find the primary file in the new version
+                        log::debug!("Files in new_version for datapack update: {:?}", version.files);
+                        let primary_file = version.files.iter().find(|f| f.primary)
+                            .ok_or_else(|| AppError::Other(format!(
+                                "No primary file found for Modrinth version {} (ID: {})",
+                                version.name, version.id
+                            )))?;
+                        
                         // Find the primary file for the URL
                         if let Some(primary_file) = version.files.iter().find(|f| f.primary) {
                             debug!("Using primary file from Modrinth: {}", primary_file.filename);
@@ -251,6 +259,7 @@ pub async fn update_datapack_from_modrinth(
     let was_disabled = datapack.is_disabled;
     
     // Find the primary file in the new version
+    log::debug!("Files in new_version for datapack update: {:?}", new_version.files);
     let primary_file = new_version.files.iter().find(|f| f.primary)
         .ok_or_else(|| AppError::Other(format!(
             "No primary file found for Modrinth version {} (ID: {})",

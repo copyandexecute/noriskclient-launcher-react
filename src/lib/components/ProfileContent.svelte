@@ -326,7 +326,7 @@
         game_versions: [gameVersion] // Use the profile's game version
       };
       
-      console.debug('[ProfileContent] Checking for updates for data packs with request:', request);
+      console.log('[ProfileContent] Checking for updates for data packs with request:', request);
       
       // Call the update check command
       const updates = await invoke<Record<string, ModrinthVersion>>(
@@ -334,7 +334,7 @@
         { request }
       );
       
-      console.debug('[ProfileContent] Received raw data pack updates from backend:', updates);
+      console.log('[ProfileContent] Received raw data pack updates from backend:', updates);
       
       dataPackUpdates = updates;
       console.log(`[ProfileContent] Found updates for ${Object.keys(updates).length} data packs`);
