@@ -48,13 +48,13 @@ use commands::minecraft_command::{
 use commands::profile_command::{
     abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
     copy_profile, create_profile, delete_custom_mod, delete_mod_from_profile, delete_profile,
-    export_profile, get_custom_mods, get_local_resourcepacks, get_local_shaderpacks,
+    export_profile, get_custom_mods, get_local_resourcepacks, get_local_shaderpacks, get_local_datapacks,
     get_norisk_packs, get_profile, get_profile_directory_structure, get_standard_profiles,
     get_system_ram_mb, import_local_mods, import_profile_from_file, is_profile_launching,
     launch_profile, list_profiles, open_profile_folder, refresh_norisk_packs,
     refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
-    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth,
+    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth,
 };
 
 // Use statements for registered commands only
@@ -269,6 +269,7 @@ async fn main() {
             get_custom_mods,
             get_local_resourcepacks,
             get_local_shaderpacks,
+            get_local_datapacks,
             set_custom_mod_enabled,
             import_local_mods,
             get_system_ram_mb,
@@ -296,6 +297,7 @@ async fn main() {
             // Resource and Shader pack updates
             update_resourcepack_from_modrinth,
             update_shaderpack_from_modrinth,
+            update_datapack_from_modrinth,
             // Skin management commands
             get_user_skin_data,
             upload_skin,
