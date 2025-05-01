@@ -210,6 +210,58 @@
         return hash ? modUpdates[hash] : null;
     }
 
+    // Handle updating a mod to the latest version
+    async function handleUpdateMod(mod: Mod) {
+        if (!hasModUpdate(mod)) return;
+        
+        const updateVersion = getModUpdateVersion(mod);
+        if (!updateVersion) {
+            console.error("Update version not found despite hasModUpdate returning true");
+            return;
+        }
+        
+        try {
+            console.log(`Updating mod ${mod.id} in profile ${profile.id} to version ${updateVersion.id}`);
+            
+            // Show loading state
+            const modId = mod.id.toString();
+            const oldUpdatesMap = {...modUpdates};
+            
+            // Remove from updates map to hide update button during update
+            if (mod.source.type === "modrinth") {
+                const hash = (mod.source as ModSourceModrinth).file_hash_sha1;
+                if (hash && hash in modUpdates) {
+                    const newMap = {...modUpdates};
+                    delete newMap[hash];
+                    modUpdates = newMap;
+                }
+            }
+            
+            // Call the update command
+            await invoke("update_modrinth_mod_version", {
+                profileId: profile.id,
+                modInstanceId: mod.id,
+                newVersionDetails: updateVersion
+            });
+            
+            console.log(`Successfully updated mod ${mod.id} to version ${updateVersion.id}`);
+            
+            // Optionally refresh mod list or entire profile
+            dispatch("modUpdated", { modId: mod.id, version: updateVersion });
+            
+        } catch (error) {
+            console.error("Failed to update mod:", error);
+            // Restore updates map in case of error
+            modUpdates = {...modUpdates}; // Trigger reactivity
+            
+            // Show error to user
+            dispatch("error", { 
+                message: "Failed to update mod", 
+                details: error instanceof Error ? error.message : String(error)
+            });
+        }
+    }
+
     // Überprüfe den Status beim Laden der Komponente
     onMount(async () => {
         try {
@@ -743,6 +795,14 @@
                                     <path d="M19 21H5a2 2 0 0 1-2-2V5"></path>
                                 </svg>
                             </span>
+                            <!-- Add update button -->
+                            <button 
+                                class="update-mod-button"
+                                title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number}` : "Update to latest version"}
+                                on:click={() => handleUpdateMod(mod)}
+                            >
+                                Update
+                            </button>
                         {/if}
 
                         <!-- Modrinth Version Changer -->
@@ -1373,5 +1433,21 @@
     .update-indicator.new-update svg {
         width: 16px;
         height: 16px;
+    }
+
+    /* Add styles for update button */
+    .update-mod-button {
+        padding: 2px 5px;
+        font-size: 0.9em;
+        background-color: #2ecc71;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 5px;
+    }
+
+    .update-mod-button:hover {
+        background-color: #27ae60;
     }
 </style>
