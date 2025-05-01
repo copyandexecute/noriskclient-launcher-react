@@ -8,28 +8,38 @@ interface FormFieldProps {
   description?: string;
   error?: string | null;
   children: ReactNode;
+  className?: string;
 }
 
 export function FormField({
   label,
-  required = false,
-  description,
-  error,
   children,
+  required = false,
+  error = null,
+  className = "",
+  description,
 }: FormFieldProps) {
   return (
-    <div>
-      <label className="block text-white font-minecraft mb-2 lowercase text-base">
-        {label} {required && <span className="text-red-400">*</span>}
-      </label>
+    <div className={`mb-6 ${className}`}>
+      {label && (
+        <label className="block text-2xl text-white font-minecraft mb-3 lowercase tracking-wide select-none">
+          {label}
+          {required && <span className="text-red-400 ml-1">*</span>}
+        </label>
+      )}
+
       {description && (
-        <p className="text-white/70 mb-4 text-sm font-minecraft">
+        <p className="text-xl text-white/70 mb-3 font-minecraft tracking-wide select-none">
           {description}
         </p>
       )}
+
       {children}
+
       {error && (
-        <p className="mt-1 text-red-400 font-minecraft text-sm">{error}</p>
+        <div className="mt-2 text-base text-red-400 font-minecraft tracking-wide select-none">
+          {error}
+        </div>
       )}
     </div>
   );

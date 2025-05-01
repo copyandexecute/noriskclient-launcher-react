@@ -41,9 +41,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizeClasses = {
-      sm: "py-2 px-4 text-sm",
-      md: "py-3 px-6 text-base",
-      lg: "py-4 px-8 text-lg",
+      sm: "py-2 px-4 text-xl",
+      md: "py-3 px-6 text-2xl",
+      lg: "py-4 px-8 text-2xl",
     };
 
     return (
@@ -54,11 +54,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled}
         className={cn(
           "font-minecraft tracking-wider lowercase border-2 transition-all duration-300",
-          "flex items-center justify-center gap-2",
+          "flex items-center justify-center gap-3",
           "disabled:opacity-60 disabled:cursor-not-allowed",
           "shadow-md hover:shadow-lg active:shadow-sm",
           "text-shadow-sm rounded-md",
           "active:translate-y-0.5",
+          "select-none",
           variantClasses[variant],
           sizeClasses[size],
           className,

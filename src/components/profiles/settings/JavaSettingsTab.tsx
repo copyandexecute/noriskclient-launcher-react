@@ -85,10 +85,10 @@ export function JavaSettingsTab({
 
           {!useCustomJava && (
             <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 rounded-lg mt-4">
-              <div className="text-white font-minecraft mb-2 text-base lowercase tracking-wide">
+              <div className="text-2xl text-white font-minecraft mb-3 lowercase tracking-wide select-none">
                 using default java 21 installation:
               </div>
-              <div className="text-white/70 text-sm font-minecraft break-all lowercase tracking-wide">
+              <div className="text-xl text-white/70 font-minecraft break-all lowercase tracking-wide select-none">
                 c:\users\username\appdata\roaming\noriskclient\meta\java_versions\zulu21.38.21-ca-jre21.0.5-win_x64\bin\javaw.exe
               </div>
             </div>
@@ -123,7 +123,7 @@ export function JavaSettingsTab({
             maxLabel={`${systemRam} mb (${(systemRam / 1024).toFixed(1)} gb)`}
             disabled={isLoadingRam}
           />
-          <div className="mt-3 text-white/70 text-sm tracking-wide">
+          <div className="mt-3 text-xl text-white/70 tracking-wide select-none">
             recommended: {recommendedMaxRam} mb (
             {(recommendedMaxRam / 1024).toFixed(1)} gb)
           </div>

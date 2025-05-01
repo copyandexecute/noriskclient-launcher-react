@@ -9,7 +9,7 @@ interface TabButtonProps {
 export function TabButton({ label, isActive, onClick }: TabButtonProps) {
   return (
     <button
-      className={`px-5 py-3 font-minecraft lowercase tracking-wider ${
+      className={`px-6 py-4 font-minecraft lowercase tracking-wider text-2xl select-none ${
         isActive
           ? "bg-white/20 text-white"
           : "text-white/70 hover:text-white hover:bg-white/10"

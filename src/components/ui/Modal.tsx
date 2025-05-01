@@ -3,26 +3,24 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
-import { cn } from "../../lib/utils";
 
 interface ModalProps {
   children: ReactNode;
   title: string;
   onClose: () => void;
   className?: string;
-  width?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl";
+  width?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "full";
   height?: string;
   footer?: ReactNode;
 }
 
 export function Modal({
-  children,
   title,
+  children,
   onClose,
-  className,
-  width = "md",
-  height = "auto",
   footer,
+  width = "md",
+  height,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -36,6 +34,7 @@ export function Modal({
     "3xl": "max-w-3xl",
     "4xl": "max-w-4xl",
     "5xl": "max-w-5xl",
+    full: "max-w-full",
   };
 
   useEffect(() => {
@@ -78,32 +77,28 @@ export function Modal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center"
     >
       <div
         ref={modalRef}
-        className={cn(
-          "bg-black/70 backdrop-blur-lg border-2 border-white/30 w-full shadow-lg flex flex-col rounded-lg",
-          widthClasses[width],
-          className,
-        )}
-        style={{ height }}
+        className={`bg-black/20 backdrop-blur-lg border-2 border-white/30 w-full ${
+          widthClasses[width]
+        } flex flex-col shadow-[0_0_30px_rgba(0,0,0,0.5)]`}
+        style={{ height: height || "auto", maxHeight: "90vh" }}
       >
         <div className="flex items-center justify-between p-5 border-b border-white/20 bg-black/20">
-          <h2 className="text-2xl font-minecraft text-white lowercase tracking-wider text-shadow">
+          <h2 className="text-2xl font-minecraft text-white lowercase tracking-wider select-none">
             {title}
           </h2>
           <button
-            className="text-white/60 hover:text-white transition-colors p-2 rounded-md"
-            onClick={handleCloseWithAnimation}
+            className="text-white/70 hover:text-white transition-colors"
+            onClick={onClose}
           >
             <Icon icon="pixel:window-close-solid" className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar p-5">
-          {children}
-        </div>
+        <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
 
         {footer && (
           <div className="p-5 border-t border-white/20 bg-black/20">

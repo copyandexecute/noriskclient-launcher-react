@@ -5,6 +5,7 @@ interface TextAreaProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
   rows?: number;
 }
 
@@ -13,15 +14,20 @@ export function TextArea({
   onChange,
   placeholder = "",
   className = "",
+  disabled = false,
   rows = 4,
 }: TextAreaProps) {
   return (
     <textarea
-      value={value}
+      value={value || ""}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base resize-none ${className}`}
+      disabled={disabled}
       rows={rows}
+      className={`w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-4 text-2xl text-white font-minecraft rounded-md
+        focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20
+        placeholder:text-white/40 placeholder:lowercase resize-none select-none
+        ${disabled ? "opacity-60 cursor-not-allowed" : ""} ${className}`}
     />
   );
 }

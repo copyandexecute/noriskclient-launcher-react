@@ -1,4 +1,7 @@
 "use client";
+
+import { useState } from "react";
+import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { ProfileItem } from "./ProfileItem";
 
@@ -15,22 +18,50 @@ export function ProfileGroup({
   selectedProfileId,
   onSelectProfile,
 }: ProfileGroupProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
+  };
+
   return (
     <div className="mb-4">
-      <div className="px-3 py-1 text-white/50 font-minecraft text-xs bg-white/5 mb-2">
-        {loader}
-      </div>
+      <button
+        onClick={toggleExpand}
+        className="flex items-center justify-between w-full bg-black/30 border border-white/10 p-2 text-white font-minecraft text-2xl mb-1"
+      >
+        <div className="flex items-center">
+          <LoaderIcon loader={loader} />
+          <span className="ml-2 tracking-wide lowercase select-none">
+            {loader}
+          </span>
+        </div>
+        <Icon
+          icon={isExpanded ? "pixel:chevron-up" : "pixel:chevron-down"}
+          className="w-5 h-5 text-white/70"
+        />
+      </button>
 
-      <div className="space-y-2">
-        {profiles.map((profile) => (
-          <ProfileItem
-            key={profile.id}
-            profile={profile}
-            isSelected={selectedProfileId === profile.id}
-            onSelect={() => onSelectProfile(profile.id)}
-          />
-        ))}
-      </div>
+      {isExpanded && (
+        <div className="space-y-1">
+          {profiles.map((profile) => (
+            <ProfileItem
+              key={profile.id}
+              profile={profile}
+              isSelected={selectedProfileId === profile.id}
+              onSelect={() => onSelectProfile(profile.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+interface LoaderIconProps {
+  loader: string;
+}
+
+function LoaderIcon({}: LoaderIconProps) {
+  return <Icon icon="pixel:grid-solid" className="w-5 h-5 text-blue-400" />;
 }

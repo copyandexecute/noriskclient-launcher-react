@@ -190,7 +190,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
   };
 
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-10 select-none">
       <SectionTitle
         title="select mod loader"
         description="choose a mod loader for your minecraft profile. some loaders may not be compatible with the selected version."
@@ -241,7 +241,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
       </div>
 
       {profile.loader !== "vanilla" && (
-        <FormField label={`${profile.loader} version`}>
+        <FormField label={`${profile.loader} version`} className="mt-6">
           {loading ? (
             <LoadingIndicator
               message={`loading ${profile.loader} versions...`}

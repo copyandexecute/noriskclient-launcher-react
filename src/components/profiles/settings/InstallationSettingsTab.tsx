@@ -174,7 +174,7 @@ export function InstallationSettingsTab({
   }
 
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-10 select-none">
       {error && <StatusMessage type="error" message={error} />}
 
       <FormSection>
@@ -188,10 +188,10 @@ export function InstallationSettingsTab({
                 />
               </div>
               <div>
-                <div className="text-white font-minecraft text-lg tracking-wide lowercase">
+                <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
                   minecraft {editedProfile.game_version}
                 </div>
-                <div className="text-white/70 text-base tracking-wide lowercase">
+                <div className="text-xl text-white/70 tracking-wide lowercase">
                   {editedProfile.loader === "vanilla"
                     ? "vanilla"
                     : `${editedProfile.loader} ${editedProfile.loader_version || ""}`}
@@ -231,7 +231,7 @@ export function InstallationSettingsTab({
           </div>
         </FormField>
 
-        <FormField label="game version">
+        <FormField label="game version" className="mt-6">
           <div className="mb-4">
             <div className="relative">
               <TextInput
@@ -263,7 +263,7 @@ export function InstallationSettingsTab({
             ) : (
               <div className="max-h-64 overflow-y-auto custom-scrollbar bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg">
                 {filteredVersions.length === 0 ? (
-                  <div className="p-5 text-white/70 text-center">
+                  <div className="p-5 text-2xl text-white/70 text-center select-none">
                     no versions found matching your search
                   </div>
                 ) : (
@@ -271,7 +271,7 @@ export function InstallationSettingsTab({
                     {filteredVersions.map((version) => (
                       <button
                         key={version}
-                        className={`py-2.5 px-3.5 font-minecraft text-center text-sm lowercase tracking-wide rounded-md transition-all duration-200 ${
+                        className={`py-3 px-4 font-minecraft text-center text-2xl lowercase tracking-wide rounded-md transition-all duration-200 ${
                           editedProfile.game_version === version
                             ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
                             : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white"
@@ -402,7 +402,7 @@ export function InstallationSettingsTab({
         </FormField>
 
         {editedProfile.loader !== "vanilla" && (
-          <FormField label={`${editedProfile.loader} version`}>
+          <FormField label={`${editedProfile.loader} version`} className="mt-6">
             {isLoadingLoaderVersions ? (
               <LoadingIndicator
                 message={`loading ${editedProfile.loader} versions...`}
@@ -421,7 +421,7 @@ export function InstallationSettingsTab({
                 className="text-base tracking-wide"
               />
             ) : (
-              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 text-white/70 text-center rounded-lg">
+              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 text-2xl text-white/70 text-center rounded-lg select-none">
                 no {editedProfile.loader} versions available for minecraft{" "}
                 {editedProfile.game_version}
               </div>

@@ -72,14 +72,16 @@ export function ProfileSelectionPopup({
         className="bg-black/40 border-2 border-white/30 shadow-lg w-full max-w-md max-h-[80vh] flex flex-col"
       >
         <div className="p-4 border-b border-white/20 flex justify-between items-center">
-          <h3 className="text-white font-minecraft text-lg">{title}</h3>
+          <h3 className="text-white font-minecraft text-3xl tracking-wide lowercase select-none">
+            {title}
+          </h3>
           <button onClick={onCancel} className="text-white/60 hover:text-white">
-            <Icon icon="pixel:close" className="w-5 h-5" />
+            <Icon icon="pixel:close" className="w-6 h-6" />
           </button>
         </div>
 
         <div className="p-4">
-          <p className="text-white/70 font-minecraft text-sm mb-4">
+          <p className="text-white/70 font-minecraft text-sm mb-4 tracking-wide lowercase select-none">
             {description}
           </p>
 
@@ -105,14 +107,14 @@ export function ProfileSelectionPopup({
         <div className="p-4 border-t border-white/20 flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-4 py-2 bg-black/30 border border-white/10 text-white/70 font-minecraft text-sm hover:bg-black/40 hover:text-white"
+            className="px-4 py-2 bg-black/30 border border-white/10 text-white/70 font-minecraft text-sm tracking-wide lowercase select-none hover:bg-black/40 hover:text-white"
           >
             Cancel
           </button>
           <button
             onClick={() => selectedProfileId && onSelect(selectedProfileId)}
             disabled={!selectedProfileId}
-            className="px-4 py-2 bg-white/10 border border-white/20 text-white font-minecraft text-sm hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-white/10 border border-white/20 text-white font-minecraft text-sm tracking-wide lowercase select-none hover:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Install
           </button>
@@ -126,13 +128,13 @@ function EmptyProfilesMessage() {
   return (
     <div className="text-center py-8">
       <Icon
-        icon="pixel:warning"
-        className="w-12 h-12 text-white/30 mx-auto mb-4"
+        icon="pixel:exclaimation-solid"
+        className="w-14 h-14 text-white/30 mx-auto mb-4"
       />
-      <p className="text-white/60 font-minecraft text-sm">
+      <p className="text-white/60 font-minecraft text-sm tracking-wide lowercase select-none">
         No profiles available
       </p>
-      <p className="text-white/40 font-minecraft text-xs mt-2">
+      <p className="text-white/40 font-minecraft text-xs mt-2 tracking-wide lowercase select-none">
         Create a profile first to install content
       </p>
     </div>

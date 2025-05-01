@@ -50,11 +50,12 @@ export function ProfileImport({
         variant="primary"
         onClick={handleImport}
         disabled={isImporting}
-        icon={<Icon icon="pixel:file-import-solid" className="w-4 h-4" />}
+        icon={<Icon icon="pixel:file-import-solid" className="w-5 h-5" />}
+        className="text-2xl py-3 px-6"
       >
         {isImporting ? (
           <>
-            <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
+            <Icon icon="pixel:spinner-solid" className="w-5 h-5 animate-spin" />
             <span>importing...</span>
           </>
         ) : (
@@ -77,31 +78,31 @@ export function ProfileImport({
 
         <div className="space-y-6">
           <div>
-            <h3 className="text-xl font-minecraft text-white mb-4 lowercase tracking-wide">
+            <h3 className="text-2xl font-minecraft text-white mb-5 lowercase select-none">
               import profile pack
             </h3>
-            <p className="text-white/70 mb-6 font-minecraft text-sm tracking-wide">
+            <p className="text-xl text-white/70 mb-6 font-minecraft tracking-wide select-none">
               Import a .mrpack or .noriskpack file to create a new profile. This
               will open a file selection dialog.
             </p>
           </div>
 
           <div className="bg-black/30 backdrop-blur-md border-2 border-white/20 p-5">
-            <h3 className="text-white font-minecraft text-base mb-3 lowercase">
+            <h3 className="text-2xl text-white font-medium mb-3 select-none">
               Supported formats:
             </h3>
-            <ul className="text-white/80 text-sm space-y-2 font-minecraft">
+            <ul className="text-xl text-gray-300 space-y-2 select-none">
               <li className="flex items-center">
                 <Icon
                   icon="pixel:file-solid"
-                  className="w-4 h-4 mr-2 text-blue-400"
+                  className="w-5 h-5 mr-3 text-blue-400"
                 />
                 <span>.mrpack (Modrinth)</span>
               </li>
               <li className="flex items-center">
                 <Icon
                   icon="pixel:file-solid"
-                  className="w-4 h-4 mr-2 text-green-400"
+                  className="w-5 h-5 mr-3 text-green-400"
                 />
                 <span>.noriskpack (NoRisk Launcher)</span>
               </li>

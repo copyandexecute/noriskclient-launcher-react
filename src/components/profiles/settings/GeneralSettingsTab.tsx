@@ -113,7 +113,7 @@ export function GeneralSettingsTab({
           <TextInput
             value={editedProfile.name}
             onChange={(value) => updateProfile({ name: value })}
-            className="text-base tracking-wide"
+            className="text-2xl tracking-wide"
           />
         </FormField>
 
@@ -122,7 +122,7 @@ export function GeneralSettingsTab({
             value={editedProfile.description || ""}
             onChange={(value) => updateProfile({ description: value || null })}
             placeholder="enter a description for this profile"
-            className="text-base tracking-wide"
+            className="text-2xl tracking-wide"
           />
         </FormField>
 
@@ -139,11 +139,11 @@ export function GeneralSettingsTab({
                   })
                 }
                 options={[{ value: "", label: "none" }, ...noriskPackOptions]}
-                className="text-base tracking-wide"
+                className="text-2xl tracking-wide"
               />
               {editedProfile.selected_norisk_pack_id &&
                 noriskPacks[editedProfile.selected_norisk_pack_id] && (
-                  <p className="text-white/70 text-sm mt-3 font-minecraft tracking-wide">
+                  <p className="text-xl text-white/70 mt-4 font-minecraft tracking-wide select-none">
                     {
                       noriskPacks[editedProfile.selected_norisk_pack_id]
                         .description
@@ -164,7 +164,7 @@ export function GeneralSettingsTab({
             value={editedProfile.group || ""}
             onChange={(value) => updateProfile({ group: value || null })}
             placeholder="enter group name"
-            className="text-base tracking-wide"
+            className="text-2xl tracking-wide"
           />
         </FormField>
       </FormSection>
@@ -180,7 +180,7 @@ export function GeneralSettingsTab({
               disabled={loading}
               icon="pixel:copy-solid"
               variant="secondary"
-              className="text-base tracking-wide"
+              className="text-2xl py-3 px-6 tracking-wide"
             >
               duplicate
             </Button>
@@ -196,7 +196,7 @@ export function GeneralSettingsTab({
               onClick={handleDelete}
               variant="danger"
               icon="pixel:trash-solid"
-              className="text-base tracking-wide"
+              className="text-2xl py-3 px-6 tracking-wide"
             >
               {confirmDelete ? "confirm delete" : "delete instance"}
             </Button>

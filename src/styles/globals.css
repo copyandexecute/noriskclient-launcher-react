@@ -10,6 +10,14 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: "MinecraftTen";
+    src: url("/fonts/minecraft.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --background: 0 0% 7%;
     --foreground: 0 0% 98%;
@@ -42,6 +50,7 @@
     --radius-xl: 16px;
     --radius-2xl: 24px;
     --font-minecraft: "Minecraft", monospace;
+    --font-minecraft-ten: "MinecraftTen", sans-serif;
     --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
     --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
@@ -114,6 +123,11 @@
 .font-minecraft {
     font-family: var(--font-minecraft), monospace;
     letter-spacing: 0.05em;
+}
+
+.font-minecraft-ten {
+    font-family: var(--font-minecraft-ten), sans-serif;
+    letter-spacing: 0.03em;
 }
 
 ::-webkit-scrollbar {
@@ -344,3 +358,4 @@
 .mc-toggle-inactive .mc-toggle-handle {
     @apply translate-x-1;
 }
+

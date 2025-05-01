@@ -24,9 +24,9 @@ export function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className={`w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base rounded-md
+      className={`w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-4 text-2xl text-white font-minecraft rounded-md
         focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20
-        placeholder:text-white/40 placeholder:lowercase
+        placeholder:text-white/40 placeholder:lowercase select-none
         ${disabled ? "opacity-60 cursor-not-allowed" : ""} ${className}`}
     />
   );

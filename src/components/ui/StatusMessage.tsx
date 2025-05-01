@@ -1,5 +1,4 @@
 import { Icon } from "@iconify/react";
-import { cn } from "../../lib/utils";
 
 type StatusType = "error" | "success" | "warning" | "info";
 
@@ -9,31 +8,33 @@ interface StatusMessageProps {
   className?: string;
 }
 
-export function StatusMessage({
-  type,
-  message,
-  className,
-}: StatusMessageProps) {
+export function StatusMessage({ type = "info", message }: StatusMessageProps) {
+  if (!message) return null;
+
   const typeConfig = {
-    error: {
-      bg: "bg-red-500/20",
-      border: "border-red-500/40",
-      icon: "pixel:warning",
+    info: {
+      bgColor: "bg-blue-900/20",
+      borderColor: "border-blue-500/40",
+      textColor: "text-blue-400",
+      icon: "pixel:info-circle-solid",
     },
     success: {
-      bg: "bg-green-500/20",
-      border: "border-green-500/40",
-      icon: "pixel:check-circle",
+      bgColor: "bg-green-900/20",
+      borderColor: "border-green-500/40",
+      textColor: "text-green-400",
+      icon: "pixel:check-circle-solid",
     },
     warning: {
-      bg: "bg-yellow-500/20",
-      border: "border-yellow-500/40",
-      icon: "pixel:exclamation-triangle",
+      bgColor: "bg-yellow-900/20",
+      borderColor: "border-yellow-500/40",
+      textColor: "text-yellow-400",
+      icon: "pixel:exclamation-triangle-solid",
     },
-    info: {
-      bg: "bg-blue-500/20",
-      border: "border-blue-500/40",
-      icon: "pixel:info-circle",
+    error: {
+      bgColor: "bg-red-900/20",
+      borderColor: "border-red-500/40",
+      textColor: "text-red-400",
+      icon: "pixel:exclamation-circle-solid",
     },
   };
 
@@ -41,17 +42,17 @@ export function StatusMessage({
 
   return (
     <div
-      className={cn(
-        "mb-6 p-4 text-white border",
-        config.bg,
-        config.border,
-        className,
-      )}
+      className={`p-4 mb-6 ${config.bgColor} border ${config.borderColor} rounded-md flex items-start select-none`}
     >
-      <p className="font-minecraft text-sm flex items-center gap-2">
-        <Icon icon={config.icon} className="w-4 h-4" />
+      <Icon
+        icon={config.icon}
+        className={`w-6 h-6 ${config.textColor} mr-3 mt-1 flex-shrink-0`}
+      />
+      <div
+        className={`${config.textColor} text-xl font-minecraft tracking-wide`}
+      >
         {message}
-      </p>
+      </div>
     </div>
   );
 }

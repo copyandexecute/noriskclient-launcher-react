@@ -12,7 +12,7 @@ import type {
   ModLoader,
   Profile,
 } from "../../types/profile";
-//@ts-ignore
+// @ts-ignore
 import type { MinecraftVersion, VersionManifest } from "../../types/minecraft";
 import { useProfileStore } from "../../store/profile-store";
 import { invoke } from "@tauri-apps/api/core";
@@ -184,8 +184,8 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
   const renderContent = () => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center h-full">
-          <LoadingSpinner size="lg" text="Loading..." />
+        <div className="flex flex-col items-center justify-center h-full select-none">
+          <LoadingSpinner size="lg" text="Loading..." textClass="text-2xl" />
         </div>
       );
     }
@@ -225,7 +225,8 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
             variant="secondary"
             onClick={handleBack}
             disabled={creating || loading}
-            icon={<Icon icon="pixel:arrow-left-solid" className="w-4 h-4" />}
+            icon={<Icon icon="pixel:arrow-left-solid" className="w-5 h-5" />}
+            className="text-2xl py-3 px-6"
           >
             back
           </Button>
@@ -236,6 +237,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
           variant="secondary"
           onClick={onClose}
           disabled={creating || loading}
+          className="text-2xl py-3 px-6"
         >
           cancel
         </Button>
@@ -243,19 +245,20 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
           variant="primary"
           onClick={handleNext}
           disabled={creating || loading || (step === 1 && !profile.name)}
+          className="text-2xl py-3 px-6"
         >
           {creating ? (
             <>
               <Icon
                 icon="pixel:spinner-solid"
-                className="w-4 h-4 animate-spin"
+                className="w-5 h-5 animate-spin"
               />
               <span>creating...</span>
             </>
           ) : step < totalSteps ? (
             <>
               <span>next</span>
-              <Icon icon="pixel:arrow-right-solid" className="w-4 h-4" />
+              <Icon icon="pixel:arrow-right-solid" className="w-5 h-5" />
             </>
           ) : (
             <span>create</span>

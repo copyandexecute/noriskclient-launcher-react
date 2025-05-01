@@ -348,10 +348,9 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setModVersions([]);
           setVersionsError(null);
         } catch (err) {
-          console.error("Modrinth search failed:", err);
-          setSearchError(
-            `Search failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
+          const error = err as Error;
+          console.error("Modrinth search failed:", error);
+          setSearchError(`Search failed: ${error.message || String(error)}`);
           setSearchResults([]);
           setSearchResponse(null);
         } finally {
@@ -567,6 +566,8 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
         setSearchError(
           `Failed to load content: ${err instanceof Error ? err.message : String(err)}`,
         );
+        setSearchResults([]);
+        setSearchResponse(null);
       } finally {
         setSearchLoading(false);
         // Reset the flag to indicate search is complete
@@ -594,7 +595,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
               {PROJECT_TYPES.map((tab) => (
                 <button
                   key={tab.type}
-                  className={`px-4 py-2 font-minecraft text-sm lowercase ${
+                  className={`px-4 py-2 font-minecraft text-3xl lowercase select-none tracking-wide ${
                     selectedProjectType === tab.type
                       ? "bg-white/10 text-white"
                       : "text-white/60 hover:text-white"
@@ -614,14 +615,14 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search mods, modpacks, resource packs..."
-                  className="w-full bg-black/20 backdrop-blur-md border border-white/10 px-3 py-2 text-white font-minecraft text-sm shadow-sm"
+                  className="w-full bg-black/20 backdrop-blur-md border border-white/10 px-3 py-2 text-white font-minecraft text-3xl shadow-sm tracking-wide"
                 />
                 {searchTerm && (
                   <button
                     className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
                     onClick={() => setSearchTerm("")}
                   >
-                    <Icon icon="pixel:close" className="w-4 h-4" />
+                    <Icon icon="pixel:window-close-solid" className="w-6 h-6" />
                   </button>
                 )}
               </div>
@@ -632,30 +633,37 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                   onChange={(e) => {
                     changeSortType(e.target.value as ModrinthSortType);
                   }}
-                  className="bg-black/20 backdrop-blur-md border border-white/10 px-2 py-2 text-white font-minecraft text-sm shadow-sm appearance-none pr-8"
+                  className="bg-black/20 backdrop-blur-md border border-white/10 px-2 py-2 text-white font-minecraft text-3xl shadow-sm appearance-none pr-8 tracking-wide"
                   disabled={searchLoading}
                   aria-label="Sort by"
                 >
                   {SORT_OPTIONS.map((option) => (
-                    <option key={option.type} value={option.type}>
+                    <option
+                      key={option.type}
+                      value={option.type}
+                      className="text-3xl"
+                    >
                       {option.label}
                     </option>
                   ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
-                  <Icon icon="pixel:chevron-down" className="w-3 h-3" />
+                  <Icon icon="pixel:chevron-down" className="w-6 h-6" />
                 </div>
               </div>
 
               <button
                 onClick={() => performSearch(true)}
                 disabled={searchLoading || searchInProgressRef.current}
-                className="bg-black/20 hover:bg-black/30 backdrop-blur-md border border-white/10 px-4 py-2 text-white font-minecraft text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed minecraft-button-hover"
+                className="bg-black/20 hover:bg-black/30 backdrop-blur-md border border-white/10 px-4 py-2 text-white font-minecraft text-3xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed minecraft-button-hover tracking-wide"
               >
                 {searchLoading ? (
-                  <Icon icon="pixel:loading" className="animate-spin w-4 h-4" />
+                  <Icon
+                    icon="pixel:circle-notch-solid"
+                    className="animate-spin w-6 h-6"
+                  />
                 ) : (
-                  <Icon icon="pixel:search" className="w-4 h-4" />
+                  <Icon icon="pixel:search" className="w-6 h-6" />
                 )}
               </button>
             </div>
@@ -692,6 +700,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                         <div className="versions-container mt-4 pt-4 border-t border-white/10">
                           {versionsLoading ? (
                             <LoadingIndicator
+                              // @ts-ignore
                               size="sm"
                               message="Loading versions..."
                             />
@@ -699,7 +708,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                             <ErrorMessage message={versionsError} />
                           ) : modVersions.length > 0 ? (
                             <div>
-                              <h4 className="text-white font-minecraft text-sm mb-2">
+                              <h4 className="text-white font-minecraft text-2xl mb-2 tracking-wide lowercase select-none">
                                 Available Versions:
                               </h4>
                               <div className="versions-list space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
@@ -713,6 +722,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                                       key={version.id}
                                       version={version}
                                       file={primaryFile}
+                                      // @ts-ignore
                                       installState={
                                         addingModState[version.id] || "idle"
                                       }
@@ -736,15 +746,12 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                   ))}
 
                   {loadingMore && (
-                    <LoadingIndicator
-                      size="sm"
-                      message="Loading more results..."
-                    />
+                    <LoadingIndicator message="Loading more results..." />
                   )}
 
                   {!hasMore && searchResults.length > 0 && !loadingMore && (
                     <div className="text-center py-4 border-t border-white/10 mt-2">
-                      <p className="text-white/50 font-minecraft text-sm">
+                      <p className="text-white/50 font-minecraft-ten text-xl tracking-wide lowercase select-none">
                         End of results
                       </p>
                     </div>
@@ -783,8 +790,11 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       )}
 
       {addError && (
-        <div className="fixed bottom-4 right-4 bg-red-900/90 border border-red-700 text-white px-4 py-3 font-minecraft text-sm shadow-md z-50">
-          <Icon icon="pixel:warning" className="inline-block mr-2 w-4 h-4" />
+        <div className="fixed bottom-4 right-4 bg-red-900/90 border border-red-700 text-white px-4 py-3 font-minecraft-ten text-2xl shadow-md z-50 tracking-wide lowercase select-none">
+          <Icon
+            icon="pixel:exclamation-triangle-solid"
+            className="inline-block mr-2 w-5 h-5"
+          />
           {addError}
         </div>
       )}

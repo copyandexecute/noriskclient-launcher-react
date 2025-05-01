@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
@@ -9,7 +8,7 @@ import { ContentTab } from "./detail/ContentTab";
 import { WorldsTab } from "./detail/WorldsTab";
 import { LogsTab } from "./detail/LogsTab";
 import { BrowseTab } from "./detail/BrowseTab";
-import { DetailHeader } from "./detail/DetailHeader.tsx";
+import { DetailHeader } from "./detail/DetailHeader";
 import * as ProfileService from "../../services/profile-service";
 
 interface ProfileDetailViewProps {
@@ -83,12 +82,6 @@ export function ProfileDetailView({
     }
   };
 
-  const handleOutsideClick = (e: React.MouseEvent) => {
-    if (e.target === containerRef.current) {
-      handleClose();
-    }
-  };
-
   const handleBrowseContent = (contentType: string) => {
     setBrowseContentType(contentType);
     setActiveTab("browse");
@@ -116,8 +109,12 @@ export function ProfileDetailView({
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center"
-      onClick={handleOutsideClick}
+      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
     >
       <div
         ref={modalRef}
@@ -136,14 +133,14 @@ export function ProfileDetailView({
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              className={`px-6 py-3 font-minecraft text-base lowercase flex items-center gap-2 transition-colors ${
+              className={`px-6 py-4 font-minecraft text-2xl lowercase flex items-center gap-3 transition-colors select-none ${
                 activeTab === tab.id
                   ? "bg-white/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/10"
+                  : "text-white/60 hover:text-white"
               }`}
               onClick={() => setActiveTab(tab.id as TabType)}
             >
-              <Icon icon={tab.icon} className="w-4 h-4" />
+              <Icon icon={tab.icon} className="w-6 h-6" />
               <span>{tab.label}</span>
             </button>
           ))}

@@ -1,112 +1,145 @@
 "use client";
 
 import type React from "react";
+import { useState } from "react";
 import { Icon } from "@iconify/react";
 import type { ModrinthSearchHit } from "../../types/modrinth";
+import { Card, CardContent } from "../ui/Card";
 
 interface ModrinthProjectCardProps {
   project: ModrinthSearchHit;
-  isExpanded: boolean;
-  isLoading: boolean;
-  onToggleExpand: () => void;
+  isExpanded?: boolean;
+  isLoading?: boolean;
+  onClick?: () => void;
+  onToggleExpand?: () => void;
   children?: React.ReactNode;
 }
 
-export const ModrinthProjectCard: React.FC<ModrinthProjectCardProps> = ({
+export function ModrinthProjectCard({
   project,
-  isExpanded,
-  isLoading,
+  isExpanded = false,
+  isLoading = false,
+  onClick,
   onToggleExpand,
   children,
-}) => {
+}: ModrinthProjectCardProps) {
+  const [imageError, setImageError] = useState(false);
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    }
+  };
+
+  const handleExpandClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onToggleExpand) {
+      onToggleExpand();
+    }
+  };
+
   return (
-    <div className="result-item bg-black/20 backdrop-blur-md border border-white/10 p-4 hover:bg-black/30 transition-colors">
-      <div className="flex gap-4">
-        <div className="flex-shrink-0 w-28 h-28 bg-black/30 overflow-hidden">
-          {project.icon_url ? (
-            <img
-              src={project.icon_url || "/placeholder.svg"}
-              alt={`${project.title} icon`}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = "none";
-                const parent = target.parentElement;
-                if (parent) {
-                  parent.textContent = "📦";
-                  parent.className +=
-                    " flex items-center justify-center text-2xl";
-                }
-              }}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-2xl">
-              📦
-            </div>
-          )}
-        </div>
-
-        <div className="flex-grow overflow-hidden">
-          <h3 className="text-white font-minecraft text-lg font-bold mb-1">
-            {project.title}
-          </h3>
-
-          <p className="text-white/80 font-minecraft text-sm line-clamp-2 mb-2">
-            {project.description}
-          </p>
-
-          <div className="flex items-center gap-4 text-white/60 font-minecraft text-xs">
-            <div className="flex items-center">
-              <Icon icon="pixel:download" className="mr-1 w-3 h-3" />
-              {project.downloads.toLocaleString()}
-            </div>
-
-            <div className="flex items-center">
-              <Icon icon="pixel:star" className="mr-1 w-3 h-3" />
-              {project.follows.toLocaleString()}
-            </div>
-
-            {project.latest_version && (
-              <div className="flex items-center">
-                <Icon icon="pixel:tag" className="mr-1 w-3 h-3" />
-                {project.latest_version}
+    <Card
+      className={`overflow-hidden transition-all duration-200 hover:bg-white/5 cursor-pointer border border-white/10 ${
+        isExpanded ? "bg-white/5" : ""
+      }`}
+      // @ts-ignore
+      onClick={handleClick}
+    >
+      <CardContent className="p-4">
+        <div className="flex gap-4">
+          <div className="flex-shrink-0">
+            {!imageError && project.icon_url ? (
+              <img
+                src={project.icon_url || "/placeholder.svg"}
+                alt={project.title}
+                className="w-28 h-28 object-cover rounded"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div className="w-16 h-16 bg-white/10 rounded flex items-center justify-center">
+                <Icon
+                  icon={
+                    project.project_type === "mod"
+                      ? "pixel:bolt-solid"
+                      : project.project_type === "modpack"
+                        ? "pixel:folder-open-solid"
+                        : project.project_type === "resourcepack"
+                          ? "pixel:image-solid"
+                          : project.project_type === "shader"
+                            ? "pixel:image-solid"
+                            : "pixel:grid-solid"
+                  }
+                  className="w-8 h-8 text-white/70"
+                />
               </div>
             )}
           </div>
 
-          <div className="flex justify-end mt-2">
-            <button
-              onClick={onToggleExpand}
-              disabled={isLoading}
-              className="bg-black/30 hover:bg-black/40 px-3 py-1 text-white font-minecraft text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isExpanded ? (
-                isLoading ? (
-                  <span className="flex items-center">
-                    <Icon
-                      icon="pixel:loading"
-                      className="animate-spin mr-1 w-3 h-3"
-                    />
-                    Loading...
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <Icon icon="pixel:chevron-up" className="mr-1 w-3 h-3" />
-                    Hide Versions
-                  </span>
-                )
-              ) : (
-                <span className="flex items-center">
-                  <Icon icon="pixel:chevron-down" className="mr-1 w-3 h-3" />
-                  Show Versions
+          <div className="flex-grow">
+            <div className="flex items-start justify-between">
+              <h3 className="text-white font-minecraft text-3xl mb-1 tracking-wide lowercase select-none">
+                {project.title}
+              </h3>
+              <button
+                onClick={handleExpandClick}
+                className="text-white/60 hover:text-white p-1 transition-colors"
+                aria-label={isExpanded ? "Collapse" : "Expand"}
+              >
+                <Icon
+                  icon={isExpanded ? "pixel:chevron-up" : "pixel:chevron-down"}
+                  className={`w-5 h-5 transition-transform duration-200 ${isLoading ? "animate-pulse" : ""}`}
+                />
+              </button>
+            </div>
+
+            <p className="text-white/70 font-minecraft-ten text-xs mb-2 line-clamp-2 tracking-wide lowercase select-none">
+              {project.description}
+            </p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {/* @ts-ignore */}
+              {project.categories?.slice(0, 3).map((category) => (
+                <span
+                  key={category}
+                  className="px-2 py-0.5 bg-white/10 text-white/80 rounded text-xs font-minecraft-ten tracking-wide lowercase select-none"
+                >
+                  {category}
                 </span>
-              )}
-            </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 text-white/70">
+              <div className="flex items-center gap-1">
+                <Icon icon="pixel:download-solid" className="w-4 h-4" />
+                <span className="text-xs font-minecraft-ten tracking-wide lowercase select-none">
+                  {project.downloads.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Icon
+                  icon={
+                    project.project_type === "mod"
+                      ? "pixel:bolt-solid"
+                      : project.project_type === "modpack"
+                        ? "pixel:folder-open-solid"
+                        : project.project_type === "resourcepack"
+                          ? "pixel:image-solid"
+                          : project.project_type === "shader"
+                            ? "pixel:image-solid"
+                            : "pixel:grid-solid"
+                  }
+                  className="w-4 h-4"
+                />
+                <span className="text-xs font-minecraft-ten tracking-wide lowercase select-none">
+                  {project.project_type}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {children}
-    </div>
+        {children}
+      </CardContent>
+    </Card>
   );
-};
+}

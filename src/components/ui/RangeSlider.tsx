@@ -6,7 +6,7 @@ interface RangeSliderProps {
   min: number;
   max: number;
   step?: number;
-  label?: string;
+  className?: string;
   valueLabel?: string;
   minLabel?: string;
   maxLabel?: string;
@@ -19,43 +19,30 @@ export function RangeSlider({
   min,
   max,
   step = 1,
-  label,
+  className = "",
+  disabled = false,
   valueLabel,
   minLabel,
   maxLabel,
-  disabled = false,
 }: RangeSliderProps) {
   return (
-    <div>
-      {label && (
-        <div className="mb-2 flex justify-between">
-          <span className="text-white font-minecraft text-base lowercase">
-            {label}
+    <div className={`space-y-3 ${className}`}>
+      <div className="flex justify-between items-center">
+        {minLabel && (
+          <span className="text-base text-white/60 font-minecraft select-none">
+            {minLabel}
           </span>
-          {valueLabel && (
-            <span className="text-white font-minecraft text-base lowercase">
-              {valueLabel}
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="mb-2 flex justify-between">
-        <span className="text-white/70 font-minecraft text-sm lowercase">
-          {minLabel || min}
-        </span>
-        <span className="text-white/70 font-minecraft text-sm lowercase">
-          {maxLabel || max}
-        </span>
-      </div>
-
-      <div className="relative h-2 bg-black/30 border border-white/30 rounded-none overflow-hidden">
-        <div
-          className="absolute top-0 left-0 h-full bg-white/40"
-          style={{
-            width: `${((value - min) / (max - min)) * 100}%`,
-          }}
-        ></div>
+        )}
+        {valueLabel && (
+          <span className="text-xl text-white font-minecraft select-none">
+            {valueLabel}
+          </span>
+        )}
+        {maxLabel && (
+          <span className="text-base text-white/60 font-minecraft select-none">
+            {maxLabel}
+          </span>
+        )}
       </div>
 
       <input
@@ -65,8 +52,9 @@ export function RangeSlider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full mt-2"
         disabled={disabled}
+        className="w-full h-3 bg-black/40 rounded-lg appearance-none cursor-pointer
+                   accent-white/70 focus:outline-none focus:ring-2 focus:ring-white/30"
       />
     </div>
   );

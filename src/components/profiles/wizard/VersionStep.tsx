@@ -49,7 +49,7 @@ export function VersionStep({
   };
 
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-10 select-none">
       <SectionTitle
         title="select minecraft version"
         description="choose the minecraft version for your profile. this will determine which mod loaders are available."
@@ -61,6 +61,30 @@ export function VersionStep({
         selectedVersionType={selectedVersionType}
         onVersionTypeSelect={setSelectedVersionType}
         versions={filteredVersions.map((v) => v.id)}
+        versionButton={(
+          version: string,
+          selectedVersion: string,
+          onVersionSelect: (version: string) => void,
+        ) => (
+          <button
+            key={version}
+            className={`py-4 px-5 font-minecraft text-center text-2xl lowercase tracking-wide rounded-md transition-all duration-200 ${
+              selectedVersion === version
+                ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+                : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white hover:border-white/30"
+            }`}
+            onClick={() => onVersionSelect(version)}
+          >
+            {version}
+          </button>
+        )}
+        emptyState={() => (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-2xl text-white/70 font-minecraft tracking-wide select-none">
+              no versions available
+            </p>
+          </div>
+        )}
       />
     </div>
   );

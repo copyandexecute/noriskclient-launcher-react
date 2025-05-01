@@ -15,7 +15,7 @@ import { ModrinthVersionItem } from "./ModrinthVersionItem";
 import { LoadingIndicator } from "../ui/LoadingIndicator";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { EmptyState } from "../ui/EmptyState";
-import { useModrinthInstaller } from "../../hooks/useModrinthInstaller.ts";
+import { useModrinthInstaller } from "../../hooks/useModrinthInstaller";
 
 interface FeaturedContentProps {
   profiles: Profile[];
@@ -148,11 +148,11 @@ export function FeaturedContent({
   const renderContentSection = (
     title: string,
     content: ModrinthSearchHit[],
-    // @ts-ignore
+    //@ts-ignore
     type: ModrinthProjectType,
   ) => (
     <div className="mb-8">
-      <h3 className="text-white font-minecraft text-lg mb-4">{title}</h3>
+      <h3 className="text-white font-minecraft text-3xl mb-4">{title}</h3>
 
       {content.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -162,7 +162,7 @@ export function FeaturedContent({
               className="bg-black/20 backdrop-blur-md border border-white/10 p-4 hover:bg-black/30 transition-colors"
             >
               <div className="flex gap-3">
-                <div className="flex-shrink-0 w-16 h-16 bg-black/30 overflow-hidden">
+                <div className="flex-shrink-0 w-28 h-28 bg-black/30 overflow-hidden">
                   {item.icon_url ? (
                     <img
                       src={item.icon_url || "/placeholder.svg"}
@@ -187,23 +187,40 @@ export function FeaturedContent({
                 </div>
 
                 <div className="flex-grow overflow-hidden">
-                  <h4 className="text-white font-minecraft text-base font-bold mb-1 truncate">
+                  <h4 className="text-white font-minecraft text-3xl font-bold mb-1 truncate">
                     {item.title}
                   </h4>
 
-                  <p className="text-white/80 font-minecraft text-xs line-clamp-2 mb-2">
+                  <p className="text-white/80 font-minecraft-ten text-xs line-clamp-2 mb-2">
                     {item.description}
                   </p>
 
-                  <div className="flex items-center gap-3 text-white/60 font-minecraft text-xs">
+                  <div className="flex items-center gap-3 text-white/60">
                     <div className="flex items-center">
                       <Icon icon="pixel:download" className="mr-1 w-3 h-3" />
-                      {item.downloads.toLocaleString()}
+                      <span className="text-xs font-minecraft-ten tracking-wide lowercase select-none">
+                        {item.downloads.toLocaleString()}
+                      </span>
                     </div>
 
                     <div className="flex items-center">
-                      <Icon icon="pixel:star" className="mr-1 w-3 h-3" />
-                      {item.follows.toLocaleString()}
+                      <Icon
+                        icon={
+                          item.project_type === "mod"
+                            ? "pixel:puzzle-solid"
+                            : item.project_type === "modpack"
+                              ? "pixel:package-solid"
+                              : item.project_type === "resourcepack"
+                                ? "pixel:image-solid"
+                                : item.project_type === "shader"
+                                  ? "pixel:sparkles-solid"
+                                  : "pixel:grid-solid"
+                        }
+                        className="mr-1 w-3 h-3"
+                      />
+                      <span className="text-xs font-minecraft-ten tracking-wide lowercase select-none">
+                        {item.project_type}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -221,7 +238,7 @@ export function FeaturedContent({
           ))}
         </div>
       ) : (
-        <p className="text-white/60 font-minecraft text-sm">
+        <p className="text-white/60 font-minecraft-ten text-xs">
           No {title.toLowerCase()} found
         </p>
       )}
@@ -259,7 +276,7 @@ export function FeaturedContent({
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-black/90 border-2 border-white/30 shadow-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="p-4 border-b border-white/20 flex justify-between items-center">
-              <h3 className="text-white font-minecraft text-lg">
+              <h3 className="text-white font-minecraft text-3xl">
                 {selectedProject.title} - Versions
               </h3>
               <button
@@ -272,7 +289,7 @@ export function FeaturedContent({
 
             <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
               {versionsLoading ? (
-                <LoadingIndicator size="sm" message="Loading versions..." />
+                <LoadingIndicator message="Loading versions..." />
               ) : versionsError ? (
                 <ErrorMessage message={versionsError} />
               ) : projectVersions.length > 0 ? (
@@ -288,10 +305,12 @@ export function FeaturedContent({
                         key={version.id}
                         version={version}
                         file={primaryFile}
+                        //@ts-ignore
                         installState={currentAddState}
                         onInstall={() =>
                           handleContentInstall(version, primaryFile)
                         }
+                        showChangelog
                       />
                     ) : null;
                   })}

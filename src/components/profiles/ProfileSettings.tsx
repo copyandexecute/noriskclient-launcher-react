@@ -178,10 +178,10 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const renderExportTab = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-minecraft text-white mb-4 lowercase tracking-wide">
+        <h3 className="text-2xl font-minecraft text-white mb-5 lowercase">
           export profile
         </h3>
-        <p className="text-white/70 mb-6 font-minecraft text-sm tracking-wide">
+        <p className="text-xl text-white/70 mb-6 font-minecraft tracking-wide">
           Export your profile to share with others or back it up. You can
           include all files or just the profile configuration.
         </p>
@@ -191,7 +191,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         <div className="space-y-2">
           <label
             htmlFor="exportFilename"
-            className="block text-white font-minecraft text-base mb-2 lowercase"
+            className="block text-2xl text-white font-minecraft mb-3 lowercase"
           >
             export filename
           </label>
@@ -200,10 +200,10 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             id="exportFilename"
             value={exportFilename}
             onChange={(e) => setExportFilename(e.target.value)}
-            className="w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base"
+            className="w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-4 text-2xl text-white font-minecraft"
             placeholder="Enter filename without extension"
           />
-          <p className="mt-1 text-white/50 font-minecraft text-sm">
+          <p className="mt-2 text-base text-white/50 font-minecraft tracking-wide">
             The .noriskpack extension will be added automatically
           </p>
         </div>
@@ -216,7 +216,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
               onChange={(e) => setExportIncludeFiles(e.target.checked)}
               className="w-5 h-5 rounded bg-black/20 border-white/30"
             />
-            <span className="text-white font-minecraft text-base lowercase">
+            <span className="text-2xl text-white font-minecraft lowercase">
               include profile files
             </span>
           </label>
@@ -245,13 +245,14 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           variant="primary"
           onClick={handleExport}
           disabled={isExporting || !exportFilename}
-          icon={<Icon icon="pixel:file-export-solid" className="w-4 h-4" />}
+          icon={<Icon icon="pixel:file-export-solid" className="w-5 h-5" />}
+          className="text-2xl py-3 px-6"
         >
           {isExporting ? (
             <>
               <Icon
                 icon="pixel:spinner-solid"
-                className="w-4 h-4 animate-spin"
+                className="w-5 h-5 animate-spin"
               />
               <span>exporting...</span>
             </>
@@ -333,13 +334,22 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
 
   const renderFooter = () => (
     <div className="flex justify-between">
-      <Button variant="secondary" onClick={onClose}>
+      <Button
+        variant="secondary"
+        onClick={onClose}
+        className="text-2xl py-3 px-6"
+      >
         cancel
       </Button>
-      <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+      <Button
+        variant="primary"
+        onClick={handleSave}
+        disabled={isSaving}
+        className="text-2xl py-3 px-6"
+      >
         {isSaving ? (
-          <div className="flex items-center gap-2">
-            <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
+          <div className="flex items-center gap-3">
+            <Icon icon="pixel:spinner-solid" className="w-5 h-5 animate-spin" />
             <span>saving...</span>
           </div>
         ) : (
@@ -363,7 +373,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             {tabConfig.map((tab) => (
               <button
                 key={tab.id}
-                className={`w-full text-left py-3 px-4 font-minecraft text-lg lowercase transition-all duration-200 ${
+                className={`w-full text-left py-4 px-5 font-minecraft text-2xl lowercase transition-all duration-200 ${
                   activeTab === tab.id
                     ? "bg-white/20 text-white border-l-4 border-l-white"
                     : "text-white/70 hover:text-white hover:bg-white/10"
@@ -371,7 +381,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
                 onClick={() => setActiveTab(tab.id as SettingsTab)}
               >
                 <div className="flex items-center">
-                  <Icon icon={tab.icon} className="w-5 h-5 mr-3" />
+                  <Icon icon={tab.icon} className="w-6 h-6 mr-4" />
                   <span>{tab.label}</span>
                 </div>
               </button>

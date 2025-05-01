@@ -25,8 +25,8 @@ export function ProfileItem({
     >
       <ProfileIcon profile={profile} />
       <div className="flex-1">
-        <div className="font-bold">{profile.name}</div>
-        <div className="text-white/60 text-xs">
+        <div className="font-bold text-2xl">{profile.name}</div>
+        <div className="text-white/60 text-sm">
           MC {profile.game_version} • {profile.loader}
         </div>
       </div>
@@ -39,22 +39,8 @@ interface ProfileIconProps {
   profile: Profile;
 }
 
-function ProfileIcon({ profile }: ProfileIconProps) {
-  // @ts-ignore
-  return profile.icon ? (
-    <img
-      // @ts-ignore
-      src={profile.icon || "/placeholder.svg"}
-      alt=""
-      className="mr-3 w-8 h-8 object-cover"
-      onError={(e) => {
-        const target = e.target as HTMLImageElement;
-        target.style.display = "none";
-      }}
-    />
-  ) : (
-    <Icon icon="pixel:cube" className="mr-3 w-8 h-8" />
-  );
+function ProfileIcon({}: ProfileIconProps) {
+  return <Icon icon="pixel:grid-solid" className="mr-3 w-12 h-12" />;
 }
 
 interface SelectionIndicatorProps {
@@ -65,13 +51,13 @@ function SelectionIndicator({ isSelected }: SelectionIndicatorProps) {
   return (
     <div className="ml-2">
       <div
-        className={`w-5 h-5 rounded-full border-2 ${
+        className={`w-6 h-6 rounded-full border-2 ${
           isSelected
             ? "border-white bg-white/30"
             : "border-white/30 bg-transparent"
         } flex items-center justify-center`}
       >
-        {isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}
+        {isSelected && <div className="w-3 h-3 bg-white rounded-full"></div>}
       </div>
     </div>
   );

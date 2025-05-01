@@ -17,30 +17,30 @@ export function ModLoaderButton({
 }: ModLoaderButtonProps) {
   return (
     <button
-      className={`py-3 px-4 font-minecraft text-center text-base lowercase ${
-        isSelected
-          ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_15px_rgba(255,255,255,0.2)]"
-          : isCompatible
-            ? "bg-black/30 text-white/70 border-2 border-white/20 hover:bg-black/40 hover:text-white"
-            : "bg-black/10 border-2 border-white/10 opacity-50 cursor-not-allowed"
-      }`}
+      className={`flex flex-col items-center justify-center p-4 rounded-lg transition-all duration-300 select-none
+        ${
+          !isCompatible
+            ? "opacity-50 cursor-not-allowed bg-black/20 border-2 border-white/10"
+            : isSelected
+              ? "bg-white/20 border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+              : "bg-black/20 border-2 border-white/20 hover:bg-black/30 hover:border-white/30"
+        }`}
       onClick={onClick}
       disabled={!isCompatible}
+      title={
+        !isCompatible ? `Not compatible with this Minecraft version` : undefined
+      }
     >
-      <div className="flex flex-col items-center">
+      <div className="w-12 h-12 mb-3 flex items-center justify-center">
         <img
           src={icon || "/placeholder.svg"}
           alt={name}
-          className="w-8 h-8 mb-2 object-contain"
-          style={{ imageRendering: "pixelated" }}
+          className="w-10 h-10 object-contain"
         />
-        <span>{name}</span>
-        {!isCompatible && (
-          <div className="text-white/50 font-minecraft text-xs mt-1 lowercase">
-            not compatible
-          </div>
-        )}
       </div>
+      <span className="text-2xl text-white font-minecraft lowercase tracking-wide">
+        {name}
+      </span>
     </button>
   );
 }

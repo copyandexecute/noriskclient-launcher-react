@@ -253,17 +253,17 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
             )}
           </div>
           <div className="overflow-hidden">
-            <h3 className="text-xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] lowercase font-normal tracking-wide">
+            <h3 className="text-2xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] lowercase font-normal">
               {profile.name}
             </h3>
             <div className="flex items-center mt-1">
               <img
                 src={getModLoaderIcon() || "/placeholder.svg"}
                 alt={profile.loader || "vanilla"}
-                className="w-4 h-4 mr-2"
+                className="w-5 h-5 mr-2"
                 style={{ imageRendering: "pixelated" }}
               />
-              <span className="text-sm text-white/70 font-minecraft whitespace-nowrap lowercase">
+              <span className="text-base text-white/70 font-minecraft whitespace-nowrap lowercase">
                 {profile.game_version}
               </span>
             </div>
@@ -290,14 +290,14 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
                 <Icon icon="pixel:copy-solid" className="w-4 h-4" />
               )
             }
-            //@ts-ignore
+            // @ts-ignore
             onClick={(e) => handleClone(e)}
             disabled={isCloning}
             title="Clone Profile"
           />
           <IconButton
             icon={<Icon icon="pixel:cog-solid" className="w-4 h-4" />}
-            //@ts-ignore
+            // @ts-ignore
             onClick={(e) => {
               e.stopPropagation();
               onEdit();
@@ -309,7 +309,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
 
       <div className="flex-1 p-4 flex flex-col">
         {profile.description && (
-          <p className="text-white/70 text-sm font-minecraft mb-3 line-clamp-3 tracking-wide">
+          <p className="text-xl text-white/70 font-minecraft mb-3 line-clamp-3 select-none">
             {profile.description}
           </p>
         )}
@@ -318,9 +318,9 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
           <div className="flex items-center mt-auto mb-3">
             <Icon
               icon="pixel:folder-solid"
-              className="w-4 h-4 mr-2 text-white/60"
+              className="w-5 h-5 mr-2 text-white/60"
             />
-            <span className="text-sm text-white/60 font-minecraft lowercase tracking-wide">
+            <span className="text-base text-white/60 font-minecraft lowercase">
               {profile.group}
             </span>
           </div>
@@ -338,10 +338,10 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
           {isLaunching || isProfileCurrentlyLaunching ? (
             <div className="flex flex-col gap-2">
               <button
-                className="backdrop-blur-sm border-2 border-red-400/50 bg-red-900/30 py-3 text-base text-white font-minecraft flex items-center justify-center gap-2 transition-all uppercase whitespace-nowrap hover:bg-red-900/40"
+                className="backdrop-blur-sm border-2 border-red-400/50 bg-red-900/30 py-4 px-6 text-2xl text-white font-minecraft flex items-center justify-center gap-3 transition-all uppercase whitespace-nowrap hover:bg-red-900/40 select-none"
                 onClick={handleAbort}
               >
-                <Icon icon="pixel:x-solid" className="w-4 h-4" />
+                <Icon icon="pixel:x-solid" className="w-5 h-5" />
                 <span>ABORT</span>
               </button>
               <div className="w-full h-[3px] bg-black/40">
@@ -350,14 +350,14 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
                   style={{ width: `${Math.max(1, launchProgress * 100)}%` }}
                 />
               </div>
-              <div className="text-xs text-white/80 font-minecraft text-center">
+              <div className="text-base text-white/80 font-minecraft text-center">
                 {currentStep}
               </div>
             </div>
           ) : (
             <button
               className={cn(
-                "backdrop-blur-sm border-2 border-white/30 py-3 text-base text-white font-minecraft flex items-center justify-center gap-2 transition-all uppercase whitespace-nowrap",
+                "backdrop-blur-sm border-2 border-white/30 py-4 px-6 text-2xl text-white font-minecraft flex items-center justify-center gap-3 transition-all uppercase whitespace-nowrap select-none",
                 isButtonDisabled
                   ? "bg-black/60 cursor-wait"
                   : "bg-black/40 hover:bg-black/60 active:bg-black/70 active:scale-[0.99]",

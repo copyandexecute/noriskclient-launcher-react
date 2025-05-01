@@ -51,7 +51,7 @@ export function WindowSettingsTab({
         <FormField label="resolution">
           <div className="grid grid-cols-2 gap-5 mb-5">
             <div>
-              <label className="block text-white/70 font-minecraft mb-2 text-sm lowercase tracking-wide">
+              <label className="block text-2xl text-white/70 font-minecraft mb-3 text-sm lowercase tracking-wide select-none">
                 width
               </label>
               <TextInput
@@ -70,7 +70,7 @@ export function WindowSettingsTab({
               />
             </div>
             <div>
-              <label className="block text-white/70 font-minecraft mb-2 text-sm lowercase tracking-wide">
+              <label className="block text-2xl text-white/70 font-minecraft mb-3 text-sm lowercase tracking-wide select-none">
                 height
               </label>
               <TextInput
@@ -94,7 +94,7 @@ export function WindowSettingsTab({
             {resolutionPresets.map((preset) => (
               <button
                 key={preset.label}
-                className={`px-4 py-2 text-sm font-minecraft tracking-wide rounded-md transition-all duration-200 ${
+                className={`px-5 py-3 text-2xl font-minecraft tracking-wide rounded-md transition-all duration-200 ${
                   editedProfile.settings?.resolution?.width === preset.width &&
                   editedProfile.settings?.resolution?.height === preset.height
                     ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_8px_rgba(255,255,255,0.15)]"
