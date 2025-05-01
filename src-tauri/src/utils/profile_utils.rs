@@ -1,8 +1,9 @@
 use crate::error::{AppError, Result};
 use crate::integrations::modrinth::{ModrinthProjectType, ModrinthVersion};
 use crate::state::profile_state::Profile;
+use crate::state::profile_state::{Mod, ModSource};
 use crate::utils::{resourcepack_utils, shaderpack_utils, datapack_utils, hash_utils};
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -210,6 +211,136 @@ pub async fn install_modrinth_content(
     .await?;
 
     Ok(())
+}
+
+/// Checks if a specific Modrinth content item is installed in a given profile.
+///
+/// Currently focuses on checking mods. Can be extended for other content types.
+/// At least one identifier (project_id, version_id, file_hash_sha1, file_name) must be provided.
+///
+/// # Arguments
+///
+/// * `profile_id` - The UUID of the profile to check.
+/// * `project_id` - Optional Modrinth project ID.
+/// * `version_id` - Optional Modrinth version ID.
+/// * `file_hash_sha1` - Optional SHA1 hash of the content file.
+/// * `file_name` - Optional filename of the content file.
+/// * `project_type` - Optional type of content (e.g., "mod", "resourcepack"). Defaults to checking mods if None.
+///
+/// # Returns
+///
+/// Returns `Ok(true)` if the content is found matching all provided criteria, `Ok(false)` otherwise.
+/// Returns `Err` if the profile cannot be loaded or other errors occur.
+#[tauri::command]
+pub async fn check_content_installed(
+    profile_id: Uuid,
+    project_id: Option<String>,
+    version_id: Option<String>,
+    file_hash_sha1: Option<String>,
+    file_name: Option<String>,
+    project_type: Option<String>, // TODO: Implement checks for other types
+) -> Result<bool> {
+    info!(
+        "Checking installation status for content in profile {}: project_id={:?}, version_id={:?}, hash={:?}, filename={:?}, type={:?}",
+        profile_id, project_id, version_id, file_hash_sha1.is_some(), file_name, project_type
+    );
+
+    // Ensure at least one identifier is provided
+    if project_id.is_none() && version_id.is_none() && file_hash_sha1.is_none() && file_name.is_none() {
+        return Err(AppError::Other("At least one identifier (project_id, version_id, file_hash_sha1, file_name) must be provided to check installation status.".to_string()));
+    }
+
+    // Get the profile
+    let state = crate::state::state_manager::State::get().await?;
+    let profile = state.profile_manager.get_profile(profile_id).await?;
+
+    // --- Mod Checking Logic ---
+    // TODO: Extend this to handle other project_types based on the input parameter
+    let target_type = project_type.unwrap_or_else(|| "mod".to_string()); // Default to mod for now
+    if target_type == "mod" {
+        for installed_mod in &profile.mods { 
+
+            // Default values if not a Modrinth mod or fields are missing
+            let mut mod_project_id: Option<&str> = None;
+            let mut mod_version_id: Option<&str> = None;
+            let mut mod_sha1_hash: Option<&str> = None;
+            let mut mod_file_name: Option<&str> = None;
+
+            // Extract info only if it's a Modrinth mod
+            if let ModSource::Modrinth { 
+                project_id: pid, 
+                version_id: vid, 
+                file_hash_sha1: hash_opt, 
+                file_name: fname, 
+                .. 
+            } = &installed_mod.source {
+                mod_project_id = Some(pid);
+                mod_version_id = Some(vid);
+                mod_sha1_hash = hash_opt.as_deref(); // Convert Option<String> to Option<&str>
+                mod_file_name = Some(fname);
+            }
+
+            let mut match_project = true;
+            if let Some(pid) = &project_id {
+                match_project = mod_project_id == Some(pid.as_str());
+            }
+
+            let mut match_version = true;
+            if let Some(vid) = &version_id {
+                match_version = mod_version_id == Some(vid.as_str());
+            }
+
+            let mut match_hash = true;
+            if let Some(hash) = &file_hash_sha1 {
+                 // Compare Option<&str> with Option<&str>
+                match_hash = mod_sha1_hash == Some(hash.as_str());
+            }
+
+            let mut match_name = true;
+            if let Some(name) = &file_name {
+                 // Compare Option<&str> with Option<&str>
+                match_name = mod_file_name == Some(name.as_str());
+                 // Note: We are comparing against the filename stored in ModSource::Modrinth
+                 // If you need to check against display_name as well/instead, that requires different logic:
+                 // e.g., match_name = installed_mod.display_name.as_deref() == Some(name.as_str());
+            }
+
+            // If all provided criteria match, return true
+            if match_project && match_version && match_hash && match_name {
+                 // Use display_name for logging, but the match was based on source info
+                info!(
+                    "Found matching installed mod: {}", 
+                    installed_mod.display_name.as_deref().unwrap_or("[Unknown Name]")
+                );
+                return Ok(true);
+            }
+        }
+        // If loop completes without finding a match
+        info!("No matching mod found installed in profile {}", profile_id);
+        return Ok(false);
+    } else {
+        // --- Placeholder for other content types ---
+        warn!("Checking installation for content type '{}' is not yet implemented.", target_type);
+        // TODO: Implement checks for resourcepacks, shaderpacks, datapacks
+        // Example for resource packs (requires similar structure in ResourcePackInfo):
+        /*
+        if target_type == "resourcepack" {
+             let packs = resourcepack_utils::list_resourcepacks(&profile).await?;
+             for pack in packs {
+                 // Similar matching logic as above using pack.modrinth_info, pack.sha1_hash, pack.filename
+                 let mut match_project = ...;
+                 let mut match_version = ...;
+                 let mut match_hash = ...;
+                 let mut match_name = ...;
+                 if match_project && match_version && match_hash && match_name {
+                     return Ok(true);
+                 }
+             }
+             return Ok(false);
+         }
+        */
+        return Ok(false); // Return false for unimplemented types for now
+    }
 }
 
 /// Exports a profile to a `.noriskpack` file
