@@ -182,6 +182,7 @@ export interface CheckContentParams {
   project_type?: string | null;
   game_version?: string | null;
   loader?: string | null;
+  pack_version_number?: string | null;
 }
 
 /**
@@ -190,4 +191,5 @@ export interface CheckContentParams {
 export interface ContentInstallStatus {
   is_included_in_norisk_pack: boolean;
   is_installed: boolean;
+  is_specific_version_in_pack: boolean;
 }

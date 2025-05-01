@@ -227,6 +227,7 @@ pub struct CheckContentParams {
     pub project_type: Option<String>,
     pub game_version: Option<String>,
     pub loader: Option<String>,
+    pub pack_version_number: Option<String>,
 }
 
 // --- Return Type ---
@@ -234,6 +235,7 @@ pub struct CheckContentParams {
 pub struct ContentInstallStatus {
     pub is_included_in_norisk_pack: bool,
     pub is_installed: bool,
+    pub is_specific_version_in_pack: bool,
 }
 
 /// Checks the installation status of a specific Modrinth content item within a profile's context.
@@ -251,7 +253,7 @@ pub struct ContentInstallStatus {
 /// Returns `Ok(ContentInstallStatus)` with the status, or `Err` if errors occur.
 #[tauri::command]
 pub async fn check_content_installed(
-    params: CheckContentParams, // Use the params struct
+    params: CheckContentParams,
 ) -> Result<ContentInstallStatus> { 
     info!(
         "Checking installation status for content in profile {} (MC: {:?}, Loader: {:?}): project_id={:?}, version_id={:?}, hash={:?}, filename={:?}, type={:?}",
@@ -292,64 +294,46 @@ pub async fn check_content_installed(
     if let Some(pack_id) = &profile.selected_norisk_pack_id {
         debug!("Profile {} has selected Norisk Pack: {}. Checking pack definition...", params.profile_id, pack_id);
         let config = state.norisk_pack_manager.get_config().await; 
-
         match config.get_resolved_pack_definition(pack_id) {
             Ok(resolved_pack) => {
-                debug!("Found {} mods in resolved pack definition for {}", resolved_pack.mods.len(), pack_id);
                 for norisk_mod in &resolved_pack.mods {
-                    let mut is_potential_match = false;
-
-                    // Use params fields for matching
+                    let mut is_potential_project_match = false;
                     if let (Some(pid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { project_id: norisk_pid, .. }) = (&params.project_id, &norisk_mod.source) {
                         if pid_arg == norisk_pid {
-                            is_potential_match = true;
+                            is_potential_project_match = true;
                         }
                     }
-                    // TODO: Add similar checks for other source types if needed
+                    // TODO: Add project matching for other source types if needed
 
-                    if is_potential_match {
+                    if is_potential_project_match {
                         if let Some(loader_map) = norisk_mod.compatibility.get(target_game_version) { 
                             if let Some(target) = loader_map.get(target_loader_str) {
-                                let mut version_or_filename_match = false;
+                                status.is_included_in_norisk_pack = true;
 
-                                // Use params fields for matching
-                                if let (Some(vid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { .. }) = (&params.version_id, &norisk_mod.source) {
-                                    if vid_arg == &target.identifier {
-                                        version_or_filename_match = true;
+                                // Check if the SPECIFIC version NUMBER requested matches the pack identifier
+                                if let Some(v_num_arg) = &params.pack_version_number { // Use the new field
+                                    // TODO: Comparison might need adjustment for non-Modrinth sources if identifier format differs
+                                    if v_num_arg == &target.identifier { 
+                                        debug!("Specific version number {} IS the one defined in the pack (identifier: {}).", v_num_arg, target.identifier);
+                                        status.is_specific_version_in_pack = true;
                                     }
-                                }
-                                // Use params fields for matching
-                                else if let Some(fname_arg) = &params.file_name {
-                                    match norisk_packs::get_norisk_pack_mod_filename(&norisk_mod.source, target, &norisk_mod.id) {
-                                        Ok(expected_filename) if fname_arg == &expected_filename => {
-                                            version_or_filename_match = true;
-                                        }
-                                        _ => {} 
-                                    }
-                                }
-                                // Use params fields for matching
-                                else if params.file_hash_sha1.is_some() {
-                                    // Cannot match hash against pack def
-                                }
-                                // Use params fields for matching
-                                else if params.version_id.is_none() && params.file_name.is_none() && params.file_hash_sha1.is_none() {
-                                    version_or_filename_match = true;
-                                }
-
-                                if version_or_filename_match {
-                                    info!("Content matches definition in selected Norisk Pack '{}' for MC {} / {}.", pack_id, target_game_version, target_loader_str);
-                                    status.is_included_in_norisk_pack = true;
-                                    break; 
+                                } 
+                                
+                                if status.is_specific_version_in_pack {
+                                    break; // Found specific version in pack
                                 }
                             }
                         } 
                     }
+                    if status.is_specific_version_in_pack {
+                        break; // Found specific version in pack
+                    }
                 }
-                if status.is_included_in_norisk_pack {
-                    debug!("Found content in Norisk Pack definition.");
-                } else {
-                    debug!("Content not found in the definition of Norisk Pack '{}' for MC {} / {}", pack_id, target_game_version, target_loader_str);
-                }
+                 if status.is_included_in_norisk_pack {
+                    debug!("Found content (some version) in Norisk Pack definition.");
+                 } else {
+                     debug!("Content not found in the definition of Norisk Pack '{}' for MC {} / {}", pack_id, target_game_version, target_loader_str);
+                 }
             },
             Err(e) => {
                 warn!("Could not resolve Norisk Pack definition for pack ID '{}': {}. Skipping pack check.", pack_id, e);
@@ -359,7 +343,7 @@ pub async fn check_content_installed(
 
     // --- Installed Mod Check ---
     debug!("Checking locally installed mods in profile {}...", params.profile_id);
-    let target_type = params.project_type.as_deref().unwrap_or("mod"); // Use params field
+    let target_type = params.project_type.as_deref().unwrap_or("mod");
     if target_type == "mod" {
         for installed_mod in &profile.mods { 
             let mut mod_project_id: Option<&str> = None;
@@ -381,46 +365,45 @@ pub async fn check_content_installed(
             }
             // TODO: Add extraction logic for other source types
 
-            // Use params fields for matching
+            // Match project ID (using params.project_id)
             let mut match_project = true;
             if let Some(pid) = &params.project_id {
                 match_project = mod_project_id == Some(pid.as_str());
             }
 
+            // Match Modrinth Version ID (using params.version_id)
             let mut match_version = true;
             if let Some(vid) = &params.version_id {
-                match_version = mod_version_id == Some(vid.as_str());
+                match_version = mod_version_id == Some(vid.as_str()); 
             }
 
+            // Match Hash (using params.file_hash_sha1)
             let mut match_hash = true;
             if let Some(hash) = &params.file_hash_sha1 {
                 match_hash = mod_sha1_hash == Some(hash.as_str());
             }
 
+            // Match Filename (using params.file_name)
             let mut match_name = true;
             if let Some(name) = &params.file_name {
                 match_name = mod_file_name == Some(name.as_str());
             }
 
+            // Match Context (game version and loader)
             let mut match_game_version = true; 
             if let Some(installed_versions) = &installed_mod.game_versions {
                 match_game_version = installed_versions.contains(&target_game_version.to_string());
             }
-
             let mut match_loader = true; 
             if let Some(installed_loader_enum) = &installed_mod.associated_loader {
                 match_loader = installed_loader_enum.as_str() == target_loader_str;
             }
 
+            // Check if *this specific installed mod* matches all criteria 
             if match_project && match_version && match_hash && match_name && match_game_version && match_loader {
-                info!(
-                    "Found matching locally installed mod for context ({} {}): {}", 
-                    target_game_version, 
-                    target_loader_str,
-                    installed_mod.display_name.as_deref().unwrap_or("[Unknown Name]")
-                );
+                info!("Found matching locally installed mod for context ({} {}): {}", target_game_version, target_loader_str, installed_mod.display_name.as_deref().unwrap_or("[Unknown Name]"));
                 status.is_installed = true;
-                break; 
+                break; // Found installed mod matching criteria
             }
         }
         if status.is_installed {

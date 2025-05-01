@@ -6,6 +6,8 @@
   import ProfileSelect from '$lib/components/ProfileSelect.svelte'; // Import ProfileSelect
   import ModrinthProfileDropdown from '$lib/components/ModrinthProfileDropdown.svelte';
   import type { ModrinthSearchHit, ModrinthSearchResponse, ModrinthVersion, ModrinthFile, ModrinthProjectType, ModrinthSortType } from '$lib/types/modrinth';
+  // Import the new types
+  import type { CheckContentParams, ContentInstallStatus } from '$lib/types/profile';
 
   // --- Props --- 
   // targetProfileId is now implicitly handled via the selectedProfile store
@@ -20,6 +22,12 @@
   let searchResponse: ModrinthSearchResponse | null = null; // Full response including pagination info
   let searchLoading = false;
   let searchError: string | null = null;
+
+  // Allow null in the status type
+  let hitInstallStatus: { [projectId: string]: ContentInstallStatus | 'loading' | 'error' | null } = {};
+
+  // New state for specific version install status
+  let versionInstallStatus: { [versionId: string]: ContentInstallStatus | 'loading' | 'error' | null } = {};
 
   // Project type tabs
   let selectedProjectType: ModrinthProjectType = "mod"; // Default to mods
@@ -79,10 +87,54 @@
     }
   }
 
+  // Function to fetch installation status for a single hit
+  async function updateHitInstallStatus(hit: ModrinthSearchHit) {
+    const profileId = $selectedProfile?.id;
+    if (!profileId) {
+      // Set status to null or default if no profile selected
+      hitInstallStatus = { ...hitInstallStatus, [hit.project_id]: null };
+      return;
+    }
+
+    // Set loading state for this specific hit
+    hitInstallStatus = { ...hitInstallStatus, [hit.project_id]: 'loading' };
+
+    const params: CheckContentParams = {
+      profile_id: profileId,
+      project_id: hit.project_id,
+      // Pass context for more accurate checking, especially for Norisk Packs
+      game_version: $selectedProfile?.game_version ?? null, // Pass null if not available
+      loader: $selectedProfile?.loader ?? null,       // Pass null if not available
+      // We don't need version_id, file_hash, or file_name for this high-level check
+      version_id: null,
+      file_hash_sha1: null,
+      file_name: null,
+      project_type: hit.project_type // Pass project type
+    };
+
+    try {
+      console.debug(`Checking install status for ${hit.project_id} in profile ${profileId}`);
+      const status = await invoke<ContentInstallStatus>('is_content_installed', { params });
+      hitInstallStatus = { ...hitInstallStatus, [hit.project_id]: status };
+      console.debug(`Status for ${hit.project_id}:`, status);
+    } catch (err) {
+      console.error(`Failed to check install status for ${hit.project_id}:`, err);
+      hitInstallStatus = { ...hitInstallStatus, [hit.project_id]: 'error' };
+    }
+  }
+
+  // Function to update statuses for all visible hits
+  async function updateAllHitStatuses(hits: ModrinthSearchHit[]) {
+     const promises = hits.map(hit => updateHitInstallStatus(hit));
+     await Promise.all(promises);
+     console.log("Finished updating all hit statuses.");
+  }
+
   // Search function
   async function performSearch(resetPagination = true) {
     searchLoading = true;
     searchError = null;
+    hitInstallStatus = {}; // Clear old statuses
     
     // Reset pagination if this is a new search
     if (resetPagination) {
@@ -120,6 +172,12 @@
       versionsError = null;
       
       console.log(`Found ${response.total_hits} total results, showing ${response.hits.length} items (page ${currentPage + 1}/${totalPages})`);
+
+      // --- Trigger status checks after results are set ---
+      // Don't await here to avoid blocking UI rendering of search results
+      updateAllHitStatuses(response.hits);
+      // --- End trigger ---
+
     } catch (err) {
       console.error("Modrinth search failed:", err);
       searchError = `Search failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -151,19 +209,68 @@
     performSearch(true); // Reset pagination when changing sort
   }
 
+  // --- New function to fetch status for individual versions ---
+  async function updateVersionStatuses(versions: ModrinthVersion[]) {
+    const profileId = $selectedProfile?.id;
+    if (!profileId || versions.length === 0) {
+      versionInstallStatus = {}; // Clear if no profile or no versions
+      return;
+    }
+    
+    // Reset statuses for the new set of versions being checked
+    let newVersionStatuses: { [versionId: string]: ContentInstallStatus | 'loading' | 'error' | null } = {};
+
+    const promises = versions.map(async (version) => {
+      newVersionStatuses = { ...newVersionStatuses, [version.id]: 'loading' };
+      versionInstallStatus = { ...newVersionStatuses }; // Update UI reactively during loading
+
+      const primaryFile = version.files.find(f => f.primary) ?? version.files[0];
+      const fileHash = primaryFile?.hashes?.sha1;
+      const fileName = primaryFile?.filename;
+
+      const params: CheckContentParams = {
+        profile_id: profileId,
+        project_id: version.project_id,
+        version_id: version.id, // Specific Modrinth Version ID
+        file_hash_sha1: fileHash ?? null, 
+        file_name: fileName ?? null, 
+        pack_version_number: version.version_number, // Specific Version Number for pack check
+        project_type: version.search_hit?.project_type ?? null,
+        game_version: $selectedProfile?.game_version ?? null,
+        loader: $selectedProfile?.loader ?? null,
+      };
+
+      try {
+        console.info(`Checking specific install status for version`,version);
+        const status = await invoke<ContentInstallStatus>('is_content_installed', { params });
+        console.info(`Status for version ${version.id}:`, status);
+        newVersionStatuses = { ...newVersionStatuses, [version.id]: status };
+      } catch (err) {
+        console.error(`Failed to check specific install status for version ${version.id}:`, err);
+        newVersionStatuses = { ...newVersionStatuses, [version.id]: 'error' };
+      }
+    });
+
+    await Promise.all(promises);
+    versionInstallStatus = newVersionStatuses; // Update with final results
+    console.log("Finished updating all version statuses.", versionInstallStatus);
+  }
+
   // Fetch and display versions for a project
   async function fetchAndShowVersions(hit: ModrinthSearchHit) {
       const projectId = hit.project_id;
+      versionInstallStatus = {}; // Clear specific version statuses when opening/closing
+
       if (selectedProjectId === projectId) {
           selectedProjectId = null;
           modVersions = [];
           versionsError = null;
-          currentlySelectedHit = null; // Clear context
+          currentlySelectedHit = null; 
           return;
       }
 
       selectedProjectId = projectId;
-      currentlySelectedHit = hit; // Store context
+      currentlySelectedHit = hit; 
       versionsLoading = true;
       versionsError = null;
       modVersions = [];
@@ -186,8 +293,17 @@
               gameVersions: gameVersions, 
               loaders: loaders 
           });
-          // Add the search hit context to each version for later use
+         
           modVersions = versionData.map(v => ({ ...v, search_hit: hit }));
+
+          // --- Trigger specific version status check ---
+          if ($selectedProfile?.id) { // Only check if a profile is selected
+             updateVersionStatuses(modVersions); // Don't await, let it run in background
+          } else {
+             versionInstallStatus = {}; // Ensure it's cleared if no profile selected
+          }
+          // --- End trigger ---
+
       } catch (err) {
           console.error(`Failed to fetch versions for ${projectId}:`, err);
           versionsError = `Failed to load versions: ${err instanceof Error ? err.message : String(err)}`;
@@ -240,7 +356,9 @@
           modName: hit.title ?? file.filename,
           versionNumber: version.version_number,
           loaders: version.loaders,
-          gameVersions: version.game_versions
+          gameVersions: version.game_versions,
+          // Pass icon URL if available from hit
+          iconUrl: hit.icon_url
         };
         
         console.log(`Installing mod to profile ${profileId}`);
@@ -257,7 +375,7 @@
           contentName: hit.title ?? file.filename,
           versionNumber: version.version_number,
           projectType: hit.project_type
-        };
+        }; // No icon URL needed for content
         
         console.log(`Installing ${hit.project_type} to profile ${profileId}`);
         await invoke('add_modrinth_content_to_profile', payload);
@@ -266,6 +384,9 @@
       console.log(`Successfully added ${hit.project_type} ${file.filename}`);
       addingModState = { ...addingModState, [versionId]: 'success' };
       
+      // Update the general status for this hit after successful installation
+      updateHitInstallStatus(hit);
+
       setTimeout(() => {
         addingModState = { ...addingModState, [versionId]: 'idle' };
       }, 2000);
@@ -367,7 +488,7 @@
 </script>
 
 <div class="modrinth-search-container">
-  <h2>Search on Modrinth adawdwa</h2>
+  <h2>Search on Modrinth</h2>
 
   <div class="search-bar">
     <input
@@ -446,6 +567,7 @@
   {#if searchResults.length > 0}
     <ul class="results-list">
       {#each searchResults as hit (hit.project_id)}
+        {@const status = hitInstallStatus[hit.project_id]}
         <li class="result-item">
           <img
             src={hit.icon_url ?? 'default-icon.png'}
@@ -481,6 +603,25 @@
                   Show Versions
                 {/if}
               </button>
+
+               <!-- Installation Status Display -->
+               {#if $selectedProfile && hit.project_type !== 'modpack'} 
+                  <span class="install-status">
+                     {#if status === 'loading'}
+                        <span class="badge loading">Checking...</span>
+                     {:else if status === 'error'}
+                        <span class="badge error">Status Error</span>
+                     {:else if typeof status === 'object' && status !== null}
+                        {#if status.is_included_in_norisk_pack}
+                           <span class="badge norisk-pack">Included in Norisk Pack</span>
+                        {/if}
+                        {#if status.is_installed}
+                           <span class="badge installed">Installed</span>
+                        {/if}
+                     {/if}
+                  </span>
+               {/if}
+              <!-- End Status Display -->
             </div>
 
             {#if selectedProjectId === hit.project_id}
@@ -497,6 +638,8 @@
                       {@const downloadUrl = primaryFile?.url}
                       {@const downloadFilename = primaryFile?.filename ?? 'Unknown File'}
                       {@const currentAddState = addingModState[version.id] ?? 'idle'}
+                      {@const versionStatus = versionInstallStatus[version.id]}
+                      {@const isVersionInstalled = typeof versionStatus === 'object' && versionStatus !== null && versionStatus.is_installed}
 
                       <li class="version-list-item">
                         <div class="version-info">
@@ -533,7 +676,7 @@
                                   class="add-button {currentAddState}" 
                                   data-content-type={version.search_hit?.project_type}
                                   on:click={() => handleContentInstall(version, primaryFile)}
-                                  disabled={currentAddState === 'adding' || currentAddState === 'success'}
+                                  disabled={currentAddState === 'adding' || currentAddState === 'success' || isVersionInstalled} 
                                 >
                                   {#if currentAddState === 'adding'}
                                     Adding...
@@ -541,19 +684,11 @@
                                     Added!
                                   {:else if currentAddState === 'error'}
                                     Retry
+                                  {:else if isVersionInstalled} 
+                                    Installed 
                                   {:else}
-                                    <!-- Show different text based on project type -->
-                                    {#if version.search_hit?.project_type === 'mod'}
-                                      Install Mod
-                                    {:else if version.search_hit?.project_type === 'resourcepack'}
-                                      Install Resource Pack
-                                    {:else if version.search_hit?.project_type === 'shader'}
-                                      Install Shader
-                                    {:else if version.search_hit?.project_type === 'datapack'}
-                                      Install Datapack
-                                    {:else}
-                                      Install
-                                    {/if}
+                                    <!-- Install text -->
+                                    Install {version.search_hit?.project_type ?? 'Content'} <!-- Simplified install text -->
                                   {/if}
                                 </button>
                               {/if}
@@ -570,6 +705,21 @@
                           {:else}
                               <span class="no-file">(No file found)</span>
                           {/if}
+
+                          <!-- Version Status Indicators -->
+                          {#if versionStatus === 'loading'}
+                             <span class="badge loading small">(Checking...)</span>
+                          {:else if versionStatus === 'error'}
+                             <span class="badge error small">(Error)</span> 
+                          {:else if typeof versionStatus === 'object' && versionStatus !== null}
+                             {#if versionStatus.is_specific_version_in_pack}
+                                <span class="badge norisk-pack small">(In Pack)</span>
+                             {/if}
+                             {#if versionStatus.is_installed && !isVersionInstalled} 
+                                <span class="badge installed small">(Installed)</span>
+                             {/if}
+                          {/if}
+                          <!-- End Version Status Indicators -->
                         </div>
                         
                       </li>
@@ -847,6 +997,10 @@
 
   .mod-actions {
       margin-top: 0.5em;
+      display: flex; /* Make actions align horizontally */
+      align-items: center; /* Align items vertically */
+      gap: 0.5em; /* Add space between button and status */
+      flex-wrap: wrap; /* Allow wrapping on small screens */
   }
   .versions-button {
       padding: 0.3em 0.6em;
@@ -1067,5 +1221,44 @@
   .tab-button[data-type="modpack"]:hover,
   .add-button[data-content-type="modpack"]:hover {
       background-color: #c82333;
+  }
+
+  /* Styles for the installation status badge */
+  .install-status {
+     font-size: 0.8em;
+     white-space: nowrap;
+  }
+  .badge {
+      padding: 0.2em 0.5em;
+      border-radius: 10px;
+      font-weight: bold;
+      color: white;
+  }
+  .badge.loading {
+      background-color: #ffc107; /* Yellow */
+      color: #333;
+  }
+  .badge.error {
+      background-color: #dc3545; /* Red */
+  }
+  .badge.installed {
+      background-color: #28a745; /* Green */
+  }
+  .badge.norisk-pack {
+      background-color: #17a2b8; /* Teal/Blue */
+  }
+
+  /* Adjust button disabled state based on install status */
+  .add-button:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  /* Add styles for small loading/error badges */
+  .badge.small {
+      font-size: 0.7em;
+      padding: 0.1em 0.4em;
+      margin-left: 0.3em;
   }
 </style> 
