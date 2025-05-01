@@ -1,40 +1,39 @@
-// --- Enums ---
+export type ModLoader = "vanilla" | "forge" | "fabric" | "quilt" | "neoforge";
+export type ProfileState =
+  | "not_installed"
+  | "installing"
+  | "installed"
+  | "running"
+  | "error";
 
-export type ModLoader = 'vanilla' | 'forge' | 'fabric' | 'quilt' | 'neoforge';
-
-export type ProfileState = 'not_installed' | 'installing' | 'installed' | 'running' | 'error';
-
-// --- Image related types ---
-
-// Base interfaces for ImageSource discriminated union
 interface ImageSourceBase {
-  type: 'url' | 'relativePath' | 'relativeProfile' | 'absolutePath' | 'base64';
+  type: "url" | "relativePath" | "relativeProfile" | "absolutePath" | "base64";
 }
 
 export interface ImageSourceUrl extends ImageSourceBase {
-  type: 'url';
+  type: "url";
   url: string;
 }
 
 export interface ImageSourceRelativePath extends ImageSourceBase {
-  type: 'relativePath';
+  type: "relativePath";
   path: string;
 }
 
 export interface ImageSourceRelativeProfile extends ImageSourceBase {
-  type: 'relativeProfile';
+  type: "relativeProfile";
   path: string;
 }
 
 export interface ImageSourceAbsolutePath extends ImageSourceBase {
-  type: 'absolutePath';
+  type: "absolutePath";
   path: string;
 }
 
 export interface ImageSourceBase64 extends ImageSourceBase {
-  type: 'base64';
+  type: "base64";
   data: string;
-  mime_type?: string; // Optional MIME type
+  mime_type?: string;
 }
 
 export type ImageSource =
@@ -48,55 +47,52 @@ export interface ProfileBanner {
   source: ImageSource;
 }
 
-// --- Dependent Structs/Interfaces ---
-
 export interface MemorySettings {
-  min: number; // u32 -> number
-  max: number; // u32 -> number
+  min: number;
+  max: number;
 }
 
 export interface WindowSize {
-  width: number; // u32 -> number
-  height: number; // u32 -> number
+  width: number;
+  height: number;
 }
 
 export interface ProfileSettings {
-  java_path: string | null;       // Option<String> -> string | null
+  java_path: string | null;
   memory: MemorySettings;
-  resolution: WindowSize | null; // Option<WindowSize> -> WindowSize | null
+  resolution: WindowSize | null;
   fullscreen: boolean;
-  extra_args: string[];           // Vec<String> -> string[]
+  extra_args: string[];
 }
 
-// Base interfaces for ModSource discriminated union
 interface ModSourceBase {
-  type: 'local' | 'url' | 'maven' | 'embedded' | 'modrinth';
+  type: "local" | "url" | "maven" | "embedded" | "modrinth";
 }
 
 export interface ModSourceLocal extends ModSourceBase {
-  type: 'local';
+  type: "local";
   file_name: string;
 }
 
 export interface ModSourceUrl extends ModSourceBase {
-  type: 'url';
+  type: "url";
   url: string;
   file_name: string | null;
 }
 
 export interface ModSourceMaven extends ModSourceBase {
-  type: 'maven';
+  type: "maven";
   coordinates: string;
   repository_url: string | null;
 }
 
 export interface ModSourceEmbedded extends ModSourceBase {
-  type: 'embedded';
+  type: "embedded";
   name: string;
 }
 
 export interface ModSourceModrinth extends ModSourceBase {
-  type: 'modrinth';
+  type: "modrinth";
   project_id: string;
   version_id: string;
   file_name: string;
@@ -104,7 +100,6 @@ export interface ModSourceModrinth extends ModSourceBase {
   file_hash_sha1: string | null;
 }
 
-// Discriminated Union for ModSource
 export type ModSource =
   | ModSourceLocal
   | ModSourceUrl
@@ -112,16 +107,15 @@ export type ModSource =
   | ModSourceEmbedded
   | ModSourceModrinth;
 
-
 export interface Mod {
-  id: string; // Uuid -> string
+  id: string;
   source: ModSource;
   enabled: boolean;
   display_name: string | null;
   version: string | null;
-  game_versions: string[] | null; // Option<Vec<String>> -> string[] | null
+  game_versions: string[] | null;
   file_name_override: string | null;
-  associated_loader: ModLoader | null; // Option<ModLoader> -> ModLoader | null
+  associated_loader: ModLoader | null;
 }
 
 export interface NoriskModIdentifier {
@@ -136,34 +130,70 @@ export interface NoriskInformation {
   is_experimental: boolean;
 }
 
-// Local definition until $lib/types is fixed
 export interface CustomModInfo {
   filename: string;
   is_enabled: boolean;
   path: string;
 }
 
-
-// --- Main Profile Interface ---
-
 export interface Profile {
-  id: string;                      // Uuid -> string
+  id: string;
   name: string;
   path: string;
   game_version: string;
   loader: ModLoader;
-  loader_version: string | null;   // Option<String> -> string | null
-  created: string;                 // DateTime<Utc> -> string (ISO 8601)
-  last_played: string | null;      // Option<DateTime<Utc>> -> string | null
+  loader_version: string | null;
+  created: string;
+  last_played: string | null;
   settings: ProfileSettings;
   state: ProfileState;
-  mods: Mod[];                     // Vec<Mod> -> Mod[]
-  selected_norisk_pack_id: string | null; // Option<String> -> string | null
-  disabled_norisk_mods_detailed: NoriskModIdentifier[]; // HashSet -> Array
-  source_standard_profile_id: string | null; // Option<Uuid> -> string | null
-  group: string | null;             // Option<String> -> string | null
+  mods: Mod[];
+  selected_norisk_pack_id: string | null;
+  disabled_norisk_mods_detailed: NoriskModIdentifier[];
+  source_standard_profile_id: string | null;
+  group: string | null;
   is_standard_version: boolean;
   description: string | null;
-  banner: ProfileBanner | null;     // Option<ProfileBanner> -> ProfileBanner | null
-  norisk_information: NoriskInformation | null; // Option<NoriskInformation> -> NoriskInformation | null
+  banner: ProfileBanner | null;
+  norisk_information: NoriskInformation | null;
+}
+
+export interface ProfileGroup {
+  id: string;
+  name: string;
+  profiles: string[];
+}
+
+export type ProfileFilterType = "all" | "downloaded" | "custom";
+
+export interface CreateProfileParams {
+  name: string;
+  game_version: string;
+  loader: string;
+  loader_version?: string;
+  selected_norisk_pack_id?: string;
+}
+
+export interface UpdateProfileParams {
+  name?: string;
+  game_version?: string;
+  loader?: string;
+  loader_version?: string;
+  settings?: ProfileSettings;
+  selected_norisk_pack_id?: string;
+  group?: string | null;
+  description?: string | null;
+}
+
+export interface CopyProfileParams {
+  source_profile_id: string;
+  new_profile_name: string;
+  include_files?: string[];
+}
+
+export interface ExportProfileParams {
+  profile_id: string;
+  file_name: string;
+  include_files?: string[];
+  open_folder: boolean;
 }

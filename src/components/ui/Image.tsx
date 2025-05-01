@@ -8,7 +8,7 @@ interface ImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallback?: string;
 }
 
-export default function Image({
+export function Image({
   className,
   src,
   alt,

@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@iconify/react": "^5.2.1",
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.2.1",
     "@tauri-apps/plugin-opener": "^2",
     "clsx": "^2.1.1",
     "gsap": "^3.12.7",
@@ -19,11 +19,15 @@
     "prettier": "^3.5.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-router-dom": "^7.5.3",
     "skinview3d": "^3.2.0",
     "tailwind-merge": "^3.2.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "uuid": "^11.1.0",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@tauri-apps/api": "^2.5.0",
     "@tauri-apps/cli": "^2",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",

@@ -1,64 +1,122 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { gsap } from "gsap";
+import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import Image from "../ui/Image";
+import { cn } from "../../lib/utils";
+import * as ProfileService from "../../services/profile-service";
+import { Card } from "../ui/Card";
+import {
+  LaunchState,
+  useLaunchStateStore,
+} from "../../store/launch-state-store";
 
 interface VersionInfoProps {
-  version: {
-    id: string;
-    label: string;
-    icon?: string;
-    isCustom?: boolean;
-  };
-  isLaunching: boolean;
+  profileId: string;
   className?: string;
 }
 
-export function VersionInfo({
-  version,
-  isLaunching,
-  className,
-}: VersionInfoProps) {
-  const versionInfoRef = useRef<HTMLDivElement>(null);
+export function VersionInfo({ profileId, className }: VersionInfoProps) {
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const { initializeProfile, getProfileState } = useLaunchStateStore();
+  const { launchState } = getProfileState(profileId);
 
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.from(versionInfoRef.current, {
-        opacity: 0,
-        x: -20,
-        duration: 0.5,
-        delay: 0.2,
-        ease: "power3.out",
-      });
-    });
+    if (profileId) {
+      initializeProfile(profileId);
+    }
+  }, [profileId, initializeProfile]);
 
-    return () => ctx.revert();
-  }, []);
+  useEffect(() => {
+    const loadProfile = async () => {
+      if (!profileId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const profileData = await ProfileService.getProfile(profileId);
+        setProfile(profileData);
+        setError(null);
+      } catch (err) {
+        console.error(`Error loading profile ${profileId}:`, err);
+        setError("Failed to load profile");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [profileId]);
+
+  if (!profileId) {
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "flex items-center text-white/70 font-minecraft",
+          className,
+        )}
+      >
+        <Icon
+          icon="pixel:spinner-solid"
+          className="w-5 h-5 animate-spin mr-2"
+        />
+        <span>Loading...</span>
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className={cn("text-red-400 font-minecraft", className)}>
+        <Icon
+          icon="pixel:exclamation-triangle-solid"
+          className="w-5 h-5 inline-block mr-2"
+        />
+        <span>{error || "Profile not found"}</span>
+      </div>
+    );
+  }
+
+  const getModLoaderIcon = (loader: string) => {
+    switch (loader.toLowerCase()) {
+      case "fabric":
+        return "pixel:fabric";
+      case "forge":
+        return "pixel:forge";
+      case "quilt":
+        return "pixel:quilt";
+      case "neoforge":
+        return "pixel:neoforge";
+      default:
+        return "pixel:minecraft";
+    }
+  };
+
+  const isLaunching = launchState === LaunchState.LAUNCHING;
 
   return (
-    <div ref={versionInfoRef} className={className}>
-      <div className="flex items-center gap-3 bg-black/50 backdrop-blur-lg px-4 py-2 border-2 border-white/20 shadow-[0_0_12px_rgba(0,0,0,0.3)]">
-        {version.isCustom ? (
-          <div className="w-9 h-9 relative">
-            <Image
-              src="/logo.png"
-              alt="NoRisk"
-              width={24}
-              height={24}
-              className="object-contain"
-            />
-          </div>
-        ) : (
-          <div className="w-9 h-9 flex items-center justify-center">
-            <Icon icon="pixel:grid-solid" className="w-8 h-8" />
-          </div>
-        )}
-        <span className="text-2xl font-minecraft text-white uppercase">
-          {isLaunching ? "LAUNCHING..." : version.label}
-        </span>
-      </div>
-    </div>
+    <Card className={cn("inline-flex items-center px-3 py-1.5", className)}>
+      <Icon
+        icon={getModLoaderIcon(profile.loader)}
+        className="w-5 h-5 mr-2 text-white/80"
+      />
+      <span className="font-minecraft text-white/90 text-sm">
+        {profile.name} ({profile.game_version})
+      </span>
+      {isLaunching && (
+        <Icon
+          icon="pixel:spinner-solid"
+          className="w-4 h-4 ml-2 text-red-400 animate-spin"
+        />
+      )}
+    </Card>
   );
 }

@@ -1,8 +1,9 @@
 export const navItems = [
   { id: "play", icon: "pixel:angle-right-solid", label: "Play" },
+  { id: "profiles", icon: "pixel:user-solid", label: "Profiles" },
+  { id: "mods", icon: "pixel:bolt-solid", label: "Mods" },
   { id: "store", icon: "pixel:shop-solid", label: "Store" },
   { id: "skins", icon: "pixel:huggingface", label: "Skins" },
-  { id: "profiles", icon: "pixel:user-solid", label: "Profiles" },
   { id: "news", icon: "pixel:bell-solid", label: "News" },
   { id: "settings", icon: "pixel:cog-solid", label: "Settings" },
 ];
@@ -47,7 +48,7 @@ export const recentServers = [
 ];
 
 export const userData = {
-  username: "NORISKK",
+  username: "noriskk",
   avatarUrl: "/skin.png",
   skinUrl: "/NoRiskk.png",
 };

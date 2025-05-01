@@ -37,21 +37,16 @@ export function NewsSection({ items, className, onRefresh }: NewsSectionProps) {
     return () => ctx.revert();
   }, [items]);
 
-  const handleRefresh = () => {
-    if (onRefresh) {
-      onRefresh();
-    }
-  };
-
   return (
     <div ref={newsRef} className={className}>
-      <Card className="h-full ">
+      <Card className="h-full">
         <CardHeader
+          // @ts-ignore
           actions={
             <div className="flex items-center">
               <button
                 className="text-white/70 hover:text-white transition-colors p-1"
-                onClick={handleRefresh}
+                onClick={onRefresh}
               >
                 <Icon icon="pixel:refresh-solid" className="w-7 h-7" />
               </button>
@@ -68,7 +63,7 @@ export function NewsSection({ items, className, onRefresh }: NewsSectionProps) {
           {items.map((item) => (
             <div
               key={item.id}
-              className="news-item relative overflow-hidden cursor-pointer border-2 border-white/40  backdrop-blur-md"
+              className="news-item relative overflow-hidden cursor-pointer border-2 border-white/40 backdrop-blur-md"
               onClick={() => {
                 gsap.to(`#news-item-${item.id}`, {
                   scale: 0.98,
@@ -95,13 +90,13 @@ export function NewsSection({ items, className, onRefresh }: NewsSectionProps) {
             >
               <div className="w-full" style={{ height: "250px" }}>
                 <img
-                  src={item.image}
+                  src={item.image || "/placeholder.svg"}
                   alt={item.title}
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t ">
+              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t">
                 <h4 className="font-minecraft text-white text-lg uppercase">
                   {item.title}
                 </h4>
