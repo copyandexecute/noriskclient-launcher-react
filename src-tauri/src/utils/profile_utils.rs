@@ -1,8 +1,11 @@
 use crate::error::{AppError, Result};
 use crate::integrations::modrinth::{ModrinthProjectType, ModrinthVersion};
 use crate::state::profile_state::Profile;
+use crate::state::profile_state::{Mod, ModSource, ModLoader};
 use crate::utils::{resourcepack_utils, shaderpack_utils, datapack_utils, hash_utils};
-use log::{debug, info};
+use crate::state::state_manager::State;
+use crate::integrations::norisk_packs;
+use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -13,6 +16,7 @@ use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
 use futures::future::BoxFuture;
+use serde::{Serialize, Deserialize};
 
 /// Represents the type of content to be installed
 pub enum ContentType {
@@ -210,6 +214,334 @@ pub async fn install_modrinth_content(
     .await?;
 
     Ok(())
+}
+
+// --- Struct for command parameters ---
+#[derive(Deserialize, Serialize, Debug)]
+pub struct CheckContentParams {
+    pub profile_id: Uuid,
+    pub project_id: Option<String>,
+    pub version_id: Option<String>,
+    pub file_hash_sha1: Option<String>,
+    pub file_name: Option<String>,
+    pub project_type: Option<String>,
+    pub game_version: Option<String>,
+    pub loader: Option<String>,
+    pub pack_version_number: Option<String>,
+}
+
+// --- Return Type ---
+#[derive(Serialize, Debug, Default, Clone)]
+pub struct ContentInstallStatus {
+    pub is_included_in_norisk_pack: bool,
+    pub is_installed: bool,
+    pub is_specific_version_in_pack: bool,
+}
+
+/// Checks the installation status of a specific Modrinth content item within a profile's context.
+///
+/// Returns a struct indicating if the content is defined in the selected Norisk Pack
+/// and if it is currently installed in the profile.
+/// At least one identifier (project_id, version_id, file_hash_sha1, file_name) must be provided.
+///
+/// # Arguments
+///
+/// * `params` - A struct containing all necessary context and identifiers.
+///
+/// # Returns
+///
+/// Returns `Ok(ContentInstallStatus)` with the status, or `Err` if errors occur.
+#[tauri::command]
+pub async fn check_content_installed(
+    params: CheckContentParams,
+) -> Result<ContentInstallStatus> { 
+    info!(
+        "Checking installation status for content in profile {} (MC: {:?}, Loader: {:?}): project_id={:?}, version_id={:?}, hash={:?}, filename={:?}, type={:?}",
+        params.profile_id, params.game_version, params.loader, params.project_id, params.version_id, params.file_hash_sha1.is_some(), params.file_name, params.project_type
+    );
+
+    // Ensure at least one identifier is provided
+    if params.project_id.is_none() && params.version_id.is_none() && params.file_hash_sha1.is_none() && params.file_name.is_none() {
+        return Err(AppError::Other("At least one identifier (project_id, version_id, file_hash_sha1, file_name) must be provided to check installation status.".to_string()));
+    }
+
+    // Initialize the status struct
+    let mut status = ContentInstallStatus::default();
+
+    // Get the profile
+    let state = State::get().await?;
+    let profile = state.profile_manager.get_profile(params.profile_id).await?;
+
+    // Determine the target loader context
+    let target_loader_str = match &params.loader { // Borrow from params
+        Some(loader_str) => loader_str.as_str(), 
+        None => profile.loader.as_str(),         
+    };
+
+    // Determine the target game version context
+    let target_game_version_str_buf; 
+    let target_game_version = match &params.game_version { // Borrow from params
+        Some(gv_str) => gv_str.as_str(),
+        None => {
+            target_game_version_str_buf = profile.game_version.clone();
+            target_game_version_str_buf.as_str()
+        }
+    };
+
+    info!("Using context: MC={}, Loader={}", target_game_version, target_loader_str);
+
+    // --- Norisk Pack Check (if applicable) ---
+    if let Some(pack_id) = &profile.selected_norisk_pack_id {
+        debug!("Profile {} has selected Norisk Pack: {}. Checking pack definition...", params.profile_id, pack_id);
+        let config = state.norisk_pack_manager.get_config().await; 
+        match config.get_resolved_pack_definition(pack_id) {
+            Ok(resolved_pack) => {
+                for norisk_mod in &resolved_pack.mods {
+                    let mut is_potential_project_match = false;
+                    if let (Some(pid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { project_id: norisk_pid, .. }) = (&params.project_id, &norisk_mod.source) {
+                        if pid_arg == norisk_pid {
+                            is_potential_project_match = true;
+                        }
+                    }
+                    // TODO: Add project matching for other source types if needed
+
+                    if is_potential_project_match {
+                        if let Some(loader_map) = norisk_mod.compatibility.get(target_game_version) { 
+                            if let Some(target) = loader_map.get(target_loader_str) {
+                                status.is_included_in_norisk_pack = true;
+
+                                // Check if the SPECIFIC version NUMBER requested matches the pack identifier
+                                if let Some(v_num_arg) = &params.pack_version_number { // Use the new field
+                                    // TODO: Comparison might need adjustment for non-Modrinth sources if identifier format differs
+                                    if v_num_arg == &target.identifier { 
+                                        debug!("Specific version number {} IS the one defined in the pack (identifier: {}).", v_num_arg, target.identifier);
+                                        status.is_specific_version_in_pack = true;
+                                    }
+                                } 
+                                
+                                if status.is_specific_version_in_pack {
+                                    break; // Found specific version in pack
+                                }
+                            }
+                        } 
+                    }
+                    if status.is_specific_version_in_pack {
+                        break; // Found specific version in pack
+                    }
+                }
+                 if status.is_included_in_norisk_pack {
+                    debug!("Found content (some version) in Norisk Pack definition.");
+                 } else {
+                     debug!("Content not found in the definition of Norisk Pack '{}' for MC {} / {}", pack_id, target_game_version, target_loader_str);
+                 }
+            },
+            Err(e) => {
+                warn!("Could not resolve Norisk Pack definition for pack ID '{}': {}. Skipping pack check.", pack_id, e);
+            }
+        }
+    }
+
+    // --- Installed Check (Type-Dependent) ---
+    let target_type = params.project_type.as_deref().unwrap_or("mod");
+    debug!("Checking local installation for type: {}", target_type);
+
+    match target_type {
+        "mod" => {
+            debug!("Checking locally installed mods in profile {}...", params.profile_id);
+            for installed_mod in &profile.mods { 
+                let mut mod_project_id: Option<&str> = None;
+                let mut mod_version_id: Option<&str> = None;
+                let mut mod_sha1_hash: Option<&str> = None;
+                let mut mod_file_name: Option<&str> = None;
+
+                if let ModSource::Modrinth { 
+                    project_id: pid, 
+                    version_id: vid, 
+                    file_hash_sha1: hash_opt, 
+                    file_name: fname, 
+                    .. 
+                } = &installed_mod.source {
+                    mod_project_id = Some(pid);
+                    mod_version_id = Some(vid);
+                    mod_sha1_hash = hash_opt.as_deref(); 
+                    mod_file_name = Some(fname);
+                }
+                // TODO: Add extraction logic for other source types
+
+                let mut match_project = true;
+                if let Some(pid) = &params.project_id {
+                    match_project = mod_project_id == Some(pid.as_str());
+                }
+                let mut match_version = true;
+                if let Some(vid) = &params.version_id {
+                    match_version = mod_version_id == Some(vid.as_str()); 
+                }
+                let mut match_hash = true;
+                if let Some(hash) = &params.file_hash_sha1 {
+                    match_hash = mod_sha1_hash == Some(hash.as_str());
+                }
+                let mut match_name = true;
+                if let Some(name) = &params.file_name {
+                    match_name = mod_file_name == Some(name.as_str());
+                }
+                let mut match_game_version = true; 
+                if let Some(installed_versions) = &installed_mod.game_versions {
+                    match_game_version = installed_versions.contains(&target_game_version.to_string());
+                }
+                let mut match_loader = true; 
+                if let Some(installed_loader_enum) = &installed_mod.associated_loader {
+                    match_loader = installed_loader_enum.as_str() == target_loader_str;
+                }
+
+                if match_project && match_version && match_hash && match_name && match_game_version && match_loader {
+                    info!("Found matching locally installed mod for context ({} {}): {}", target_game_version, target_loader_str, installed_mod.display_name.as_deref().unwrap_or("[Unknown Name]"));
+                    status.is_installed = true;
+                    break; 
+                }
+            }
+            if !status.is_installed {
+                info!("No matching mod found locally installed in profile {} for context ({} {})", params.profile_id, target_game_version, target_loader_str);
+            }
+        },
+        "resourcepack" => {
+            debug!("Checking locally installed resource packs in profile {}...", params.profile_id);
+            match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
+                Ok(packs) => {
+                    for pack_info in &packs {
+                        let modrinth_pid = pack_info.modrinth_info.as_ref().map(|m| m.project_id.as_str());
+                        let modrinth_vid = pack_info.modrinth_info.as_ref().map(|m| m.version_id.as_str());
+                        let pack_hash = pack_info.sha1_hash.as_deref();
+                        let pack_filename = Some(pack_info.filename.as_str());
+
+                        // Match against provided parameters (excluding context for RPs)
+                        let mut match_project = true;
+                        if let Some(pid) = &params.project_id {
+                            match_project = modrinth_pid == Some(pid.as_str());
+                        }
+                        let mut match_version = true;
+                        if let Some(vid) = &params.version_id {
+                            match_version = modrinth_vid == Some(vid.as_str());
+                        }
+                        let mut match_hash = true;
+                        if let Some(hash) = &params.file_hash_sha1 {
+                            match_hash = pack_hash == Some(hash.as_str());
+                        }
+                        let mut match_name = true;
+                        if let Some(name) = &params.file_name {
+                            match_name = pack_filename == Some(name.as_str());
+                        }
+
+                        if match_project && match_version && match_hash && match_name {
+                            info!("Found matching locally installed resource pack: {}", pack_info.filename);
+                            status.is_installed = true;
+                            break; 
+                        }
+                    }
+                    if !status.is_installed {
+                         info!("No matching resource pack found locally installed in profile {}", params.profile_id);
+                    }
+                },
+                Err(e) => {
+                    warn!("Failed to list resource packs for profile {}: {}. Assuming not installed.", params.profile_id, e);
+                }
+            }
+        },
+        "shaderpack" => {
+            debug!("Checking locally installed shader packs in profile {}...", params.profile_id);
+            match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
+                Ok(packs) => {
+                    for pack_info in &packs {
+                        let modrinth_pid = pack_info.modrinth_info.as_ref().map(|m| m.project_id.as_str());
+                        let modrinth_vid = pack_info.modrinth_info.as_ref().map(|m| m.version_id.as_str());
+                        let pack_hash = pack_info.sha1_hash.as_deref();
+                        let pack_filename = Some(pack_info.filename.as_str());
+
+                        // Match against provided parameters (excluding context)
+                        let mut match_project = true;
+                        if let Some(pid) = &params.project_id {
+                            match_project = modrinth_pid == Some(pid.as_str());
+                        }
+                        let mut match_version = true;
+                        if let Some(vid) = &params.version_id {
+                            match_version = modrinth_vid == Some(vid.as_str());
+                        }
+                        let mut match_hash = true;
+                        if let Some(hash) = &params.file_hash_sha1 {
+                            match_hash = pack_hash == Some(hash.as_str());
+                        }
+                        let mut match_name = true;
+                        if let Some(name) = &params.file_name {
+                            match_name = pack_filename == Some(name.as_str());
+                        }
+
+                        if match_project && match_version && match_hash && match_name {
+                            info!("Found matching locally installed shader pack: {}", pack_info.filename);
+                            status.is_installed = true;
+                            break; 
+                        }
+                    }
+                    if !status.is_installed {
+                         info!("No matching shader pack found locally installed in profile {}", params.profile_id);
+                    }
+                },
+                Err(e) => {
+                    warn!("Failed to list shader packs for profile {}: {}. Assuming not installed.", params.profile_id, e);
+                }
+            }
+        },
+        "datapack" => {
+            debug!("Checking locally installed data packs in profile {}...", params.profile_id);
+            match datapack_utils::get_datapacks_for_profile(&profile).await {
+                Ok(packs) => {
+                    for pack_info in &packs {
+                        let modrinth_pid = pack_info.modrinth_info.as_ref().map(|m| m.project_id.as_str());
+                        let modrinth_vid = pack_info.modrinth_info.as_ref().map(|m| m.version_id.as_str());
+                        let pack_hash = pack_info.sha1_hash.as_deref();
+                        let pack_filename = Some(pack_info.filename.as_str());
+
+                        // Match against provided parameters (excluding context)
+                        let mut match_project = true;
+                        if let Some(pid) = &params.project_id {
+                            match_project = modrinth_pid == Some(pid.as_str());
+                        }
+                        let mut match_version = true;
+                        if let Some(vid) = &params.version_id {
+                            match_version = modrinth_vid == Some(vid.as_str());
+                        }
+                        let mut match_hash = true;
+                        if let Some(hash) = &params.file_hash_sha1 {
+                            match_hash = pack_hash == Some(hash.as_str());
+                        }
+                        let mut match_name = true;
+                        if let Some(name) = &params.file_name {
+                            match_name = pack_filename == Some(name.as_str());
+                        }
+
+                        if match_project && match_version && match_hash && match_name {
+                            info!("Found matching locally installed data pack: {}", pack_info.filename);
+                            status.is_installed = true;
+                            break; 
+                        }
+                    }
+                    if !status.is_installed {
+                         info!("No matching data pack found locally installed in profile {}", params.profile_id);
+                    }
+                },
+                Err(e) => {
+                    warn!("Failed to list data packs for profile {}: {}. Assuming not installed.", params.profile_id, e);
+                }
+            }
+        },
+        _ => {
+             warn!("Checking installation for content type '{}' is not yet implemented.", target_type);
+        }
+    }
+
+    if status.is_installed {
+         debug!("Final status: Found content installed locally.");
+    } 
+
+    Ok(status)
 }
 
 /// Exports a profile to a `.noriskpack` file
