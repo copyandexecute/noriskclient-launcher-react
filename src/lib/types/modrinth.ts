@@ -189,10 +189,13 @@ export interface ModrinthProject {
     loaders?: string[] | null; // Added based on Rust struct
 }
 
+// Allowed hash algorithms for Modrinth API requests
+export type ModrinthHashAlgorithm = "sha1" | "sha512";
+
 // Request body for checking mod updates via the bulk API
 export interface ModrinthBulkUpdateRequestBody {
     hashes: string[];      // SHA1 or SHA512 hashes of the currently installed mod files
-    algorithm: string;     // Hash algorithm used, either "sha1" or "sha512"
+    algorithm: ModrinthHashAlgorithm; // Use the specific type
     loaders: string[];     // List of mod loaders to filter by (e.g., ["fabric", "quilt"])
     game_versions: string[]; // List of game versions to filter by (e.g., ["1.20.1"])
 }
