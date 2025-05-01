@@ -71,7 +71,7 @@
 			console.error('Error invoking open_profile_latest_log:', error);
 			// Optionally show another error message to the user
 		}
-		close(); // Popup nach Klick schließen
+		//close(); // Popup nach Klick schließen
 	};
 </script>
 
