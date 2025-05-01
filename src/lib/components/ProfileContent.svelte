@@ -1,7 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, onDestroy } from 'svelte';
-  import type { ResourcePackInfo, ShaderPackInfo } from '$lib/types/modrinth';
+  import type { ResourcePackInfo, ShaderPackInfo, DataPackInfo } from '$lib/types/modrinth';
   import type { ModrinthProject, ModrinthVersion, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm } from '$lib/types/modrinth';
 
   // Properties
@@ -14,16 +14,19 @@
   }>();
 
   // Tab states
-  let activeTab = $state<'mods' | 'resourcepacks' | 'shaderpacks'>('mods');
+  let activeTab = $state<'mods' | 'resourcepacks' | 'shaderpacks' | 'datapacks'>('mods');
   
 
   // State
   let resourcePacks = $state<ResourcePackInfo[]>([]);
   let shaderPacks = $state<ShaderPackInfo[]>([]);
+  let dataPacks = $state<DataPackInfo[]>([]);
   let loadingResourcePacks = false;
   let loadingShaderPacks = false;
+  let loadingDataPacks = false;
   let errorResourcePacks: string | null = null;
   let errorShaderPacks: string | null = null;
+  let errorDataPacks: string | null = null;
   let loadingOperation = false;
   
   // State for Modrinth project details
@@ -36,15 +39,20 @@
   let loadingLocalIcons = $state(false);
   let localIconsError = $state<string | null>(null);
   
-  // NEW: State for resource pack updates
+  // State for resource pack updates
   let resourcePackUpdates = $state<Record<string, ModrinthVersion>>({});
   let checkingResourcePackUpdates = $state(false);
   let resourcePackUpdatesError = $state<string | null>(null);
   
-  // NEW: State for shader pack updates
+  // State for shader pack updates
   let shaderPackUpdates = $state<Record<string, ModrinthVersion>>({});
   let checkingShaderPackUpdates = $state(false);
   let shaderPackUpdatesError = $state<string | null>(null);
+  
+  // State for data pack updates
+  let dataPackUpdates = $state<Record<string, ModrinthVersion>>({});
+  let checkingDataPackUpdates = $state(false);
+  let dataPackUpdatesError = $state<string | null>(null);
   
   // Interval for auto-refresh
   let refreshInterval: number | null = null;
@@ -76,6 +84,8 @@
       await loadResourcePacks();
     } else if (tab === 'shaderpacks') {
       await loadShaderPacks();
+    } else if (tab === 'datapacks') {
+      await loadDataPacks();
     }
   }
 
@@ -131,7 +141,33 @@
     }
   }
 
-  // NEW: Function to check for resource pack updates
+  // Load DataPacks for the current profile
+  async function loadDataPacks() {
+    if (!profileId) return;
+    
+    loadingDataPacks = true;
+    errorDataPacks = null;
+
+    try {
+      dataPacks = await invoke<DataPackInfo[]>('get_local_datapacks', {
+        profileId
+      });
+      console.log(`Loaded ${dataPacks.length} data packs`);
+      
+      // Check for updates after loading packs
+      if (dataPacks.length > 0) {
+        checkForDataPackUpdates();
+      }
+    } catch (err) {
+      console.error('Failed to load data packs:', err);
+      errorDataPacks = `Error loading data packs: ${err instanceof Error ? err.message : String(err)}`;
+      dataPacks = [];
+    } finally {
+      loadingDataPacks = false;
+    }
+  }
+
+  // Function to check for resource pack updates
   async function checkForResourcePackUpdates() {
     if (!gameVersion) {
       console.debug('[ProfileContent] Cannot check resource pack updates without gameVersion.');
@@ -191,7 +227,7 @@
     }
   }
 
-  // NEW: Function to check for shader pack updates
+  // Function to check for shader pack updates
   async function checkForShaderPackUpdates() {
     if (!gameVersion) {
       console.debug('[ProfileContent] Cannot check shader pack updates without gameVersion.');
@@ -251,10 +287,70 @@
     }
   }
 
-  // NEW: Effect to fetch Modrinth details AND local icons when packs change
+  // Function to check for data pack updates
+  async function checkForDataPackUpdates() {
+    if (!gameVersion) {
+      console.debug('[ProfileContent] Cannot check data pack updates without gameVersion.');
+      return;
+    }
+    // Only check packs from Modrinth with SHA1 hash
+    const packsWithHashes = dataPacks.filter(pack => 
+      pack.modrinth_info && pack.sha1_hash
+    );
+    
+    console.debug('[ProfileContent] Packs eligible for data pack update check:', packsWithHashes);
+    
+    if (packsWithHashes.length === 0) {
+      console.debug('[ProfileContent] No data packs eligible for update check.');
+      return;
+    }
+    
+    const hashes = packsWithHashes
+      .map(pack => pack.sha1_hash!)
+      .filter(hash => hash); // Filter out any undefined/null
+    
+    if (hashes.length === 0) {
+      console.debug('[ProfileContent] No valid hashes found for data pack update check.');
+      return;
+    }
+    
+    checkingDataPackUpdates = true;
+    dataPackUpdatesError = null;
+    
+    try {
+      // Prepare the request body - Use profile game version
+      const request: ModrinthBulkUpdateRequestBody = {
+        hashes,
+        algorithm: 'sha1' as ModrinthHashAlgorithm,
+        loaders: [], // Empty array for loader-agnostic packs
+        game_versions: [gameVersion] // Use the profile's game version
+      };
+      
+      console.debug('[ProfileContent] Checking for updates for data packs with request:', request);
+      
+      // Call the update check command
+      const updates = await invoke<Record<string, ModrinthVersion>>(
+        'check_modrinth_updates', 
+        { request }
+      );
+      
+      console.debug('[ProfileContent] Received raw data pack updates from backend:', updates);
+      
+      dataPackUpdates = updates;
+      console.log(`[ProfileContent] Found updates for ${Object.keys(updates).length} data packs`);
+    } catch (error) {
+      console.error('Error checking for data pack updates:', error);
+      dataPackUpdatesError = error instanceof Error ? error.message : 'Error checking for data pack updates';
+      dataPackUpdates = {}; 
+    } finally {
+      checkingDataPackUpdates = false;
+    }
+  }
+
+  // Effect to fetch Modrinth details AND local icons when packs change
   $effect(() => {
     // Combine packs for easier processing
-    const allPacks = [...resourcePacks, ...shaderPacks];
+    const allPacks = [...resourcePacks, ...shaderPacks, ...dataPacks];
 
     if (allPacks.length > 0) {
       console.log('[ProfileContent] Pack lists updated, fetching details/icons...');
@@ -308,7 +404,7 @@
     }
   }
 
-  // NEW: Function to fetch icons for local archives
+  // Function to fetch icons for local archives
   async function fetchLocalPackIcons(paths: string[]) {
     if (paths.length === 0) return;
 
@@ -341,7 +437,7 @@
     }
   }
 
-  // Toggle enabled state of a resource pack or shader pack
+  // Toggle enabled state of a resource pack, shader pack, or data pack
   async function togglePackEnabled(path: string, isDisabled: boolean) {
     if (loadingOperation) return;
     loadingOperation = true;
@@ -362,6 +458,8 @@
         await loadResourcePacks();
       } else if (activeTab === 'shaderpacks') {
         await loadShaderPacks();
+      } else if (activeTab === 'datapacks') {
+        await loadDataPacks();
       }
       
     } catch (err) {
@@ -372,7 +470,7 @@
     }
   }
 
-  // Delete a resource pack or shader pack
+  // Delete a resource pack, shader pack, or data pack
   async function deletePack(path: string) {
     if (loadingOperation) return;
     
@@ -393,6 +491,8 @@
         await loadResourcePacks();
       } else if (activeTab === 'shaderpacks') {
         await loadShaderPacks();
+      } else if (activeTab === 'datapacks') {
+        await loadDataPacks();
       }
       
     } catch (err) {
@@ -443,7 +543,7 @@
     }
   });
 
-  // NEW: Helper function to check if a resource pack has an update (and it's a different version)
+  // Helper functions for resource pack updates
   function hasResourcePackUpdate(pack: ResourcePackInfo): boolean {
     if (!pack.sha1_hash || !pack.modrinth_info) return false;
     
@@ -454,7 +554,6 @@
     return updateVersion.id !== pack.modrinth_info.version_id;
   }
   
-  // NEW: Helper function to get update version for a resource pack
   function getResourcePackUpdateVersion(pack: ResourcePackInfo): ModrinthVersion | null {
     if (!pack.sha1_hash || !(pack.sha1_hash in resourcePackUpdates)) return null;
     
@@ -468,7 +567,7 @@
     return updateVersion;
   }
   
-  // NEW: Helper function to check if a shader pack has an update (and it's a different version)
+  // Helper functions for shader pack updates
   function hasShaderPackUpdate(pack: ShaderPackInfo): boolean {
     if (!pack.sha1_hash || !pack.modrinth_info) return false;
     
@@ -479,7 +578,6 @@
     return updateVersion.id !== pack.modrinth_info.version_id;
   }
   
-  // NEW: Helper function to get update version for a shader pack
   function getShaderPackUpdateVersion(pack: ShaderPackInfo): ModrinthVersion | null {
     if (!pack.sha1_hash || !(pack.sha1_hash in shaderPackUpdates)) return null;
     
@@ -492,8 +590,32 @@
     
     return updateVersion;
   }
+
+  // Helper functions for data pack updates
+  function hasDataPackUpdate(pack: DataPackInfo): boolean {
+    if (!pack.sha1_hash || !pack.modrinth_info) return false;
+    
+    const updateVersion = pack.sha1_hash in dataPackUpdates ? dataPackUpdates[pack.sha1_hash] : null;
+    if (!updateVersion) return false; // No update found for this hash
+    
+    // Check if the version ID is different from the installed version ID
+    return updateVersion.id !== pack.modrinth_info.version_id;
+  }
   
-  // NEW: Handle updating a resource pack
+  function getDataPackUpdateVersion(pack: DataPackInfo): ModrinthVersion | null {
+    if (!pack.sha1_hash || !(pack.sha1_hash in dataPackUpdates)) return null;
+    
+    const updateVersion = dataPackUpdates[pack.sha1_hash];
+    
+    // Ensure it's actually an update (different version ID)
+    if (pack.modrinth_info && updateVersion.id === pack.modrinth_info.version_id) {
+      return null; // Same version, not an update
+    }
+    
+    return updateVersion;
+  }
+  
+  // Handle updating a resource pack
   async function handleUpdateResourcePack(pack: ResourcePackInfo) {
     if (!hasResourcePackUpdate(pack)) return;
     
@@ -539,7 +661,7 @@
     }
   }
   
-  // NEW: Handle updating a shader pack
+  // Handle updating a shader pack
   async function handleUpdateShaderPack(pack: ShaderPackInfo) {
     if (!hasShaderPackUpdate(pack)) return;
     
@@ -584,6 +706,52 @@
       loadingOperation = false;
     }
   }
+
+  // Handle updating a data pack
+  async function handleUpdateDataPack(pack: DataPackInfo) {
+    if (!hasDataPackUpdate(pack)) return;
+    
+    const updateVersion = getDataPackUpdateVersion(pack);
+    if (!updateVersion) {
+      console.error("Update version not found despite hasDataPackUpdate returning true");
+      return;
+    }
+    
+    try {
+      console.log(`Updating data pack ${pack.filename} to version ${updateVersion.version_number}`);
+      
+      // Show loading state
+      loadingOperation = true;
+      
+      // Remove from updates map to hide update button during update
+      if (pack.sha1_hash && pack.sha1_hash in dataPackUpdates) {
+        const newMap = {...dataPackUpdates};
+        delete newMap[pack.sha1_hash];
+        dataPackUpdates = newMap;
+      }
+      
+      // Call the update command
+      await invoke("update_datapack_from_modrinth", {
+        profileId,
+        datapack: pack,
+        newVersionDetails: updateVersion
+      });
+      
+      console.log(`Successfully updated data pack ${pack.filename} to version ${updateVersion.version_number}`);
+      
+      // Refresh data packs
+      await loadDataPacks();
+      
+    } catch (error) {
+      console.error("Failed to update data pack:", error);
+      alert(`Failed to update data pack: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Restore updates map in case of error
+      dataPackUpdates = {...dataPackUpdates}; // Trigger reactivity
+    } finally {
+      loadingOperation = false;
+    }
+  }
 </script>
 
 <div class="profile-content">
@@ -606,6 +774,12 @@
       on:click={() => activeTab = 'shaderpacks'}
     >
       Shader Packs
+    </button>
+    <button 
+      class="tab-button {activeTab === 'datapacks' ? 'active' : ''}" 
+      on:click={() => activeTab = 'datapacks'}
+    >
+      Data Packs
     </button>
   </div>
 
@@ -839,6 +1013,123 @@
                   <button 
                     class="delete-button" 
                     title="Delete shader pack"
+                    disabled={loadingOperation}
+                    on:click={() => deletePack(pack.path)}
+                  >
+                    <span class="trash-icon">🗑️</span>
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Data Packs Tab -->
+    {#if activeTab === 'datapacks'}
+      <div class="datapacks-tab">
+        <h3>Data Packs</h3>
+
+        {#if loadingDataPacks}
+          <div class="loading">Loading data packs...</div>
+        {:else if errorDataPacks}
+          <div class="error-message">{errorDataPacks}</div>
+        {:else if dataPacks.length === 0}
+          <div class="empty-state">
+            <p>No data packs found for this profile.</p>
+            <p class="tip">You can download data packs from Modrinth or add them manually to your profile's datapacks folder.</p>
+          </div>
+        {:else}
+          <div class="pack-list">
+            {#each dataPacks as pack (pack.path)}
+              <div class="pack-item {pack.is_disabled ? 'disabled' : ''}">
+                <div class="pack-controls">
+                  <label class="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      checked={!pack.is_disabled}
+                      disabled={loadingOperation}
+                      on:change={() => togglePackEnabled(pack.path, pack.is_disabled)} 
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                <div class="pack-icon">
+                  {#if pack.modrinth_info?.project_id && modrinthProjects[pack.modrinth_info.project_id]?.icon_url}
+                    <!-- Modrinth Icon -->
+                    <img 
+                      src={modrinthProjects[pack.modrinth_info.project_id].icon_url} 
+                      alt="Modrinth data pack icon" 
+                      class="pack-icon-img" 
+                      loading="lazy"
+                    />
+                  {:else if localPackIcons[pack.path]}
+                    <!-- Local Icon -->
+                    <img 
+                      src="data:image/png;base64,{localPackIcons[pack.path]}" 
+                      alt="Local data pack icon" 
+                      class="pack-icon-img" 
+                      loading="lazy"
+                    />
+                  {:else}
+                    <!-- Default Icon -->
+                    <div class="default-icon">📦</div>
+                  {/if}
+                </div>
+                <div class="pack-details">
+                  <div class="pack-name">
+                    {pack.modrinth_info ? pack.modrinth_info.name : pack.filename}
+                    {#if pack.is_disabled}<span class="disabled-badge">Disabled</span>{/if}
+                  </div>
+                  <div class="pack-meta">
+                    {#if pack.modrinth_info}
+                      <span class="version">Version: {pack.modrinth_info.version_number}</span>
+                      <span class="source">From Modrinth</span>
+                    {:else}
+                      <span class="source">Local File</span>
+                    {/if}
+                    <span class="size">Size: {formatFileSize(pack.file_size)}</span>
+                  </div>
+                </div>
+                
+                <!-- Update indicator and button for Modrinth data packs -->
+                {#if hasDataPackUpdate(pack)}
+                  {@const updateVersion = getDataPackUpdateVersion(pack)}
+                  <div class="pack-update-info">
+                    <span 
+                      class="update-indicator"
+                      title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number} available` : "Update available"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v12"></path>
+                        <path d="m17 8-5-5-5 5"></path>
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5"></path>
+                      </svg>
+                    </span>
+                    <button 
+                      class="update-pack-button"
+                      title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number}` : "Update to latest version"}
+                      disabled={loadingOperation}
+                      on:click={() => handleUpdateDataPack(pack)}
+                    >
+                      Update
+                    </button>
+                  </div>
+                {/if}
+                
+                <div class="pack-actions">
+                  <button 
+                    class="folder-button" 
+                    title="Open folder"
+                    disabled={loadingOperation}
+                    on:click={() => openPackDirectory(pack.path)}
+                  >
+                    <span class="folder-icon">📁</span>
+                  </button>
+                  <button 
+                    class="delete-button" 
+                    title="Delete data pack"
                     disabled={loadingOperation}
                     on:click={() => deletePack(pack.path)}
                   >

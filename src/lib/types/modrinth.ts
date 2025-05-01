@@ -123,6 +123,23 @@ export interface ShaderPackInfo {
     modrinth_info: ShaderPackModrinthInfo | null;
 }
 
+export interface DataPackModrinthInfo {
+    project_id: string;
+    version_id: string;
+    name: string;
+    version_number: string;
+    download_url: string;
+}
+
+export interface DataPackInfo {
+    filename: string;
+    path: string;
+    sha1_hash: string | null;
+    file_size: number;
+    is_disabled: boolean;
+    modrinth_info: DataPackModrinthInfo | null;
+}
+
 // --- Structures for Bulk Project Lookup --- 
 
 // Corresponds to ModrinthModeratorMessage in Rust
