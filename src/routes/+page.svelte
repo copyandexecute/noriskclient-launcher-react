@@ -13,6 +13,7 @@
 	let errorProfileName: string | null = null;
 	let errorExitCode: string | null = null;
 	let errorProcessId: string | null = null;
+    let errorProfileId: string | null = null;
 
   // --- Funktion, um den Profilnamen anhand der ID zu finden ---
 	function getProfileNameByProfileId(profileId: string): string {
@@ -65,6 +66,7 @@
                 errorProfileName = profileName;
                 errorExitCode = exitCodeDisplay; // Verwende den formatierten Code
                 errorProcessId = processId;
+                errorProfileId = profileId;
                 isErrorPopupOpen = true;
               } else {
                 // Prozess war erfolgreich
@@ -108,6 +110,7 @@
     profileName={errorProfileName}
     exitCode={errorExitCode}
     processId={errorProcessId}
+    profileId={errorProfileId}
     on:close={handlePopupClose}
   />
   <ProfileManager />

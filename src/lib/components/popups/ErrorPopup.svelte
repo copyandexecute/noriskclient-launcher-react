@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
+	import { invoke } from '@tauri-apps/api/core'; // Import invoke
 
 	export let isOpen: boolean = false;
 	export let profileName: string | null = null; // Name des betroffenen Profils
 	export let exitCode: string | null = null; // Exit-Code als String (wie im Backend formatiert)
 	export let processId: string | null = null; // ID des Prozesses für evtl. weitere Aktionen (Logs)
+	export let profileId: string | null = null; // << NEU: ID des Profils
 
 	const dispatch = createEventDispatcher();
 
@@ -55,10 +57,20 @@
 	$: description = getExitCodeDescription(exitCode);
 
 	// Funktion für den optionalen "Logs anzeigen"-Button
-	const showLogs = () => {
-		console.log('Anzeigen der Logs für Prozess:', processId);
-		// Hier Logik zum Anzeigen der Logs einfügen (z.B. Navigation zu Log-Seite oder API-Aufruf)
-		// Eventuell ein weiteres Event dispatch('showlogs', { processId });
+	const showLogs = async () => { // Make async
+		if (!profileId) {
+			console.error('Profile ID not available to show logs.');
+			close();
+			return;
+		}
+		console.log('Requesting to open latest log for profile:', profileId);
+		try {
+			await invoke('open_profile_latest_log', { profileId: profileId });
+			console.log('Backend command open_profile_latest_log invoked successfully.');
+		} catch (error) {
+			console.error('Error invoking open_profile_latest_log:', error);
+			// Optionally show another error message to the user
+		}
 		close(); // Popup nach Klick schließen
 	};
 </script>
