@@ -2,10 +2,16 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount, onDestroy } from 'svelte';
   import type { ResourcePackInfo, ShaderPackInfo } from '$lib/types/modrinth';
-  import type { ModrinthProject } from '$lib/types/modrinth';
+  import type { ModrinthProject, ModrinthVersion, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm } from '$lib/types/modrinth';
 
   // Properties
-  let { profileId = null } = $props<{ profileId?: string | null }>();
+  let { 
+    profileId = null,
+    gameVersion = null
+  } = $props<{ 
+    profileId?: string | null;
+    gameVersion?: string | null;
+  }>();
 
   // Tab states
   let activeTab = $state<'mods' | 'resourcepacks' | 'shaderpacks'>('mods');
@@ -29,6 +35,16 @@
   let localPackIcons = $state<Record<string, string>>({});
   let loadingLocalIcons = $state(false);
   let localIconsError = $state<string | null>(null);
+  
+  // NEW: State for resource pack updates
+  let resourcePackUpdates = $state<Record<string, ModrinthVersion>>({});
+  let checkingResourcePackUpdates = $state(false);
+  let resourcePackUpdatesError = $state<string | null>(null);
+  
+  // NEW: State for shader pack updates
+  let shaderPackUpdates = $state<Record<string, ModrinthVersion>>({});
+  let checkingShaderPackUpdates = $state(false);
+  let shaderPackUpdatesError = $state<string | null>(null);
   
   // Interval for auto-refresh
   let refreshInterval: number | null = null;
@@ -76,8 +92,10 @@
       });
       console.log(`Loaded ${resourcePacks.length} resource packs`);
       
-      // Fetch Modrinth project details for icons - MOVED to separate effect
-      // await fetchModrinthProjectDetails();
+      // Check for updates after loading packs
+      if (resourcePacks.length > 0) {
+        checkForResourcePackUpdates();
+      }
     } catch (err) {
       console.error('Failed to load resource packs:', err);
       errorResourcePacks = `Error loading resource packs: ${err instanceof Error ? err.message : String(err)}`;
@@ -100,14 +118,136 @@
       });
       console.log(`Loaded ${shaderPacks.length} shader packs`);
       
-      // Fetch Modrinth project details for icons - MOVED to separate effect
-      // await fetchModrinthProjectDetails();
+      // Check for updates after loading packs
+      if (shaderPacks.length > 0) {
+        checkForShaderPackUpdates();
+      }
     } catch (err) {
       console.error('Failed to load shader packs:', err);
       errorShaderPacks = `Error loading shader packs: ${err instanceof Error ? err.message : String(err)}`;
       shaderPacks = [];
     } finally {
       loadingShaderPacks = false;
+    }
+  }
+
+  // NEW: Function to check for resource pack updates
+  async function checkForResourcePackUpdates() {
+    if (!gameVersion) {
+      console.debug('[ProfileContent] Cannot check resource pack updates without gameVersion.');
+      return;
+    }
+    // Only check packs from Modrinth with SHA1 hash
+    const packsWithHashes = resourcePacks.filter(pack => 
+      pack.modrinth_info && pack.sha1_hash
+    );
+    
+    console.debug('[ProfileContent] Packs eligible for resource pack update check:', packsWithHashes);
+    
+    if (packsWithHashes.length === 0) {
+      console.debug('[ProfileContent] No resource packs eligible for update check.');
+      return;
+    }
+    
+    const hashes = packsWithHashes
+      .map(pack => pack.sha1_hash!)
+      .filter(hash => hash); // Filter out any undefined/null
+    
+    if (hashes.length === 0) {
+      console.debug('[ProfileContent] No valid hashes found for resource pack update check.');
+      return;
+    }
+    
+    checkingResourcePackUpdates = true;
+    resourcePackUpdatesError = null;
+    
+    try {
+      // Prepare the request body - Use profile game version
+      const request: ModrinthBulkUpdateRequestBody = {
+        hashes,
+        algorithm: 'sha1' as ModrinthHashAlgorithm,
+        loaders: [], // Empty array for loader-agnostic packs
+        game_versions: [gameVersion] // Use the profile's game version
+      };
+      
+      console.debug('[ProfileContent] Checking for updates for resource packs with request:', request);
+      
+      // Call the update check command
+      const updates = await invoke<Record<string, ModrinthVersion>>(
+        'check_modrinth_updates', 
+        { request }
+      );
+      
+      console.debug('[ProfileContent] Received raw resource pack updates from backend:', updates);
+      
+      resourcePackUpdates = updates;
+      console.log(`[ProfileContent] Found updates for ${Object.keys(updates).length} resource packs`);
+    } catch (error) {
+      console.error('Error checking for resource pack updates:', error);
+      resourcePackUpdatesError = error instanceof Error ? error.message : 'Error checking for resource pack updates';
+      resourcePackUpdates = {}; 
+    } finally {
+      checkingResourcePackUpdates = false;
+    }
+  }
+
+  // NEW: Function to check for shader pack updates
+  async function checkForShaderPackUpdates() {
+    if (!gameVersion) {
+      console.debug('[ProfileContent] Cannot check shader pack updates without gameVersion.');
+      return;
+    }
+    // Only check packs from Modrinth with SHA1 hash
+    const packsWithHashes = shaderPacks.filter(pack => 
+      pack.modrinth_info && pack.sha1_hash
+    );
+    
+    console.debug('[ProfileContent] Packs eligible for shader pack update check:', packsWithHashes);
+    
+    if (packsWithHashes.length === 0) {
+      console.debug('[ProfileContent] No shader packs eligible for update check.');
+      return;
+    }
+    
+    const hashes = packsWithHashes
+      .map(pack => pack.sha1_hash!)
+      .filter(hash => hash); // Filter out any undefined/null
+      
+    if (hashes.length === 0) {
+      console.debug('[ProfileContent] No valid hashes found for shader pack update check.');
+      return;
+    }
+    
+    checkingShaderPackUpdates = true;
+    shaderPackUpdatesError = null;
+    
+    try {
+      // Prepare the request body - Use profile game version
+      const request: ModrinthBulkUpdateRequestBody = {
+        hashes,
+        algorithm: 'sha1' as ModrinthHashAlgorithm,
+        loaders: [], // Empty array for loader-agnostic packs
+        game_versions: [gameVersion] // Use the profile's game version
+      };
+      
+      console.debug('[ProfileContent] Checking for updates for shader packs with request:', request);
+      
+      // Call the update check command
+      const updates = await invoke<Record<string, ModrinthVersion>>(
+        'check_modrinth_updates', 
+        { request }
+      );
+      
+      console.debug('[ProfileContent] Received raw shader pack updates from backend:', updates);
+      
+      shaderPackUpdates = updates;
+      console.log(`[ProfileContent] Found updates for ${Object.keys(updates).length} shader packs`);
+    } catch (error) {
+      console.error('Error checking for shader pack updates:', error);
+      shaderPackUpdatesError = error instanceof Error ? error.message : 'Error checking for shader pack updates';
+      shaderPackUpdates = {};
+    } finally {
+      checkingShaderPackUpdates = false;
     }
   }
 
@@ -302,6 +442,148 @@
       clearInterval(refreshInterval);
     }
   });
+
+  // NEW: Helper function to check if a resource pack has an update (and it's a different version)
+  function hasResourcePackUpdate(pack: ResourcePackInfo): boolean {
+    if (!pack.sha1_hash || !pack.modrinth_info) return false;
+    
+    const updateVersion = pack.sha1_hash in resourcePackUpdates ? resourcePackUpdates[pack.sha1_hash] : null;
+    if (!updateVersion) return false; // No update found for this hash
+    
+    // Check if the version ID is different from the installed version ID
+    return updateVersion.id !== pack.modrinth_info.version_id;
+  }
+  
+  // NEW: Helper function to get update version for a resource pack
+  function getResourcePackUpdateVersion(pack: ResourcePackInfo): ModrinthVersion | null {
+    if (!pack.sha1_hash || !(pack.sha1_hash in resourcePackUpdates)) return null;
+    
+    const updateVersion = resourcePackUpdates[pack.sha1_hash];
+    
+    // Ensure it's actually an update (different version ID)
+    if (pack.modrinth_info && updateVersion.id === pack.modrinth_info.version_id) {
+      return null; // Same version, not an update
+    }
+    
+    return updateVersion;
+  }
+  
+  // NEW: Helper function to check if a shader pack has an update (and it's a different version)
+  function hasShaderPackUpdate(pack: ShaderPackInfo): boolean {
+    if (!pack.sha1_hash || !pack.modrinth_info) return false;
+    
+    const updateVersion = pack.sha1_hash in shaderPackUpdates ? shaderPackUpdates[pack.sha1_hash] : null;
+    if (!updateVersion) return false; // No update found for this hash
+    
+    // Check if the version ID is different from the installed version ID
+    return updateVersion.id !== pack.modrinth_info.version_id;
+  }
+  
+  // NEW: Helper function to get update version for a shader pack
+  function getShaderPackUpdateVersion(pack: ShaderPackInfo): ModrinthVersion | null {
+    if (!pack.sha1_hash || !(pack.sha1_hash in shaderPackUpdates)) return null;
+    
+    const updateVersion = shaderPackUpdates[pack.sha1_hash];
+    
+    // Ensure it's actually an update (different version ID)
+    if (pack.modrinth_info && updateVersion.id === pack.modrinth_info.version_id) {
+      return null; // Same version, not an update
+    }
+    
+    return updateVersion;
+  }
+  
+  // NEW: Handle updating a resource pack
+  async function handleUpdateResourcePack(pack: ResourcePackInfo) {
+    if (!hasResourcePackUpdate(pack)) return;
+    
+    const updateVersion = getResourcePackUpdateVersion(pack);
+    if (!updateVersion) {
+      console.error("Update version not found despite hasResourcePackUpdate returning true");
+      return;
+    }
+    
+    try {
+      console.log(`Updating resource pack ${pack.filename} to version ${updateVersion.version_number}`);
+      
+      // Show loading state
+      loadingOperation = true;
+      
+      // Remove from updates map to hide update button during update
+      if (pack.sha1_hash && pack.sha1_hash in resourcePackUpdates) {
+        const newMap = {...resourcePackUpdates};
+        delete newMap[pack.sha1_hash];
+        resourcePackUpdates = newMap;
+      }
+      
+      // Call the update command
+      await invoke("update_resourcepack_from_modrinth", {
+        profileId,
+        resourcepack: pack,
+        newVersionDetails: updateVersion
+      });
+      
+      console.log(`Successfully updated resource pack ${pack.filename} to version ${updateVersion.version_number}`);
+      
+      // Refresh resource packs
+      await loadResourcePacks();
+      
+    } catch (error) {
+      console.error("Failed to update resource pack:", error);
+      alert(`Failed to update resource pack: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Restore updates map in case of error
+      resourcePackUpdates = {...resourcePackUpdates}; // Trigger reactivity
+    } finally {
+      loadingOperation = false;
+    }
+  }
+  
+  // NEW: Handle updating a shader pack
+  async function handleUpdateShaderPack(pack: ShaderPackInfo) {
+    if (!hasShaderPackUpdate(pack)) return;
+    
+    const updateVersion = getShaderPackUpdateVersion(pack);
+    if (!updateVersion) {
+      console.error("Update version not found despite hasShaderPackUpdate returning true");
+      return;
+    }
+    
+    try {
+      console.log(`Updating shader pack ${pack.filename} to version ${updateVersion.version_number}`);
+      
+      // Show loading state
+      loadingOperation = true;
+      
+      // Remove from updates map to hide update button during update
+      if (pack.sha1_hash && pack.sha1_hash in shaderPackUpdates) {
+        const newMap = {...shaderPackUpdates};
+        delete newMap[pack.sha1_hash];
+        shaderPackUpdates = newMap;
+      }
+      
+      // Call the update command
+      await invoke("update_shaderpack_from_modrinth", {
+        profileId,
+        shaderpack: pack,
+        newVersionDetails: updateVersion
+      });
+      
+      console.log(`Successfully updated shader pack ${pack.filename} to version ${updateVersion.version_number}`);
+      
+      // Refresh shader packs
+      await loadShaderPacks();
+      
+    } catch (error) {
+      console.error("Failed to update shader pack:", error);
+      alert(`Failed to update shader pack: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // Restore updates map in case of error
+      shaderPackUpdates = {...shaderPackUpdates}; // Trigger reactivity
+    } finally {
+      loadingOperation = false;
+    }
+  }
 </script>
 
 <div class="profile-content">
@@ -402,6 +684,32 @@
                     <span class="size">Size: {formatFileSize(pack.file_size)}</span>
                   </div>
                 </div>
+                
+                <!-- NEW: Update indicator and button for Modrinth resource packs -->
+                {#if hasResourcePackUpdate(pack)}
+                  {@const updateVersion = getResourcePackUpdateVersion(pack)}
+                  <div class="pack-update-info">
+                    <span 
+                      class="update-indicator"
+                      title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number} available` : "Update available"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v12"></path>
+                        <path d="m17 8-5-5-5 5"></path>
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5"></path>
+                      </svg>
+                    </span>
+                    <button 
+                      class="update-pack-button"
+                      title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number}` : "Update to latest version"}
+                      disabled={loadingOperation}
+                      on:click={() => handleUpdateResourcePack(pack)}
+                    >
+                      Update
+                    </button>
+                  </div>
+                {/if}
+                
                 <div class="pack-actions">
                   <button 
                     class="folder-button" 
@@ -493,6 +801,32 @@
                     <span class="size">Size: {formatFileSize(pack.file_size)}</span>
                   </div>
                 </div>
+                
+                <!-- NEW: Update indicator and button for Modrinth shader packs -->
+                {#if hasShaderPackUpdate(pack)}
+                  {@const updateVersion = getShaderPackUpdateVersion(pack)}
+                  <div class="pack-update-info">
+                    <span 
+                      class="update-indicator"
+                      title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number} available` : "Update available"}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3v12"></path>
+                        <path d="m17 8-5-5-5 5"></path>
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5"></path>
+                      </svg>
+                    </span>
+                    <button 
+                      class="update-pack-button"
+                      title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number}` : "Update to latest version"}
+                      disabled={loadingOperation}
+                      on:click={() => handleUpdateShaderPack(pack)}
+                    >
+                      Update
+                    </button>
+                  </div>
+                {/if}
+                
                 <div class="pack-actions">
                   <button 
                     class="folder-button" 
@@ -791,5 +1125,55 @@
 
   .info-text {
     font-style: italic;
+  }
+
+  .pack-update-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .update-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2ecc71;
+    background-color: rgba(46, 204, 113, 0.1);
+    border-radius: 50%;
+    padding: 2px;
+    margin-right: 5px;
+    cursor: help;
+  }
+  
+  .update-indicator svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .update-pack-button {
+    padding: 2px 8px;
+    font-size: 0.9em;
+    background-color: #2ecc71;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .update-pack-button:hover {
+    background-color: #27ae60;
+  }
+  
+  .update-pack-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  .pack-update-info {
+    display: flex;
+    align-items: center;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
   }
 </style>

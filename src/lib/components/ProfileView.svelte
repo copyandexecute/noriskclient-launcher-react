@@ -1012,7 +1012,10 @@
 
     <!-- Add the ProfileContent component for resourcepacks and shaderpacks -->
     <div class="additional-content">
-        <ProfileContent profileId={profile.id} />
+        <ProfileContent 
+          profileId={profile.id} 
+          gameVersion={profile.game_version}
+        />
     </div>
 
     <!-- Copy Profile Modal -->
