@@ -4,7 +4,7 @@
         Mod,
         NoriskModIdentifier,
     } from "$lib/stores/profileStore";
-    import type { ModrinthVersion, ModrinthProject } from "$lib/types/modrinth";
+    import type { ModrinthVersion, ModrinthProject, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm } from "$lib/types/modrinth";
     import type {
         NoriskModpacksConfig,
         NoriskPackDefinition,
@@ -86,6 +86,11 @@
     let loadingNoriskModIcons = $state(false);
     let noriskModIconsError = $state<string | null>(null);
 
+    // NEW: State for mod updates using the new bulk update command
+    let modUpdates = $state<Record<string, ModrinthVersion>>({});
+    let checkingModUpdates = $state(false);
+    let modUpdatesError = $state<string | null>(null);
+
     // Function to fetch Modrinth project details for all mods
     async function fetchModrinthProjectDetails() {
         if (!profile.mods || profile.mods.length === 0) return;
@@ -120,6 +125,91 @@
         }
     }
 
+    // Load mod updates using the new bulk update check command
+    async function checkForModUpdates() {
+        if (!profile.mods || profile.mods.length === 0) return;
+        
+        // Filter Modrinth mods with SHA1 hashes
+        const modsWithHashes = profile.mods.filter((mod: Mod) => 
+            mod.source.type === "modrinth" && 
+            (mod.source as ModSourceModrinth).file_hash_sha1 != null
+        );
+        
+        if (modsWithHashes.length === 0) return;
+        
+        const hashes = modsWithHashes.map((mod: Mod) => 
+            (mod.source as ModSourceModrinth).file_hash_sha1!
+        );
+        
+        checkingModUpdates = true;
+        modUpdatesError = null;
+        
+        try {
+            // Prepare the request body
+            const request: ModrinthBulkUpdateRequestBody = {
+                hashes,
+                algorithm: "sha1" as ModrinthHashAlgorithm,
+                loaders: [profile.loader],
+                game_versions: [profile.game_version]
+            };
+            
+            console.log(`Checking for updates for ${hashes.length} mods...`);
+            
+            // Call the new bulk update check command
+            const updates = await invoke<Record<string, ModrinthVersion>>(
+                "check_modrinth_updates", 
+                { request }
+            );
+            
+            modUpdates = updates;
+            console.log(`Found updates for ${Object.keys(updates).length} mods`);
+            
+            // Map file hashes back to mod IDs for easier reference in the UI
+            const modIdsByHash = new Map<string, string>();
+            for (const mod of modsWithHashes) {
+                const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+                modIdsByHash.set(hash, mod.id);
+            }
+            
+            // Log which mods have updates
+            for (const [hash, version] of Object.entries(updates)) {
+                const modId = modIdsByHash.get(hash);
+                if (modId) {
+                    console.log(`Update available for mod ${modId}: ${version.name} ${version.version_number}`);
+                }
+            }
+        } catch (error) {
+            console.error("Error checking for mod updates:", error);
+            modUpdatesError = error instanceof Error ? error.message : "Error checking for mod updates";
+        } finally {
+            checkingModUpdates = false;
+        }
+    }
+    
+    // Helper function to check if a mod has an update available
+    function hasModUpdate(mod: Mod): boolean {
+        if (mod.source.type !== "modrinth") return false;
+        
+        const hash = (mod.source as ModSourceModrinth).file_hash_sha1;
+        if (!hash || !(hash in modUpdates)) return false;
+        
+        // Get the current version ID and update version
+        const currentVersionId = (mod.source as ModSourceModrinth).version_id;
+        const updateVersion = modUpdates[hash];
+        
+        // Make sure we're not showing an update for the same version
+        // If the version IDs match, it's not an update
+        return updateVersion.id !== currentVersionId;
+    }
+    
+    // Helper function to get update version for a mod
+    function getModUpdateVersion(mod: Mod): ModrinthVersion | null {
+        if (!hasModUpdate(mod)) return null;
+        
+        const hash = (mod.source as ModSourceModrinth).file_hash_sha1;
+        return hash ? modUpdates[hash] : null;
+    }
+
     // Überprüfe den Status beim Laden der Komponente
     onMount(async () => {
         try {
@@ -139,6 +229,9 @@
             if (profile.selected_norisk_pack_id && noriskPacksConfig?.packs) {
                 await fetchNoriskModIcons();
             }
+            
+            // NEW: Check for mod updates
+            await checkForModUpdates();
         } catch (error) {
             console.error("Error during component initialization:", error);
         }
@@ -635,6 +728,21 @@
                                 class="update-indicator"
                                 title="Update available">⬆️</span
                             >
+                        {/if}
+
+                        <!-- NEW: Show update indicator from bulk check -->
+                        {#if hasModUpdate(mod)}
+                            {@const updateVersion = getModUpdateVersion(mod)}
+                            <span 
+                                class="update-indicator new-update"
+                                title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number} available` : "Update available"}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 3v12"></path>
+                                    <path d="m17 8-5-5-5 5"></path>
+                                    <path d="M19 21H5a2 2 0 0 1-2-2V5"></path>
+                                </svg>
+                            </span>
                         {/if}
 
                         <!-- Modrinth Version Changer -->
@@ -1247,5 +1355,23 @@
         align-items: center;
         gap: 0.5em;
         flex-wrap: wrap;
+    }
+
+    /* Styles for update indicator */
+    .update-indicator.new-update {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #2ecc71;
+        background-color: rgba(46, 204, 113, 0.1);
+        border-radius: 50%;
+        padding: 2px;
+        margin-right: 5px;
+        cursor: help;
+    }
+    
+    .update-indicator.new-update svg {
+        width: 16px;
+        height: 16px;
     }
 </style>
