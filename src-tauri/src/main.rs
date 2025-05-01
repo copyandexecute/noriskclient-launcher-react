@@ -60,7 +60,7 @@ use commands::profile_command::{
 use commands::modrinth_commands::{
     download_and_install_modrinth_modpack, get_all_modrinth_versions_for_contexts,
     get_modrinth_mod_versions, get_modrinth_project_details, search_modrinth_mods,
-    search_modrinth_projects,
+    search_modrinth_projects, check_modrinth_updates,
 }; // Remove or comment out if not needed
 
 use commands::file_command::{
@@ -256,6 +256,7 @@ async fn main() {
             add_modrinth_mod_to_profile,
             add_modrinth_content_to_profile,
             get_modrinth_project_details,
+            check_modrinth_updates,
             get_icons_for_archives,
             set_profile_mod_enabled,
             delete_mod_from_profile,

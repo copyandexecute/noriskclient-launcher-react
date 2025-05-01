@@ -188,3 +188,11 @@ export interface ModrinthProject {
     game_versions?: string[] | null; // Added based on Rust struct
     loaders?: string[] | null; // Added based on Rust struct
 }
+
+// Request body for checking mod updates via the bulk API
+export interface ModrinthBulkUpdateRequestBody {
+    hashes: string[];      // SHA1 or SHA512 hashes of the currently installed mod files
+    algorithm: string;     // Hash algorithm used, either "sha1" or "sha512"
+    loaders: string[];     // List of mod loaders to filter by (e.g., ["fabric", "quilt"])
+    game_versions: string[]; // List of game versions to filter by (e.g., ["1.20.1"])
+}
