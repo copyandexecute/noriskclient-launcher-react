@@ -284,4 +284,102 @@ async fn is_shader_directory(path: &Path) -> Result<bool> {
     
     debug!("No shader files found in directory: {}", shader_dir.display());
     Ok(false)
+}
+
+/// Update a shader pack from Modrinth to a new version
+pub async fn update_shaderpack_from_modrinth(
+    profile: &Profile,
+    shaderpack: &ShaderPackInfo,
+    new_version: &crate::integrations::modrinth::ModrinthVersion
+) -> Result<()> {
+    info!(
+        "Updating shader pack '{}' to version {} in profile {}",
+        shaderpack.filename, new_version.version_number, profile.id
+    );
+    
+    // Get the shaderpacks directory
+    let shaderpacks_dir = get_shaderpacks_dir(profile).await?;
+    
+    // Check if the directory exists, create if not
+    if !shaderpacks_dir.exists() {
+        debug!("Creating shaderpacks directory for profile: {}", profile.id);
+        fs::create_dir_all(&shaderpacks_dir).await
+            .map_err(|e| AppError::Other(format!("Failed to create shaderpacks directory: {}", e)))?;
+    }
+    
+    // Find and delete the old file/directory (including .disabled variant)
+    let old_path = shaderpacks_dir.join(&shaderpack.filename);
+    let old_path_disabled = shaderpacks_dir.join(format!("{}.disabled", shaderpack.filename));
+    
+    let was_disabled = shaderpack.is_disabled;
+    
+    // Find the primary file in the new version
+    let primary_file = new_version.files.iter().find(|f| f.primary)
+        .ok_or_else(|| AppError::Other(format!(
+            "No primary file found for Modrinth version {} (ID: {})",
+            new_version.name, new_version.id
+        )))?;
+    
+    // Check and delete the old file/directory
+    if old_path.exists() {
+        debug!("Removing old shader pack: {}", old_path.display());
+        if old_path.is_dir() {
+            fs::remove_dir_all(&old_path).await
+                .map_err(|e| AppError::Other(format!("Failed to remove old shader pack directory: {}", e)))?;
+        } else {
+            fs::remove_file(&old_path).await
+                .map_err(|e| AppError::Other(format!("Failed to remove old shader pack file: {}", e)))?;
+        }
+    } else if old_path_disabled.exists() {
+        debug!("Removing old disabled shader pack: {}", old_path_disabled.display());
+        if old_path_disabled.is_dir() {
+            fs::remove_dir_all(&old_path_disabled).await
+                .map_err(|e| AppError::Other(format!("Failed to remove old disabled shader pack directory: {}", e)))?;
+        } else {
+            fs::remove_file(&old_path_disabled).await
+                .map_err(|e| AppError::Other(format!("Failed to remove old disabled shader pack file: {}", e)))?;
+        }
+    } else {
+        warn!("Old shader pack not found: {}", shaderpack.filename);
+    }
+    
+    // Use the utility function to download the new content
+    use crate::utils::profile_utils::{add_modrinth_content_to_profile, ContentType};
+    
+    // Download the new shader pack
+    add_modrinth_content_to_profile(
+        profile.id,
+        new_version.project_id.clone(),
+        new_version.id.clone(),
+        primary_file.filename.clone(),
+        primary_file.url.clone(),
+        primary_file.hashes.sha1.clone(),
+        Some(new_version.name.clone()),
+        Some(new_version.version_number.clone()),
+        ContentType::ShaderPack,
+    ).await?;
+    
+    // If the old pack was disabled, disable the new one too
+    if was_disabled {
+        let new_path = shaderpacks_dir.join(&primary_file.filename);
+        let new_path_disabled = shaderpacks_dir.join(format!("{}.disabled", primary_file.filename));
+        
+        debug!("Old pack was disabled, disabling new pack as well");
+        
+        // Handle both file and directory cases
+        if new_path.is_dir() {
+            // For directories, we need to rename them
+            debug!("Renaming directory to disabled: {} -> {}", new_path.display(), new_path_disabled.display());
+            fs::rename(&new_path, &new_path_disabled).await
+                .map_err(|e| AppError::Other(format!("Failed to disable new shader pack directory: {}", e)))?;
+        } else {
+            debug!("Renaming file to disabled: {} -> {}", new_path.display(), new_path_disabled.display());
+            fs::rename(&new_path, &new_path_disabled).await
+                .map_err(|e| AppError::Other(format!("Failed to disable new shader pack file: {}", e)))?;
+        }
+    }
+    
+    info!("Successfully updated shader pack from '{}' to '{}'", shaderpack.filename, primary_file.filename);
+    
+    Ok(())
 } 
