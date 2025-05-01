@@ -16,7 +16,7 @@ use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
 use futures::future::BoxFuture;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 /// Represents the type of content to be installed
 pub enum ContentType {
@@ -216,6 +216,26 @@ pub async fn install_modrinth_content(
     Ok(())
 }
 
+// --- Struct for command parameters ---
+#[derive(Deserialize, Serialize, Debug)]
+pub struct CheckContentParams {
+    pub profile_id: Uuid,
+    pub project_id: Option<String>,
+    pub version_id: Option<String>,
+    pub file_hash_sha1: Option<String>,
+    pub file_name: Option<String>,
+    pub project_type: Option<String>,
+    pub game_version: Option<String>,
+    pub loader: Option<String>,
+}
+
+// --- Return Type ---
+#[derive(Serialize, Debug, Default, Clone)]
+pub struct ContentInstallStatus {
+    pub is_included_in_norisk_pack: bool,
+    pub is_installed: bool,
+}
+
 /// Checks the installation status of a specific Modrinth content item within a profile's context.
 ///
 /// Returns a struct indicating if the content is defined in the selected Norisk Pack
@@ -224,36 +244,22 @@ pub async fn install_modrinth_content(
 ///
 /// # Arguments
 ///
-/// * `profile_id` - The UUID of the profile to check.
-/// * `project_id` - Optional Modrinth project ID.
-/// * `version_id` - Optional Modrinth version ID.
-/// * `file_hash_sha1` - Optional SHA1 hash of the content file.
-/// * `file_name` - Optional filename of the content file.
-/// * `project_type` - Optional type of content (e.g., "mod", "resourcepack"). Defaults to checking mods if None.
-/// * `game_version` - Optional Minecraft version context. If None, uses the version from the specified profile_id.
-/// * `loader` - Optional loader context (e.g., "fabric"). If None, uses the loader from the specified profile_id.
+/// * `params` - A struct containing all necessary context and identifiers.
 ///
 /// # Returns
 ///
 /// Returns `Ok(ContentInstallStatus)` with the status, or `Err` if errors occur.
 #[tauri::command]
 pub async fn check_content_installed(
-    profile_id: Uuid,
-    project_id: Option<String>,
-    version_id: Option<String>,
-    file_hash_sha1: Option<String>,
-    file_name: Option<String>,
-    project_type: Option<String>,
-    game_version: Option<String>,
-    loader: Option<String>,
-) -> Result<ContentInstallStatus> {
+    params: CheckContentParams, // Use the params struct
+) -> Result<ContentInstallStatus> { 
     info!(
         "Checking installation status for content in profile {} (MC: {:?}, Loader: {:?}): project_id={:?}, version_id={:?}, hash={:?}, filename={:?}, type={:?}",
-        profile_id, game_version, loader, project_id, version_id, file_hash_sha1.is_some(), file_name, project_type
+        params.profile_id, params.game_version, params.loader, params.project_id, params.version_id, params.file_hash_sha1.is_some(), params.file_name, params.project_type
     );
 
     // Ensure at least one identifier is provided
-    if project_id.is_none() && version_id.is_none() && file_hash_sha1.is_none() && file_name.is_none() {
+    if params.project_id.is_none() && params.version_id.is_none() && params.file_hash_sha1.is_none() && params.file_name.is_none() {
         return Err(AppError::Other("At least one identifier (project_id, version_id, file_hash_sha1, file_name) must be provided to check installation status.".to_string()));
     }
 
@@ -262,18 +268,18 @@ pub async fn check_content_installed(
 
     // Get the profile
     let state = State::get().await?;
-    let profile = state.profile_manager.get_profile(profile_id).await?;
+    let profile = state.profile_manager.get_profile(params.profile_id).await?;
 
     // Determine the target loader context
-    let target_loader_str = match loader {
-        Some(ref loader_str) => loader_str.as_str(), 
+    let target_loader_str = match &params.loader { // Borrow from params
+        Some(loader_str) => loader_str.as_str(), 
         None => profile.loader.as_str(),         
     };
 
     // Determine the target game version context
     let target_game_version_str_buf; 
-    let target_game_version = match game_version {
-        Some(ref gv_str) => gv_str.as_str(),
+    let target_game_version = match &params.game_version { // Borrow from params
+        Some(gv_str) => gv_str.as_str(),
         None => {
             target_game_version_str_buf = profile.game_version.clone();
             target_game_version_str_buf.as_str()
@@ -284,7 +290,7 @@ pub async fn check_content_installed(
 
     // --- Norisk Pack Check (if applicable) ---
     if let Some(pack_id) = &profile.selected_norisk_pack_id {
-        debug!("Profile {} has selected Norisk Pack: {}. Checking pack definition...", profile_id, pack_id);
+        debug!("Profile {} has selected Norisk Pack: {}. Checking pack definition...", params.profile_id, pack_id);
         let config = state.norisk_pack_manager.get_config().await; 
 
         match config.get_resolved_pack_definition(pack_id) {
@@ -293,7 +299,8 @@ pub async fn check_content_installed(
                 for norisk_mod in &resolved_pack.mods {
                     let mut is_potential_match = false;
 
-                    if let (Some(pid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { project_id: norisk_pid, .. }) = (&project_id, &norisk_mod.source) {
+                    // Use params fields for matching
+                    if let (Some(pid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { project_id: norisk_pid, .. }) = (&params.project_id, &norisk_mod.source) {
                         if pid_arg == norisk_pid {
                             is_potential_match = true;
                         }
@@ -305,30 +312,34 @@ pub async fn check_content_installed(
                             if let Some(target) = loader_map.get(target_loader_str) {
                                 let mut version_or_filename_match = false;
 
-                                if let (Some(vid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { .. }) = (&version_id, &norisk_mod.source) {
+                                // Use params fields for matching
+                                if let (Some(vid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { .. }) = (&params.version_id, &norisk_mod.source) {
                                     if vid_arg == &target.identifier {
                                         version_or_filename_match = true;
                                     }
                                 }
-                                else if let Some(fname_arg) = &file_name {
+                                // Use params fields for matching
+                                else if let Some(fname_arg) = &params.file_name {
                                     match norisk_packs::get_norisk_pack_mod_filename(&norisk_mod.source, target, &norisk_mod.id) {
                                         Ok(expected_filename) if fname_arg == &expected_filename => {
                                             version_or_filename_match = true;
                                         }
-                                        _ => {} // Ignore mismatch or error here
+                                        _ => {} 
                                     }
                                 }
-                                else if file_hash_sha1.is_some() {
+                                // Use params fields for matching
+                                else if params.file_hash_sha1.is_some() {
                                     // Cannot match hash against pack def
                                 }
-                                else if version_id.is_none() && file_name.is_none() && file_hash_sha1.is_none() {
+                                // Use params fields for matching
+                                else if params.version_id.is_none() && params.file_name.is_none() && params.file_hash_sha1.is_none() {
                                     version_or_filename_match = true;
                                 }
 
                                 if version_or_filename_match {
                                     info!("Content matches definition in selected Norisk Pack '{}' for MC {} / {}.", pack_id, target_game_version, target_loader_str);
                                     status.is_included_in_norisk_pack = true;
-                                    break; // Found match in pack, no need to check further mods in pack
+                                    break; 
                                 }
                             }
                         } 
@@ -347,9 +358,8 @@ pub async fn check_content_installed(
     }
 
     // --- Installed Mod Check ---
-    // This check runs regardless of the Norisk Pack check result
-    debug!("Checking locally installed mods in profile {}...", profile_id);
-    let target_type = project_type.unwrap_or_else(|| "mod".to_string());
+    debug!("Checking locally installed mods in profile {}...", params.profile_id);
+    let target_type = params.project_type.as_deref().unwrap_or("mod"); // Use params field
     if target_type == "mod" {
         for installed_mod in &profile.mods { 
             let mut mod_project_id: Option<&str> = None;
@@ -371,23 +381,24 @@ pub async fn check_content_installed(
             }
             // TODO: Add extraction logic for other source types
 
+            // Use params fields for matching
             let mut match_project = true;
-            if let Some(pid) = &project_id {
+            if let Some(pid) = &params.project_id {
                 match_project = mod_project_id == Some(pid.as_str());
             }
 
             let mut match_version = true;
-            if let Some(vid) = &version_id {
+            if let Some(vid) = &params.version_id {
                 match_version = mod_version_id == Some(vid.as_str());
             }
 
             let mut match_hash = true;
-            if let Some(hash) = &file_hash_sha1 {
+            if let Some(hash) = &params.file_hash_sha1 {
                 match_hash = mod_sha1_hash == Some(hash.as_str());
             }
 
             let mut match_name = true;
-            if let Some(name) = &file_name {
+            if let Some(name) = &params.file_name {
                 match_name = mod_file_name == Some(name.as_str());
             }
 
@@ -409,21 +420,18 @@ pub async fn check_content_installed(
                     installed_mod.display_name.as_deref().unwrap_or("[Unknown Name]")
                 );
                 status.is_installed = true;
-                break; // Found installed mod matching criteria, no need to check further installed mods
+                break; 
             }
         }
         if status.is_installed {
              debug!("Found content installed locally.");
         } else {
-             info!("No matching mod found locally installed in profile {} for context ({} {})", profile_id, target_game_version, target_loader_str);
+             info!("No matching mod found locally installed in profile {} for context ({} {})", params.profile_id, target_game_version, target_loader_str);
         }
     } else {
         warn!("Checking installation for content type '{}' is not yet implemented.", target_type);
-        // For other types, we'd need similar logic: check if installed in appropriate directory
-        // and potentially set status.is_installed = true;
     }
 
-    // Return the final status object
     Ok(status)
 }
 
@@ -646,10 +654,4 @@ fn add_dir_to_zip<'a>(
         
         Ok(())
     })
-}
-
-#[derive(Serialize, Debug, Default, Clone)]
-pub struct ContentInstallStatus {
-    pub is_included_in_norisk_pack: bool,
-    pub is_installed: bool,
 }
