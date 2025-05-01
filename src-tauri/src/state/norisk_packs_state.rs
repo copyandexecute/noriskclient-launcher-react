@@ -1,7 +1,8 @@
 use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
 use crate::error::Result;
 use crate::integrations::norisk_packs::NoriskModpacksConfig;
-use log::{info, error};
+use crate::minecraft::api::norisk_api::NoRiskApi;
+use log::{info, error, debug};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -52,6 +53,42 @@ impl NoriskPackManager {
                     packs: HashMap::new(),
                     repositories: HashMap::new(),
                 })
+            }
+        }
+    }
+
+    /// Fetches the latest Norisk packs configuration from the API and updates the local state.
+    /// Saves the updated configuration to the file on success.
+    pub async fn fetch_and_update_config(
+        &self,
+        norisk_token: &str,
+        is_experimental: bool,
+    ) -> Result<()> {
+        info!("Fetching latest Norisk packs config from API...");
+
+        match NoRiskApi::get_modpacks(norisk_token, is_experimental).await {
+            Ok(new_config) => {
+                debug!("Successfully fetched {} packs definitions from API.", new_config.packs.len());
+                { // Scope for the write lock
+                    let mut config_guard = self.config.write().await;
+                    *config_guard = new_config;
+                } // Write lock released here
+                
+                // Save the newly fetched config
+                match self.save_config().await {
+                    Ok(_) => {
+                        info!("Successfully updated and saved Norisk packs config from API.");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        error!("Fetched config from API, but failed to save it: {}", e);
+                        Err(e) // Return the save error
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to fetch Norisk packs config from API: {}", e);
+                Err(e) // Return the fetch error
             }
         }
     }

@@ -121,6 +121,82 @@ struct HashesRequestBody {
 
 // --- End Structures for Bulk Hash Lookup --- 
 
+// --- Structures for Bulk Project Lookup --- 
+
+// Structures for deserializing Modrinth API responses (Bulk Project Details)
+// Based on https://docs.modrinth.com/api/operations/getprojects/
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthProject {
+    pub id: String, // The ID of the project, encoded as a base62 string
+    pub slug: String,
+    pub project_type: ModrinthProjectType, // Reuse existing enum
+    pub team: String, // The ID of the team that has ownership of this project
+    pub title: String,
+    pub description: String, // Short description
+    pub body: String, // Long description
+    // pub body_url: Option<String>, // Deprecated
+    pub published: String, // ISO 8601
+    pub updated: String, // ISO 8601
+    pub approved: Option<String>, // ISO 8601
+    pub status: String, // e.g., "approved"
+    // pub requested_status: Option<String>,
+    pub moderator_message: Option<ModrinthModeratorMessage>,
+    pub license: ModrinthLicense, // Reuse existing struct
+    pub client_side: String, // "required", "optional", "unsupported", "unknown"
+    pub server_side: String, // "required", "optional", "unsupported", "unknown"
+    pub downloads: u64,
+    pub followers: u64,
+    pub categories: Vec<String>,
+    pub versions: Vec<String>, // List of version IDs
+    pub icon_url: Option<String>, // The field we often need
+    pub color: Option<u32>,
+    // pub thread_id: Option<String>,
+    // pub monetization_status: Option<String>,
+    pub issues_url: Option<String>,
+    pub source_url: Option<String>,
+    pub wiki_url: Option<String>,
+    pub discord_url: Option<String>,
+    pub donation_urls: Option<Vec<ModrinthDonationUrl>>, // Reuse existing struct
+    pub gallery: Vec<ModrinthGalleryImage>, // Reuse existing struct
+    // Custom fields observed but not strictly in doc example
+    #[serde(default)]
+    pub game_versions: Option<Vec<String>>, 
+    #[serde(default)]
+    pub loaders: Option<Vec<String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthModeratorMessage {
+    pub message: String,
+    pub body: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthDonationUrl {
+    pub id: String,
+    pub platform: String,
+    pub url: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthLicense {
+    pub id: String, // SPDX identifier
+    pub name: String,
+    pub url: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthGalleryImage {
+    pub url: String,
+    pub featured: bool,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub created: String, // ISO 8601
+    pub ordering: u32,
+}
+
+// --- End Structures for Bulk Project Lookup --- 
+
 // NEUE Struktur für den Input der Bulk-Abfrage
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ModrinthProjectContext {
@@ -549,4 +625,57 @@ pub async fn get_versions_by_hashes(
     log::info!("Successfully retrieved version info for {} out of {} requested hashes.", versions_map.len(), hashes.len());
 
     Ok(versions_map)
+}
+
+/// Fetches project details for multiple projects from Modrinth using a list of IDs or slugs.
+/// https://docs.modrinth.com/api/operations/getprojects/
+pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProject>> {
+    if ids.is_empty() {
+        return Ok(Vec::new()); // Nothing to fetch
+    }
+
+    // Modrinth expects the IDs as a JSON array string in the query parameter
+    let ids_json = serde_json::to_string(&ids)
+        .map_err(|e| AppError::Json(e))?; // Use appropriate error type
+
+    let client = reqwest::Client::new();
+    // Note: No trailing slash needed for the base URL when using parse_with_params
+    let base_url = format!("{}/projects", MODRINTH_API_BASE_URL); 
+
+    let final_url = reqwest::Url::parse_with_params(&base_url, &[("ids", ids_json)])
+        .map_err(|e| AppError::Other(format!("Failed to build Modrinth bulk projects URL: {}", e)))?;
+
+    log::info!("Getting Modrinth project details for {} projects: {}", ids.len(), final_url);
+
+    let response = client.get(final_url) 
+        .header("User-Agent", format!("NoRiskClient-Launcher/{} (support@norisk.gg)", env!("CARGO_PKG_VERSION")))
+        .send()
+        .await
+        .map_err(|e| AppError::RequestError(format!("Modrinth API request failed for bulk projects: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+        log::error!(
+            "Modrinth API error getting bulk project details (Status: {}): {}",
+            status, error_text
+        );
+        // We could check for 404, but the API might just return an empty list or partial results for valid IDs mixed with invalid ones.
+        // It's probably best to return a general error here.
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} getting bulk project details: {}",
+            status,
+            error_text
+        )));
+    }
+
+    // The response is a JSON array of Project objects.
+    let projects = response
+        .json::<Vec<ModrinthProject>>()
+        .await
+        .map_err(|e| AppError::RequestError(format!("Failed to parse Modrinth bulk projects response: {}", e)))?; // Use appropriate error type
+
+    log::info!("Successfully retrieved details for {} projects.", projects.len());
+
+    Ok(projects)
 } 

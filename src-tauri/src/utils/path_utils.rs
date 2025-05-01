@@ -3,6 +3,8 @@ use tokio::fs; // Verwende tokio::fs für async checks
 use crate::error::{Result, AppError}; // Dein Result- und Fehlertyp
 use log::{info, error, warn};
 use uuid::Uuid;
+use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::integrations::norisk_packs::{NoriskModSourceDefinition, NoriskModEntryDefinition, get_norisk_pack_mod_filename};
 
 /// Findet einen eindeutigen Verzeichnisnamen (Segment) in einem Basisverzeichnis.
 /// Wenn "desired_segment" schon existiert, werden Suffixe wie "(1)", "(2)" usw. angehängt.
@@ -522,4 +524,52 @@ pub async fn copy_profile_with_exclusions(
     info!("Profile copy completed. Copied {} files.", files_copied);
     
     Ok(files_copied)
+}
+
+// Konstante aus dem mod_downloader/norisk_pack_downloader übernehmen
+const MOD_CACHE_DIR_NAME: &str = "mod_cache";
+
+/// Gibt den vollständigen Pfad zu einem Norisk-Mod im Cache-Verzeichnis zurück.
+///
+/// # Arguments
+///
+/// * `mod_entry` - Die Mod-Definition aus dem Norisk-Pack
+/// * `minecraft_version` - Die Minecraft-Version, für die der Mod benötigt wird
+/// * `loader` - Der Mod-Loader (z.B. "fabric", "forge")
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - Den Pfad zur .jar Datei im Cache-Verzeichnis
+/// * `Err(AppError)` - Wenn kein kompatibler Mod gefunden wurde oder der Dateiname nicht ermittelt werden konnte
+pub fn get_norisk_mod_cache_path(
+    mod_entry: &NoriskModEntryDefinition,
+    minecraft_version: &str,
+    loader: &str,
+) -> Result<PathBuf> {
+    // Überprüfe die Kompatibilität des Mods für die angegebene MC-Version und den Loader
+    let compatibility_target = mod_entry
+        .compatibility
+        .get(minecraft_version)
+        .and_then(|loader_map| loader_map.get(loader))
+        .ok_or_else(|| {
+            let display_name = mod_entry.display_name.as_deref().unwrap_or(&mod_entry.id);
+            AppError::Other(format!(
+                "Kein kompatibler Mod '{}' (ID: {}) für MC {} / Loader {} gefunden.",
+                display_name, mod_entry.id, minecraft_version, loader
+            ))
+        })?
+        .clone();
+
+    // Ermittle den Dateinamen mit der vorhandenen Hilfsfunktion
+    let filename = get_norisk_pack_mod_filename(
+        &mod_entry.source,
+        &compatibility_target,
+        &mod_entry.id
+    )?;
+
+    // Erstelle den vollständigen Pfad zum Cache-Verzeichnis
+    let mod_cache_dir = LAUNCHER_DIRECTORY.meta_dir().join(MOD_CACHE_DIR_NAME);
+    
+    // Gib den vollständigen Pfad zur .jar-Datei zurück
+    Ok(mod_cache_dir.join(filename))
 } 

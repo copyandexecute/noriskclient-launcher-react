@@ -122,3 +122,69 @@ export interface ShaderPackInfo {
     is_disabled: boolean;
     modrinth_info: ShaderPackModrinthInfo | null;
 }
+
+// --- Structures for Bulk Project Lookup --- 
+
+// Corresponds to ModrinthModeratorMessage in Rust
+export interface ModrinthModeratorMessage {
+    message: string;
+    body: string | null;
+}
+
+// Corresponds to ModrinthDonationUrl in Rust
+export interface ModrinthDonationUrl {
+    id: string;
+    platform: string;
+    url: string;
+}
+
+// Corresponds to ModrinthLicense in Rust
+export interface ModrinthLicense {
+    id: string; // SPDX identifier
+    name: string;
+    url: string | null;
+}
+
+// Corresponds to ModrinthGalleryImage in Rust
+export interface ModrinthGalleryImage {
+    url: string;
+    featured: boolean;
+    title: string | null;
+    description: string | null;
+    created: string; // ISO 8601
+    ordering: number;
+}
+
+// Corresponds to ModrinthProject in Rust (from bulk /projects endpoint)
+// Based on https://docs.modrinth.com/api/operations/getprojects/
+export interface ModrinthProject {
+    id: string; 
+    slug: string;
+    project_type: ModrinthProjectType; // Reuse existing enum
+    team: string; 
+    title: string;
+    description: string; // Short description
+    body: string; // Long description
+    published: string; // ISO 8601
+    updated: string; // ISO 8601
+    approved: string | null; // ISO 8601
+    status: string; // e.g., "approved"
+    moderator_message: ModrinthModeratorMessage | null;
+    license: ModrinthLicense;
+    client_side: string; // "required", "optional", "unsupported", "unknown"
+    server_side: string; // "required", "optional", "unsupported", "unknown"
+    downloads: number; // u64 in Rust
+    followers: number; // u64 in Rust
+    categories: string[];
+    versions: string[]; // List of version IDs
+    icon_url: string | null;
+    color: number | null; // u32 in Rust
+    issues_url: string | null;
+    source_url: string | null;
+    wiki_url: string | null;
+    discord_url: string | null;
+    donation_urls: ModrinthDonationUrl[] | null;
+    gallery: ModrinthGalleryImage[];
+    game_versions?: string[] | null; // Added based on Rust struct
+    loaders?: string[] | null; // Added based on Rust struct
+}
