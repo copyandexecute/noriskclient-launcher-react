@@ -167,3 +167,27 @@ export interface Profile {
   banner: ProfileBanner | null;     // Option<ProfileBanner> -> ProfileBanner | null
   norisk_information: NoriskInformation | null; // Option<NoriskInformation> -> NoriskInformation | null
 }
+
+// --- Types for check_content_installed command ---
+
+/**
+ * Parameters for the `is_content_installed` Tauri command.
+ */
+export interface CheckContentParams {
+  profile_id: string; // Uuid -> string
+  project_id?: string | null;
+  version_id?: string | null;
+  file_hash_sha1?: string | null;
+  file_name?: string | null;
+  project_type?: string | null;
+  game_version?: string | null;
+  loader?: string | null;
+}
+
+/**
+ * Return type for the `is_content_installed` Tauri command.
+ */
+export interface ContentInstallStatus {
+  is_included_in_norisk_pack: boolean;
+  is_installed: boolean;
+}
