@@ -55,7 +55,7 @@ use commands::profile_command::{
     refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
     update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
-    is_content_installed, open_profile_latest_log
+    is_content_installed, open_profile_latest_log, get_profile_latest_log_content
 };
 
 // Use statements for registered commands only
@@ -322,7 +322,8 @@ async fn main() {
             refresh_norisk_packs,
             refresh_standard_versions,
             is_content_installed,
-            open_profile_latest_log
+            open_profile_latest_log,
+            get_profile_latest_log_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

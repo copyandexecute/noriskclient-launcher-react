@@ -1331,3 +1331,15 @@ pub async fn open_profile_latest_log<R: tauri::Runtime>(
     // Call the utility function
     Ok(profile_utils::open_latest_log_for_profile(app_handle, profile_id).await?)
 }
+
+/// Gets the content of the latest log file for the specified profile.
+#[tauri::command]
+pub async fn get_profile_latest_log_content(profile_id: Uuid) -> Result<String, CommandError> {
+    info!(
+        "Executing get_profile_latest_log_content command for profile {}",
+        profile_id
+    );
+
+    // Call the utility function
+    Ok(profile_utils::get_latest_log_content(profile_id).await?)
+}

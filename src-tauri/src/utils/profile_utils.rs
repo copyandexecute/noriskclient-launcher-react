@@ -19,6 +19,7 @@ use futures::future::BoxFuture;
 use serde::{Serialize, Deserialize};
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
+use crate::utils::file_utils;
 
 /// Represents the type of content to be installed
 pub enum ContentType {
@@ -598,6 +599,34 @@ pub async fn open_latest_log_for_profile<R: tauri::Runtime>(
             )))
         }
     }
+}
+
+/// Gets the content of the `latest.log` file for a given profile.
+///
+/// # Arguments
+///
+/// * `profile_id` - The UUID of the profile whose log content is needed.
+///
+/// # Returns
+///
+/// Returns `Ok(String)` containing the log content on success.
+/// Returns an empty string in `Ok` if the log file is not found.
+/// Returns an `AppError` if the profile instance path cannot be determined or reading fails.
+pub async fn get_latest_log_content(profile_id: Uuid) -> Result<String> {
+    info!("Attempting to get latest.log content for profile {}", profile_id);
+
+    // Get the profile instance path
+    let state = State::get().await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
+
+    // Construct the path to the log file
+    let log_path = instance_path.join("logs").join("latest.log");
+
+    // Use the utility function to read the file content
+    file_utils::read_file_content_lossy(&log_path).await
 }
 
 /// Exports a profile to a `.noriskpack` file
