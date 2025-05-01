@@ -54,18 +54,19 @@ use commands::profile_command::{
     launch_profile, list_profiles, open_profile_folder, refresh_norisk_packs,
     refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
+    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth,
 };
 
 // Use statements for registered commands only
 use commands::modrinth_commands::{
-    download_and_install_modrinth_modpack, get_all_modrinth_versions_for_contexts,
-    get_modrinth_mod_versions, get_modrinth_project_details, search_modrinth_mods,
-    search_modrinth_projects, check_modrinth_updates,
+    check_modrinth_updates, download_and_install_modrinth_modpack,
+    get_all_modrinth_versions_for_contexts, get_modrinth_mod_versions,
+    get_modrinth_project_details, search_modrinth_mods, search_modrinth_projects,
 }; // Remove or comment out if not needed
 
 use commands::file_command::{
-    delete_file, get_icons_for_archives, open_file_directory, set_file_enabled,
-    get_icons_for_norisk_mods,
+    delete_file, get_icons_for_archives, get_icons_for_norisk_mods, open_file_directory,
+    set_file_enabled,
 };
 
 // Import config commands
@@ -292,6 +293,9 @@ async fn main() {
             set_launcher_config,
             get_launcher_directory,
             resolve_image_path,
+            // Resource and Shader pack updates
+            update_resourcepack_from_modrinth,
+            update_shaderpack_from_modrinth,
             // Skin management commands
             get_user_skin_data,
             upload_skin,

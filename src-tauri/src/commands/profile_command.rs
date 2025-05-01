@@ -22,6 +22,8 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
 use uuid::Uuid;
+use crate::utils::resourcepack_utils::ResourcePackInfo;
+use crate::utils::shaderpack_utils::ShaderPackInfo;
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -1055,5 +1057,59 @@ pub async fn refresh_standard_versions(
             Err(CommandError::from(e))
         }
     }
+}
+
+// Command to update a Modrinth resourcepack in a profile
+#[tauri::command]
+pub async fn update_resourcepack_from_modrinth(
+    profile_id: Uuid,
+    resourcepack: ResourcePackInfo,
+    new_version_details: ModrinthVersion,
+) -> Result<(), CommandError> {
+    info!(
+        "Received command update_resourcepack_from_modrinth: profile={}, resourcepack={}, new_version_id={}",
+        profile_id,
+        resourcepack.filename,
+        new_version_details.id
+    );
+    
+    let state = State::get().await?;
+    let profile = state.profile_manager.get_profile(profile_id).await?;
+    
+    crate::utils::resourcepack_utils::update_resourcepack_from_modrinth(
+        &profile,
+        &resourcepack,
+        &new_version_details
+    )
+    .await?;
+    
+    Ok(())
+}
+
+// Command to update a Modrinth shaderpack in a profile
+#[tauri::command]
+pub async fn update_shaderpack_from_modrinth(
+    profile_id: Uuid,
+    shaderpack: ShaderPackInfo,
+    new_version_details: ModrinthVersion,
+) -> Result<(), CommandError> {
+    info!(
+        "Received command update_shaderpack_from_modrinth: profile={}, shaderpack={}, new_version_id={}",
+        profile_id,
+        shaderpack.filename,
+        new_version_details.id
+    );
+    
+    let state = State::get().await?;
+    let profile = state.profile_manager.get_profile(profile_id).await?;
+    
+    crate::utils::shaderpack_utils::update_shaderpack_from_modrinth(
+        &profile,
+        &shaderpack,
+        &new_version_details
+    )
+    .await?;
+    
+    Ok(())
 }
 
