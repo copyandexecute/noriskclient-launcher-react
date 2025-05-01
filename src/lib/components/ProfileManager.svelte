@@ -479,7 +479,7 @@
         isLoadingPacks = true;
         try {
             console.log("ProfileManager: Fetching Norisk packs config...");
-            const config: NoriskModpacksConfig = await invoke("get_norisk_packs");
+            const config: NoriskModpacksConfig = await invoke("get_norisk_packs_resolved");
             noriskPacksConfig = config;
             console.log("ProfileManager: Norisk packs config loaded:", config);
         } catch (error) {

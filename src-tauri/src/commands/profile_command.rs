@@ -1,11 +1,12 @@
 use crate::error::{AppError, CommandError};
 use crate::integrations::modrinth::ModrinthVersion;
 use crate::integrations::mrpack;
-use crate::integrations::norisk_packs::{NoriskModpacksConfig, import_noriskpack_as_profile};
+use crate::integrations::norisk_packs::{NoriskModpacksConfig, import_noriskpack_as_profile, NoriskPackDefinition};
 use crate::integrations::norisk_versions::{self, NoriskVersionsConfig};
 use crate::minecraft::installer;
 use crate::state::profile_state::{
     default_profile_path, CustomModInfo, ModLoader, Profile, ProfileSettings, ProfileState,
+    ModSource
 };
 use crate::state::state_manager::State;
 use crate::utils::path_utils::find_unique_profile_segment;
@@ -15,7 +16,7 @@ use log::{info, error, warn};
 use noriskclient_launcher_v3_lib::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use sanitize_filename::sanitize;
 use serde::Deserialize;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use sysinfo::System;
 use tauri_plugin_dialog::DialogExt;
@@ -389,6 +390,43 @@ pub async fn get_norisk_packs() -> Result<NoriskModpacksConfig, CommandError> {
     let state = State::get().await?;
     let config = state.norisk_pack_manager.get_config().await;
     Ok(config)
+}
+
+/// Retrieves the Norisk packs configuration with fully resolved mod lists for each pack.
+#[tauri::command]
+pub async fn get_norisk_packs_resolved() -> Result<NoriskModpacksConfig, CommandError> {
+    info!("Received command get_norisk_packs_resolved");
+    let state = State::get().await?;
+    let manager = &state.norisk_pack_manager; // Get a reference
+
+    // Get the base configuration to access metadata and pack IDs
+    let base_config = manager.get_config().await;
+
+    // Create a new map to store the resolved pack definitions
+    let mut resolved_packs = HashMap::new();
+
+    // Iterate through the pack IDs from the base config's packs map
+    for pack_id in base_config.packs.keys() {
+        match base_config.get_resolved_pack_definition(pack_id) {
+            Ok(resolved_pack) => {
+                resolved_packs.insert(pack_id.clone(), resolved_pack);
+            }
+            Err(e) => {
+                // Log the error for the specific pack but continue resolving others
+                error!("Failed to resolve pack definition for ID '{}': {}", pack_id, e);
+                // Optionally, return an error if resolving any pack fails
+                // return Err(CommandError::from(e));
+            }
+        }
+    }
+
+    // Construct the final config object with the resolved packs
+    let resolved_config = NoriskModpacksConfig {
+        packs: resolved_packs,        // Use the newly created map with resolved packs
+        repositories: base_config.repositories, // Copy repositories from base config
+    };
+
+    Ok(resolved_config)
 }
 
 #[tauri::command]

@@ -54,7 +54,7 @@ use commands::profile_command::{
     launch_profile, list_profiles, open_profile_folder, refresh_norisk_packs,
     refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
-    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth,
+    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved
 };
 
 // Use statements for registered commands only
@@ -262,6 +262,7 @@ async fn main() {
             set_profile_mod_enabled,
             delete_mod_from_profile,
             get_norisk_packs,
+            get_norisk_packs_resolved,
             set_norisk_mod_status,
             update_modrinth_mod_version,
             get_all_modrinth_versions_for_contexts,
