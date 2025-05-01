@@ -627,6 +627,92 @@ pub async fn get_versions_by_hashes(
     Ok(versions_map)
 }
 
+/// Structure for bulk update check request body
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthBulkUpdateRequestBody {
+    pub hashes: Vec<String>,
+    pub algorithm: String,
+    pub loaders: Vec<String>,
+    pub game_versions: Vec<String>,
+}
+
+impl ModrinthBulkUpdateRequestBody {
+    /// Create a new BulkUpdateRequestBody with validation
+    pub fn new(
+        hashes: Vec<String>,
+        algorithm: String,
+        loaders: Vec<String>,
+        game_versions: Vec<String>,
+    ) -> Result<Self> {
+        if hashes.is_empty() {
+            return Err(AppError::Other("No hashes provided for update check".to_string()));
+        }
+        
+        if algorithm != "sha1" && algorithm != "sha512" {
+            return Err(AppError::Other(format!("Invalid hash algorithm provided: {}", algorithm)));
+        }
+        
+        Ok(Self {
+            hashes,
+            algorithm,
+            loaders,
+            game_versions,
+        })
+    }
+}
+
+/// Efficiently checks for updates to multiple mods using a single API call.
+/// Takes a BulkUpdateRequestBody struct and returns the latest available version for each mod.
+/// This is specifically designed for update checking and is more efficient than
+/// fetching all versions for each project.
+///
+/// Returns a HashMap where:
+/// - Keys are the input file hashes
+/// - Values are the latest available ModrinthVersion objects that match the filters
+/// - Mods without updates or not found on Modrinth are omitted from the results
+pub async fn check_bulk_updates(
+    request: ModrinthBulkUpdateRequestBody,
+) -> Result<HashMap<String, ModrinthVersion>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/version_files/update", MODRINTH_API_BASE_URL); // Update check endpoint
+
+    log::info!("Checking for updates for {} mods via Modrinth bulk API", request.hashes.len());
+
+    let response = client.post(&url)
+        .header("User-Agent", format!("NoRiskClient-Launcher/{} (support@norisk.gg)", env!("CARGO_PKG_VERSION")))
+        .header("Content-Type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API bulk update check request failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+        log::error!(
+            "Modrinth API error checking for updates (Algorithm: {}) ({}): {}",
+            request.algorithm, status, error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} checking for updates: {}",
+            status,
+            error_text
+        )));
+    }
+
+    // The response is a map where keys are the input hashes and values are the latest Version objects.
+    // Hashes without updates available are omitted from the response map.
+    let updates_map = response
+        .json::<HashMap<String, ModrinthVersion>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth bulk update response: {}", e)))?;
+
+    let update_count = updates_map.len();
+    log::info!("Found updates for {}/{} mods checked", update_count, request.hashes.len());
+
+    Ok(updates_map)
+}
+
 /// Fetches project details for multiple projects from Modrinth using a list of IDs or slugs.
 /// https://docs.modrinth.com/api/operations/getprojects/
 pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProject>> {
