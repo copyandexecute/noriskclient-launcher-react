@@ -3,6 +3,7 @@ pub mod system_info; // <-- Hinzufügen
 pub mod hash_utils;
 pub mod resourcepack_utils; // ResourcePack-Utils für das Scannen und Verwalten von ResourcePacks
 pub mod shaderpack_utils; // ShaderPack-Utils für das Scannen und Verwalten von ShaderPacks
+pub mod datapack_utils; // DataPack-Utils für das Scannen und Verwalten von DataPacks
 pub mod profile_utils; // Utility-Funktionen für Profilinhalte wie das Installieren von Modrinth-Content
 pub mod mc_utils; // Utilities for Minecraft-related operations
 pub mod file_utils; // Utilities for file operations like reading archives
