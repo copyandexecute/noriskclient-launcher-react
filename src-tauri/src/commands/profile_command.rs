@@ -1316,3 +1316,18 @@ pub async fn is_content_installed(
     // Call the utility function and map the error
     Ok(profile_utils::check_content_installed(params).await?)
 }
+
+/// Opens the latest log file for the specified profile using the system default application.
+#[tauri::command]
+pub async fn open_profile_latest_log<R: tauri::Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    profile_id: Uuid,
+) -> Result<(), CommandError> {
+    info!(
+        "Executing open_profile_latest_log command for profile {}",
+        profile_id
+    );
+
+    // Call the utility function
+    Ok(profile_utils::open_latest_log_for_profile(app_handle, profile_id).await?)
+}
