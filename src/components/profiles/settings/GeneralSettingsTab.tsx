@@ -7,7 +7,7 @@ import { FormSection } from "../../ui/FormSection";
 import { FormField } from "../../ui/FormField";
 import { TextInput } from "../../ui/TextInput";
 import { TextArea } from "../../ui/TextArea";
-import { SelectInput } from "../../ui//SelectInput";
+import { SelectInput } from "../../ui/SelectInput";
 import { Button } from "../../ui/Button";
 import { StatusMessage } from "../../ui/StatusMessage";
 import { LoadingIndicator } from "../../ui/LoadingIndicator";
@@ -51,7 +51,7 @@ export function GeneralSettingsTab({
       } catch (err) {
         console.error("Failed to load NoRisk packs:", err);
         setError(
-          `Failed to load NoRisk packs: ${err instanceof Error ? err.message : String(err)}`,
+          `failed to load norisk packs: ${err instanceof Error ? err.message : String(err)}`,
         );
       } finally {
         setLoading(false);
@@ -79,17 +79,17 @@ export function GeneralSettingsTab({
       await invoke("copy_profile", {
         params: {
           source_profile_id: profile.id,
-          new_profile_name: `${profile.name} (Copy)`,
+          new_profile_name: `${profile.name} (copy)`,
           include_files: undefined,
         },
       });
 
-      setCloneSuccess("Profile duplicated successfully!");
+      setCloneSuccess("profile duplicated successfully!");
       setTimeout(() => setCloneSuccess(null), 3000);
     } catch (err) {
       console.error("Failed to duplicate profile:", err);
       setError(
-        `Failed to duplicate profile: ${err instanceof Error ? err.message : String(err)}`,
+        `failed to duplicate profile: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
       setLoading(false);
@@ -99,20 +99,21 @@ export function GeneralSettingsTab({
   const noriskPackOptions = Object.entries(noriskPacks).map(
     ([packId, packDef]) => ({
       value: packId,
-      label: `${packDef.displayName} ${packDef.isExperimental ? "(Experimental)" : ""}`,
+      label: `${packDef.displayName} ${packDef.isExperimental ? "(experimental)" : ""}`,
     }),
   );
 
   return (
-    <div className="space-y-6">
-      <StatusMessage type="error" message={error} />
-      <StatusMessage type="success" message={cloneSuccess} />
+    <div className="space-y-8 select-none">
+      {error && <StatusMessage type="error" message={error} />}
+      {cloneSuccess && <StatusMessage type="success" message={cloneSuccess} />}
 
       <FormSection>
         <FormField label="profile name">
           <TextInput
             value={editedProfile.name}
             onChange={(value) => updateProfile({ name: value })}
+            className="text-base tracking-wide"
           />
         </FormField>
 
@@ -120,13 +121,14 @@ export function GeneralSettingsTab({
           <TextArea
             value={editedProfile.description || ""}
             onChange={(value) => updateProfile({ description: value || null })}
-            placeholder="Enter a description for this profile"
+            placeholder="enter a description for this profile"
+            className="text-base tracking-wide"
           />
         </FormField>
 
         <FormField label="norisk client pack">
           {loading ? (
-            <LoadingIndicator message="Loading NoRisk packs..." />
+            <LoadingIndicator message="loading norisk packs..." />
           ) : (
             <>
               <SelectInput
@@ -136,11 +138,12 @@ export function GeneralSettingsTab({
                     selected_norisk_pack_id: value === "" ? null : value,
                   })
                 }
-                options={[{ value: "", label: "None" }, ...noriskPackOptions]}
+                options={[{ value: "", label: "none" }, ...noriskPackOptions]}
+                className="text-base tracking-wide"
               />
               {editedProfile.selected_norisk_pack_id &&
                 noriskPacks[editedProfile.selected_norisk_pack_id] && (
-                  <p className="text-white/70 text-sm mt-2 font-minecraft">
+                  <p className="text-white/70 text-sm mt-3 font-minecraft tracking-wide">
                     {
                       noriskPacks[editedProfile.selected_norisk_pack_id]
                         .description
@@ -155,12 +158,13 @@ export function GeneralSettingsTab({
       <FormSection>
         <FormField
           label="library groups"
-          description="Library groups allow you to organize your instances into different sections in your library."
+          description="library groups allow you to organize your instances into different sections in your library."
         >
           <TextInput
             value={editedProfile.group || ""}
             onChange={(value) => updateProfile({ group: value || null })}
-            placeholder="Enter group name"
+            placeholder="enter group name"
+            className="text-base tracking-wide"
           />
         </FormField>
       </FormSection>
@@ -169,14 +173,14 @@ export function GeneralSettingsTab({
         <FormSection className="flex-1 min-w-[300px]">
           <FormField
             label="duplicate instance"
-            description="Creates a copy of this instance, including worlds, configs, mods, etc."
+            description="creates a copy of this instance, including worlds, configs, mods, etc."
           >
             <Button
               onClick={handleDuplicate}
               disabled={loading}
-              loading={loading}
               icon="pixel:copy-solid"
               variant="secondary"
+              className="text-base tracking-wide"
             >
               duplicate
             </Button>
@@ -186,12 +190,13 @@ export function GeneralSettingsTab({
         <FormSection className="flex-1 min-w-[300px]">
           <FormField
             label="delete instance"
-            description="Permanently deletes this instance from your device, including your worlds, configs, and all installed content."
+            description="permanently deletes this instance from your device, including your worlds, configs, and all installed content."
           >
             <Button
               onClick={handleDelete}
               variant="danger"
               icon="pixel:trash-solid"
+              className="text-base tracking-wide"
             >
               {confirmDelete ? "confirm delete" : "delete instance"}
             </Button>

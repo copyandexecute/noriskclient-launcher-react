@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
@@ -8,7 +9,7 @@ import { ContentTab } from "./detail/ContentTab";
 import { WorldsTab } from "./detail/WorldsTab";
 import { LogsTab } from "./detail/LogsTab";
 import { BrowseTab } from "./detail/BrowseTab";
-import { DetailHeader } from "./detail/DetailHeader";
+import { DetailHeader } from "./detail/DetailHeader.tsx";
 import * as ProfileService from "../../services/profile-service";
 
 interface ProfileDetailViewProps {
@@ -30,14 +31,23 @@ export function ProfileDetailView({
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (containerRef.current) {
       gsap.fromTo(
         containerRef.current,
-        { opacity: 0, scale: 0.98 },
-        { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out" },
+        { opacity: 0 },
+        { opacity: 1, duration: 0.3, ease: "power2.out" },
+      );
+    }
+
+    if (modalRef.current) {
+      gsap.fromTo(
+        modalRef.current,
+        { opacity: 0, scale: 0.98, y: 10 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.3, ease: "power2.out" },
       );
     }
   }, []);
@@ -53,16 +63,29 @@ export function ProfileDetailView({
   }, [activeTab]);
 
   const handleClose = () => {
-    if (containerRef.current) {
+    if (containerRef.current && modalRef.current) {
       gsap.to(containerRef.current, {
         opacity: 0,
+        duration: 0.2,
+        ease: "power2.in",
+      });
+
+      gsap.to(modalRef.current, {
+        opacity: 0,
         scale: 0.98,
-        duration: 0.3,
+        y: 10,
+        duration: 0.2,
         ease: "power2.in",
         onComplete: onClose,
       });
     } else {
       onClose();
+    }
+  };
+
+  const handleOutsideClick = (e: React.MouseEvent) => {
+    if (e.target === containerRef.current) {
+      handleClose();
     }
   };
 
@@ -93,9 +116,14 @@ export function ProfileDetailView({
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center"
+      className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center"
+      onClick={handleOutsideClick}
     >
-      <div className="bg-black/20 backdrop-blur-lg border-2 border-white/30 w-full max-w-6xl h-[90vh] flex flex-col shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+      <div
+        ref={modalRef}
+        className="bg-black/20 backdrop-blur-lg border-2 border-white/30 w-full max-w-6xl h-[90vh] flex flex-col shadow-[0_0_30px_rgba(0,0,0,0.5)]"
+        onClick={(e) => e.stopPropagation()}
+      >
         <DetailHeader
           profile={currentProfile}
           onClose={handleClose}
@@ -108,10 +136,10 @@ export function ProfileDetailView({
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              className={`px-6 py-3 font-minecraft text-sm lowercase flex items-center gap-2 transition-colors ${
+              className={`px-6 py-3 font-minecraft text-base lowercase flex items-center gap-2 transition-colors ${
                 activeTab === tab.id
                   ? "bg-white/20 text-white"
-                  : "text-white/60 hover:text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
               }`}
               onClick={() => setActiveTab(tab.id as TabType)}
             >
@@ -121,7 +149,7 @@ export function ProfileDetailView({
           ))}
         </div>
 
-        <div ref={contentRef} className="flex-1 p-4 overflow-hidden">
+        <div ref={contentRef} className="flex-1 p-5 overflow-hidden">
           {activeTab === "content" && (
             <ContentTab
               profile={currentProfile}

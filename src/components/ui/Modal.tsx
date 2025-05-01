@@ -25,6 +25,7 @@ export function Modal({
   footer,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
   const widthClasses = {
     sm: "max-w-sm",
@@ -45,6 +46,19 @@ export function Modal({
         { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out" },
       );
     }
+
+    // Add event listener to close modal when clicking outside
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
+        handleCloseWithAnimation();
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
   }, []);
 
   const handleCloseWithAnimation = () => {
@@ -62,32 +76,37 @@ export function Modal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 bg-black/40 backdrop-blur-md flex items-center justify-center z-50"
+    >
       <div
         ref={modalRef}
         className={cn(
-          "bg-black/20 backdrop-blur-lg border-2 border-white/30 w-full shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col",
+          "bg-black/70 backdrop-blur-lg border-2 border-white/30 w-full shadow-lg flex flex-col rounded-lg",
           widthClasses[width],
           className,
         )}
         style={{ height }}
       >
-        <div className="flex items-center justify-between p-4 border-b border-white/20 bg-black/20">
-          <h2 className="text-2xl font-minecraft text-white lowercase text-shadow">
+        <div className="flex items-center justify-between p-5 border-b border-white/20 bg-black/20">
+          <h2 className="text-2xl font-minecraft text-white lowercase tracking-wider text-shadow">
             {title}
           </h2>
           <button
-            className="text-white/60 hover:text-white transition-colors"
+            className="text-white/60 hover:text-white transition-colors p-2 rounded-md"
             onClick={handleCloseWithAnimation}
           >
             <Icon icon="pixel:window-close-solid" className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
+        <div className="flex-1 overflow-auto custom-scrollbar p-5">
+          {children}
+        </div>
 
         {footer && (
-          <div className="p-4 border-t border-white/20 bg-black/20">
+          <div className="p-5 border-t border-white/20 bg-black/20">
             {footer}
           </div>
         )}

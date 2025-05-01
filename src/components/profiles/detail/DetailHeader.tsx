@@ -20,9 +20,9 @@ export function DetailHeader({
   isRefreshing = false,
 }: DetailHeaderProps) {
   return (
-    <div className="flex items-center justify-between bg-black/30 backdrop-blur-md border-b-2 border-white/30 p-4">
+    <div className="flex items-center justify-between bg-black/30 backdrop-blur-md border-b-2 border-white/30 p-5 select-none">
       <div className="flex items-center">
-        <div className="w-12 h-12 bg-white/10 border border-white/20 flex items-center justify-center mr-4">
+        <div className="w-14 h-14 bg-white/10 border border-white/20 flex items-center justify-center mr-5">
           {profile.banner?.source.type === "url" ? (
             <img
               src={profile.banner.source.url || "/placeholder.svg"}
@@ -34,14 +34,14 @@ export function DetailHeader({
           )}
         </div>
         <div>
-          <h2 className="text-white font-minecraft text-xl lowercase">
+          <h2 className="text-white font-minecraft text-2xl lowercase tracking-wide">
             {profile.name}
           </h2>
-          <div className="flex items-center text-white/60 text-sm">
+          <div className="flex items-center text-white/60 text-base">
             <span className="mr-2">{profile.game_version}</span>
             {profile.loader && profile.loader !== "vanilla" && (
               <>
-                <span className="w-1 h-1 bg-white/40 rounded-full mx-2"></span>
+                <span className="w-1.5 h-1.5 bg-white/40 rounded-full mx-2"></span>
                 <span className="capitalize">{profile.loader}</span>
                 {profile.loader_version && (
                   <span className="ml-1">{profile.loader_version}</span>
@@ -50,9 +50,9 @@ export function DetailHeader({
             )}
             {profile.group && (
               <>
-                <span className="w-1 h-1 bg-white/40 rounded-full mx-2"></span>
+                <span className="w-1.5 h-1.5 bg-white/40 rounded-full mx-2"></span>
                 <span className="flex items-center">
-                  <Icon icon="pixel:folder-solid" className="w-3 h-3 mr-1" />
+                  <Icon icon="pixel:folder-solid" className="w-4 h-4 mr-1.5" />
                   {profile.group}
                 </span>
               </>
@@ -60,36 +60,36 @@ export function DetailHeader({
           </div>
         </div>
       </div>
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-4">
         {onRefresh && (
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="bg-black/20 hover:bg-black/30 backdrop-blur-md border border-white/30 w-8 h-8 flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-50"
+            className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-50"
             title="Refresh profile"
           >
             <Icon
               icon={
                 isRefreshing ? "pixel:spinner-solid" : "pixel:refresh-solid"
               }
-              className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+              className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`}
             />
           </button>
         )}
         <button
           onClick={onEdit}
-          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border border-white/30 px-3 py-1 text-white/80 font-minecraft text-xs transition-colors flex items-center"
+          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-2 text-white/80 hover:text-white font-minecraft text-base transition-colors flex items-center gap-2"
           title="Edit profile settings"
         >
-          <Icon icon="pixel:cog-solid" className="mr-1 w-3 h-3" />
-          Settings
+          <Icon icon="pixel:cog-solid" className="w-4 h-4" />
+          settings
         </button>
         <button
           onClick={onClose}
-          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border border-white/30 w-8 h-8 flex items-center justify-center text-white/80 hover:text-white transition-colors"
+          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors"
           title="Close detail view"
         >
-          <Icon icon="pixel:window-close-solid" className="w-4 h-4" />
+          <Icon icon="pixel:window-close-solid" className="w-5 h-5" />
         </button>
       </div>
     </div>

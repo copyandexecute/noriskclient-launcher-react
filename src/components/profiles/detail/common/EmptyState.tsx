@@ -6,9 +6,9 @@ interface EmptyStateProps {
   icon: string;
   title: string;
   description?: string;
-  actionLabel?: string;
+  actionLabel?: string | undefined;
   actionUrl?: string;
-  onAction?: () => void;
+  onAction?: (() => void) | undefined;
 }
 
 export function EmptyState({
@@ -20,28 +20,26 @@ export function EmptyState({
   onAction,
 }: EmptyStateProps) {
   const handleAction = () => {
-    if (onAction) {
-      onAction();
-    } else if (actionUrl) {
+    if (actionUrl) {
       window.open(actionUrl, "_blank");
+    } else if (onAction) {
+      onAction();
     }
   };
 
   return (
-    <div className="text-center py-12">
-      <Icon icon={icon} className="w-16 h-16 text-white/30 mx-auto mb-4" />
-      <p className="text-white/60 font-minecraft text-xl lowercase drop-shadow">
+    <div className="flex flex-col items-center justify-center h-full text-center p-8 select-none">
+      <Icon icon={icon} className="w-16 h-16 text-white/30 mb-4" />
+      <h3 className="text-white font-minecraft text-xl lowercase tracking-wide mb-2">
         {title}
-      </p>
+      </h3>
       {description && (
-        <p className="text-white/40 font-minecraft text-base lowercase mt-2">
-          {description}
-        </p>
+        <p className="text-white/60 text-base mb-6 max-w-md">{description}</p>
       )}
-      {(actionLabel || actionUrl || onAction) && (
+      {actionLabel && (
         <button
-          className="mt-4 bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 px-6 py-2 text-white font-minecraft transition-colors minecraft-button-hover shadow-sm"
           onClick={handleAction}
+          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-2.5 text-white font-minecraft text-base transition-colors"
         >
           {actionLabel}
         </button>

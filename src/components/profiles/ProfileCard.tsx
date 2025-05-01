@@ -26,12 +26,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
     abortProfileLaunch,
   } = useProfileStore();
 
-  const {
-    initializeProfile,
-    getProfileState,
-    // @ts-ignore
-    launchProfile: launchProfileState,
-  } = useLaunchStateStore();
+  const { initializeProfile, getProfileState } = useLaunchStateStore();
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -235,7 +230,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   return (
     <div
       className={cn(
-        "bg-black/10 backdrop-blur-lg border-2 border-white/30 overflow-hidden transition-all duration-300 cursor-pointer h-[280px] flex flex-col",
+        "bg-black/10 backdrop-blur-lg border-2 border-white/30 overflow-hidden transition-all duration-300 cursor-pointer h-[280px] flex flex-col select-none",
         isHovered && "border-white/50 shadow-[0_0_15px_rgba(255,255,255,0.1)]",
         isLaunching && "border-red-400/50",
       )}
@@ -258,7 +253,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
             )}
           </div>
           <div className="overflow-hidden">
-            <h3 className="text-xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] lowercase font-normal">
+            <h3 className="text-xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] lowercase font-normal tracking-wide">
               {profile.name}
             </h3>
             <div className="flex items-center mt-1">
@@ -295,14 +290,14 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
                 <Icon icon="pixel:copy-solid" className="w-4 h-4" />
               )
             }
-            // @ts-ignore
-            onClick={handleClone}
+            //@ts-ignore
+            onClick={(e) => handleClone(e)}
             disabled={isCloning}
             title="Clone Profile"
           />
           <IconButton
             icon={<Icon icon="pixel:cog-solid" className="w-4 h-4" />}
-            // @ts-ignore
+            //@ts-ignore
             onClick={(e) => {
               e.stopPropagation();
               onEdit();
@@ -314,7 +309,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
 
       <div className="flex-1 p-4 flex flex-col">
         {profile.description && (
-          <p className="text-white/70 text-sm font-minecraft mb-3 line-clamp-3">
+          <p className="text-white/70 text-sm font-minecraft mb-3 line-clamp-3 tracking-wide">
             {profile.description}
           </p>
         )}
@@ -325,7 +320,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
               icon="pixel:folder-solid"
               className="w-4 h-4 mr-2 text-white/60"
             />
-            <span className="text-sm text-white/60 font-minecraft lowercase">
+            <span className="text-sm text-white/60 font-minecraft lowercase tracking-wide">
               {profile.group}
             </span>
           </div>

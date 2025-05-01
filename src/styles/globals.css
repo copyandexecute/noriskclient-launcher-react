@@ -36,12 +36,21 @@
     --animation-short: 0.2s;
     --animation-medium: 0.5s;
     --animation-long: 1s;
-    --radius-sm: 0px;
-    --radius-md: 0px;
-    --radius-lg: 0px;
-    --radius-xl: 0px;
-    --radius-2xl: 0px;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 24px;
     --font-minecraft: "Minecraft", monospace;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.25);
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
 }
 
 @keyframes fadeIn {
@@ -72,6 +81,7 @@
         background-position: center;
         background-attachment: fixed;
         font-family: var(--font-minecraft), monospace;
+        letter-spacing: 0.03em;
     }
 
     h1,
@@ -80,7 +90,19 @@
     h4,
     h5,
     h6 {
-        @apply font-minecraft tracking-wider;
+        @apply font-minecraft tracking-wider lowercase;
+        font-weight: normal;
+        user-select: none;
+    }
+
+    button,
+    a {
+        user-select: none;
+    }
+
+    p {
+        line-height: 1.6;
+        letter-spacing: 0.02em;
     }
 
     [data-tauri-drag-region] {
@@ -91,7 +113,7 @@
 
 .font-minecraft {
     font-family: var(--font-minecraft), monospace;
-    letter-spacing: 1px;
+    letter-spacing: 0.05em;
 }
 
 ::-webkit-scrollbar {
@@ -101,11 +123,12 @@
 
 ::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-sm);
 }
 
 ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
+    border-radius: var(--radius-md);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -118,12 +141,12 @@
 
 .custom-scrollbar::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.3);
-    border-radius: 0;
+    border-radius: var(--radius-sm);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.3);
-    border-radius: 0;
+    border-radius: var(--radius-md);
     border: 2px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -156,7 +179,7 @@
 }
 
 .minecraft-button-hover {
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .minecraft-button-hover:hover {
@@ -181,4 +204,143 @@
 
 .glow-white:hover {
     box-shadow: 0 0 25px rgba(255, 255, 255, 0.3);
+}
+
+/* New design system classes */
+.mc-card {
+    @apply bg-black/50 backdrop-blur-md border-2 border-white/30 rounded-lg shadow-md;
+}
+
+.mc-button {
+    @apply bg-black/60 backdrop-blur-md text-white border-2 border-white/30
+    py-3 px-6 tracking-wider lowercase transition-all duration-300
+    hover:bg-black/70 hover:border-white/50 hover:shadow-lg
+    active:translate-y-0.5 active:shadow-sm
+    disabled:opacity-60 disabled:cursor-not-allowed
+    flex items-center justify-center gap-2 text-shadow-sm;
+    font-family: var(--font-minecraft), monospace;
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+    border-radius: var(--radius-md);
+    user-select: none;
+}
+
+.mc-button-sm {
+    @apply py-2 px-4 text-sm;
+}
+
+.mc-button-lg {
+    @apply py-4 px-8 text-lg;
+}
+
+.mc-input {
+    @apply bg-black/40 backdrop-blur-md border-2 border-white/30
+    py-3 px-4 text-white rounded-md
+    focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20
+    placeholder:text-white/40 placeholder:lowercase;
+    font-family: var(--font-minecraft), monospace;
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+}
+
+.mc-select {
+    @apply bg-black/40 backdrop-blur-md border-2 border-white/30
+    py-3 px-4 text-white rounded-md appearance-none
+    focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20;
+    font-family: var(--font-minecraft), monospace;
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+}
+
+.mc-modal-overlay {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50;
+}
+
+.mc-modal {
+    @apply bg-black/70 backdrop-blur-lg border-2 border-white/30 rounded-lg
+    shadow-lg w-full max-w-lg flex flex-col;
+}
+
+.mc-modal-header {
+    @apply flex items-center justify-between p-5 border-b border-white/20 bg-black/20;
+}
+
+.mc-modal-title {
+    @apply text-2xl font-minecraft lowercase tracking-wider text-white text-shadow;
+}
+
+.mc-modal-content {
+    @apply p-5 overflow-auto custom-scrollbar;
+}
+
+.mc-modal-footer {
+    @apply p-5 border-t border-white/20 bg-black/20 flex justify-end gap-3;
+}
+
+.mc-tab {
+    @apply px-5 py-3 font-minecraft lowercase tracking-wider transition-colors;
+    user-select: none;
+}
+
+.mc-tab-active {
+    @apply bg-white/20 text-white;
+}
+
+.mc-tab-inactive {
+    @apply text-white/70 hover:text-white hover:bg-white/10;
+}
+
+.mc-section-title {
+    @apply text-xl font-minecraft lowercase tracking-wider text-white mb-4;
+    letter-spacing: 0.08em;
+}
+
+.mc-section-description {
+    @apply text-white/70 mb-6 font-minecraft text-sm tracking-wide;
+}
+
+.mc-table {
+    @apply w-full border-collapse;
+}
+
+.mc-table-header {
+    @apply bg-black/30 text-white/90 lowercase tracking-wider py-3 px-4 text-left;
+    font-family: var(--font-minecraft), monospace;
+    letter-spacing: 0.05em;
+    user-select: none;
+}
+
+.mc-table-row {
+    @apply border-b border-white/10 hover:bg-white/5 transition-colors;
+}
+
+.mc-table-cell {
+    @apply py-3 px-4 text-white;
+}
+
+.mc-icon-button {
+    @apply p-2 text-white/70 hover:text-white transition-colors rounded-md;
+}
+
+.mc-toggle {
+    @apply relative inline-flex h-6 w-11 items-center rounded-full
+    bg-black/50 border border-white/30
+    transition-colors focus:outline-none;
+}
+
+.mc-toggle-active {
+    @apply bg-primary/70;
+}
+
+.mc-toggle-handle {
+    @apply inline-block h-4 w-4 transform rounded-full bg-white
+    transition-transform;
+}
+
+.mc-toggle-active .mc-toggle-handle {
+    @apply translate-x-5;
+}
+
+.mc-toggle-inactive .mc-toggle-handle {
+    @apply translate-x-1;
 }

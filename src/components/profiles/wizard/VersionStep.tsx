@@ -49,10 +49,10 @@ export function VersionStep({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 select-none">
       <SectionTitle
         title="select minecraft version"
-        description="Choose the Minecraft version for your profile. This will determine which mod loaders are available."
+        description="choose the minecraft version for your profile. this will determine which mod loaders are available."
       />
 
       <VersionSelector

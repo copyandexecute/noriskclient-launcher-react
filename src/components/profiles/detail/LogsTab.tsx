@@ -8,8 +8,8 @@ import { EmptyState } from "./common/EmptyState";
 interface LogsTabProps {
   profile: Profile;
 }
-// @ts-ignore
-export function LogsTab({ profile }: LogsTabProps) {
+
+export function LogsTab({}: LogsTabProps) {
   const [activeLogType, setActiveLogType] = useState<string>("latest");
 
   const logTypes = [
@@ -23,36 +23,35 @@ export function LogsTab({ profile }: LogsTabProps) {
   ];
 
   return (
-    <div className="h-full flex">
-      <div className="w-64 border-r-2 border-white/20 pr-4">
-        <h3 className="text-white font-minecraft text-base mb-4 lowercase">
-          Log Files
+    <div className="h-full flex select-none">
+      <div className="w-72 border-r-2 border-white/20 pr-5">
+        <h3 className="text-white font-minecraft text-lg mb-5 lowercase tracking-wide">
+          log files
         </h3>
         <div className="space-y-2">
           {logTypes.map((logType) => (
             <button
               key={logType.id}
-              className={`w-full text-left py-2 px-3 font-minecraft text-sm lowercase flex items-center gap-2 ${
+              className={`w-full text-left py-3 px-4 font-minecraft text-base lowercase flex items-center gap-3 transition-colors ${
                 activeLogType === logType.id
                   ? "bg-white/20 text-white"
                   : "text-white/60 hover:text-white hover:bg-white/10"
               }`}
               onClick={() => setActiveLogType(logType.id)}
             >
-              <Icon icon={logType.icon} className="w-4 h-4" />
+              <Icon icon={logType.icon} className="w-5 h-5" />
               <span>{logType.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="flex-1 pl-4">
+      <div className="flex-1 pl-5">
         <EmptyState
           icon="pixel:file-text"
-          title="Log Viewer"
-          description="Coming soon"
-          // @ts-ignore
-          actionLabel={null}
+          title="log viewer"
+          description="coming soon"
+          actionLabel={undefined}
         />
       </div>
     </div>

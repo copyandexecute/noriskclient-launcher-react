@@ -27,9 +27,9 @@ export function SelectInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={`w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base ${
-        disabled ? "opacity-70 cursor-not-allowed" : ""
-      } ${className}`}
+      className={`w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base
+        appearance-none focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20
+        ${disabled ? "opacity-60 cursor-not-allowed" : ""} ${className}`}
     >
       {placeholder && (
         <option value="" disabled>
@@ -38,7 +38,7 @@ export function SelectInput({
       )}
       {options.map((option) => (
         <option key={option.value} value={option.value}>
-          {option.label}
+          {option.label ? option.label : option.value}
         </option>
       ))}
     </select>

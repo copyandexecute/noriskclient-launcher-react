@@ -62,8 +62,8 @@ export function JavaSettingsTab({
   };
 
   return (
-    <div className="space-y-6">
-      <StatusMessage type="error" message={error} />
+    <div className="space-y-8 select-none">
+      {error && <StatusMessage type="error" message={error} />}
 
       <FormSection>
         <FormField label="java installation">
@@ -84,25 +84,27 @@ export function JavaSettingsTab({
           />
 
           {!useCustomJava && (
-            <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-4">
-              <div className="text-white font-minecraft mb-1 text-base lowercase">
+            <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 rounded-lg mt-4">
+              <div className="text-white font-minecraft mb-2 text-base lowercase tracking-wide">
                 using default java 21 installation:
               </div>
-              <div className="text-white/70 text-sm font-minecraft break-all lowercase">
+              <div className="text-white/70 text-sm font-minecraft break-all lowercase tracking-wide">
                 c:\users\username\appdata\roaming\noriskclient\meta\java_versions\zulu21.38.21-ca-jre21.0.5-win_x64\bin\javaw.exe
               </div>
             </div>
           )}
 
           {useCustomJava && (
-            <div className="flex gap-4">
+            <div className="flex gap-4 mt-4">
               <TextInput
                 value={editedProfile.settings?.java_path || ""}
                 onChange={handleJavaPathChange}
                 placeholder="path to java executable"
-                className="flex-1"
+                className="flex-1 text-base tracking-wide"
               />
-              <Button variant="secondary">browse</Button>
+              <Button variant="secondary" className="text-base tracking-wide">
+                browse
+              </Button>
             </div>
           )}
         </FormField>
@@ -116,14 +118,14 @@ export function JavaSettingsTab({
             min={512}
             max={systemRam}
             step={512}
-            valueLabel={`${memory.max} mb (${(memory.max / 1024).toFixed(1)} GB)`}
+            valueLabel={`${memory.max} mb (${(memory.max / 1024).toFixed(1)} gb)`}
             minLabel="512 mb"
-            maxLabel={`${systemRam} mb (${(systemRam / 1024).toFixed(1)} GB)`}
+            maxLabel={`${systemRam} mb (${(systemRam / 1024).toFixed(1)} gb)`}
             disabled={isLoadingRam}
           />
-          <div className="mt-2 text-white/70 text-sm">
-            Recommended: {recommendedMaxRam} MB (
-            {(recommendedMaxRam / 1024).toFixed(1)} GB)
+          <div className="mt-3 text-white/70 text-sm tracking-wide">
+            recommended: {recommendedMaxRam} mb (
+            {(recommendedMaxRam / 1024).toFixed(1)} gb)
           </div>
         </FormField>
       </FormSection>
@@ -155,6 +157,7 @@ export function JavaSettingsTab({
               value={editedProfile.settings?.extra_args?.join(" ") || ""}
               onChange={handleJavaArgsChange}
               placeholder="enter java arguments..."
+              className="mt-4 text-base tracking-wide"
             />
           )}
         </FormField>

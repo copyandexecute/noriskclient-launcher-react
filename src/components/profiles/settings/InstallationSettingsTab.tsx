@@ -51,7 +51,7 @@ export function InstallationSettingsTab({
       } catch (err) {
         console.error("Failed to fetch Minecraft versions:", err);
         setError(
-          `Failed to fetch Minecraft versions: ${err instanceof Error ? err.message : String(err)}`,
+          `failed to fetch minecraft versions: ${err instanceof Error ? err.message : String(err)}`,
         );
       } finally {
         setIsLoadingVersions(false);
@@ -122,7 +122,7 @@ export function InstallationSettingsTab({
       } catch (err) {
         console.error(`Failed to fetch ${editedProfile.loader} versions:`, err);
         setError(
-          `Failed to fetch ${editedProfile.loader} versions: ${err instanceof Error ? err.message : String(err)}`,
+          `failed to fetch ${editedProfile.loader} versions: ${err instanceof Error ? err.message : String(err)}`,
         );
       } finally {
         setIsLoadingLoaderVersions(false);
@@ -174,38 +174,40 @@ export function InstallationSettingsTab({
   }
 
   return (
-    <div className="space-y-6">
-      <StatusMessage type="error" message={error} />
+    <div className="space-y-8 select-none">
+      {error && <StatusMessage type="error" message={error} />}
 
       <FormSection>
         <FormField label="currently installed">
-          <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-black/40 flex items-center justify-center">
+          <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-5">
+              <div className="w-12 h-12 bg-black/40 flex items-center justify-center rounded-md">
                 <Icon
                   icon="pixel:grid-solid"
-                  className="w-6 h-6 text-white/70"
+                  className="w-7 h-7 text-white/70"
                 />
               </div>
               <div>
-                <div className="text-white font-minecraft text-lg lowercase">
+                <div className="text-white font-minecraft text-lg tracking-wide lowercase">
                   minecraft {editedProfile.game_version}
                 </div>
-                <div className="text-white/70 text-base lowercase">
+                <div className="text-white/70 text-base tracking-wide lowercase">
                   {editedProfile.loader === "vanilla"
                     ? "vanilla"
                     : `${editedProfile.loader} ${editedProfile.loader_version || ""}`}
                 </div>
               </div>
             </div>
-            <Button variant="secondary">repair</Button>
+            <Button variant="secondary" className="text-base tracking-wide">
+              repair
+            </Button>
           </div>
         </FormField>
       </FormSection>
 
       <FormSection>
         <FormField label="version type">
-          <div className="flex flex-wrap bg-black/30 backdrop-blur-md border-2 border-white/30 mb-4">
+          <div className="flex flex-wrap bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg overflow-hidden">
             <TabButton
               label="release"
               isActive={selectedVersionType === "release"}
@@ -230,13 +232,13 @@ export function InstallationSettingsTab({
         </FormField>
 
         <FormField label="game version">
-          <div className="mb-3">
+          <div className="mb-4">
             <div className="relative">
               <TextInput
                 value={searchQuery}
                 onChange={setSearchQuery}
-                placeholder="Search versions..."
-                className="pl-10"
+                placeholder="search versions..."
+                className="pl-10 text-base tracking-wide"
               />
               <Icon
                 icon="pixel:search"
@@ -244,7 +246,7 @@ export function InstallationSettingsTab({
               />
               {searchQuery && (
                 <button
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white transition-colors"
                   onClick={() => setSearchQuery("")}
                 >
                   <Icon icon="pixel:window-close-solid" className="w-4 h-4" />
@@ -255,21 +257,21 @@ export function InstallationSettingsTab({
 
           <div className="flex-1 relative">
             {isLoadingVersions ? (
-              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-4 text-white/70 text-center">
-                <LoadingIndicator message="Loading versions..." />
+              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 text-white/70 text-center rounded-lg">
+                <LoadingIndicator message="loading versions..." />
               </div>
             ) : (
-              <div className="max-h-60 overflow-y-auto custom-scrollbar bg-black/30 backdrop-blur-md border-2 border-white/30">
+              <div className="max-h-64 overflow-y-auto custom-scrollbar bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg">
                 {filteredVersions.length === 0 ? (
-                  <div className="p-4 text-white/70 text-center">
-                    No versions found matching your search
+                  <div className="p-5 text-white/70 text-center">
+                    no versions found matching your search
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
                     {filteredVersions.map((version) => (
                       <button
                         key={version}
-                        className={`py-2 px-3 font-minecraft text-center text-sm lowercase ${
+                        className={`py-2.5 px-3.5 font-minecraft text-center text-sm lowercase tracking-wide rounded-md transition-all duration-200 ${
                           editedProfile.game_version === version
                             ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
                             : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white"
@@ -306,7 +308,7 @@ export function InstallationSettingsTab({
 
       <FormSection>
         <FormField label="platform">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5">
             <ModLoaderButton
               name="vanilla"
               icon="/icons/minecraft.png"
@@ -403,23 +405,24 @@ export function InstallationSettingsTab({
           <FormField label={`${editedProfile.loader} version`}>
             {isLoadingLoaderVersions ? (
               <LoadingIndicator
-                message={`Loading ${editedProfile.loader} versions...`}
+                message={`loading ${editedProfile.loader} versions...`}
               />
             ) : loaderVersions.length > 0 ? (
               <SelectInput
                 value={editedProfile.loader_version || ""}
                 onChange={(value) => updateProfile({ loader_version: value })}
                 options={[
-                  { value: "", label: "Select a version" },
+                  { value: "", label: "select a version" },
                   ...loaderVersions.map((version) => ({
                     value: version,
                     label: version,
                   })),
                 ]}
+                className="text-base tracking-wide"
               />
             ) : (
-              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-4 text-white/70 text-center">
-                No {editedProfile.loader} versions available for Minecraft{" "}
+              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 text-white/70 text-center rounded-lg">
+                no {editedProfile.loader} versions available for minecraft{" "}
                 {editedProfile.game_version}
               </div>
             )}
@@ -427,9 +430,13 @@ export function InstallationSettingsTab({
         )}
       </FormSection>
 
-      <div className="flex flex-wrap gap-4">
-        <Button variant="primary">install</Button>
-        <Button variant="secondary">reset to current</Button>
+      <div className="flex flex-wrap gap-5">
+        <Button variant="primary" className="text-base tracking-wide">
+          install
+        </Button>
+        <Button variant="secondary" className="text-base tracking-wide">
+          reset to current
+        </Button>
       </div>
     </div>
   );

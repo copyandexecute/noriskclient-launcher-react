@@ -175,6 +175,113 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     { id: "export", label: "Export", icon: "pixel:file-export-solid" },
   ];
 
+  const renderExportTab = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xl font-minecraft text-white mb-4 lowercase tracking-wide">
+          export profile
+        </h3>
+        <p className="text-white/70 mb-6 font-minecraft text-sm tracking-wide">
+          Export your profile to share with others or back it up. You can
+          include all files or just the profile configuration.
+        </p>
+      </div>
+
+      <div className="space-y-4 bg-black/20 backdrop-blur-md border-2 border-white/20 p-5">
+        <div className="space-y-2">
+          <label
+            htmlFor="exportFilename"
+            className="block text-white font-minecraft text-base mb-2 lowercase"
+          >
+            export filename
+          </label>
+          <input
+            type="text"
+            id="exportFilename"
+            value={exportFilename}
+            onChange={(e) => setExportFilename(e.target.value)}
+            className="w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base"
+            placeholder="Enter filename without extension"
+          />
+          <p className="mt-1 text-white/50 font-minecraft text-sm">
+            The .noriskpack extension will be added automatically
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={exportIncludeFiles}
+              onChange={(e) => setExportIncludeFiles(e.target.checked)}
+              className="w-5 h-5 rounded bg-black/20 border-white/30"
+            />
+            <span className="text-white font-minecraft text-base lowercase">
+              include profile files
+            </span>
+          </label>
+          <p className="mt-1 text-white/50 font-minecraft text-sm ml-6">
+            Include mods, resource packs, and other files in the export
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={exportOpenFolder}
+              onChange={(e) => setExportOpenFolder(e.target.checked)}
+              className="w-5 h-5 rounded bg-black/20 border-white/30"
+            />
+            <span className="text-white font-minecraft text-base lowercase">
+              open folder after export
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-4 pt-4">
+        <Button
+          variant="primary"
+          onClick={handleExport}
+          disabled={isExporting || !exportFilename}
+          icon={<Icon icon="pixel:file-export-solid" className="w-4 h-4" />}
+        >
+          {isExporting ? (
+            <>
+              <Icon
+                icon="pixel:spinner-solid"
+                className="w-4 h-4 animate-spin"
+              />
+              <span>exporting...</span>
+            </>
+          ) : (
+            "export profile"
+          )}
+        </Button>
+
+        <Button
+          variant="primary"
+          onClick={handleCloneProfile}
+          disabled={isCloning}
+          icon={<Icon icon="pixel:copy-solid" className="w-4 h-4" />}
+        >
+          {isCloning ? (
+            <>
+              <Icon
+                icon="pixel:spinner-solid"
+                className="w-4 h-4 animate-spin"
+              />
+              <span>cloning...</span>
+            </>
+          ) : (
+            "clone profile"
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+
   const renderTabContent = () => {
     if (error) {
       return <StatusMessage type="error" message={error} />;
@@ -218,114 +325,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           />
         );
       case "export":
-        return (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-xl font-minecraft text-white mb-4 lowercase">
-                export profile
-              </h3>
-              <p className="text-white/70 mb-6 font-minecraft text-sm">
-                Export your profile to share with others or back it up. You can
-                include all files or just the profile configuration.
-              </p>
-            </div>
-
-            <div className="space-y-4 bg-black/20 backdrop-blur-md border-2 border-white/20 p-5">
-              <div className="space-y-2">
-                <label
-                  htmlFor="exportFilename"
-                  className="block text-white font-minecraft text-base mb-2 lowercase"
-                >
-                  export filename
-                </label>
-                <input
-                  type="text"
-                  id="exportFilename"
-                  value={exportFilename}
-                  onChange={(e) => setExportFilename(e.target.value)}
-                  className="w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-3 text-white font-minecraft text-base"
-                  placeholder="Enter filename without extension"
-                />
-                <p className="mt-1 text-white/50 font-minecraft text-sm">
-                  The .noriskpack extension will be added automatically
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={exportIncludeFiles}
-                    onChange={(e) => setExportIncludeFiles(e.target.checked)}
-                    className="w-5 h-5 rounded bg-black/20 border-white/30"
-                  />
-                  <span className="text-white font-minecraft text-base lowercase">
-                    include profile files
-                  </span>
-                </label>
-                <p className="mt-1 text-white/50 font-minecraft text-sm ml-6">
-                  Include mods, resource packs, and other files in the export
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={exportOpenFolder}
-                    onChange={(e) => setExportOpenFolder(e.target.checked)}
-                    className="w-5 h-5 rounded bg-black/20 border-white/30"
-                  />
-                  <span className="text-white font-minecraft text-base lowercase">
-                    open folder after export
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4 pt-4">
-              <Button
-                variant="primary"
-                onClick={handleExport}
-                disabled={isExporting || !exportFilename}
-                icon={
-                  <Icon icon="pixel:file-export-solid" className="w-4 h-4" />
-                }
-              >
-                {isExporting ? (
-                  <>
-                    <Icon
-                      icon="pixel:spinner-solid"
-                      className="w-4 h-4 animate-spin"
-                    />
-                    <span>exporting...</span>
-                  </>
-                ) : (
-                  "export profile"
-                )}
-              </Button>
-
-              <Button
-                variant="primary"
-                onClick={handleCloneProfile}
-                disabled={isCloning}
-                icon={<Icon icon="pixel:copy-solid" className="w-4 h-4" />}
-              >
-                {isCloning ? (
-                  <>
-                    <Icon
-                      icon="pixel:spinner-solid"
-                      className="w-4 h-4 animate-spin"
-                    />
-                    <span>cloning...</span>
-                  </>
-                ) : (
-                  "clone profile"
-                )}
-              </Button>
-            </div>
-          </div>
-        );
+        return renderExportTab();
       default:
         return null;
     }
@@ -384,7 +384,11 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             className="flex-1 p-6 overflow-y-auto custom-scrollbar"
             ref={contentRef}
           >
-            {renderTabContent()}
+            {error && <StatusMessage type="error" message={error} />}
+            {successMessage && (
+              <StatusMessage type="success" message={successMessage} />
+            )}
+            {!error && !successMessage && renderTabContent()}
           </div>
         </div>
       </div>

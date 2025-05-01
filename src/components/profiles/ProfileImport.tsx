@@ -77,18 +77,20 @@ export function ProfileImport({
 
         <div className="space-y-6">
           <div>
-            <h3 className="text-xl font-minecraft text-white mb-4 lowercase">
+            <h3 className="text-xl font-minecraft text-white mb-4 lowercase tracking-wide">
               import profile pack
             </h3>
-            <p className="text-white/70 mb-6 font-minecraft text-sm">
+            <p className="text-white/70 mb-6 font-minecraft text-sm tracking-wide">
               Import a .mrpack or .noriskpack file to create a new profile. This
               will open a file selection dialog.
             </p>
           </div>
 
-          <div className="bg-gray-800/50 border border-gray-700 rounded p-4">
-            <h3 className="text-white font-medium mb-2">Supported formats:</h3>
-            <ul className="text-gray-300 text-sm space-y-1">
+          <div className="bg-black/30 backdrop-blur-md border-2 border-white/20 p-5">
+            <h3 className="text-white font-minecraft text-base mb-3 lowercase">
+              Supported formats:
+            </h3>
+            <ul className="text-white/80 text-sm space-y-2 font-minecraft">
               <li className="flex items-center">
                 <Icon
                   icon="pixel:file-solid"

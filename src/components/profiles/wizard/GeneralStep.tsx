@@ -61,7 +61,7 @@ export function GeneralStep({
     updateProfile({ name });
 
     if (!name) {
-      setNameError("Profile name is required");
+      setNameError("profile name is required");
     } else {
       setNameError(null);
     }
@@ -83,23 +83,28 @@ export function GeneralStep({
   const noriskPackOptions = Object.entries(noriskPacks).map(
     ([packId, packDef]) => ({
       value: packId,
-      label: `${packDef.displayName} ${packDef.isExperimental ? "(Experimental)" : ""}`,
+      label: `${packDef.displayName} ${packDef.isExperimental ? "(experimental)" : ""}`,
     }),
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 select-none">
       <SectionTitle
         title="general information"
-        description="Enter basic information about your profile. The profile name is required."
+        description="enter basic information about your profile. the profile name is required."
       />
 
-      <div className="space-y-5">
-        <FormField label="profile name" required error={nameError}>
+      <div className="space-y-6">
+        <FormField
+          label="profile name"
+          required
+          error={nameError ? nameError.toLowerCase() : null}
+        >
           <TextInput
             value={profile.name || ""}
             onChange={handleNameChange}
-            placeholder="My Awesome Profile"
+            placeholder="my awesome profile"
+            className="text-base tracking-wide"
           />
         </FormField>
 
@@ -107,7 +112,8 @@ export function GeneralStep({
           <TextArea
             value={profile.description || ""}
             onChange={(value) => updateProfile({ description: value || null })}
-            placeholder="A brief description of your profile"
+            placeholder="a brief description of your profile"
+            className="text-base tracking-wide"
           />
         </FormField>
 
@@ -115,12 +121,13 @@ export function GeneralStep({
           <TextInput
             value={profile.group || ""}
             onChange={(value) => updateProfile({ group: value || null })}
-            placeholder="e.g. Modpacks, Vanilla+"
+            placeholder="e.g. modpacks, vanilla+"
+            className="text-base tracking-wide"
           />
         </FormField>
 
-        <FormField label={`maximum ram: ${memoryMaxMb} MB`}>
-          <div className="flex items-center gap-4">
+        <FormField label={`maximum ram: ${memoryMaxMb} mb`}>
+          <div className="flex items-center gap-5">
             <RangeSlider
               value={memoryMaxMb}
               onChange={handleMemoryChange}
@@ -132,17 +139,17 @@ export function GeneralStep({
               type="number"
               value={String(memoryMaxMb)}
               onChange={(value) => handleMemoryChange(Number.parseInt(value))}
-              className="w-28"
+              className="w-32 text-base tracking-wide"
             />
           </div>
-          <p className="text-white/50 mt-1 font-minecraft text-xs">
-            System RAM: {Math.round(systemRamMb / 1024)} GB
+          <p className="text-white/60 mt-2 font-minecraft text-sm tracking-wide">
+            system ram: {Math.round(systemRamMb / 1024)} gb
           </p>
         </FormField>
 
         <FormField label="norisk client pack (optional)">
           {loading ? (
-            <LoadingIndicator message="Loading NoRisk packs..." />
+            <LoadingIndicator message="loading norisk packs..." />
           ) : (
             <>
               <SelectInput
@@ -152,11 +159,12 @@ export function GeneralStep({
                     selected_norisk_pack_id: value === "" ? null : value,
                   })
                 }
-                options={[{ value: "", label: "None" }, ...noriskPackOptions]}
+                options={[{ value: "", label: "none" }, ...noriskPackOptions]}
+                className="text-base tracking-wide"
               />
               {profile.selected_norisk_pack_id &&
                 noriskPacks[profile.selected_norisk_pack_id] && (
-                  <p className="text-white/50 mt-2 font-minecraft text-sm">
+                  <p className="text-white/60 mt-3 font-minecraft text-sm tracking-wide">
                     {noriskPacks[profile.selected_norisk_pack_id].description}
                   </p>
                 )}

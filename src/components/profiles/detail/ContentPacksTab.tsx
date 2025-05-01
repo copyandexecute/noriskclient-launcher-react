@@ -225,15 +225,15 @@ export function ContentPacksTab({
   });
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full flex flex-col select-none">
+      <div className="flex items-center justify-between mb-5">
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
           placeholder={`search ${title}...`}
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <ActionButton
             icon="pixel:trash-solid"
             label="delete selected"
@@ -246,7 +246,7 @@ export function ContentPacksTab({
           <ActionButton
             icon="pixel:refresh-solid"
             onClick={fetchPacks}
-            className="w-10 h-10"
+            className="w-11 h-11"
             title={`Refresh ${title}`}
           />
         </div>
@@ -256,23 +256,23 @@ export function ContentPacksTab({
         headers={[
           {
             key: "name",
-            label: "Name",
+            label: "name",
             sortable: true,
             width: "flex-1",
-            className: "px-2",
+            className: "px-3",
           },
           {
             key: "enabled",
-            label: "Status",
+            label: "status",
             sortable: true,
-            width: "w-24",
+            width: "w-28",
             className: "text-center justify-center",
           },
           {
             key: "actions",
-            label: "Actions",
+            label: "actions",
             sortable: false,
-            width: "w-16",
+            width: "w-20",
             className: "text-center",
           },
         ]}
@@ -309,10 +309,10 @@ export function ContentPacksTab({
             icon={icon}
             title={
               searchQuery
-                ? `No ${title} match your search`
-                : `No ${title} installed`
+                ? `no ${title} match your search`
+                : `no ${title} installed`
             }
-            actionLabel={`Browse ${title} on Modrinth`}
+            actionLabel={`browse ${title} on modrinth`}
             actionUrl={browseUrl}
           />
         )}

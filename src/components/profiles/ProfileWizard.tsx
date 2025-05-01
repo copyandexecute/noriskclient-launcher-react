@@ -12,10 +12,10 @@ import type {
   ModLoader,
   Profile,
 } from "../../types/profile";
+//@ts-ignore
+import type { MinecraftVersion, VersionManifest } from "../../types/minecraft";
 import { useProfileStore } from "../../store/profile-store";
 import { invoke } from "@tauri-apps/api/core";
-// @ts-ignore
-import type { VersionManifest } from "../../types/minecraft";
 import { Modal } from ".././ui/Modal";
 import { Button } from ".././ui/Button";
 import { LoadingSpinner } from ".././ui/LoadingSpinner";
@@ -65,8 +65,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
         setMinecraftVersions(versions);
 
         const latestRelease = versions.versions.find(
-          // @ts-ignore
-          (v) => v.type === "release",
+          (v: MinecraftVersion) => v.type === "release",
         );
         if (latestRelease && !profile.game_version) {
           setProfile((prev) => ({ ...prev, game_version: latestRelease.id }));

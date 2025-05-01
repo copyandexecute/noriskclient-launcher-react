@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { ToggleSwitch } from "./common/ToggleSwitch";
+import { invoke } from "@tauri-apps/api/core";
 
 interface ContentPack {
   id: string;
@@ -38,6 +39,34 @@ export function ContentPackRow({
   iconType = "pixel:image-solid",
 }: ContentPackRowProps) {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [localIcon, setLocalIcon] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPackIcon = async () => {
+      // Skip if we already have an icon URL
+      if (contentPack.icon_url) return;
+
+      try {
+        // Try to get icon from local archive
+        if (contentPack.path) {
+          const iconsResult = await invoke<Record<string, string | null>>(
+            "get_icons_for_archives",
+            {
+              archivePaths: [contentPack.path],
+            },
+          );
+
+          if (iconsResult && iconsResult[contentPack.path]) {
+            setLocalIcon(iconsResult[contentPack.path]);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch content pack icon:", error);
+      }
+    };
+
+    fetchPackIcon();
+  }, [contentPack]);
 
   const handleDelete = () => {
     if (deleteConfirm) {
@@ -50,7 +79,7 @@ export function ContentPackRow({
 
   return (
     <div
-      className={`flex items-center p-3 border-b border-white/20 hover:bg-white/5 transition-colors ${
+      className={`flex items-center p-5 border-b border-white/20 hover:bg-white/5 transition-colors select-none ${
         isSelected ? "bg-white/10" : ""
       }`}
     >
@@ -59,27 +88,44 @@ export function ContentPackRow({
           type="checkbox"
           checked={isSelected}
           onChange={onSelect}
-          className="w-4 h-4 accent-white/70 cursor-pointer"
+          className="w-5 h-5 accent-white/70 cursor-pointer"
         />
       </div>
 
-      <div className="flex-shrink-0 w-10 h-10 mr-4 bg-black/30 flex items-center justify-center">
+      <div className="flex-shrink-0 w-12 h-12 mr-4 bg-black/30 flex items-center justify-center overflow-hidden">
         {contentPack.icon_url ? (
           <img
             src={contentPack.icon_url || "/placeholder.svg"}
             alt={contentPack.display_name || contentPack.file_name}
             className="w-full h-full object-cover"
+            loading="lazy"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = "none";
+              const parent = target.parentElement;
+              if (parent) {
+                parent.innerHTML = `<span class="icon"><Icon icon="${iconType}" class="w-7 h-7 text-white/50" /></span>`;
+              }
+            }}
+          />
+        ) : localIcon ? (
+          <img
+            src={`data:image/png;base64,${localIcon}`}
+            alt={contentPack.display_name || contentPack.file_name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+            onError={() => setLocalIcon(null)}
           />
         ) : (
-          <Icon icon={iconType} className="w-6 h-6 text-white/50" />
+          <Icon icon={iconType} className="w-7 h-7 text-white/50" />
         )}
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="font-minecraft text-white truncate">
+        <div className="font-minecraft text-white text-lg truncate tracking-wide lowercase">
           {contentPack.display_name || contentPack.file_name}
         </div>
-        <div className="text-xs text-white/60 truncate">
+        <div className="text-base text-white/60 truncate">
           {contentPack.creator && (
             <span className="mr-2">by {contentPack.creator}</span>
           )}
@@ -97,23 +143,23 @@ export function ContentPackRow({
           )}
         </div>
         {contentPack.display_name && contentPack.file_name && (
-          <div className="text-xs text-white/50 italic truncate mt-1">
-            File: {contentPack.file_name}
+          <div className="text-sm text-white/50 italic truncate mt-1">
+            file: {contentPack.file_name}
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2 ml-4">
+      <div className="flex items-center gap-4 ml-4">
         <ToggleSwitch enabled={contentPack.enabled} onChange={onToggle} />
 
         <button
-          className={`p-2 text-white/60 hover:text-white transition-colors ${
+          className={`p-2.5 text-white/60 hover:text-white transition-colors ${
             deleteConfirm ? "text-red-500 animate-pulse" : ""
           }`}
           onClick={handleDelete}
           title={deleteConfirm ? "Click again to confirm" : "Delete"}
         >
-          <Icon icon="pixel:trash-solid" className="w-4 h-4" />
+          <Icon icon="pixel:trash-solid" className="w-5 h-5" />
         </button>
       </div>
     </div>

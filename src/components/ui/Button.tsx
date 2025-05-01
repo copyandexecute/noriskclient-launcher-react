@@ -53,11 +53,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          "font-minecraft tracking-wider uppercase border-2 transition-all duration-300",
+          "font-minecraft tracking-wider lowercase border-2 transition-all duration-300",
           "flex items-center justify-center gap-2",
-          "disabled:opacity-80 disabled:cursor-not-allowed",
-          "shadow-[0_0_15px_rgba(0,0,0,0.6)] hover:shadow-[0_0_20px_rgba(0,0,0,0.7)]",
-          "text-shadow",
+          "disabled:opacity-60 disabled:cursor-not-allowed",
+          "shadow-md hover:shadow-lg active:shadow-sm",
+          "text-shadow-sm rounded-md",
+          "active:translate-y-0.5",
           variantClasses[variant],
           sizeClasses[size],
           className,

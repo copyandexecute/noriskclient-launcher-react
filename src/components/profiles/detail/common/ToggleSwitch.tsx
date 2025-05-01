@@ -9,17 +9,17 @@ interface ToggleSwitchProps {
 export function ToggleSwitch({ enabled, onChange, title }: ToggleSwitchProps) {
   return (
     <button
-      className={`w-12 h-6 rounded-full flex items-center px-1 transition-colors ${
-        enabled ? "bg-green-500/70" : "bg-white/20"
-      }`}
       onClick={onChange}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+        enabled ? "bg-primary/70" : "bg-black/50"
+      } border border-white/30`}
       title={title}
     >
-      <div
-        className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform ${
-          enabled ? "translate-x-6" : ""
-        }`}
-      ></div>
+      <span
+        className={`${
+          enabled ? "translate-x-5 bg-white" : "translate-x-1 bg-white/70"
+        } inline-block h-4 w-4 transform rounded-full transition-transform`}
+      />
     </button>
   );
 }

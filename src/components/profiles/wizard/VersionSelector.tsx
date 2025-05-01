@@ -19,8 +19,8 @@ export function VersionSelector({
   versions,
 }: VersionSelectorProps) {
   return (
-    <div className="space-y-4">
-      <div className="flex bg-black/30 backdrop-blur-md border-2 border-white/30 mb-4 overflow-hidden">
+    <div className="space-y-5 select-none">
+      <div className="flex flex-wrap bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg overflow-hidden">
         <TabButton
           label="release"
           isActive={selectedVersionType === "release"}
@@ -43,19 +43,19 @@ export function VersionSelector({
         />
       </div>
 
-      <div className="h-[300px] overflow-y-auto custom-scrollbar border-2 border-white/30 bg-black/30 backdrop-blur-md p-4">
+      <div className="h-[320px] overflow-y-auto custom-scrollbar border-2 border-white/30 bg-black/30 backdrop-blur-md rounded-lg p-5">
         {versions.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-white/70 font-minecraft text-base">
-              No versions available
+            <p className="text-white/70 font-minecraft text-lg tracking-wide">
+              no versions available
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {versions.map((version) => (
               <button
                 key={version}
-                className={`py-3 px-4 font-minecraft text-center lowercase ${
+                className={`py-3 px-4 font-minecraft text-center lowercase tracking-wide rounded-md transition-all duration-200 ${
                   selectedVersion === version
                     ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
                     : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white hover:border-white/30"

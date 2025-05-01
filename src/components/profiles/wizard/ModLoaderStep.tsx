@@ -106,7 +106,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
       }
     } catch (err) {
       console.error("Error checking compatibility:", err);
-      setError("Failed to check mod loader compatibility");
+      setError("failed to check mod loader compatibility");
     } finally {
       setLoading(false);
     }
@@ -169,7 +169,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
       }
     } catch (err) {
       console.error(`Failed to fetch ${profile.loader} versions:`, err);
-      setError(`Failed to fetch ${profile.loader} versions`);
+      setError(`failed to fetch ${profile.loader} versions`);
       setLoaderVersions([]);
     } finally {
       setLoading(false);
@@ -190,15 +190,15 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 select-none">
       <SectionTitle
         title="select mod loader"
-        description="Choose a mod loader for your Minecraft profile. Some loaders may not be compatible with the selected version."
+        description="choose a mod loader for your minecraft profile. some loaders may not be compatible with the selected version."
       />
 
-      <StatusMessage type="error" message={error} />
+      {error && <StatusMessage type="error" message={error} />}
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
         <ModLoaderButton
           name="vanilla"
           icon="/icons/minecraft.png"
@@ -244,7 +244,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
         <FormField label={`${profile.loader} version`}>
           {loading ? (
             <LoadingIndicator
-              message={`Loading ${profile.loader} versions...`}
+              message={`loading ${profile.loader} versions...`}
             />
           ) : error ? (
             <StatusMessage type="error" message={error} />
@@ -254,13 +254,14 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
               onChange={(value) => updateProfile({ loader_version: value })}
               options={
                 loaderVersions.length === 0
-                  ? [{ value: "", label: "No versions available" }]
+                  ? [{ value: "", label: "no versions available" }]
                   : loaderVersions.map((version) => ({
                       value: version,
                       label: version,
                     }))
               }
               disabled={loaderVersions.length === 0}
+              className="text-base tracking-wide"
             />
           )}
         </FormField>

@@ -117,7 +117,9 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
 
     if (
       !confirm(
-        `Are you sure you want to delete ${selectedMods.size} selected mod${selectedMods.size !== 1 ? "s" : ""}? This cannot be undone.`,
+        `Are you sure you want to delete ${selectedMods.size} selected mod${
+          selectedMods.size !== 1 ? "s" : ""
+        }? This cannot be undone.`,
       )
     ) {
       return;
@@ -185,18 +187,18 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
   });
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full flex flex-col select-none">
+      <div className="flex items-center justify-between mb-5">
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
           placeholder="search mods..."
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <ActionButton
             icon="pixel:upload-solid"
-            label="Import"
+            label="import"
             onClick={handleImportLocalMods}
           />
           <ActionButton
@@ -211,7 +213,7 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
           <ActionButton
             icon="pixel:refresh-solid"
             onClick={fetchMods}
-            className="w-10 h-10"
+            className="w-11 h-11"
             title="Refresh mods"
           />
         </div>
@@ -221,24 +223,24 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
         headers={[
           {
             key: "name",
-            label: "Name",
+            label: "name",
             sortable: true,
             width: "flex-1",
-            className: "px-2",
+            className: "px-3",
           },
-          { key: "version", label: "Version", sortable: true, width: "w-24" },
+          { key: "version", label: "version", sortable: true, width: "w-28" },
           {
             key: "enabled",
-            label: "Status",
+            label: "status",
             sortable: true,
-            width: "w-24",
+            width: "w-28",
             className: "text-center justify-center",
           },
           {
             key: "actions",
-            label: "Actions",
+            label: "actions",
             sortable: false,
-            width: "w-16",
+            width: "w-20",
             className: "text-center",
           },
         ]}
@@ -272,12 +274,10 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
           <EmptyState
             icon="pixel:grid-solid"
             title={
-              searchQuery ? "No mods match your search" : "No mods installed"
+              searchQuery ? "no mods match your search" : "no mods installed"
             }
-            // @ts-ignore
-            actionLabel={searchQuery ? null : "Import Local Mods"}
-            // @ts-ignore
-            onAction={searchQuery ? null : handleImportLocalMods}
+            actionLabel={searchQuery ? undefined : "import local mods"}
+            onAction={searchQuery ? undefined : handleImportLocalMods}
           />
         )}
       </ContentTable>

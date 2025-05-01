@@ -18,7 +18,8 @@ export function SearchInput({
       <div className="relative">
         <input
           type="text"
-          className="w-full bg-black/20 border-2 border-white/30 py-2 pl-10 pr-4 text-white font-minecraft text-sm placeholder-white/40"
+          className="w-full bg-black/20 border-2 border-white/30 py-2 pl-10 pr-4 text-white font-minecraft text-sm
+                     placeholder-white/40 rounded-md focus:outline-none focus:border-white/50 focus:ring-1 focus:ring-white/20"
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
