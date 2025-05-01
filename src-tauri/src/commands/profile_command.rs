@@ -9,7 +9,7 @@ use crate::state::profile_state::{
 };
 use crate::state::state_manager::State;
 use crate::utils::path_utils::find_unique_profile_segment;
-use crate::utils::{profile_utils, resourcepack_utils, shaderpack_utils, path_utils};
+use crate::utils::{profile_utils, resourcepack_utils, shaderpack_utils, datapack_utils, path_utils};
 use chrono::Utc;
 use log::{info, error, warn};
 use noriskclient_launcher_v3_lib::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
@@ -24,6 +24,7 @@ use tokio::fs as TokioFs;
 use uuid::Uuid;
 use crate::utils::resourcepack_utils::ResourcePackInfo;
 use crate::utils::shaderpack_utils::ShaderPackInfo;
+use crate::utils::datapack_utils::DataPackInfo;
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -1106,6 +1107,54 @@ pub async fn update_shaderpack_from_modrinth(
     crate::utils::shaderpack_utils::update_shaderpack_from_modrinth(
         &profile,
         &shaderpack,
+        &new_version_details
+    )
+    .await?;
+    
+    Ok(())
+}
+
+// Command to get all datapacks in a profile
+#[tauri::command]
+pub async fn get_local_datapacks(
+    profile_id: Uuid,
+) -> Result<Vec<datapack_utils::DataPackInfo>, CommandError> {
+    log::info!(
+        "Executing get_local_datapacks command for profile {}",
+        profile_id
+    );
+
+    let state = State::get().await?;
+    let profile = state.profile_manager.get_profile(profile_id).await?;
+
+    // Use the utility function to get all datapacks
+    let datapacks = datapack_utils::get_datapacks_for_profile(&profile)
+        .await
+        .map_err(|e| CommandError::from(e))?;
+
+    Ok(datapacks)
+}
+
+// Command to update a Modrinth datapack in a profile
+#[tauri::command]
+pub async fn update_datapack_from_modrinth(
+    profile_id: Uuid,
+    datapack: DataPackInfo,
+    new_version_details: ModrinthVersion,
+) -> Result<(), CommandError> {
+    info!(
+        "Received command update_datapack_from_modrinth: profile={}, datapack={}, new_version_id={}",
+        profile_id,
+        datapack.filename,
+        new_version_details.id
+    );
+    
+    let state = State::get().await?;
+    let profile = state.profile_manager.get_profile(profile_id).await?;
+    
+    crate::utils::datapack_utils::update_datapack_from_modrinth(
+        &profile,
+        &datapack,
         &new_version_details
     )
     .await?;
