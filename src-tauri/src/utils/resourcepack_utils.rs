@@ -221,4 +221,82 @@ fn is_resourcepack_file(path: &Path) -> bool {
         debug!("File is not a resource pack (not a zip): {}", path.display());
     }
     return is_zip;
+}
+
+/// Update a resource pack from Modrinth to a new version
+pub async fn update_resourcepack_from_modrinth(
+    profile: &Profile,
+    resourcepack: &ResourcePackInfo,
+    new_version: &crate::integrations::modrinth::ModrinthVersion
+) -> Result<()> {
+    info!(
+        "Updating resource pack '{}' to version {} in profile {}",
+        resourcepack.filename, new_version.version_number, profile.id
+    );
+    
+    // Get the resourcepacks directory
+    let resourcepacks_dir = get_resourcepacks_dir(profile).await?;
+    
+    // Check if the directory exists, create if not
+    if !resourcepacks_dir.exists() {
+        debug!("Creating resourcepacks directory for profile: {}", profile.id);
+        fs::create_dir_all(&resourcepacks_dir).await
+            .map_err(|e| AppError::Other(format!("Failed to create resourcepacks directory: {}", e)))?;
+    }
+    
+    // Find and delete the old file (including .disabled variant)
+    let old_path = resourcepacks_dir.join(&resourcepack.filename);
+    let old_path_disabled = resourcepacks_dir.join(format!("{}.disabled", resourcepack.filename));
+    
+    let was_disabled = resourcepack.is_disabled;
+    
+    // Find the primary file in the new version
+    let primary_file = new_version.files.iter().find(|f| f.primary)
+        .ok_or_else(|| AppError::Other(format!(
+            "No primary file found for Modrinth version {} (ID: {})",
+            new_version.name, new_version.id
+        )))?;
+    
+    // Check and delete the old file
+    if old_path.exists() {
+        debug!("Removing old resource pack file: {}", old_path.display());
+        fs::remove_file(&old_path).await
+            .map_err(|e| AppError::Other(format!("Failed to remove old resource pack file: {}", e)))?;
+    } else if old_path_disabled.exists() {
+        debug!("Removing old disabled resource pack file: {}", old_path_disabled.display());
+        fs::remove_file(&old_path_disabled).await
+            .map_err(|e| AppError::Other(format!("Failed to remove old disabled resource pack file: {}", e)))?;
+    } else {
+        warn!("Old resource pack file not found: {}", resourcepack.filename);
+    }
+    
+    // Use the utility function to download the new content
+    use crate::utils::profile_utils::{add_modrinth_content_to_profile, ContentType};
+    
+    // Download the new resource pack
+    add_modrinth_content_to_profile(
+        profile.id,
+        new_version.project_id.clone(),
+        new_version.id.clone(),
+        primary_file.filename.clone(),
+        primary_file.url.clone(),
+        primary_file.hashes.sha1.clone(),
+        Some(new_version.name.clone()),
+        Some(new_version.version_number.clone()),
+        ContentType::ResourcePack,
+    ).await?;
+    
+    // If the old pack was disabled, disable the new one too
+    if was_disabled {
+        let new_path = resourcepacks_dir.join(&primary_file.filename);
+        let new_path_disabled = resourcepacks_dir.join(format!("{}.disabled", primary_file.filename));
+        
+        debug!("Old pack was disabled, disabling new pack as well");
+        fs::rename(&new_path, &new_path_disabled).await
+            .map_err(|e| AppError::Other(format!("Failed to disable new resource pack: {}", e)))?;
+    }
+    
+    info!("Successfully updated resource pack from '{}' to '{}'", resourcepack.filename, primary_file.filename);
+    
+    Ok(())
 } 
