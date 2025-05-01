@@ -5,7 +5,7 @@ use crate::state::profile_state::{Mod, ModSource, ModLoader};
 use crate::utils::{resourcepack_utils, shaderpack_utils, datapack_utils, hash_utils};
 use crate::state::state_manager::State;
 use crate::integrations::norisk_packs;
-use log::{debug, info, warn};
+use log::{debug, info, warn, error};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -17,6 +17,8 @@ use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
 use futures::future::BoxFuture;
 use serde::{Serialize, Deserialize};
+use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
 
 /// Represents the type of content to be installed
 pub enum ContentType {
@@ -542,6 +544,60 @@ pub async fn check_content_installed(
     } 
 
     Ok(status)
+}
+
+/// Opens the `latest.log` file for a given profile using the system's default application.
+///
+/// # Arguments
+///
+/// * `app_handle` - The Tauri application handle to access plugins like the opener.
+/// * `profile_id` - The UUID of the profile whose log file should be opened.
+///
+/// # Returns
+///
+/// Returns `Ok(())` on success, or an `AppError` if the profile instance path cannot be determined,
+/// the log file doesn't exist, or the file cannot be opened.
+pub async fn open_latest_log_for_profile<R: tauri::Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    profile_id: Uuid,
+) -> Result<()> {
+    info!("Attempting to open latest.log for profile {}", profile_id);
+
+    // Get the profile instance path
+    let state = State::get().await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?; // This returns Result<PathBuf, AppError>
+
+    // Construct the path to the log file
+    let log_path = instance_path.join("logs").join("latest.log");
+    debug!("Constructed log path: {}", log_path.display());
+
+    // Check if the log file exists
+    if !log_path.exists() {
+        warn!("latest.log not found at {}", log_path.display());
+        return Err(AppError::FileNotFound(log_path));
+    }
+
+    // Open the log file using the system's default viewer
+    info!("Opening log file: {}", log_path.display());
+    match app_handle
+        .opener()
+        .open_path(log_path.to_string_lossy(), None::<&str>)
+    {
+        Ok(_) => {
+            info!("Successfully requested opening of log file: {}", log_path.display());
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to open log file {}: {}", log_path.display(), e);
+            Err(AppError::Other(format!(
+                "Failed to open log file: {}",
+                e
+            )))
+        }
+    }
 }
 
 /// Exports a profile to a `.noriskpack` file
