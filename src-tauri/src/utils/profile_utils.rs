@@ -15,7 +15,7 @@ use tempfile;
 use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
-use futures::future::BoxFuture;
+use futures::future::{BoxFuture, FutureExt};
 use serde::{Serialize, Deserialize};
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
@@ -916,7 +916,65 @@ pub struct ScreenshotInfo {
     pub modified: Option<chrono::DateTime<chrono::Utc>>, // Use chrono for timestamps
 }
 
-/// Lists screenshot files found in the profile's `screenshots` directory.
+/// Recursively finds screenshot files in a directory and its subdirectories.
+pub fn find_screenshots_recursive<'a>(
+    dir_path: &'a Path,
+    screenshots: &'a mut Vec<ScreenshotInfo>
+) -> BoxFuture<'a, Result<()>> {
+    async move {
+        if !dir_path.exists() || !dir_path.is_dir() {
+            return Ok(()); // Nothing to do if the path doesn't exist or isn't a directory
+        }
+    
+        let mut dir_entries = match fs::read_dir(dir_path).await {
+            Ok(entries) => entries,
+            Err(e) => {
+                error!("Failed to read directory {:?}: {}", dir_path, e);
+                return Err(AppError::Io(e));
+            }
+        };
+    
+        while let Some(entry_result) = dir_entries.next_entry().await.map_err(|e| {
+            error!("Failed to read entry in directory {:?}: {}", dir_path, e);
+            AppError::Io(e)
+        })? {
+            let path = entry_result.path();
+            if path.is_dir() {
+                // If it's a directory, recurse into it
+                find_screenshots_recursive(&path, screenshots).await?; // Use .await here
+            } else if path.is_file() {
+                // If it's a file, check if it's a PNG
+                if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
+                    if filename_str.to_lowercase().ends_with(".png") {
+                        let modified_time = match fs::metadata(&path).await {
+                            Ok(metadata) => match metadata.modified() {
+                                Ok(sys_time) => Some(chrono::DateTime::<chrono::Utc>::from(sys_time)),
+                                Err(e) => {
+                                    warn!("Could not get modified time for {:?}: {}", path, e);
+                                    None
+                                }
+                            },
+                            Err(e) => {
+                                warn!("Could not get metadata for {:?}: {}", path, e);
+                                None
+                            }
+                        };
+
+                        screenshots.push(ScreenshotInfo {
+                            filename: filename_str.to_string(),
+                            path: path.clone(),
+                            modified: modified_time,
+                        });
+                    }
+                }
+            }
+            // Ignore other entry types (symlinks, etc.)
+        }
+        Ok(())
+    }.boxed() // Use .boxed() from FutureExt trait
+}
+
+/// Lists screenshot files found in the profile's `screenshots` directory and its subdirectories.
 /// Only includes files ending in `.png`.
 pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<ScreenshotInfo>> {
     let state = State::get().await?;
@@ -924,53 +982,12 @@ pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<Screens
     let screenshots_path = instance_path.join("screenshots");
     let mut screenshots = Vec::new();
 
-    if !screenshots_path.exists() {
-        debug!("Screenshots directory {:?} does not exist for profile {}. Returning empty list.", screenshots_path, profile_id);
-        return Ok(screenshots);
-    }
+    // Call the recursive helper function starting from the main screenshots directory
+    find_screenshots_recursive(&screenshots_path, &mut screenshots).await?;
 
-    let mut dir_entries = match fs::read_dir(&screenshots_path).await {
-        Ok(entries) => entries,
-        Err(e) => {
-            error!("Failed to read screenshots directory {:?}: {}", screenshots_path, e);
-            return Err(AppError::Io(e));
-        }
-    };
-
-    while let Some(entry_result) = dir_entries.next_entry().await.map_err(|e| {
-        error!("Failed to read entry in screenshots directory {:?}: {}", screenshots_path, e);
-        AppError::Io(e)
-    })? {
-        let path = entry_result.path();
-        if path.is_file() {
-            if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
-                if filename_str.to_lowercase().ends_with(".png") {
-                    let modified_time = match fs::metadata(&path).await {
-                        Ok(metadata) => match metadata.modified() {
-                            Ok(sys_time) => Some(chrono::DateTime::<chrono::Utc>::from(sys_time)),
-                            Err(e) => {
-                                warn!("Could not get modified time for {:?}: {}", path, e);
-                                None
-                            }
-                        },
-                        Err(e) => {
-                            warn!("Could not get metadata for {:?}: {}", path, e);
-                            None
-                        }
-                    };
-
-                    screenshots.push(ScreenshotInfo {
-                        filename: filename_str.to_string(),
-                        path: path.clone(),
-                        modified: modified_time,
-                    });
-                }
-            }
-        }
-    }
-
+    // Sort the collected screenshots by modified time (newest first)
     screenshots.sort_by(|a, b| b.modified.cmp(&a.modified));
 
-    info!("Found {} screenshot(s) in {:?}", screenshots.len(), screenshots_path);
+    info!("Found {} screenshot(s) in total within {:?} and its subdirectories", screenshots.len(), screenshots_path);
     Ok(screenshots)
 }
