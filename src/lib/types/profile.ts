@@ -62,6 +62,7 @@ export interface WindowSize {
 
 export interface ProfileSettings {
   java_path: string | null;       // Option<String> -> string | null
+  use_custom_java_path: boolean; // Added boolean flag
   memory: MemorySettings;
   resolution: WindowSize | null; // Option<WindowSize> -> WindowSize | null
   fullscreen: boolean;

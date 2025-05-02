@@ -1,5 +1,6 @@
 <script lang="ts">
     import { invoke } from "@tauri-apps/api/core";
+    import { open } from '@tauri-apps/plugin-dialog';
     import { createEventDispatcher, onMount, tick } from 'svelte';
     // Import Profile without state if possible, or handle Partial correctly
     import type { Profile as ProfileFromStore } from "$lib/stores/profileStore"; 
@@ -10,6 +11,7 @@
     import type { FabricVersionInfo } from '$lib/types/fabric'; // Import Fabric type
     import type { QuiltVersionInfo } from '$lib/types/quilt'; // Import Quilt type
     import type { MinecraftVersion } from '$lib/types/minecraft';
+    import type { JavaInstallation } from '$lib/types/java'; // Import the new Java type
 
     // Define Props type using the local MinecraftVersion interface
     interface Props {
@@ -98,10 +100,21 @@
     let packLoadError = $state<string | null>(null);
     let hasMounted = false; // Flag to check if initial mount is complete
 
+    // --- *NEW* Java Path State --- 
+    let useCustomJavaPath = $state(editingProfile?.settings?.use_custom_java_path ?? false);
+    let customJavaPath = $state(editingProfile?.settings?.java_path ?? '');
+    let detectedJavaInstallations = $state<JavaInstallation[]>([]);
+    let isDetectingJava = $state(false);
+    let javaDetectionError = $state<string | null>(null);
+    let isValidatingJavaPath = $state(false);
+    let validationResult = $state<'valid' | 'invalid' | 'error' | null>(null);
+    let validationMessage = $state<string | null>(null);
+
     // Lifecycle and Data Loading
     onMount(async () => {
         await loadNoriskPacks();
         await fetchSystemRam(); // Fetch system RAM on mount
+        await detectJava(); // Detect Java installations on mount
         hasMounted = true; // Set hasMounted *after* initial loads
         // Initial fetch is handled by the effect now, checking hasMounted
     });
@@ -136,6 +149,113 @@
             systemRamError = `Could not determine system RAM: ${error instanceof Error ? error.message : String(error)}`;
             // Fallback max if detection fails? Or leave it unbound?
             // totalSystemRamMB = 16384; // Example fallback
+        }
+    }
+
+    // *NEW* Function to detect Java
+    async function detectJava() {
+        isDetectingJava = true;
+        javaDetectionError = null;
+        validationResult = null; // Reset validation when re-detecting
+        validationMessage = null;
+        try {
+            console.log("Detecting Java installations...");
+            const installations: JavaInstallation[] = await invoke("detect_java_installations_command");
+            detectedJavaInstallations = installations;
+            console.log("Detected Java:", installations);
+            // If a custom path was set, ensure it's selected in the dropdown if found, 
+            // otherwise keep the manual path input.
+            if (customJavaPath) {
+                const found = installations.find(inst => inst.path === customJavaPath);
+                if (!found) {
+                    console.log("Custom Java path not found in detected list, keeping manual entry.");
+                    // No need to clear customJavaPath here, user might want to keep it.
+                }
+            }
+
+        } catch (error) {
+            console.error("Error detecting Java:", error);
+            javaDetectionError = `Failed to detect Java: ${error instanceof Error ? error.message : String(error)}`;
+            detectedJavaInstallations = [];
+        } finally {
+            isDetectingJava = false;
+        }
+    }
+
+    // *NEW* Function to handle Java path selection/input
+    function handleJavaPathChange(event: Event) {
+        const target = event.target as HTMLSelectElement | HTMLInputElement;
+        customJavaPath = target.value;
+        validationResult = null; // Reset validation on change
+        validationMessage = null;
+        // If the selected value is from the <select> (detected), it's likely valid.
+        // If it's from the <input>, it needs testing.
+        // For simplicity, we always require testing for now.
+    }
+
+    // *NEW* Function to open browse dialog
+    async function browseForJava() {
+        errorMessage = null; // Clear general errors
+        validationResult = null;
+        validationMessage = null;
+        try {
+            const selectedPath = await open({
+                title: 'Select Java Executable (java or java.exe) or Installation Directory',
+                // Allow selecting the executable directly or the root directory of the JDK/JRE
+                // Note: Filters might not work perfectly on all OS for directories
+                // filters: [
+                //     { name: 'Java Executable', extensions: ['exe', ''] }, // Allow 'java' with no extension on Linux/Mac
+                // ],
+                directory: false, // Start by allowing file selection
+                multiple: false
+            });
+
+            // Check if a path was selected (result is string or null)
+            if (selectedPath && typeof selectedPath === 'string') {
+                customJavaPath = selectedPath; // Update the state
+                console.log('Selected Java path:', customJavaPath);
+                await testJavaPath(); // Automatically test after selecting
+            } else {
+                 console.log('Java selection cancelled or path is not a string.');
+                 // Maybe try opening as directory if file selection failed? Could be complex.
+            }
+        } catch (error) {
+            console.error('Error opening Java browse dialog:', error);
+            errorMessage = `Error browsing for Java: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+
+    // *NEW* Function to test the custom Java path
+    async function testJavaPath() {
+        if (!customJavaPath) {
+            validationResult = 'error';
+            validationMessage = 'Please select or enter a Java path.';
+            return;
+        }
+        isValidatingJavaPath = true;
+        validationResult = null;
+        validationMessage = null;
+        try {
+            console.log(`Validating Java path: ${customJavaPath}`);
+            const isValid: boolean = await invoke('validate_java_path_command', { path: customJavaPath });
+            if (isValid) {
+                validationResult = 'valid';
+                validationMessage = 'Java path is valid!';
+            } else {
+                validationResult = 'invalid';
+                validationMessage = 'Path exists but is not a valid Java installation (or version check failed).';
+            }
+        } catch (error: any) {
+            console.error(`Error validating Java path ${customJavaPath}:`, error);
+            validationResult = 'error';
+            // Check if the error message indicates the path doesn't exist
+            if (error?.message?.includes('Java path does not exist')) {
+                 validationMessage = 'Selected path does not exist.';
+            } else {
+                validationMessage = `Validation error: ${error.message || String(error)}`;
+            }
+        } finally {
+            isValidatingJavaPath = false;
         }
     }
 
@@ -295,7 +415,16 @@
             errorMessage = "Bitte einen Profilnamen eingeben.";
             return;
         }
-        errorMessage = null; // Clear previous errors
+        // *NEW* Validation for custom Java path if enabled
+        if (useCustomJavaPath && (!customJavaPath || validationResult !== 'valid')) {
+            errorMessage = "Bitte einen gültigen benutzerdefinierten Java-Pfad angeben und testen, oder die Option deaktivieren.";
+            if (!customJavaPath) validationMessage = 'Java path cannot be empty when enabled.';
+            else if (validationResult !== 'valid') validationMessage = 'Please test the Java path first.';
+            return;
+        }
+
+        errorMessage = null; 
+        validationMessage = null;
         isSubmitting = true;
 
         // Ensure the ID is correctly set to null if "Keine" is selected
@@ -309,7 +438,8 @@
                 max: memoryMaxMB
             },
             // Ensure other fields expected by ProfileSettings have defaults if not in editingProfile
-            java_path: editingProfile?.settings?.java_path ?? null,
+            java_path: useCustomJavaPath ? customJavaPath : null, // Set java_path based on checkbox
+            use_custom_java_path: useCustomJavaPath, // Send the boolean flag
             fullscreen: editingProfile?.settings?.fullscreen ?? false,
             extra_game_args: editingProfile?.settings?.extra_game_args ?? [], // Use renamed field
             custom_jvm_args: customJvmArgs.trim() || null, // Add new field, send null if empty/whitespace
@@ -379,6 +509,14 @@
         resolutionWidth = 1280;     // Reset resolution width
         resolutionHeight = 720;    // Reset resolution height
         if (minecraftVersions.length > 0) updateSelectedVersion();
+        useCustomJavaPath = false;
+        customJavaPath = '';
+        detectedJavaInstallations = [];
+        isDetectingJava = false;
+        javaDetectionError = null;
+        isValidatingJavaPath = false;
+        validationResult = null;
+        validationMessage = null;
     }
 </script>
 
@@ -487,6 +625,15 @@
         </div> 
     </div>
 
+    <!-- Min RAM Setting (Read-only for now) -->
+    <div class="ram-setting">
+        <label>Minimaler RAM (MB):</label>
+        <div class="ram-control">
+            <input type="number" value={memoryMinMB} readonly class="ram-input disabled-input" aria-label="Minimale RAM Zuweisung (MB)" />
+            <span class="ram-display">{memoryMinMB} MB (Fixed)</span>
+        </div>
+    </div>
+
     <!-- Resolution Section -->
     <div class="form-group-small-gap resolution-section">
         <div class="checkbox-group">
@@ -525,6 +672,65 @@
             aria-label="Benutzerdefinierte JVM Argumente"
         ></textarea>
         <small>Argumente durch Leerzeichen trennen.</small>
+    </div>
+
+    <!-- *NEW* Custom Java Path Section -->
+    <div class="form-group-small-gap java-path-section">
+        <div class="checkbox-group">
+            <input type="checkbox" id="custom-java-check" bind:checked={useCustomJavaPath} />
+            <label for="custom-java-check">Benutzerdefinierten Java Pfad verwenden</label>
+        </div>
+
+        {#if useCustomJavaPath}
+            <label for="java-path-select">Java Pfad:</label>
+            <div class="java-path-controls">
+                <!-- Option 1: Dropdown for detected installations -->
+                <select id="java-path-select" value={customJavaPath} on:change={handleJavaPathChange} aria-label="Ausgewählter Java Pfad" disabled={isDetectingJava} class="java-path-select">
+                    <option value="">-- Automatisch erkennen oder Pfad eingeben --</option>
+                    {#if isDetectingJava}
+                        <option value="" disabled>Suche Java...</option>
+                    {:else if detectedJavaInstallations.length > 0}
+                        {#each detectedJavaInstallations as java (java.path)} 
+                            <option value={java.path}>{java.path} (v{java.major_version} - {java.vendor} - {java.architecture})</option>
+                        {/each}
+                    {:else}
+                        <option value="" disabled>Keine Java-Installationen gefunden</option>
+                    {/if}
+                </select>
+                
+                <!-- Option 2: Manual Input (Always visible if checkbox is checked) -->
+                <input 
+                    type="text" 
+                    placeholder="Oder Java-Pfad hier eingeben..." 
+                    value={customJavaPath} 
+                    on:input={handleJavaPathChange}
+                    aria-label="Manueller Java Pfad" 
+                    class="java-path-input"
+                 />
+
+                <!-- Browse Button -->
+                <button type="button" on:click={browseForJava} class="browse-button" aria-label="Java Pfad durchsuchen">
+                    ... <!-- Browse Icon or Text -->
+                </button>
+
+                <!-- Test Button -->
+                <button 
+                    type="button" 
+                    on:click={testJavaPath} 
+                    disabled={isValidatingJavaPath || !customJavaPath}
+                    class="test-button"
+                    class:loading={isValidatingJavaPath}
+                    aria-label="Java Pfad testen"
+                >
+                    {#if isValidatingJavaPath}Test...{:else}Test Path{/if}
+                </button>
+            </div>
+            {#if javaDetectionError}<p class="error-message small">{javaDetectionError}</p>{/if}
+            <!-- Validation Message -->
+            {#if validationMessage}
+                <p class="validation-message small {validationResult ?? ''}">{validationMessage}</p>
+            {/if}
+        {/if}
     </div>
 
     <div class="form-actions">
@@ -596,6 +802,10 @@
         <p><strong>Memory Max (MB):</strong> {memoryMaxMB}</p>
         <p><strong>Custom JVM Args:</strong> {customJvmArgs || 'None'}</p>
         <p><strong>Custom Resolution:</strong> {useCustomResolution ? `${resolutionWidth}x${resolutionHeight}` : 'Default'}</p>
+        <p><strong>Use Custom Java:</strong> {useCustomJavaPath}</p>
+        <p><strong>Custom Java Path:</strong> {customJavaPath || 'None'}</p>
+        <p><strong>Java Validation:</strong> {validationResult || 'N/A'} - {validationMessage || ''}</p>
+        <p><strong>Detected Java:</strong> {detectedJavaInstallations.length}</p>
         <p><strong>Packs Loading:</strong> {isLoadingPacks}</p>
         <!-- <p><strong>Pack Entries:</strong> {JSON.stringify(packEntries)}</p> --> 
     </div>
@@ -797,5 +1007,122 @@
 
     .resolution-inputs span {
         font-weight: bold;
+    }
+
+    /* Custom Java Path Section */
+    .java-path-section {
+        margin-top: 0.5rem;
+        border-top: 1px solid var(--border-color-light, #eee);
+        padding-top: 1rem;
+    }
+    .java-path-controls {
+        display: flex;
+        gap: 0.5rem; /* Reduced gap for tighter controls */
+        align-items: center; /* Align items vertically */
+    }
+    .java-path-select {
+        flex-grow: 1; /* Allow select to take more space initially */
+        min-width: 150px; /* Minimum width */
+    }
+    .java-path-input {
+        flex-grow: 2; /* Allow input to take even more space */
+        min-width: 150px;
+    }
+    .browse-button, .test-button {
+        flex-shrink: 0; /* Prevent buttons from shrinking */
+        padding: 0.4rem 0.8rem; /* Slightly smaller padding */
+        min-width: 60px; /* Minimum width for buttons */
+        text-align: center;
+    }
+    .test-button.loading {
+        opacity: 0.8;
+    }
+
+    /* Validation Message Styles */
+    .validation-message {
+        font-size: 0.85em;
+        padding: 0.3rem 0.6rem;
+        margin-top: 0.25rem;
+        border-radius: 3px;
+        border: 1px solid transparent;
+    }
+    .validation-message.valid {
+        color: #28a745;
+        border-color: #c3e6cb;
+        background-color: #d4edda;
+    }
+    .validation-message.invalid {
+        color: #dc3545;
+        border-color: #f5c6cb;
+        background-color: #f8d7da;
+    }
+    .validation-message.error {
+        color: #ffc107;
+        border-color: #ffeeba;
+        background-color: #fff3cd;
+    }
+
+    /* Form Actions */
+    .form-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem; /* More space before actions */
+    }
+    .form-actions button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s, opacity 0.2s;
+    }
+    .form-actions button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    .form-actions button.loading {
+        opacity: 0.8;
+    }
+    .cancel-button { background-color: #f44336; color: white; }
+    .cancel-button:hover:not(:disabled) { background-color: #d32f2f; }
+    .import-button { background-color: #5bc0de; color: white; }
+    .import-button:hover:not(:disabled) { background-color: #31b0d5; }
+
+    /* Error Message */
+    .error-message {
+        color: #f44336;
+        font-size: 0.9em;
+        margin-top: 0.5rem;
+    }
+    .error-message.small {
+        font-size: 0.85em;
+        padding: 0.3rem 0.6rem;
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Helper Text */
+    small {
+        font-size: 0.85em;
+        color: var(--text-muted-color, #666);
+        margin-top: -0.25rem;
+    }
+
+    /* Debug Info */
+    .debug-info {
+        margin-top: 1rem;
+        padding: 1rem;
+        background-color: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    .debug-info h4 { margin: 0 0 0.5rem 0; color: #333; }
+    .debug-info p { margin: 0.25rem 0; }
+
+    /* Disabled Input */
+    .disabled-input {
+        background-color: var(--input-disabled-bg-color, #eee);
+        cursor: not-allowed;
     }
 </style> 
