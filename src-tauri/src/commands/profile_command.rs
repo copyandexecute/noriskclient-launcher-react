@@ -1391,6 +1391,28 @@ pub async fn get_profile_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>, Com
     Ok(profile_utils::list_log_files(profile_id).await?)
 }
 
+/// Gets the content of a specific log file (.log or .log.gz).
+///
+/// # Arguments
+///
+/// * `log_file_path` - The full path to the log file.
+///
+/// # Returns
+///
+/// Returns `Ok(String)` containing the log content on success.
+/// Returns an empty string in `Ok` if the log file is not found or unsupported.
+/// Returns an `AppError` if reading or decompression fails.
+#[tauri::command]
+pub async fn get_log_file_content(log_file_path: PathBuf) -> Result<String, CommandError> {
+    info!(
+        "Executing get_log_file_content command for file: {}",
+        log_file_path.display()
+    );
+
+    // Call the utility function from file_utils
+    Ok(crate::utils::file_utils::read_log_file_content(&log_file_path).await?)
+}
+
 #[tauri::command]
 pub async fn get_worlds_for_profile(profile_id: Uuid) -> Result<Vec<WorldInfo>, CommandError> {
     info!("Executing get_worlds_for_profile command for profile {}", profile_id);
