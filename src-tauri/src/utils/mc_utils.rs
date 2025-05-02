@@ -24,6 +24,9 @@ use tokio::net::TcpStream;
 use tokio::time::timeout;
 use base64;
 use base64::Engine as _; // Import the Engine trait for encode/decode methods
+use trust_dns_resolver::TokioAsyncResolver;
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+use trust_dns_resolver::proto::rr::RecordType;
 
 // --- Struct for World Info ---
 #[derive(Debug, Clone, Serialize)]
@@ -597,6 +600,79 @@ pub struct ServerInfo {
     pub previews_chat: Option<u8>,
 }
 
+/// Parses a Minecraft server address string (e.g., "example.com", "example.com:25566", "[::1]:25565")
+/// into host and port, handling default port and IPv6 bracket notation.
+/// Inspired by Modrinth Launcher's implementation.
+fn parse_minecraft_address(address: &str) -> std::result::Result<(String, u16), String> {
+    let default_port = 25565;
+    let (host_part, port_str) = if address.starts_with('[') {
+        // IPv6 Address like [::1] or [::1]:25566
+        let close_bracket_index = match address.rfind(']') {
+            Some(idx) => idx,
+            None => return Err(format!("Invalid bracketed host/port: {}", address)),
+        };
+
+        // Check if it's just "[...]" or "[...]:port"
+        if close_bracket_index + 1 == address.len() {
+            // Just "[...]", use default port
+            (&address[1..close_bracket_index], None)
+        } else {
+            // Should be "[...]:port"
+            if address.as_bytes().get(close_bracket_index + 1) != Some(&b':') {
+                return Err(format!("Only a colon may follow a close bracket: {}", address));
+            }
+            let port_part = &address[close_bracket_index + 2..];
+            // Validate port part contains only digits
+            if port_part.is_empty() || port_part.chars().any(|c| !c.is_ascii_digit()) {
+                 return Err(format!("Port must be numeric after brackets: {}", address));
+            }
+            (&address[1..close_bracket_index], Some(port_part))
+        }
+    } else {
+        // IPv4 or Hostname like "example.com" or "example.com:25566"
+        match address.rfind(':') {
+            Some(colon_pos) => {
+                // Check if this colon is part of an IPv6 address without brackets (less common but possible)
+                // A simple heuristic: if there's another colon *before* this one, assume IPv6.
+                if address[..colon_pos].contains(':') {
+                    // Likely bare IPv6, treat whole string as host, use default port
+                    (address, None)
+                } else {
+                    // Standard host:port
+                    let host = &address[..colon_pos];
+                    let port_part = &address[colon_pos + 1..];
+                     // Validate port part contains only digits
+                    if port_part.is_empty() || port_part.chars().any(|c| !c.is_ascii_digit()) {
+                        return Err(format!("Port must be numeric: {}", address));
+                    }
+                    (host, Some(port_part))
+                }
+            }
+            None => {
+                // No colon, treat whole string as host, use default port
+                (address, None)
+            }
+        }
+    };
+
+    let port = match port_str {
+        Some(p_str) => {
+            match p_str.parse::<u16>() {
+                Ok(p) => p,
+                Err(_) => return Err(format!("Unparseable port number: {}", p_str)),
+            }
+        }
+        None => default_port,
+    };
+
+    // Basic validation: host part should not be empty
+    if host_part.is_empty() {
+         return Err(format!("Host part cannot be empty: {}", address));
+    }
+
+    Ok((host_part.to_string(), port))
+}
+
 /// Lists the multiplayer servers found in the profile's servers.dat file.
 pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
     info!("[Servers] Getting servers for profile {}", profile_id);
@@ -723,58 +799,86 @@ impl ServerPingInfo {
 
 // Function to perform the server ping
 pub async fn ping_server_status(address: &str) -> ServerPingInfo {
-    info!("[Server Ping] Pinging server: {}", address);
-    
-    // Default timeout duration
-    let ping_timeout = Duration::from_secs(5); 
+    info!("[Server Ping] Pinging server address: {}", address);
+    let ping_timeout = Duration::from_secs(5);
 
-    // Resolve address (handles domain names and includes SRV lookup implicitly via ToSocketAddrs)
-    // Need to parse port manually if not present, or use default 25565
-    let default_port = 25565;
-    let addr_str = if address.contains(':') {
-        address.to_string()
-    } else {
-        format!("{}:{}", address, default_port)
+    // --- Parse Address ---
+    let (host, port) = match parse_minecraft_address(address) {
+        Ok((h, p)) => (h, p),
+        Err(e) => {
+            return ServerPingInfo::error(address, format!("Invalid address format: {}", e), None);
+        }
+    };
+    info!("[Server Ping] Parsed address: Host='{}', Port={}", host, port);
+
+    // --- DNS Resolver ---
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+
+    // --- SRV Lookup ---
+    // Use the parsed host for SRV query
+    let srv_query = format!("_minecraft._tcp.{}", host);
+    info!("[Server Ping] Attempting SRV lookup for: {}", srv_query);
+    let srv_response = resolver.srv_lookup(srv_query.as_str()).await;
+
+    let (target_host, target_port): (String, u16) = match srv_response {
+        Ok(srv) => {
+            // Prioritize lower priority, then higher weight (standard SRV behavior)
+            if let Some(record) = srv.iter().min_by_key(|r| (r.priority(), std::cmp::Reverse(r.weight()))) {
+                let srv_host = record.target().to_utf8(); // Convert Name to String
+                let srv_port = record.port();
+                info!("[Server Ping] SRV lookup successful: Target = {}:{}", srv_host, srv_port);
+                (srv_host, srv_port)
+            } else {
+                info!("[Server Ping] SRV lookup for '{}' returned no records. Using parsed host/port.", srv_query);
+                (host.clone(), port) // Use the host parsed earlier
+            }
+        }
+        Err(e) => {
+            warn!("[Server Ping] SRV lookup for '{}' failed: {}. Falling back to parsed host/port.", srv_query, e);
+            (host.clone(), port) // Use the host parsed earlier
+        }
     };
 
-    let socket_addr = match addr_str.to_socket_addrs() {
-         Ok(mut addrs) => match addrs.next() {
-            Some(addr) => addr,
-            None => return ServerPingInfo::error(address, "Address resolution failed (no addresses found)".to_string(), None),
+    // --- Resolve Target Host to IP ---
+    info!("[Server Ping] Resolving target host: {}", target_host);
+    let ip_response = resolver.lookup_ip(target_host.as_str()).await;
+
+    let socket_addr = match ip_response {
+        Ok(lookup) => match lookup.iter().next() { // Use the first IP address found
+            Some(ip) => SocketAddr::new(ip, target_port),
+            None => return ServerPingInfo::error(address, format!("DNS lookup for target '{}' returned no IP addresses", target_host), None),
         },
-        Err(e) => return ServerPingInfo::error(address, format!("Address resolution failed: {}", e), None),
+        Err(e) => return ServerPingInfo::error(address, format!("DNS lookup for target '{}' failed: {}", target_host, e), None),
     };
 
-    // Extract hostname for the ping function
-    let hostname = socket_addr.ip().to_string(); // Use resolved IP as hostname for ping
+    info!("[Server Ping] Resolved '{}:{}' to socket address: {}", target_host, target_port, socket_addr);
 
-    // Connect with timeout
+    // --- TCP Connect ---
     let connect_future = TcpStream::connect(socket_addr);
     let stream_result = match timeout(ping_timeout, connect_future).await {
         Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(e)) => Err(AppError::Io(e)), // Connection error
-        Err(_) => Err(AppError::Other("Connection timed out".to_string())), // Timeout error
+        Ok(Err(e)) => Err(AppError::Io(e)),
+        Err(_) => Err(AppError::Other("Connection timed out".to_string())),
     };
 
     let mut stream = match stream_result {
-         Ok(s) => s,
-         Err(e) => return ServerPingInfo::error(address, format!("Connection failed: {}", e), None),
+        Ok(s) => s,
+        Err(e) => return ServerPingInfo::error(address, format!("Connection to {} failed: {}", socket_addr, e), None),
     };
-    
-    // Start timing the actual ping
-    let start_time = std::time::Instant::now();
 
-    // Perform the ping with timeout
-    let ping_future = ping(&mut stream, &hostname, socket_addr.port());
+    // --- Ping ---
+    let start_time = std::time::Instant::now();
+    // Use the target_host (which might be from SRV) for the handshake, but connect to the resolved IP (socket_addr)
+    let ping_future = ping(&mut stream, &target_host, target_port);
     let result: std::result::Result<Response, CraftPingError> = match timeout(ping_timeout, ping_future).await {
         Ok(res) => res,
-        Err(_) => return ServerPingInfo::error(address, "Ping timed out".to_string(), Some(ping_timeout.as_millis() as u64)), // Timeout error
+        Err(_) => return ServerPingInfo::error(address, "Ping timed out".to_string(), Some(ping_timeout.as_millis() as u64)),
     };
-
+    
     let latency = start_time.elapsed();
     let latency_ms = latency.as_millis() as u64;
 
-    // Process the result
+    // --- Process Result ---
     match result {
         Ok(pong) => {
             info!(

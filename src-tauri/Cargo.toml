@@ -63,6 +63,7 @@ regex = "1.10.2"
 lazy_static = "1.4.0"
 fastnbt = "2.5.0"
 craftping = { version = "0.7.0", features = ["async-tokio"] }
+trust-dns-resolver = { version = "0.23.2", features = ["tokio-runtime"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
