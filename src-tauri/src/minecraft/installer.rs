@@ -115,27 +115,101 @@ pub async fn install_minecraft_version(
     )
     .await?;
 
-    // Download and setup Java
-    let java_service = JavaDownloadService::new();
-    let java_path = java_service
-        .get_or_download_java(
-            java_version,
-            &JavaDistribution::Zulu,
-            Some(&piston_meta.java_version.component),
+    // Check if profile uses a custom Java path
+    let mut custom_java_valid = false;
+    let java_path = if profile.settings.use_custom_java_path && profile.settings.java_path.is_some() {
+        // Try to use the custom Java path
+        let custom_path = profile.settings.java_path.as_ref().unwrap();
+        info!("Using custom Java path from profile: {}", custom_path);
+        
+        // Verify that the custom Java path exists and is valid
+        let path = std::path::PathBuf::from(custom_path);
+        if path.exists() {
+            // Check if it's a valid Java installation
+            use crate::utils::java_detector;
+            match java_detector::get_java_info(&path).await {
+                Ok(java_info) => {
+                    info!(
+                        "Verified custom Java: Version {}, Major version {}, 64-bit: {}",
+                        java_info.version, java_info.major_version, java_info.is_64bit
+                    );
+                    
+                    // Check if the Java version is compatible with the required one
+                    if java_info.major_version >= java_version {
+                        info!("Custom Java version {} meets the required version {}", 
+                            java_info.major_version, java_version);
+                        custom_java_valid = true;
+                        path
+                    } else {
+                        info!(
+                            "Custom Java version {} is lower than required version {}. Downloading Java...",
+                            java_info.major_version, java_version
+                        );
+                        // The custom Java is too old, we need to download a newer version
+                        custom_java_valid = false;
+                        // Will be set by the download code below
+                        std::path::PathBuf::new()
+                    }
+                }
+                Err(e) => {
+                    info!("Custom Java path exists but is not valid: {}. Downloading Java...", e);
+                    // Will be set by the download code below
+                    std::path::PathBuf::new()
+                }
+            }
+        } else {
+            info!("Custom Java path does not exist: {}. Downloading Java...", custom_path);
+            // Will be set by the download code below
+            std::path::PathBuf::new()
+        }
+    } else {
+        // No custom path or not enabled, initialize with empty path
+        std::path::PathBuf::new()
+    };
+
+    // Download and setup Java if necessary
+    let java_path = if custom_java_valid {
+        info!("Using verified custom Java path: {:?}", java_path);
+        
+        // Update progress to 100% since we're using a custom path
+        emit_progress_event(
+            &state,
+            EventType::InstallingJava,
+            profile.id,
+            "Verwende benutzerdefinierte Java-Installation!",
+            1.0,
+            None,
         )
         .await?;
-    info!("Java installation path: {:?}", java_path);
-
-    // Update progress to 100%
-    emit_progress_event(
-        &state,
-        EventType::InstallingJava,
-        profile.id,
-        &format!("Java {} Installation abgeschlossen!", java_version),
-        1.0,
-        None,
-    )
-    .await?;
+        
+        java_path
+    } else {
+        // Download Java since custom path is not valid or not set
+        info!("Downloading Java {}...", java_version);
+        let java_service = JavaDownloadService::new();
+        let downloaded_path = java_service
+            .get_or_download_java(
+                java_version,
+                &JavaDistribution::Zulu,
+                Some(&piston_meta.java_version.component),
+            )
+            .await?;
+        
+        info!("Java installation path: {:?}", downloaded_path);
+        
+        // Update progress to 100%
+        emit_progress_event(
+            &state,
+            EventType::InstallingJava,
+            profile.id,
+            &format!("Java {} Installation abgeschlossen!", java_version),
+            1.0,
+            None,
+        )
+        .await?;
+        
+        downloaded_path
+    };
 
     // Create game directory
     let game_directory = state

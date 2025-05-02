@@ -155,6 +155,8 @@ impl ModLoader {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProfileSettings {
     pub java_path: Option<String>,           // Java Pfad
+    #[serde(default)]
+    pub use_custom_java_path: bool,          // Ob der benutzerdefinierte Java-Pfad verwendet werden soll
     pub memory: MemorySettings,              // Speicher Einstellungen
     pub resolution: Option<WindowSize>,      // Auflösung
     pub fullscreen: bool,                    // Vollbild
@@ -1272,6 +1274,7 @@ impl Default for ProfileSettings {
     fn default() -> Self {
         Self {
             java_path: None,
+            use_custom_java_path: false,
             memory: MemorySettings::default(),
             resolution: None,
             fullscreen: false,
