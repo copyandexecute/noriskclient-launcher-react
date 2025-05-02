@@ -22,6 +22,7 @@
     import type { CustomModInfo } from '$lib/types/profile';
     import type { EventPayload } from '$lib/types/events';
     import type { MinecraftVersion } from '$lib/types/minecraft';
+    import QuickPlayOptions from './QuickPlayOptions.svelte';
 
     let minecraftVersions: MinecraftVersion[] = $state([]);
     let selectedType = $state<string>("release");
@@ -305,16 +306,35 @@
         }
     }
 
-    async function launchProfile(id: string) {
+    async function launchGame(profileId: string, options: { 
+        quickPlaySingleplayer?: string, 
+        quickPlayMultiplayer?: string 
+    } = {}) {
+        errorMessage = null;
+        console.log(`Attempting to launch profile: ${profileId}`);
+        
+        // Log if using Quick Play
+        if (options.quickPlaySingleplayer) {
+            console.log(`Quick Play: Launching singleplayer world: ${options.quickPlaySingleplayer}`);
+        } else if (options.quickPlayMultiplayer) {
+            console.log(`Quick Play: Connecting to server: ${options.quickPlayMultiplayer}`);
+        }
+        
         try {
-            await invoke("launch_profile", { id });
-        } catch (error: unknown) {
-            console.error("Fehler beim Starten des Profils:", error);
-            if (error instanceof Error) {
-                alert("Fehler beim Starten des Profils: " + error.message);
-            } else {
-                alert("Ein unbekannter Fehler ist aufgetreten");
+            const profileToLaunch = $profiles.find((p) => p.id === profileId);
+            if (!profileToLaunch) {
+                console.error("Profile not found in store for launch!");
+                errorMessage = "Profile not found.";
+                return;
             }
+            await invoke('launch_profile', { 
+                id: profileId,
+                quickPlaySingleplayer: options.quickPlaySingleplayer || null,
+                quickPlayMultiplayer: options.quickPlayMultiplayer || null
+            });
+        } catch (error) {
+            console.error(`Failed to launch profile ${profileId}:`, error);
+            errorMessage = `Failed to launch profile: ${error instanceof Error ? error.message : String(error)}`;
         }
     }
 
@@ -373,23 +393,6 @@
             case 'maven': return mod.source.coordinates ?? 'Maven Mod';
             case 'embedded': return mod.source.name ?? 'Embedded Mod';
             default: return `Unknown Mod (${mod.id})`;
-        }
-    }
-
-    async function launchGame(profileId: string) {
-        errorMessage = null;
-        console.log(`Attempting to launch profile: ${profileId}`);
-        try {
-            const profileToLaunch = $profiles.find((p: Profile) => p.id === profileId);
-            if (!profileToLaunch) {
-                console.error("Profile not found in store for launch!");
-                errorMessage = "Profile not found.";
-                return;
-            }
-            await invoke('launch_profile', { id: profileId });
-        } catch (error) {
-            console.error(`Failed to launch profile ${profileId}:`, error);
-            errorMessage = `Failed to launch profile: ${error instanceof Error ? error.message : String(error)}`;
         }
     }
 
