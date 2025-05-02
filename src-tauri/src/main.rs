@@ -184,6 +184,15 @@ async fn main() {
         }
     }
 
+    match commands::java_command::detect_java_installations_command().await {
+        Ok(installations) => {
+            info!("Java installations: {:?}", installations);
+        }
+        Err(e) => {
+            error!("Failed to get Java installations");
+        }
+    };
+
     info!("Starting NoRiskClient Launcher...");
 
     utils::file_utils::get_jar_icon_test().await;
@@ -323,7 +332,13 @@ async fn main() {
             refresh_standard_versions,
             is_content_installed,
             open_profile_latest_log,
-            get_profile_latest_log_content
+            get_profile_latest_log_content,
+            // Java detection commands
+            commands::java_command::detect_java_installations_command,
+            commands::java_command::get_java_info_command,
+            commands::java_command::find_best_java_for_minecraft_command,
+            commands::java_command::invalidate_java_cache_command,
+            commands::java_command::validate_java_path_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

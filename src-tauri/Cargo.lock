@@ -2985,6 +2985,7 @@ dependencies = [
  "futures",
  "hex",
  "jsonwebtoken",
+ "lazy_static",
  "log",
  "log4rs",
  "machineid-rs",
@@ -2992,6 +2993,7 @@ dependencies = [
  "p256",
  "quick-xml 0.31.0",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "sanitize-filename",
  "semver",
@@ -3948,9 +3950,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.11"
+version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "541d0f57c6ec747a90738a52741d3221f7960e8ac2f0ff4b1a63680e033b4ab5"
+checksum = "ee4e529991f949c5e25755532370b8af5d114acae52326361d68d47af64aa842"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -6288,9 +6290,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "0.26.8"
+version = "0.26.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2210b291f7ea53617fbafcc4939f10914214ec15aace5ba62293a668f322c5c9"
+checksum = "37493cadf42a2a939ed404698ded7fb378bf301b5011f973361779a3a74f8c93"
 dependencies = [
  "rustls-pki-types",
 ]

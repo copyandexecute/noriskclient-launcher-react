@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use crate::error::{AppError, Result};
 
@@ -14,7 +14,7 @@ pub enum OperatingSystem {
     UNKNOWN,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Architecture {
     #[serde(rename = "x86")]
     X86,

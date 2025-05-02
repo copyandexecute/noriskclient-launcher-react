@@ -1,5 +1,6 @@
 pub mod path_utils; // Deklariert das neue Modul und macht seinen Inhalt (wenn `pub`) nutzbar
 pub mod system_info; // <-- Hinzufügen
+pub mod java_detector; // Java detector to find Java installations
 pub mod hash_utils;
 pub mod resourcepack_utils; // ResourcePack-Utils für das Scannen und Verwalten von ResourcePacks
 pub mod shaderpack_utils; // ShaderPack-Utils für das Scannen und Verwalten von ShaderPacks
