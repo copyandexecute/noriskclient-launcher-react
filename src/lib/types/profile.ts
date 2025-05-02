@@ -170,6 +170,18 @@ export interface Profile {
   norisk_information: NoriskInformation | null; // Option<NoriskInformation> -> NoriskInformation | null
 }
 
+// --- Types for Commands ---
+
+/**
+ * Parameters for the `copy_world` Tauri command.
+ */
+export interface CopyWorldParams {
+  source_profile_id: string; // Uuid
+  source_world_folder: string;
+  target_profile_id: string; // Uuid
+  target_world_name: string;
+}
+
 // --- Types for check_content_installed command ---
 
 /**

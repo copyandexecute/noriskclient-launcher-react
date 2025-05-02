@@ -2,11 +2,14 @@
     import { invoke } from '@tauri-apps/api/core';
     import { convertFileSrc } from '@tauri-apps/api/core';
     // Removed onMount, onDestroy as $effect handles lifecycle
-    import type { WorldInfo, ServerInfo, ServerPingInfo } from '$lib/types/minecraft'; // Added ServerPingInfo
+    import type { WorldInfo, ServerInfo, ServerPingInfo } from '$lib/types/minecraft'; // Specific imports
+    import type { Profile, CopyWorldParams } from '$lib/types/profile'; // Specific imports
     import { createEventDispatcher } from 'svelte';
     import { timeAgo } from '$lib/utils/timeUtils'; // Make sure this path and helper exist
     import { tick } from 'svelte'; // Import tick for waiting for DOM updates
     import motdParser from '@sfirew/minecraft-motd-parser'; // Import the MOTD parser
+    import CopyWorldDialog from './CopyWorldDialog.svelte'; // Import the dialog
+    import { notificationStore } from '$lib/stores/notificationStore'; // Import notificationStore
 
     // Define combined item type
     type DisplayItem = (WorldInfo & { type: 'world' }) | (ServerInfo & { type: 'server' });
@@ -24,6 +27,11 @@
     // State for Server Pings
     let serverPings = $state<Record<string, ServerPingInfo>>({});
     let pingingServers = $state<Set<string>>(new Set());
+
+    // Copy Dialog State
+    let showCopyDialog = $state(false);
+    let worldToCopy = $state<WorldInfo | null>(null);
+    let copyLoading = $state(false); // Loading state for the copy operation
 
     // Event dispatcher
     const dispatch = createEventDispatcher<{
@@ -137,6 +145,9 @@
         loading = false;
         serverPings = {};
         pingingServers = new Set();
+        showCopyDialog = false;
+        worldToCopy = null;
+        copyLoading = false;
     }
 
     // --- Server Pinging ---
@@ -188,6 +199,65 @@
         } else {
              console.warn("[ProfileWorlds] Cannot launch item:", item);
         }
+    }
+
+    // --- World Copying --- 
+    function openCopyDialog(world: WorldInfo) {
+        console.log(`[ProfileWorlds] Opening copy dialog for world: ${world.folder_name}`);
+        worldToCopy = world;
+        showCopyDialog = true;
+    }
+
+    // Event handler for the dialog confirmation
+    async function handleCopyConfirm(event: CustomEvent<{ 
+        sourceProfileId: string; 
+        sourceWorldFolder: string; 
+        targetProfileId: string; 
+        targetWorldName: string; 
+    }>) { 
+        // Directly use event.detail which has the correct shape
+        const paramsToInvoke = {
+            source_profile_id: event.detail.sourceProfileId, 
+            source_world_folder: event.detail.sourceWorldFolder, 
+            target_profile_id: event.detail.targetProfileId, 
+            target_world_name: event.detail.targetWorldName, 
+        };
+
+        error = null;
+        copyLoading = true;
+        try {
+            console.log('[ProfileWorlds] Calling copy_world with params:', paramsToInvoke);
+            
+            const newFolderName: string = await invoke('copy_world', { 
+                params: paramsToInvoke // Pass the mapped object
+             });
+
+            console.log('[ProfileWorlds] World copied successfully, new folder:', newFolderName);
+            // Use event.detail for the user-facing names in the notification
+            notificationStore.success(`World '${event.detail.sourceWorldFolder}' copied successfully as '${event.detail.targetWorldName}'!`);
+            
+            // Optionally refresh data if copying to the *current* profile
+            if (event.detail.targetProfileId === profileId) {
+                await loadData(); // Changed from loadData()
+            }
+            
+            handleCopyClose(); // Close the dialog on success
+        } catch (err) {
+            console.error('[ProfileWorlds] Failed to copy world:', err);
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            notificationStore.error(`Failed to copy world: ${errorMessage}`);
+            // Keep dialog open on error? Or add error display to dialog? For now, just notify.
+             // Optionally: Set an error message in the dialog if it remains open
+             // error = `Failed to copy world: ${errorMessage}`; // This error is for the main component, maybe pass it to dialog?
+        } finally {
+            copyLoading = false;
+        }
+    }
+
+    function handleCopyClose() {
+        showCopyDialog = false;
+        worldToCopy = null;
+        copyLoading = false; // Reset loading state if dialog is closed prematurely
     }
 
     // --- Lifecycle and Helpers ---
@@ -331,21 +401,45 @@
                     </div>
 
                     <!-- Button Column -->
-                    <button
-                        class="launch-button"
-                        class:world-launch-button={item.type === 'world'}
-                        class:server-join-button={item.type === 'server'}
-                        onclick={() => launchItem(item)}
-                        disabled={item.type === 'server' && !item.address}
-                        title={item.type === 'world' ? 'Launch into this world' : (item.address ? 'Join this server' : 'Cannot join: Address missing')}
-                    >
-                        ▶ {item.type === 'world' ? 'Play' : 'Join'}
-                    </button>
+                    <div class="item-actions">
+                        {#if item.type === 'world'}
+                            <!-- Add Copy Button for Worlds -->
+                            <button 
+                                class="action-button copy-button" 
+                                onclick={() => openCopyDialog(item)}
+                                title="Copy this world"
+                                disabled={copyLoading} 
+                            >
+                                {#if copyLoading && worldToCopy?.folder_name === item.folder_name} <span class="spinner small"></span> {:else} 📋 {/if} <!-- Copy icon -->
+                            </button>
+                        {/if}
+                        <button
+                            class="launch-button"
+                            class:world-launch-button={item.type === 'world'}
+                            class:server-join-button={item.type === 'server'}
+                            onclick={() => launchItem(item)}
+                            disabled={item.type === 'server' && !item.address}
+                            title={item.type === 'world' ? 'Launch into this world' : (item.address ? 'Join this server' : 'Cannot join: Address missing')}
+                        >
+                            ▶ {item.type === 'world' ? 'Play' : 'Join'}
+                        </button>
+                    </div>
                 </li>
             {/each}
         </ul>
     {/if}
 </div>
+
+<!-- Render the Dialog -->
+{#if profileId && worldToCopy}
+    <CopyWorldDialog 
+        bind:isOpen={showCopyDialog} 
+        sourceProfileId={profileId} 
+        sourceWorldFolder={worldToCopy.folder_name} 
+        on:confirm={handleCopyConfirm} 
+        on:close={handleCopyClose}
+    />
+{/if}
 
 <style>
     /* Remove specific section styles if they exist */
@@ -403,7 +497,7 @@
 
     .list-item {
         display: flex;
-        align-items: center;
+        align-items: flex-start; /* Align items top for better layout with multi-line MOTD */
         gap: 1rem;
         padding: 0.75rem;
         background-color: #fff;
@@ -445,6 +539,8 @@
         display: flex;
         flex-direction: column;
         min-width: 0; 
+        padding-top: 0.1rem; /* Small padding adjustment */
+        padding-bottom: 0.1rem;
     }
 
     .item-name {
@@ -597,5 +693,65 @@
 
     @keyframes spin {
         to { transform: rotate(360deg); }
+    }
+
+    .item-actions { /* New container for buttons */
+        margin-left: auto; 
+        display: flex;
+        align-items: center; /* Vertically align buttons */
+        gap: 0.5rem; /* Space between buttons */
+        flex-shrink: 0; 
+        padding-top: 0.2rem; /* Align buttons better with world name */
+    }
+    
+    .action-button {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.9rem;
+        background-color: #e9ecef;
+        color: #495057;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        line-height: 1; /* Ensure consistent height */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .action-button:hover:not(:disabled) {
+        background-color: #dee2e6;
+    }
+
+     .action-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .action-button .spinner.small {
+        border-top-color: #495057; /* Spinner color for action buttons */
+        border-left-color: rgba(73, 80, 87, 0.3);
+        border-bottom-color: rgba(73, 80, 87, 0.3);
+        border-right-color: rgba(73, 80, 87, 0.3);
+    }
+
+    .launch-button {
+        /* Remove margin-left: auto */
+    }
+
+    /* Adjust motd height if needed */
+    .item-subtext.motd {
+         /* min-height: unset; Remove fixed height if causing issues */
+    }
+
+     /* Ensure spinner animation is defined */
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    .spinner {
+        /* ... ensure spinner styles exist ... */
+    }
+    .spinner.small {
+        /* ... ensure small spinner styles exist ... */
     }
 </style> 
