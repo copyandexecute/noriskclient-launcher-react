@@ -2,127 +2,209 @@
     import { invoke } from '@tauri-apps/api/core';
     import { convertFileSrc } from '@tauri-apps/api/core';
     // Removed onMount, onDestroy as $effect handles lifecycle
-    import type { WorldInfo, ServerInfo } from '$lib/types/minecraft'; // Added ServerInfo
+    import type { WorldInfo, ServerInfo, ServerPingInfo } from '$lib/types/minecraft'; // Added ServerPingInfo
     import { createEventDispatcher } from 'svelte';
     import { timeAgo } from '$lib/utils/timeUtils'; // Make sure this path and helper exist
+    import { tick } from 'svelte'; // Import tick for waiting for DOM updates
+    import motdParser from '@sfirew/minecraft-motd-parser'; // Import the MOTD parser
+
+    // Define combined item type
+    type DisplayItem = (WorldInfo & { type: 'world' }) | (ServerInfo & { type: 'server' });
 
     // Props
     let { profileId = null } = $props<{ profileId?: string | null }>();
 
-    // State for Worlds
+    // --- Combined State ---
     let worlds = $state<WorldInfo[]>([]);
-    let worldsLoading = $state(false);
-    let worldsError = $state<string | null>(null);
-
-    // State for Servers
     let servers = $state<ServerInfo[]>([]);
-    let serversLoading = $state(false);
-    let serversError = $state<string | null>(null);
+    let displayItems = $state<DisplayItem[]>([]); // Combined list for UI
+    let loading = $state(false); // Combined loading state
+    let error = $state<string | null>(null); // Combined error state
 
-    // Event dispatcher for launching
+    // State for Server Pings
+    let serverPings = $state<Record<string, ServerPingInfo>>({});
+    let pingingServers = $state<Set<string>>(new Set());
+
+    // Event dispatcher
     const dispatch = createEventDispatcher<{
         launch: {
             profileId: string;
-            quickPlaySingleplayer?: string; // Optional
-            quickPlayMultiplayer?: string;  // Optional
+            quickPlaySingleplayer?: string;
+            quickPlayMultiplayer?: string;
         }
     }>();
 
+    // --- Data Loading and Processing ---
     async function loadData() {
         if (!profileId) {
-            worlds = [];
-            servers = [];
-            worldsError = null;
-            serversError = null;
-            worldsLoading = false;
-            serversLoading = false;
+            resetState();
             return;
         }
-
         console.log(`[ProfileWorlds] Loading data for profile: ${profileId}`);
-        
-        // Reset states
+        loading = true;
+        error = null;
         worlds = [];
         servers = [];
-        worldsError = null;
-        serversError = null;
-        worldsLoading = true;
-        serversLoading = true;
+        displayItems = [];
+        serverPings = {}; // Clear pings on reload
+        pingingServers = new Set(); // Clear pinging status
 
         try {
-            // Fetch worlds and servers concurrently
             const [worldsResult, serversResult] = await Promise.allSettled([
                 invoke<WorldInfo[]>('get_worlds_for_profile', { profileId }),
                 invoke<ServerInfo[]>('get_servers_for_profile', { profileId })
             ]);
 
-            // Handle worlds result
+            let loadError = false; // Flag to track if any part failed
+
+            // Handle worlds
             if (worldsResult.status === 'fulfilled') {
                 worlds = worldsResult.value;
                 console.log(`[ProfileWorlds] Loaded ${worlds.length} worlds`);
             } else {
                 console.error('Failed to load worlds:', worldsResult.reason);
-                worldsError = `Error loading worlds: ${worldsResult.reason instanceof Error ? worldsResult.reason.message : String(worldsResult.reason)}`;
+                error = `Error loading worlds: ${worldsResult.reason instanceof Error ? worldsResult.reason.message : String(worldsResult.reason)}`;
+                loadError = true;
             }
 
-            // Handle servers result
+            // Handle servers
             if (serversResult.status === 'fulfilled') {
                 servers = serversResult.value;
                 console.log(`[ProfileWorlds] Loaded ${servers.length} servers`);
             } else {
                 console.error('Failed to load servers:', serversResult.reason);
-                serversError = `Error loading servers: ${serversResult.reason instanceof Error ? serversResult.reason.message : String(serversResult.reason)}`;
+                // Append server error if world error already exists
+                const serverErrorMsg = `Error loading servers: ${serversResult.reason instanceof Error ? serversResult.reason.message : String(serversResult.reason)}`;
+                error = error ? `${error}; ${serverErrorMsg}` : serverErrorMsg;
+                loadError = true;
+            }
+
+            // Update display items only if no critical error occurred during loading
+            if (!loadError) {
+                updateDisplayItems();
+                // Ping servers only after successful server list load
+                if (servers.length > 0) {
+                    await tick();
+                    pingAllServers();
+                }
+            } else {
+                 displayItems = []; // Ensure list is empty on error
             }
 
         } catch (err) {
-            // This catch block might not be strictly necessary with Promise.allSettled
-            // unless invoke itself throws synchronously before returning a promise
+            // Catch synchronous errors or unexpected issues
             console.error('Unexpected error during data loading:', err);
-            worldsError = `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
-            serversError = `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
+            error = `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
+            displayItems = []; // Ensure list is empty on error
         } finally {
-            worldsLoading = false;
-            serversLoading = false;
+            loading = false;
         }
     }
 
-    // Function to handle launching a world
-    function launchWorld(world: WorldInfo) {
+    function updateDisplayItems() {
+        // Map worlds and servers to the combined type
+        const typedWorlds: DisplayItem[] = worlds.map(w => ({ ...w, type: 'world' }));
+        const typedServers: DisplayItem[] = servers.map(s => ({ ...s, type: 'server' }));
+
+        // Sort worlds by last played (desc)
+        typedWorlds.sort((a, b) => {
+            if (a.type === 'world' && b.type === 'world') {
+                return (b.last_played ?? 0) - (a.last_played ?? 0);
+            }
+            return 0; // Should not happen if types are correct
+        });
+
+        // Sort servers alphabetically by display name
+        typedServers.sort((a, b) => {
+             if (a.type === 'server' && b.type === 'server') {
+                const nameA = getServerDisplayName(a).toLowerCase();
+                const nameB = getServerDisplayName(b).toLowerCase();
+                return nameA.localeCompare(nameB);
+             }
+             return 0; // Should not happen
+        });
+
+        // Combine sorted lists (worlds first, then servers)
+        displayItems = [...typedWorlds, ...typedServers];
+        console.log(`[ProfileWorlds] Updated displayItems: ${displayItems.length} items`);
+    }
+
+    function resetState() {
+        worlds = [];
+        servers = [];
+        displayItems = [];
+        error = null;
+        loading = false;
+        serverPings = {};
+        pingingServers = new Set();
+    }
+
+    // --- Server Pinging ---
+    async function pingAllServers() {
+        const serversToPing = servers.filter(s => s.address); // Only ping servers with an address
+        if (serversToPing.length === 0) return;
+
+        console.log(`[ProfileWorlds] Pinging ${serversToPing.length} servers...`);
+        const pingsToRun: Promise<void>[] = [];
+        // Set pinging status only for those we actually ping
+        pingingServers = new Set(serversToPing.map(s => s.address as string)); 
+        serverPings = {}; // Clear previous pings
+
+        for (const server of serversToPing) {
+            // server.address is guaranteed to be non-null here due to filter
+            const address = server.address as string; 
+            pingsToRun.push(
+                (async () => {
+                    try {
+                        console.log(`[ProfileWorlds] Pinging: ${address}`);
+                        const pingResult = await invoke<ServerPingInfo>('ping_minecraft_server', { address });
+                        serverPings[address] = pingResult;
+                        console.log(`[ProfileWorlds] Ping result for ${address}:`, pingResult);
+                    } catch (err) {
+                        console.error(`[ProfileWorlds] Failed to ping ${address}:`, err);
+                        serverPings[address] = { /* error structure */ error: err instanceof Error ? err.message : String(err), description:null, description_json:null, version_name:null, version_protocol:null, players_online:null, players_max:null, favicon_base64:null, latency_ms:null };
+                    } finally {
+                        pingingServers.delete(address);
+                        pingingServers = new Set(pingingServers); // Trigger reactivity
+                        serverPings = { ...serverPings }; // Trigger reactivity
+                    }
+                })()
+            );
+        }
+
+        await Promise.allSettled(pingsToRun);
+        console.log("[ProfileWorlds] All server pings finished.");
+    }
+
+    // --- Launching ---
+    function launchItem(item: DisplayItem) {
         if (!profileId) return;
-        console.log(`[ProfileWorlds] Dispatching launch event for world: ${world.folder_name}`);
-        dispatch('launch', {
-            profileId: profileId,
-            quickPlaySingleplayer: world.folder_name // Use folder name as the identifier
-        });
+        if (item.type === 'world') {
+            console.log(`[ProfileWorlds] Dispatching launch for world: ${item.folder_name}`);
+            dispatch('launch', { profileId, quickPlaySingleplayer: item.folder_name });
+        } else if (item.type === 'server' && item.address) {
+            console.log(`[ProfileWorlds] Dispatching launch for server: ${item.address}`);
+            dispatch('launch', { profileId, quickPlayMultiplayer: item.address });
+        } else {
+             console.warn("[ProfileWorlds] Cannot launch item:", item);
+        }
     }
 
-    // Function to handle joining a server
-    function joinServer(server: ServerInfo) {
-        if (!profileId || !server.address) return; // Need address to join
-        console.log(`[ProfileWorlds] Dispatching launch event for server: ${server.address}`);
-        dispatch('launch', {
-            profileId: profileId,
-            quickPlayMultiplayer: server.address
-        });
-    }
-
-    // Load data when profileId changes
+    // --- Lifecycle and Helpers ---
     $effect(() => {
         loadData();
+        // Cleanup function for $effect, if needed (e.g., abort controllers)
+        // return () => { /* cleanup logic */ };
     });
 
-    // Helper to get a display name for worlds
     function getWorldDisplayName(world: WorldInfo): string {
         return world.display_name || world.folder_name;
     }
 
-    // Helper to get icon using Tauri's asset protocol for worlds
     function getWorldIconSrc(world: WorldInfo): string | null {
-        if (world.icon_path) { // Check if the string path exists
+         if (world.icon_path) {
             try {
-                // Convert the string path directly
-                const url = convertFileSrc(world.icon_path);
-                return url;
+                return convertFileSrc(world.icon_path);
             } catch (error) {
                 console.error(`Failed to convert icon path for world ${world.folder_name}:`, error);
                 return null;
@@ -131,128 +213,152 @@
         return null;
     }
 
-    // Helper to get a display name for servers
     function getServerDisplayName(server: ServerInfo): string {
         return server.name || server.address || 'Unnamed Server';
     }
 
-    // Helper to get server icon (base64 data URI)
     function getServerIconSrc(server: ServerInfo): string | null {
         if (server.icon_base64) {
-            // Ensure it doesn't already have the prefix
-            if (server.icon_base64.startsWith('data:image')) {
-                return server.icon_base64;
-            }
-            return `data:image/png;base64,${server.icon_base64}`;
+            return server.icon_base64.startsWith('data:image') ? server.icon_base64 : `data:image/png;base64,${server.icon_base64}`;
         }
         return null;
     }
 
+    function parseMotdToHtml(motd: any): string {
+        if (!motd) return '<span style="color:#AAAAAA;">No description</span>'; // Return subtle text
+        try {
+            const html = motdParser.autoToHTML(motd);
+            // Provide fallback styling if parser returns empty string for valid input
+            return html || '<span style="color:#AAAAAA;">No description</span>';
+        } catch (error) {
+            console.error('Failed to parse MOTD:', error);
+            if (typeof motd === 'string') return motdParser.cleanCodes(motd);
+            try { return JSON.stringify(motd); } catch (e) { /* ignore */ }
+            return '<span style="color:#dc3545;">Invalid MOTD format</span>'; // Error indication
+        }
+    }
+
 </script>
 
-<div class="profile-play-options">
+<!-- Combined View -->
+<div class="profile-play-options combined">
+    <h4>
+        Worlds & Servers 
+        <!-- Refresh button only relevant for servers -->
+        {#if servers.length > 0}
+            <button 
+                class="refresh-button" 
+                onclick={pingAllServers} 
+                disabled={pingingServers.size > 0}
+                title="Refresh server status"
+            >
+                {#if pingingServers.size > 0} <span class="spinner"></span> {:else} 🔄 {/if}
+            </button>
+        {/if}
+    </h4>
 
-    <!-- Worlds Section -->
-    <div class="profile-worlds-section">
-        <h4>Singleplayer Worlds</h4>
-        {#if worldsLoading}
-            <div class="loading-state">Loading worlds...</div>
-        {:else if worldsError}
-            <div class="error-state">{worldsError}</div>
-        {:else if worlds.length === 0}
-            <div class="empty-state">No singleplayer worlds found in this profile's saves folder.</div>
-        {:else}
-            <ul class="item-list">
-                {#each worlds as world (world.folder_name)}
-                    <li class="list-item world-item">
-                        <div class="item-icon">
-                            {#if getWorldIconSrc(world)}
-                                <img src={getWorldIconSrc(world)} alt="World icon" class="item-icon-img">
+    {#if loading}
+        <div class="loading-state">Loading worlds and servers...</div>
+    {:else if error}
+        <div class="error-state">{error}</div>
+    {:else if displayItems.length === 0}
+        <div class="empty-state">No worlds or servers found for this profile.</div>
+    {:else}
+        <ul class="item-list">
+            {#each displayItems as item (item.type === 'world' ? item.folder_name : item.address || item.name || Math.random())}
+                <li class="list-item" class:world-item={item.type === 'world'} class:server-item={item.type === 'server'}>
+                    <!-- Icon Column -->
+                    <div class="item-icon">
+                        {#if item.type === 'world'}
+                            {#if getWorldIconSrc(item)}
+                                <img src={getWorldIconSrc(item)} alt="World icon" class="item-icon-img">
                             {:else}
-                                <div class="default-icon world-default-icon">🌍</div> <!-- Default World Icon -->
+                                <div class="default-icon world-default-icon">🌍</div>
                             {/if}
-                        </div>
-                        <div class="item-details">
-                            <span class="item-name">{getWorldDisplayName(world)}</span>
+                        {:else if item.type === 'server'}
+                             {#if getServerIconSrc(item)}
+                                <img src={getServerIconSrc(item)} alt="Server icon" class="item-icon-img">
+                            {:else}
+                                <div class="default-icon server-default-icon">🌐</div>
+                            {/if}
+                        {/if}
+                    </div>
+
+                    <!-- Details Column -->
+                    <div class="item-details">
+                        {#if item.type === 'world'}
+                            <span class="item-name">{getWorldDisplayName(item)}</span>
                             <span class="item-subtext">
-                                {#if world.last_played}
-                                    Last played: {timeAgo(world.last_played)}
+                                {#if item.last_played} Last played: {timeAgo(item.last_played)} {:else} Never played {/if}
+                            </span>
+                        {:else if item.type === 'server'}
+                            <span class="item-name">{getServerDisplayName(item)}</span>
+                            <span class="item-subtext motd" title={serverPings[item.address || '']?.description || item.address || 'Address missing'}>
+                                {#if item.address && pingingServers.has(item.address)}
+                                    <span class="motd-loading">Pinging...</span>
+                                {:else if item.address && serverPings[item.address]?.error}
+                                    <span class="ping-error">Error: {serverPings[item.address]?.error}</span>
+                                {:else if item.address && (serverPings[item.address]?.description || serverPings[item.address]?.description_json)}
+                                     {@html parseMotdToHtml(serverPings[item.address]?.description_json || serverPings[item.address]?.description)}
+                                {:else if item.address}
+                                    {item.address} <!-- Show address if ping didn't return MOTD -->
                                 {:else}
-                                    Never played
+                                    Address missing
                                 {/if}
                             </span>
-                        </div>
-                        <button
-                            class="launch-button world-launch-button"
-                            onclick={() => launchWorld(world)}
-                            title="Launch into this world (Quick Play)"
-                        >
-                            ▶ Play
-                        </button>
-                    </li>
-                {/each}
-            </ul>
-        {/if}
-    </div>
+                            <div class="server-status">
+                                {#if item.address && !pingingServers.has(item.address) && serverPings[item.address] && !serverPings[item.address]?.error}
+                                    <span class="player-count" title="Players Online">
+                                        👥 {serverPings[item.address]?.players_online ?? '?'}/{serverPings[item.address]?.players_max ?? '?'}
+                                    </span>
+                                    <span class="latency" title="Ping Latency">
+                                        📶 {serverPings[item.address]?.latency_ms ?? '?'} ms
+                                    </span>
+                                    {#if serverPings[item.address]?.version_name}
+                                        <span class="version" title="Server Version">
+                                            🏷️ {serverPings[item.address]?.version_name}
+                                        </span>
+                                    {/if}
+                                {:else if item.address && pingingServers.has(item.address)}
+                                    <span class="latency-loading">📶 Pinging...</span>
+                                {:else if item.address && serverPings[item.address]?.error}
+                                    <span class="latency-error">📶 Error</span>
+                                {:else}
+                                     <!-- Placeholder -->
+                                {/if}
+                            </div>
+                        {/if}
+                    </div>
 
-    <!-- Servers Section -->
-    <div class="profile-servers-section">
-        <h4>Multiplayer Servers</h4>
-         {#if serversLoading}
-            <div class="loading-state">Loading servers...</div>
-        {:else if serversError}
-            <div class="error-state">{serversError}</div>
-        {:else if servers.length === 0}
-            <div class="empty-state">No multiplayer servers found (servers.dat missing or empty).</div>
-        {:else}
-            <ul class="item-list">
-                 {#each servers as server (server.address || server.name || Math.random())} 
-                    <li class="list-item server-item">
-                        <div class="item-icon">
-                            {#if getServerIconSrc(server)}
-                                <img src={getServerIconSrc(server)} alt="Server icon" class="item-icon-img">
-                            {:else}
-                                <div class="default-icon server-default-icon">🌐</div> <!-- Default Server Icon -->
-                            {/if}
-                        </div>
-                        <div class="item-details">
-                            <span class="item-name">{getServerDisplayName(server)}</span>
-                            <span class="item-subtext">{server.address || 'Address missing'}</span>
-                        </div>
-                        <button
-                            class="launch-button server-join-button"
-                            onclick={() => joinServer(server)}
-                            disabled={!server.address} 
-                            title={server.address ? "Join this server (Quick Play)" : "Cannot join: Server address missing"}
-                        >
-                            ▶ Join
-                        </button>
-                    </li>
-                {/each}
-            </ul>
-        {/if}
-    </div>
-
+                    <!-- Button Column -->
+                    <button
+                        class="launch-button"
+                        class:world-launch-button={item.type === 'world'}
+                        class:server-join-button={item.type === 'server'}
+                        onclick={() => launchItem(item)}
+                        disabled={item.type === 'server' && !item.address}
+                        title={item.type === 'world' ? 'Launch into this world' : (item.address ? 'Join this server' : 'Cannot join: Address missing')}
+                    >
+                        ▶ {item.type === 'world' ? 'Play' : 'Join'}
+                    </button>
+                </li>
+            {/each}
+        </ul>
+    {/if}
 </div>
 
 <style>
-    .profile-play-options { /* Renamed outer container */
-        margin-top: 1.5rem;
-        display: flex; /* Arrange sections side-by-side */
-        gap: 1.5rem; /* Space between sections */
-        flex-wrap: wrap; /* Allow wrapping on smaller screens */
-    }
+    /* Remove specific section styles if they exist */
+    /* .profile-worlds-section, .profile-servers-section { ... } */
 
-    .profile-worlds-section,
-    .profile-servers-section {
-        flex: 1; /* Allow sections to grow */
-        min-width: 300px; /* Minimum width before wrapping */
+    .profile-play-options.combined {
+        margin-top: 1.5rem;
         padding: 1rem;
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: 4px;
         display: flex;
-        flex-direction: column; /* Stack title and list */
+        flex-direction: column;
     }
 
     h4 {
@@ -261,6 +367,9 @@
         color: #343a40;
         border-bottom: 1px solid #dee2e6;
         padding-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
     .loading-state, .error-state, .empty-state {
@@ -271,7 +380,7 @@
         background-color: #fff;
         border: 1px dashed #ced4da;
         border-radius: 4px;
-        margin-top: auto; /* Push to bottom if list is empty */
+        margin-top: auto;
         margin-bottom: auto;
     }
 
@@ -281,18 +390,18 @@
         border-color: #f5c6cb;
     }
 
-    .item-list { /* Generic list style */
+    .item-list {
         list-style: none;
         padding: 0;
         margin: 0;
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
-        overflow-y: auto; /* Allow scrolling if list is long */
-        max-height: 400px; /* Example max height */
+        overflow-y: auto;
+        max-height: 450px; /* Adjusted max height */
     }
 
-    .list-item { /* Generic item style */
+    .list-item {
         display: flex;
         align-items: center;
         gap: 1rem;
@@ -307,7 +416,7 @@
         background-color: #f1f3f5;
     }
 
-    .item-icon { /* Generic icon container */
+    .item-icon {
         width: 40px;
         height: 40px;
         flex-shrink: 0;
@@ -319,28 +428,26 @@
         overflow: hidden;
     }
     
-    .item-icon-img { /* Generic icon image */
+    .item-icon-img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-        /* Prevents blurry icons in some cases */
-        image-rendering: pixelated; /* Or -webkit-optimize-contrast */
+        image-rendering: pixelated;
     }
 
-    .default-icon { /* Generic default icon */
+    .default-icon {
         font-size: 24px;
         color: #adb5bd;
     }
 
-    .item-details { /* Generic details container */
+    .item-details {
         flex-grow: 1;
         display: flex;
         flex-direction: column;
-        /* Prevent text overflow */
         min-width: 0; 
     }
 
-    .item-name { /* Generic name style */
+    .item-name {
         font-weight: 500;
         color: #212529;
         white-space: nowrap;
@@ -348,7 +455,7 @@
         text-overflow: ellipsis;
     }
 
-    .item-subtext { /* Generic subtext style */
+    .item-subtext {
         font-size: 0.85rem;
         color: #6c757d;
         margin-top: 0.2rem;
@@ -357,7 +464,70 @@
         text-overflow: ellipsis;
     }
 
-    .launch-button { /* Generic button style */
+    .item-subtext.motd {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical; 
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.3;
+        min-height: 2.6em; 
+    }
+    
+    .motd-loading {
+        font-style: italic;
+        color: #adb5bd;
+    }
+
+    /* Minecraft MOTD styling */
+    :global(.item-subtext.motd span) {
+        font-family: 'Minecraft', monospace, sans-serif !important;
+        line-height: 1.2;
+        /* Prevent user selection if needed */
+        /* user-select: none; */ 
+    }
+    :global(.item-subtext.motd span[style*="color: #000000;"]) {
+        text-shadow: 1px 1px 0px #555555; /* Make black text slightly more visible */
+    }
+    /* Add other specific style adjustments for MOTD if needed */
+
+    .ping-error {
+        color: #dc3545;
+        font-style: italic;
+        font-size: 0.9em;
+    }
+
+    .server-status {
+        display: flex;
+        flex-wrap: wrap; /* Allow wrapping if space is tight */
+        gap: 0.5rem 1rem; /* Row and column gap */
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin-top: 0.3rem;
+        align-items: center;
+    }
+
+    .player-count,
+    .latency,
+    .version,
+    .latency-loading,
+    .latency-error {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        white-space: nowrap; /* Prevent wrapping within status items */
+    }
+
+    .latency-error {
+        color: #dc3545;
+    }
+
+    .latency-loading {
+        font-style: italic;
+    }
+
+    .launch-button {
         padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
         color: white;
@@ -366,7 +536,8 @@
         cursor: pointer;
         transition: background-color 0.2s;
         white-space: nowrap;
-        margin-left: auto; /* Push button to the right */
+        margin-left: auto; 
+        flex-shrink: 0; /* Prevent button from shrinking */
     }
 
     .world-launch-button,
@@ -383,5 +554,48 @@
         background-color: #cccccc;
         cursor: not-allowed;
         opacity: 0.7;
+    }
+
+    /* Refresh Button Styles */
+    .refresh-button {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.8rem;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        min-width: 28px; 
+        min-height: 28px;
+        flex-shrink: 0; /* Don't shrink */
+    }
+
+    .refresh-button:hover {
+        background-color: #5a6268;
+    }
+
+    .refresh-button:disabled {
+        background-color: #adb5bd;
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
+
+    .spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
 </style> 
