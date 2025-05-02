@@ -9,6 +9,7 @@ pub mod profile_utils; // Utility-Funktionen für Profilinhalte wie das Installi
 pub mod mc_utils; // Utilities for Minecraft-related operations
 pub mod file_utils; // Utilities for file operations like reading archives
 pub mod debug_utils;
+pub mod world_utils;
 
 // Füge hier ggf. andere Util-Module hinzu
 // pub mod network_utils;
@@ -24,3 +25,4 @@ pub use resourcepack_utils::*;
 pub use shaderpack_utils::*;
 pub use system_info::*;
 pub use debug_utils::*; 
+pub use world_utils::*;
