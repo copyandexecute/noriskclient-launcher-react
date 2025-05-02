@@ -11,6 +11,7 @@ use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use fastnbt::{from_bytes, to_bytes, Value, error::Error as FastNbtError};
+use fs4::tokio::AsyncFileExt;
 
 /// Generates a unique, sanitized folder name for a world within a given saves directory.
 ///
@@ -172,8 +173,22 @@ pub async fn copy_world_directory(
         });
     }
 
-    // --- TODO: Implement Session Lock Check for source_world_path ---
-    // ...
+    // --- Check Session Lock ---
+    if let Err(e) = check_world_session_lock(&source_world_path).await {
+        // If it's the specific WorldLocked error, enhance it with correct IDs
+        if let AppError::WorldLocked { .. } = e {
+            error!("Source world '{}' in profile {} is currently locked.", source_world_folder, source_profile_id);
+            return Err(AppError::WorldLocked {
+                profile_id: source_profile_id,
+                world_folder: source_world_folder.to_string(),
+            });
+        } else {
+             // Propagate other errors (e.g., IO errors during lock check)
+             error!("Error checking session lock for source world '{}': {}", source_world_folder, e);
+            return Err(e);
+        }
+    }
+    info!("Source world '{}' is not locked, proceeding with copy.", source_world_folder);
 
     // --- Copy Directory ---
     info!("Starting directory copy for target folder '{}'...", final_target_folder_name);
@@ -297,6 +312,71 @@ async fn modify_level_dat_name(level_dat_path: &Path, new_level_name: &str) -> R
 
     info!("Successfully modified and saved level.dat: {}", level_dat_path.display());
     Ok(())
+}
+
+/// Checks if the world directory's session.lock file can be exclusively locked.
+/// This indicates whether the world is likely currently in use by Minecraft.
+///
+/// # Arguments
+/// * `world_path` - Path to the specific world directory (e.g., .../saves/MyWorld).
+///
+/// # Returns
+/// * `Ok(())` if the lock can be acquired (world likely not in use).
+/// * `Err(AppError::WorldLocked)` if the lock cannot be acquired immediately.
+/// * `Err(AppError::Io)` for other file system errors.
+async fn check_world_session_lock(world_path: &Path) -> Result<()> {
+    let lock_file_path = world_path.join("session.lock");
+    info!("Checking session lock for world at: {}", lock_file_path.display());
+
+    // Try to open or create the lock file for writing
+    // Use tokio::fs::OpenOptions for async operation
+    let file = match fs::OpenOptions::new()
+        .write(true)
+        .create(true) // Create if it doesn't exist
+        .open(&lock_file_path)
+        .await
+    {
+        Ok(f) => f,
+        Err(e) => {
+            error!("Failed to open session.lock file at '{}': {}", lock_file_path.display(), e);
+            // Don't necessarily error out if we can't OPEN it, 
+            // maybe Minecraft hasn't created it yet, but the folder exists.
+            // However, if we can't lock it later, that's the real issue.
+            // Let's try to proceed, try_lock_exclusive handles non-existence implicitly I think?
+            // Re-evaluate: Opening it is necessary for fs4::try_lock_exclusive
+             return Err(AppError::Io(e)); 
+        }
+    };
+
+    // Try to acquire an exclusive, non-blocking lock
+    match file.try_lock_exclusive() {
+        Ok(_) => {
+            // Lock acquired successfully! This means the file was not locked by another process.
+            info!("Session lock acquired for '{}'. World is likely not in use.", lock_file_path.display());
+            // The lock is automatically released when `file` goes out of scope here.
+            Ok(())
+        }
+        Err(e) => {
+            // Check if the error is specifically because it's already locked
+            if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::PermissionDenied || e.kind() == std::io::ErrorKind::ResourceBusy {
+                 error!("Failed to acquire session lock for '{}' (likely in use): {}", lock_file_path.display(), e);
+                // Cannot acquire lock, world is likely in use
+                Err(AppError::WorldLocked {
+                    // We don't have profile_id/world_folder here easily, adjust error or pass them in?
+                    // For now, use path, but ideally the caller (copy_world_directory) constructs the specific error.
+                    // Let's change the return type to signal locked state.
+                    // Returning Ok(false) might be cleaner than a specific error here.
+                    // Let's stick with the specific error for now.
+                    profile_id: Uuid::nil(), // Placeholder - To be filled by caller
+                    world_folder: world_path.file_name().map_or_else(|| "?".to_string(), |n| n.to_string_lossy().to_string()), // Get folder name from path
+                })
+            } else {
+                 error!("Unexpected error trying to lock session.lock file '{}': {}", lock_file_path.display(), e);
+                 // Another I/O error occurred
+                 Err(AppError::Io(e))
+            }
+        }
+    }
 }
 
 // --- Error Enum Extension (add FsExtra and WorldLocked variants in error.rs) ---
