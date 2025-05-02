@@ -324,7 +324,7 @@ async fn modify_level_dat_name(level_dat_path: &Path, new_level_name: &str) -> R
 /// * `Ok(())` if the lock can be acquired (world likely not in use).
 /// * `Err(AppError::WorldLocked)` if the lock cannot be acquired immediately.
 /// * `Err(AppError::Io)` for other file system errors.
-async fn check_world_session_lock(world_path: &Path) -> Result<()> {
+pub async fn check_world_session_lock(world_path: &Path) -> Result<()> {
     let lock_file_path = world_path.join("session.lock");
     info!("Checking session lock for world at: {}", lock_file_path.display());
 

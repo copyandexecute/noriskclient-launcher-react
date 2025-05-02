@@ -32,6 +32,7 @@ use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
 use uuid::Uuid;
 use crate::utils::mc_utils::{self, WorldInfo};
+use crate::utils::world_utils; // Import the new world_utils
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -70,6 +71,15 @@ pub struct ExportProfileParams {
     file_name: String,           // Base name without extension
     include_files: Option<Vec<PathBuf>>,
     open_folder: bool, // Whether to open the exports folder after export
+}
+
+// DTO for the new command
+#[derive(Deserialize)]
+pub struct CopyWorldParams {
+    source_profile_id: Uuid,
+    source_world_folder: String,
+    target_profile_id: Uuid,
+    target_world_name: String,
 }
 
 // CRUD Commands
@@ -1381,4 +1391,89 @@ pub async fn get_servers_for_profile(profile_id: Uuid) -> Result<Vec<mc_utils::S
     info!("Executing get_servers_for_profile command for profile {}", profile_id);
     // Call the utility function and map the error
     Ok(mc_utils::get_profile_servers(profile_id).await?)
+}
+
+/// Copies a singleplayer world to another profile (or the same one) with a new name.
+#[tauri::command]
+pub async fn copy_world(
+    params: CopyWorldParams
+) -> Result<String, CommandError> {
+    info!(
+        "Executing copy_world command: from profile {} ('{}') to profile {} (name: '{}')",
+        params.source_profile_id,
+        params.source_world_folder,
+        params.target_profile_id,
+        params.target_world_name
+    );
+    
+    // Call the utility function
+    let generated_folder_name = world_utils::copy_world_directory(
+        params.source_profile_id,
+        &params.source_world_folder,
+        params.target_profile_id,
+        &params.target_world_name,
+    ).await?;
+
+    // Optional: Trigger UI updates for the target profile if different from source
+    if params.source_profile_id != params.target_profile_id {
+        if let Ok(state) = State::get().await {
+            if let Err(e) = state.event_state.trigger_profile_update(params.target_profile_id).await {
+                warn!("Failed to emit profile update event for target profile {}: {}", params.target_profile_id, e);
+            }
+             // Optionally trigger for source profile too if needed, though less common for copy
+             // if let Err(e) = state.event_state.trigger_profile_update(params.source_profile_id).await {
+             //     warn!("Failed to emit profile update event for source profile {}: {}", params.source_profile_id, e);
+             // }
+        } else {
+             warn!("Could not get state to emit profile update event after world copy.");
+        }
+    } else {
+         // Source and target are the same, trigger update for that profile
+         if let Ok(state) = State::get().await {
+            if let Err(e) = state.event_state.trigger_profile_update(params.target_profile_id).await {
+                warn!("Failed to emit profile update event for profile {}: {}", params.target_profile_id, e);
+            }
+        } else {
+             warn!("Could not get state to emit profile update event after world copy.");
+        }
+    }
+
+    info!("Successfully executed copy_world command. New folder name: {}", generated_folder_name);
+    Ok(generated_folder_name) // Return the actual folder name created
+}
+
+/// Checks if a specific world's session.lock file can be locked, indicating if it's likely in use.
+#[tauri::command]
+pub async fn check_world_lock_status(profile_id: Uuid, world_folder: String) -> Result<bool, CommandError> {
+    info!("Executing check_world_lock_status for profile {}, world '{}'", profile_id, world_folder);
+
+    let state = State::get().await?;
+    let profile_manager = &state.profile_manager;
+
+    // Calculate the world path
+    let instance_path = profile_manager.get_profile_instance_path(profile_id).await?;
+    let world_path = instance_path.join("saves").join(&world_folder);
+
+    if !world_path.is_dir() {
+        return Err(AppError::WorldNotFound { profile_id, world_folder }.into());
+    }
+
+    // Call the utility function
+    match world_utils::check_world_session_lock(&world_path).await {
+        Ok(()) => {
+            // Lock could be acquired -> world is NOT locked
+            info!("World '{}' in profile {} is not locked.", world_folder, profile_id);
+            Ok(false) 
+        }
+        Err(AppError::WorldLocked { .. }) => {
+            // Lock could NOT be acquired -> world IS locked
+            info!("World '{}' in profile {} is locked.", world_folder, profile_id);
+            Ok(true)
+        }
+        Err(e) => {
+            // Other error during lock check
+            error!("Error checking lock status for world '{}' in profile {}: {}", world_folder, profile_id, e);
+            Err(e.into()) // Propagate other errors
+        }
+    }
 }

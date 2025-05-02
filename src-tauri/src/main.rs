@@ -58,7 +58,7 @@ use commands::profile_command::{
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
     update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
     is_content_installed, open_profile_latest_log, get_profile_latest_log_content,
-    get_worlds_for_profile, get_servers_for_profile,
+    get_worlds_for_profile, get_servers_for_profile, copy_world, check_world_lock_status,
 };
 
 // Use statements for registered commands only
@@ -361,6 +361,8 @@ async fn main() {
             commands::java_command::validate_java_path_command,
             get_worlds_for_profile,
             get_servers_for_profile,
+            copy_world,
+            check_world_lock_status,
             ping_minecraft_server,
         ])
         .run(tauri::generate_context!())
