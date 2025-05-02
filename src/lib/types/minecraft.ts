@@ -81,3 +81,10 @@ export interface MinecraftVersion {
     time: string;
     releaseTime: string;
 }
+
+export interface WorldInfo {
+  folder_name: string;
+  display_name: string | null;
+  last_played: number | null; // Assuming Rust i64 maps to number (epoch milliseconds)
+  icon_path: string | null; // Changed type from object to string | null
+}

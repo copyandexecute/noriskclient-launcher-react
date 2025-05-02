@@ -139,6 +139,13 @@ pub async fn launch_profile(
     quick_play_singleplayer: Option<String>,
     quick_play_multiplayer: Option<String>
 ) -> Result<(), CommandError> {
+    log::info!(
+        "[Command] launch_profile called for ID: {}. QuickPlay Single: {:?}, QuickPlay Multi: {:?}", 
+        id, 
+        quick_play_singleplayer,
+        quick_play_multiplayer
+    );
+
     let state = State::get().await?;
 
     // Try to get the regular profile

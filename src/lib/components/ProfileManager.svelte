@@ -1268,7 +1268,16 @@
                         doAlternativesExistForThisMod={(modId) => checkAlternativesForMod(profile.id, modId)}
                         profileEvents={getProfileEvents(profile.id)}
 
-                        on:launch={() => launchGame(profile.id)}
+                        on:launch={(event) => {
+                            // --- ADD DETAILED LOGGING --- 
+                            console.log('[ProfileManager] on:launch received from ProfileView. Full event.detail:', JSON.stringify(event.detail, null, 2));
+                            const receivedProfileId = event.detail.profileId;
+                            const receivedOptions = event.detail.options || {}; // Default to empty object
+                            console.log(`[ProfileManager] Extracted profileId: ${receivedProfileId}`);
+                            console.log('[ProfileManager] Extracted options:', JSON.stringify(receivedOptions, null, 2));
+                            // --- END LOGGING --- 
+                            launchGame(receivedProfileId, receivedOptions); // Use extracted values
+                        }}
                         on:edit={() => editProfile(profile)}
                         on:delete={() => deleteProfile(profile.id)}
                         on:openFolder={() => openProfileFolder(profile.id)}

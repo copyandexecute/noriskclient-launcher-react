@@ -12,6 +12,7 @@
     import type { FileNode } from "$lib/types/fileSystem"; // Add FileNode import
     import ProfileContent from "./ProfileContent.svelte"; // Import ProfileContent
     import ProfileCopy from "./ProfileCopy.svelte"; // Import ProfileCopy instead
+    import ProfileWorlds from "./ProfileWorlds.svelte"; // Import ProfileWorlds
     import Modal from "./Modal.svelte"; // Import Modal component
     import { invoke } from "@tauri-apps/api/core";
     import { copyProfile } from "$lib/api/profiles";
@@ -19,6 +20,7 @@
     import type { EventPayload } from "$lib/types/events";
     import type { CustomModInfo, ModSourceModrinth } from "$lib/types/profile";
     import { onMount } from "svelte";
+    import { createEventDispatcher } from "svelte";
 
     // Define props passed from ProfileManager
     let {
@@ -64,7 +66,6 @@
     let showFileViewerModal = $state(false);
 
     // Event dispatcher
-    import { createEventDispatcher } from "svelte";
     const dispatch = createEventDispatcher();
 
     // State for Copy Profile modal
@@ -643,6 +644,27 @@
             loadingNoriskModIcons = false;
         }
     }
+
+    // Dispatch launch event when ProfileWorlds requests it
+    function handleWorldLaunch(event: CustomEvent<{ profileId: string, quickPlaySingleplayer: string }>) {
+        console.log('[ProfileView] Received launch event from ProfileWorlds, dispatching upwards:', event.detail);
+        // Dispatch the 'launch' event upwards to ProfileManager, passing the world details
+        dispatch('launch', {
+            profileId: event.detail.profileId, // Use the profileId from the event
+            options: { // Pass options object matching ProfileManager's launchGame signature
+                quickPlaySingleplayer: event.detail.quickPlaySingleplayer
+            }
+        });
+    }
+
+    // Launch game by dispatching event (for the main launch button)
+    function dispatchLaunch() {
+        if (isLaunching) return;
+        isLaunching = true; // Set launching state here
+        console.log(`[ProfileView] Dispatching launch for profile ${profile.id}`);
+        dispatch('launch', { profileId: profile.id, options: {} }); // No options for standard launch
+        // We don't reset isLaunching here, ProfileManager should handle UI feedback
+    }
 </script>
 
 <!-- Moved HTML structure for a single profile item here -->
@@ -689,14 +711,19 @@
             {/if}
         </div>
         <div class="profile-actions">
-            <!-- Dynamischer Launch/Cancel Button -->
-            <button 
-                on:click={handleLaunch}
-                class={isLaunching ? "cancel-button" : "launch-button"}
+            <!-- Launch Button -->
+            <button
+                class="launch-button"
+                disabled={isLaunching}
+                on:click={dispatchLaunch}
             >
-                {isLaunching ? "Abbrechen" : "Launch"}
                 {#if isLaunching}
-                <span class="loading-spinner"></span>
+                    Launching...
+                {:else}
+                    <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Launch {profile.name}
                 {/if}
             </button>
             <button on:click={() => dispatch("edit")}>Edit</button>
@@ -799,7 +826,7 @@
                             <button 
                                 class="update-mod-button"
                                 title={updateVersion ? `Update to ${updateVersion.name} ${updateVersion.version_number}` : "Update to latest version"}
-                                on:click={() => handleUpdateMod(mod)}
+                                on:click={(event) => handleUpdateMod(mod)}
                             >
                                 Update
                             </button>
@@ -871,7 +898,7 @@
                                         <button
                                             class="change-version-btn"
                                             title="Version ändern"
-                                            on:click={() =>
+                                            on:click={(event) =>
                                                 handleOpenVersionDropdown(
                                                     mod.id,
                                                 )}
@@ -888,7 +915,7 @@
                         <button
                             class="delete-mod-button"
                             title={`Delete mod ${getModDisplayName(mod)}`}
-                            on:click={() => handleDeleteMod(mod.id)}
+                            on:click={(event) => handleDeleteMod(mod.id)}
                         >
                             🗑️
                         </button>
@@ -993,7 +1020,7 @@
                         <button
                             class="delete-mod-button custom-delete"
                             title={`Delete custom mod ${customMod.filename}`}
-                            on:click={() =>
+                            on:click={(event) =>
                                 dispatch("deleteCustomMod", {
                                     filename: customMod.filename,
                                 })}
@@ -1040,6 +1067,14 @@
                 onSuccess={handleExportSuccess}
             />
         </Modal>
+    {/if}
+
+    <!-- NEW: Worlds Component -->
+    {#if profile.id}
+        <ProfileWorlds 
+            profileId={profile.id} 
+            on:launch={handleWorldLaunch}
+        />
     {/if}
 </div>
 
