@@ -27,6 +27,8 @@ use base64::Engine as _; // Import the Engine trait for encode/decode methods
 use trust_dns_resolver::TokioAsyncResolver;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::proto::rr::RecordType;
+use async_compression::tokio::bufread::GzipDecoder;
+use tokio::io::{AsyncReadExt as _, BufReader};
 
 // --- Struct for World Info ---
 #[derive(Debug, Clone, Serialize)]
@@ -509,38 +511,55 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
                             icon_path: None,
                         };
 
-                        // Try to read and decompress level.dat
-                        match fs::read(&level_dat_path).await {
-                            Ok(compressed_bytes) => {
-                                let mut decoder = GzDecoder::new(&compressed_bytes[..]);
+                        // Try to read and decompress level.dat asynchronously
+                        match fs::File::open(&level_dat_path).await {
+                            Ok(file) => {
+                                let buf_reader = BufReader::new(file); // Wrap file in BufReader
+                                let mut decoder = GzipDecoder::new(buf_reader);
                                 let mut decompressed_bytes = Vec::new();
-                                match decoder.read_to_end(&mut decompressed_bytes) {
+                                // Read decompressed bytes asynchronously
+                                match decoder.read_to_end(&mut decompressed_bytes).await {
                                     Ok(_) => {
                                         // Now parse the decompressed bytes
                                         match from_bytes::<LevelDat>(&decompressed_bytes) {
                                             Ok(level_dat) => {
-                                                info!("[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}", 
-                                                    folder_name, level_dat.data.level_name, level_dat.data.last_played);
+                                                info!(
+                                                    "[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}",
+                                                    folder_name,
+                                                    level_dat.data.level_name,
+                                                    level_dat.data.last_played
+                                                );
                                                 world_info.display_name = level_dat.data.level_name;
                                                 world_info.last_played = level_dat.data.last_played;
                                             }
                                             Err(e) => {
-                                                warn!("[Worlds] Failed to parse decompressed NBT for '{}': {}. Path: {}", 
-                                                    folder_name, e, level_dat_path.display());
+                                                warn!(
+                                                    "[Worlds] Failed to parse decompressed NBT for '{}': {}. Path: {}",
+                                                    folder_name,
+                                                    e,
+                                                    level_dat_path.display()
+                                                );
                                             }
                                         }
                                     }
                                     Err(e) => {
-                                        warn!("[Worlds] Failed to decompress level.dat for '{}': {}. Path: {}", 
-                                            folder_name, e, level_dat_path.display());
-                                        // Optionally try parsing without decompression as a fallback?
-                                        // match from_bytes::<LevelDat>(&compressed_bytes) { ... }
+                                        warn!(
+                                            "[Worlds] Failed to decompress level.dat asynchronously for '{}': {}. Path: {}",
+                                            folder_name,
+                                            e,
+                                            level_dat_path.display()
+                                        );
+                                        // Consider if a fallback to non-async reading/parsing is needed/useful
                                     }
                                 }
                             }
                             Err(e) => {
-                                warn!("[Worlds] Failed to read level.dat for '{}': {}. Path: {}", 
-                                      folder_name, e, level_dat_path.display());
+                                warn!(
+                                    "[Worlds] Failed to open level.dat for async reading '{}': {}. Path: {}",
+                                    folder_name,
+                                    e,
+                                    level_dat_path.display()
+                                );
                             }
                         }
 
@@ -724,26 +743,49 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
     let server_list_nbt: ServerListNbt = match from_bytes(&servers_dat_bytes) {
         Ok(data) => data,
         Err(e) => {
-             // Try parsing with GZip decompression as a fallback (less common)
-             let mut decoder = GzDecoder::new(&servers_dat_bytes[..]);
-             let mut decompressed_bytes = Vec::new();
-             if decoder.read_to_end(&mut decompressed_bytes).is_ok() {
-                 match from_bytes::<ServerListNbt>(&decompressed_bytes) {
-                     Ok(decompressed_data) => {
-                         warn!("[Servers] Successfully parsed servers.dat for '{}' after GZip fallback.", profile.name);
-                         decompressed_data
-                     },
-                     Err(decompressed_e) => {
-                         error!("[Servers] Failed to parse NBT from servers.dat for '{}' (tried both raw and GZip): Raw Error: {}, GZip Error: {}. Path: {}",
-                                profile.name, e, decompressed_e, servers_dat_path.display());
-                         return Err(AppError::Nbt(decompressed_e)); // Return the decompression parse error
-                     }
-                 }
-             } else {
-                 error!("[Servers] Failed to parse NBT from servers.dat for '{}' and GZip decompression failed: {}. Path: {}",
-                        profile.name, e, servers_dat_path.display());
-                 return Err(AppError::Nbt(e)); // Return the original parse error
-             }
+            // Try parsing with GZip decompression asynchronously as a fallback (less common)
+            warn!(
+                "[Servers] Failed to parse raw servers.dat for '{}': {}. Attempting GZip fallback...",
+                profile.name,
+                e
+            );
+            let mut reader = BufReader::new(Cursor::new(&servers_dat_bytes)); // Create async reader from bytes
+            let mut decoder = GzipDecoder::new(reader);
+            let mut decompressed_bytes = Vec::new();
+
+            match decoder.read_to_end(&mut decompressed_bytes).await {
+                Ok(_) => {
+                    match from_bytes::<ServerListNbt>(&decompressed_bytes) {
+                        Ok(decompressed_data) => {
+                            warn!(
+                                "[Servers] Successfully parsed servers.dat for '{}' after async GZip fallback.",
+                                profile.name
+                            );
+                            decompressed_data
+                        }
+                        Err(decompressed_e) => {
+                            error!(
+                                "[Servers] Failed to parse NBT from GZipped servers.dat for '{}' (async fallback): {}. Path: {}",
+                                profile.name,
+                                decompressed_e,
+                                servers_dat_path.display()
+                            );
+                            // Return original error if fallback parsing fails
+                            return Err(AppError::Nbt(e));
+                        }
+                    }
+                }
+                Err(decompression_e) => {
+                    error!(
+                        "[Servers] Async GZip decompression failed for servers.dat for '{}': {}. Path: {}",
+                        profile.name,
+                        decompression_e,
+                        servers_dat_path.display()
+                    );
+                    // Return original error if decompression fails
+                    return Err(AppError::Nbt(e));
+                }
+            }
         }
     };
 
