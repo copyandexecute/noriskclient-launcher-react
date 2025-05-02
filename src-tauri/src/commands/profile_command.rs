@@ -31,6 +31,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
 use uuid::Uuid;
+use crate::utils::mc_utils::{self, WorldInfo};
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -1359,4 +1360,11 @@ pub async fn get_profile_latest_log_content(profile_id: Uuid) -> Result<String, 
 
     // Call the utility function
     Ok(profile_utils::get_latest_log_content(profile_id).await?)
+}
+
+#[tauri::command]
+pub async fn get_worlds_for_profile(profile_id: Uuid) -> Result<Vec<WorldInfo>, CommandError> {
+    info!("Executing get_worlds_for_profile command for profile {}", profile_id);
+    // Rufe die Utility-Funktion auf und mappe den Fehler
+    Ok(mc_utils::get_profile_worlds(profile_id).await?)
 }

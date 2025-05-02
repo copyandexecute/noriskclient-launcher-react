@@ -56,7 +56,8 @@ use commands::profile_command::{
     refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
     update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
-    is_content_installed, open_profile_latest_log, get_profile_latest_log_content
+    is_content_installed, open_profile_latest_log, get_profile_latest_log_content,
+    get_worlds_for_profile,
 };
 
 // Use statements for registered commands only
@@ -353,7 +354,8 @@ async fn main() {
             commands::java_command::get_java_info_command,
             commands::java_command::find_best_java_for_minecraft_command,
             commands::java_command::invalidate_java_cache_command,
-            commands::java_command::validate_java_path_command
+            commands::java_command::validate_java_path_command,
+            get_worlds_for_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
