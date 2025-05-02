@@ -1375,3 +1375,10 @@ pub async fn get_worlds_for_profile(profile_id: Uuid) -> Result<Vec<WorldInfo>, 
     // Rufe die Utility-Funktion auf und mappe den Fehler
     Ok(mc_utils::get_profile_worlds(profile_id).await?)
 }
+
+#[tauri::command]
+pub async fn get_servers_for_profile(profile_id: Uuid) -> Result<Vec<mc_utils::ServerInfo>, CommandError> {
+    info!("Executing get_servers_for_profile command for profile {}", profile_id);
+    // Call the utility function and map the error
+    Ok(mc_utils::get_profile_servers(profile_id).await?)
+}
