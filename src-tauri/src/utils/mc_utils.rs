@@ -10,10 +10,11 @@ use crate::state::State;
 use uuid::Uuid;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::io::Cursor; // Needed for reading NBT from bytes
+use std::io::{Cursor, Read}; // Needed for reading NBT from bytes and decompression
 use fastnbt::from_bytes; // NBT deserialization
 use fastnbt::value::Value; // Access NBT values
 use std::collections::HashMap; // To represent NBT Compound
+use flate2::read::GzDecoder; // GZip decompression
 
 // --- Struct for World Info ---
 #[derive(Debug, Clone, serde::Serialize)]
@@ -496,20 +497,32 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
                             icon_path: None,
                         };
 
-                        // Try to read level.dat
+                        // Try to read and decompress level.dat
                         match fs::read(&level_dat_path).await {
-                            Ok(bytes) => {
-                                // fastnbt::de::from_bytes expects a slice
-                                match from_bytes::<LevelDat>(&bytes) {
-                                    Ok(level_dat) => {
-                                        info!("[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}", 
-                                              folder_name, level_dat.data.level_name, level_dat.data.last_played);
-                                        world_info.display_name = level_dat.data.level_name;
-                                        world_info.last_played = level_dat.data.last_played;
+                            Ok(compressed_bytes) => {
+                                let mut decoder = GzDecoder::new(&compressed_bytes[..]);
+                                let mut decompressed_bytes = Vec::new();
+                                match decoder.read_to_end(&mut decompressed_bytes) {
+                                    Ok(_) => {
+                                        // Now parse the decompressed bytes
+                                        match from_bytes::<LevelDat>(&decompressed_bytes) {
+                                            Ok(level_dat) => {
+                                                info!("[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}", 
+                                                    folder_name, level_dat.data.level_name, level_dat.data.last_played);
+                                                world_info.display_name = level_dat.data.level_name;
+                                                world_info.last_played = level_dat.data.last_played;
+                                            }
+                                            Err(e) => {
+                                                warn!("[Worlds] Failed to parse decompressed NBT for '{}': {}. Path: {}", 
+                                                    folder_name, e, level_dat_path.display());
+                                            }
+                                        }
                                     }
                                     Err(e) => {
-                                        warn!("[Worlds] Failed to parse NBT for '{}': {}. Path: {}", 
-                                              folder_name, e, level_dat_path.display());
+                                        warn!("[Worlds] Failed to decompress level.dat for '{}': {}. Path: {}", 
+                                            folder_name, e, level_dat_path.display());
+                                        // Optionally try parsing without decompression as a fallback?
+                                        // match from_bytes::<LevelDat>(&compressed_bytes) { ... }
                                     }
                                 }
                             }
