@@ -150,7 +150,7 @@ pub enum AppError {
     PngNotFoundInArchive(std::path::PathBuf),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct CommandError {
     pub message: String,
     pub kind: String,

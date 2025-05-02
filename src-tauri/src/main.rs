@@ -186,10 +186,22 @@ async fn main() {
 
     match commands::java_command::detect_java_installations_command().await {
         Ok(installations) => {
-            info!("Java installations: {:?}", installations);
+            info!("Detected {} Java installation(s):", installations.len());
+            for (index, installation) in installations.iter().enumerate() {
+                info!(
+                    "  {}: Path='{}', Version='{}', Major={}, 64bit={}, Vendor='{}', Source='{}'",
+                    index + 1,
+                    installation.path.display(),
+                    installation.version,
+                    installation.major_version,
+                    installation.is_64bit,
+                    installation.vendor,
+                    installation.source
+                );
+            }
         }
         Err(e) => {
-            error!("Failed to get Java installations");
+            error!("Failed to get Java installations: {:?}", e); // Log the error detail
         }
     };
 

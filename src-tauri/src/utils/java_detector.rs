@@ -11,6 +11,7 @@ use lazy_static::lazy_static;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::cmp::Ordering;
+use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
 
 // Global cache of detected Java installations
 lazy_static! {
@@ -96,6 +97,80 @@ impl JavaInstallation {
     }
 }
 
+/// Detects Java installations in the launcher's meta/java directory
+async fn detect_java_in_launcher_dir() -> Result<Vec<JavaInstallation>> {
+    info!("Detecting Java installations in launcher directory");
+    let mut installations = Vec::new();
+    
+    // Get the launcher's meta/java directory
+    let java_dir = LAUNCHER_DIRECTORY.meta_dir().join("java");
+    info!("Checking for Java installations in: {}", java_dir.display());
+    
+    // Create the directory if it doesn't exist
+    if !java_dir.exists() {
+        info!("Creating launcher Java directory: {}", java_dir.display());
+        fs::create_dir_all(&java_dir).await?;
+        return Ok(installations); // Return empty, we just created the directory
+    }
+    
+    // List all directories in the java_dir, each may contain a Java installation
+    let mut read_dir = fs::read_dir(&java_dir).await?;
+    
+    while let Some(entry) = read_dir.next_entry().await? {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        
+        info!("Checking potential Java installation in: {}", path.display());
+        
+        // Try to find java executable
+        let java_exe = if cfg!(windows) {
+            path.join("bin").join("java.exe")
+        } else {
+            path.join("bin").join("java")
+        };
+        
+        if java_exe.exists() {
+            match get_java_info(&java_exe).await {
+                Ok(mut info) => {
+                    let version_clone = info.version.clone(); // Clone version before move
+                    info.source = "Launcher Directory".to_string();
+                    installations.push(info);
+                    info!("Found valid Java installation: {} ({})", java_exe.display(), version_clone);
+                }
+                Err(e) => {
+                    warn!("Invalid Java installation at {}: {}", java_exe.display(), e);
+                }
+            }
+        } else {
+            // Also check if the directory itself is a JRE without bin subdirectory
+            let direct_java_exe = if cfg!(windows) {
+                path.join("java.exe")
+            } else {
+                path.join("java")
+            };
+            
+            if direct_java_exe.exists() {
+                match get_java_info(&direct_java_exe).await {
+                    Ok(mut info) => {
+                        let version_clone = info.version.clone(); // Clone version before move
+                        info.source = "Launcher Directory".to_string();
+                        installations.push(info);
+                        info!("Found valid Java executable: {} ({})", direct_java_exe.display(), version_clone);
+                    }
+                    Err(e) => {
+                        warn!("Invalid Java executable at {}: {}", direct_java_exe.display(), e);
+                    }
+                }
+            }
+        }
+    }
+    
+    info!("Found {} Java installations in launcher directory", installations.len());
+    Ok(installations)
+}
+
 /// Detects all Java installations on the system
 pub async fn detect_java_installations() -> Result<Vec<JavaInstallation>> {
     // Check if we have cached results
@@ -110,8 +185,19 @@ pub async fn detect_java_installations() -> Result<Vec<JavaInstallation>> {
     info!("Detecting Java installations...");
     let mut installations = Vec::new();
     
+    // Check in launcher's meta/java directory first
+    match detect_java_in_launcher_dir().await {
+        Ok(launcher_javas) => {
+            for installation in launcher_javas {
+                info!("Found Java in launcher directory: {} ({})", installation.path.display(), installation.version);
+                installations.push(installation);
+            }
+        }
+        Err(e) => warn!("Failed to detect Java in launcher directory: {}", e),
+    }
+    
     // Look in PATH
-    match detect_java_in_path().await {
+    match detect_java_in_system_path().await {
         Ok(java_paths) => {
             for installation in java_paths {
                 info!("Found Java in PATH: {} ({})", installation.path.display(), installation.version);
@@ -320,7 +406,7 @@ fn parse_java_major_version(version: &str) -> Option<u32> {
 }
 
 /// Detects Java installations in the system PATH
-async fn detect_java_in_path() -> Result<Vec<JavaInstallation>> {
+async fn detect_java_in_system_path() -> Result<Vec<JavaInstallation>> {
     info!("Detecting Java installations in PATH");
     let mut installations = Vec::new();
     
