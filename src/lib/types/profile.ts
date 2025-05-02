@@ -207,3 +207,10 @@ export interface ContentInstallStatus {
   is_installed: boolean;
   is_specific_version_in_pack: boolean;
 }
+
+// Added: Type for Screenshot Information
+export interface ScreenshotInfo {
+  filename: string;
+  path: string;
+  modified: string | null; // DateTime<Utc> -> string (ISO 8601) | null
+}

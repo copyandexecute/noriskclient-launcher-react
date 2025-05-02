@@ -18,6 +18,7 @@
     "@tauri-apps/plugin-clipboard-manager": "^2.2.2",
     "@tauri-apps/plugin-dialog": "^2.2.1",
     "@tauri-apps/plugin-opener": "^2.2.6",
+    "@tauri-apps/plugin-shell": "^2.2.1",
     "three": "^0.162.0"
   },
   "devDependencies": {
