@@ -65,7 +65,8 @@ export interface ProfileSettings {
   memory: MemorySettings;
   resolution: WindowSize | null; // Option<WindowSize> -> WindowSize | null
   fullscreen: boolean;
-  extra_args: string[];           // Vec<String> -> string[]
+  extra_game_args: string[];           // Vec<String> -> string[] (Renamed from extra_args)
+  custom_jvm_args: string | null;   // Option<String> -> string | null (New)
 }
 
 // Base interfaces for ModSource discriminated union

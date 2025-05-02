@@ -72,6 +72,8 @@
     let isCreating = $state(false);
     let isSubmitting = $state(false);
     let errorMessage = $state<string | null>(null);
+    // New state for custom JVM args
+    let customJvmArgs = $state(editingProfile?.settings?.custom_jvm_args ?? ''); // Initialize with empty string or existing value
 
     // State for available loader versions
     let availableLoaderVersions = $state<string[]>([]);
@@ -306,7 +308,8 @@
             java_path: editingProfile?.settings?.java_path ?? null,
             resolution: editingProfile?.settings?.resolution ?? null,
             fullscreen: editingProfile?.settings?.fullscreen ?? false,
-            extra_args: editingProfile?.settings?.extra_args ?? [],
+            extra_game_args: editingProfile?.settings?.extra_game_args ?? [], // Use renamed field
+            custom_jvm_args: customJvmArgs.trim() || null, // Add new field, send null if empty/whitespace
         };
 
         try {
@@ -363,6 +366,7 @@
         lastFetchedMcVersion = null;
         selectedNoriskPackId = "";
         memoryMaxMB = 2048;
+        customJvmArgs = ''; // Reset custom JVM args
         if (minecraftVersions.length > 0) updateSelectedVersion();
     }
 </script>
@@ -472,6 +476,19 @@
         </div> 
     </div>
 
+    <!-- *NEW* Custom JVM Arguments Section -->
+    <div class="form-group-small-gap">
+        <label for="custom-jvm-args">Benutzerdefinierte JVM Argumente:</label>
+        <textarea 
+            id="custom-jvm-args"
+            bind:value={customJvmArgs} 
+            placeholder="-XX:+UseG1GC -XX:MaxGCPauseMillis=50 ..."
+            rows="3"
+            aria-label="Benutzerdefinierte JVM Argumente"
+        ></textarea>
+        <small>Argumente durch Leerzeichen trennen.</small>
+    </div>
+
     <div class="form-actions">
         <button
             on:click={handleSubmit}
@@ -539,6 +556,7 @@
         <p><strong>Name:</strong> {profileName}</p>
         <p><strong>Norisk Pack ID:</strong> {selectedNoriskPackId || 'None'}</p>
         <p><strong>Memory Max (MB):</strong> {memoryMaxMB}</p>
+        <p><strong>Custom JVM Args:</strong> {customJvmArgs || 'None'}</p>
         <p><strong>Packs Loading:</strong> {isLoadingPacks}</p>
         <!-- <p><strong>Pack Entries:</strong> {JSON.stringify(packEntries)}</p> --> 
     </div>
@@ -690,5 +708,29 @@
         font-weight: bold;
         min-width: 70px; /* Ensure space for text */
         text-align: right;
+    }
+
+    /* Optional: Reduce gap for specific groups like the new textarea */
+    .form-group-small-gap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem; /* Smaller gap */
+    }
+
+    textarea { /* Basic styling for the new textarea */
+        padding: 0.5rem;
+        border: 1px solid var(--input-border-color, #ccc);
+        border-radius: 4px;
+        background-color: var(--input-bg-color, white);
+        color: var(--text-color, inherit);
+        font-family: inherit; /* Match other inputs */
+        resize: vertical; /* Allow vertical resizing */
+        min-height: 60px; /* Minimum height */
+    }
+
+    small { /* Styling for the helper text */
+        font-size: 0.85em;
+        color: var(--text-muted-color, #666);
+        margin-top: -0.25rem; /* Adjust spacing */
     }
 </style> 
