@@ -74,6 +74,10 @@
     let errorMessage = $state<string | null>(null);
     // New state for custom JVM args
     let customJvmArgs = $state(editingProfile?.settings?.custom_jvm_args ?? ''); // Initialize with empty string or existing value
+    // New state for resolution
+    let useCustomResolution = $state(editingProfile?.settings?.resolution != null);
+    let resolutionWidth = $state(editingProfile?.settings?.resolution?.width ?? 1280);
+    let resolutionHeight = $state(editingProfile?.settings?.resolution?.height ?? 720);
 
     // State for available loader versions
     let availableLoaderVersions = $state<string[]>([]);
@@ -306,10 +310,10 @@
             },
             // Ensure other fields expected by ProfileSettings have defaults if not in editingProfile
             java_path: editingProfile?.settings?.java_path ?? null,
-            resolution: editingProfile?.settings?.resolution ?? null,
             fullscreen: editingProfile?.settings?.fullscreen ?? false,
             extra_game_args: editingProfile?.settings?.extra_game_args ?? [], // Use renamed field
             custom_jvm_args: customJvmArgs.trim() || null, // Add new field, send null if empty/whitespace
+            resolution: useCustomResolution ? { width: resolutionWidth, height: resolutionHeight } : null, // Set resolution based on checkbox
         };
 
         try {
@@ -340,6 +344,10 @@
             loaderVersion = null;
             selectedNoriskPackId = ""; // Reset to "Keine"
             memoryMaxMB = 2048; // Reset RAM max to 2048 MB
+            customJvmArgs = ''; // Reset custom JVM args
+            useCustomResolution = false; // Reset resolution checkbox
+            resolutionWidth = 1280;     // Reset resolution width
+            resolutionHeight = 720;    // Reset resolution height
             if (minecraftVersions.length > 0) updateSelectedVersion(); // Set default version
         }
     }
@@ -367,6 +375,9 @@
         selectedNoriskPackId = "";
         memoryMaxMB = 2048;
         customJvmArgs = ''; // Reset custom JVM args
+        useCustomResolution = false; // Reset resolution checkbox
+        resolutionWidth = 1280;     // Reset resolution width
+        resolutionHeight = 720;    // Reset resolution height
         if (minecraftVersions.length > 0) updateSelectedVersion();
     }
 </script>
@@ -476,6 +487,33 @@
         </div> 
     </div>
 
+    <!-- Resolution Section -->
+    <div class="form-group-small-gap resolution-section">
+        <div class="checkbox-group">
+            <input type="checkbox" id="custom-resolution-check" bind:checked={useCustomResolution} />
+            <label for="custom-resolution-check">Benutzerdefinierte Auflösung verwenden</label>
+        </div>
+        {#if useCustomResolution}
+            <div class="resolution-inputs">
+                <input 
+                    type="number" 
+                    bind:value={resolutionWidth} 
+                    min="1" 
+                    placeholder="Breite"
+                    aria-label="Fensterbreite"
+                />
+                <span>x</span>
+                <input 
+                    type="number" 
+                    bind:value={resolutionHeight} 
+                    min="1" 
+                    placeholder="Höhe"
+                    aria-label="Fensterhöhe"
+                />
+            </div>
+        {/if}
+    </div>
+
     <!-- *NEW* Custom JVM Arguments Section -->
     <div class="form-group-small-gap">
         <label for="custom-jvm-args">Benutzerdefinierte JVM Argumente:</label>
@@ -557,6 +595,7 @@
         <p><strong>Norisk Pack ID:</strong> {selectedNoriskPackId || 'None'}</p>
         <p><strong>Memory Max (MB):</strong> {memoryMaxMB}</p>
         <p><strong>Custom JVM Args:</strong> {customJvmArgs || 'None'}</p>
+        <p><strong>Custom Resolution:</strong> {useCustomResolution ? `${resolutionWidth}x${resolutionHeight}` : 'Default'}</p>
         <p><strong>Packs Loading:</strong> {isLoadingPacks}</p>
         <!-- <p><strong>Pack Entries:</strong> {JSON.stringify(packEntries)}</p> --> 
     </div>
@@ -732,5 +771,31 @@
         font-size: 0.85em;
         color: var(--text-muted-color, #666);
         margin-top: -0.25rem; /* Adjust spacing */
+    }
+
+    .resolution-section { /* Style the container */
+        margin-top: 0.5rem;
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem; /* Space below checkbox if inputs appear */
+    }
+
+    .resolution-inputs {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .resolution-inputs input {
+        width: 80px; /* Adjust width as needed */
+        text-align: center;
+    }
+
+    .resolution-inputs span {
+        font-weight: bold;
     }
 </style> 
