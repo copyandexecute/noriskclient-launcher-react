@@ -557,4 +557,122 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
 
     info!("[Worlds] Found {} valid world(s) for profile {}", worlds.len(), profile_id);
     Ok(worlds)
+}
+
+// --- NBT Structures for servers.dat ---
+#[derive(serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")] // Match NBT naming convention
+struct ServerListNbt {
+    servers: Vec<ServerEntryNbt>,
+}
+
+#[derive(serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")] // Match NBT naming convention
+struct ServerEntryNbt {
+    name: Option<String>,
+    ip: Option<String>,
+    icon: Option<String>, // Base64 encoded icon data
+    #[serde(default)] // Handle cases where this field might be missing
+    accept_textures: Option<u8>, // 0=prompt, 1=enabled, 2=disabled
+    #[serde(default)]
+    previews_chat: Option<u8>, // Seems to be boolean (0/1)
+}
+
+// --- Struct for Server Info (to be returned) ---
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ServerInfo {
+    pub name: Option<String>,
+    pub address: Option<String>, // Renamed from 'ip' for clarity
+    pub icon_base64: Option<String>,
+    pub accepts_textures: Option<u8>,
+    pub previews_chat: Option<u8>,
+}
+
+/// Lists the multiplayer servers found in the profile's servers.dat file.
+pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
+    info!("[Servers] Getting servers for profile {}", profile_id);
+    let state = State::get().await?;
+
+    // Try to get the user profile first, or fall back to standard profile if ID matches
+    let profile = match state.profile_manager.get_profile(profile_id).await {
+        Ok(p) => {
+            info!("[Servers] Found user profile: {}", p.name);
+            p // Found user profile
+        }
+        Err(AppError::ProfileNotFound(_)) => {
+            // Not a user profile, check if it's a standard version
+            match state.norisk_version_manager.get_profile_by_id(profile_id).await {
+                Some(standard_profile) => {
+                    info!("[Servers] ID {} matches standard profile: {}. Proceeding with standard profile object.", profile_id, standard_profile.name);
+                    standard_profile // Use the standard profile object
+                }
+                None => {
+                    error!("[Servers] Profile ID {} not found as user profile or standard profile.", profile_id);
+                    return Err(AppError::ProfileNotFound(profile_id)); // ID not found anywhere
+                }
+            }
+        }
+        Err(e) => return Err(e), // Propagate other errors
+    };
+
+    // Calculate the instance path
+    let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
+    let servers_dat_path = instance_path.join("servers.dat");
+    info!("[Servers] Looking for servers.dat at: {}", servers_dat_path.display());
+
+    if !servers_dat_path.is_file() {
+        info!("[Servers] servers.dat not found for profile '{}' (path: {}). Returning empty list.", profile.name, servers_dat_path.display());
+        return Ok(Vec::new()); // No servers.dat means no servers saved
+    }
+
+    // Read the servers.dat file
+    let servers_dat_bytes = match fs::read(&servers_dat_path).await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            error!("[Servers] Failed to read servers.dat for profile '{}': {}. Path: {}",
+                   profile.name, e, servers_dat_path.display());
+            return Err(AppError::Io(e));
+        }
+    };
+
+    // Parse the NBT data (servers.dat is typically *not* GZipped)
+    let server_list_nbt: ServerListNbt = match from_bytes(&servers_dat_bytes) {
+        Ok(data) => data,
+        Err(e) => {
+             // Try parsing with GZip decompression as a fallback (less common)
+             let mut decoder = GzDecoder::new(&servers_dat_bytes[..]);
+             let mut decompressed_bytes = Vec::new();
+             if decoder.read_to_end(&mut decompressed_bytes).is_ok() {
+                 match from_bytes::<ServerListNbt>(&decompressed_bytes) {
+                     Ok(decompressed_data) => {
+                         warn!("[Servers] Successfully parsed servers.dat for '{}' after GZip fallback.", profile.name);
+                         decompressed_data
+                     },
+                     Err(decompressed_e) => {
+                         error!("[Servers] Failed to parse NBT from servers.dat for '{}' (tried both raw and GZip): Raw Error: {}, GZip Error: {}. Path: {}",
+                                profile.name, e, decompressed_e, servers_dat_path.display());
+                         return Err(AppError::Nbt(decompressed_e)); // Return the decompression parse error
+                     }
+                 }
+             } else {
+                 error!("[Servers] Failed to parse NBT from servers.dat for '{}' and GZip decompression failed: {}. Path: {}",
+                        profile.name, e, servers_dat_path.display());
+                 return Err(AppError::Nbt(e)); // Return the original parse error
+             }
+        }
+    };
+
+    // Map the NBT structure to our ServerInfo structure
+    let server_infos: Vec<ServerInfo> = server_list_nbt.servers.into_iter().map(|nbt_entry| {
+        ServerInfo {
+            name: nbt_entry.name,
+            address: nbt_entry.ip, // Map 'ip' to 'address'
+            icon_base64: nbt_entry.icon,
+            accepts_textures: nbt_entry.accept_textures,
+            previews_chat: nbt_entry.previews_chat,
+        }
+    }).collect();
+
+    info!("[Servers] Found {} server entries in servers.dat for profile {}", server_infos.len(), profile_id);
+    Ok(server_infos)
 } 

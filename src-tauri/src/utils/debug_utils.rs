@@ -62,4 +62,58 @@ pub async fn debug_print_all_profile_worlds() {
             error!("--- [DEBUG] Error getting state for world check: {}", e);
         }
     }
+}
+
+/// Debug function to list all servers for all user profiles.
+/// This should only be called temporarily during development.
+pub async fn debug_print_all_profile_servers() {
+    info!("--- [DEBUG] Starting Server Check ---");
+    match State::get().await {
+        Ok(state) => {
+            match state.profile_manager.list_profiles().await {
+                Ok(profiles) => {
+                    if profiles.is_empty() {
+                        info!("--- [DEBUG] No profiles found.");
+                    } else {
+                        info!("--- [DEBUG] Checking servers for {} profile(s)...", profiles.len());
+                        for profile in profiles {
+                            // Skip standard profiles for this filesystem check
+                            if profile.is_standard_version {
+                                info!("--- [DEBUG] Skipping standard profile: {} ({})", profile.name, profile.id);
+                                continue;
+                            }
+
+                            info!("--- [DEBUG] Checking Profile: {} ({}) ---", profile.name, profile.id);
+                            match mc_utils::get_profile_servers(profile.id).await {
+                                Ok(servers) => {
+                                    if servers.is_empty() {
+                                        info!("    No servers found (servers.dat missing or empty).");
+                                    } else {
+                                        info!("    Found Servers:");
+                                        for server in servers {
+                                            info!("      - Name: {}", server.name.as_deref().unwrap_or("N/A"));
+                                            info!("        Address: {}", server.address.as_deref().unwrap_or("N/A"));
+                                            info!("        Icon Present: {}", server.icon_base64.is_some());
+                                            info!("        Accepts Textures: {:?}", server.accepts_textures); // 0=prompt, 1=enabled, 2=disabled
+                                            info!("        Previews Chat: {:?}", server.previews_chat); // bool?
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("    Error getting servers for profile {}: {}", profile.id, e);
+                                }
+                            }
+                        }
+                        info!("--- [DEBUG] Finished Server Check ---");
+                    }
+                }
+                Err(e) => {
+                    error!("--- [DEBUG] Error listing profiles: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            error!("--- [DEBUG] Error getting state for server check: {}", e);
+        }
+    }
 } 

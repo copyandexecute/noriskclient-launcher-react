@@ -229,6 +229,7 @@ async fn main() {
                 }
 
                 debug_utils::debug_print_all_profile_worlds().await;
+                debug_utils::debug_print_all_profile_servers().await;
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 

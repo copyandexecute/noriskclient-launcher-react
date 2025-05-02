@@ -2,6 +2,7 @@ use thiserror::Error;
 use serde::Serialize;
 use std::io;
 use uuid::Uuid;
+use fastnbt::error::Error as FastNbtError;
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -142,6 +143,9 @@ pub enum AppError {
 
     #[error("File not found: {0:?}")]
     FileNotFound(std::path::PathBuf),
+
+    #[error("NBT parsing error: {0}")]
+    Nbt(#[from] FastNbtError),
 
     #[error("Archive read error: {0}")]
     ArchiveReadError(String),
