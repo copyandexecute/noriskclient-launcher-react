@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use log::info;
+use log::warn;
 use crate::error::Result;
 use crate::minecraft::dto::piston_meta::PistonMeta;
 use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
@@ -8,7 +9,7 @@ use crate::minecraft::minecraft_auth::Credentials;
 use crate::minecraft::ClasspathBuilder;
 use crate::minecraft::GameArguments;
 use crate::minecraft::JvmArguments;
-use crate::state::profile_state::Profile;
+use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
 use uuid::Uuid;
 
@@ -23,6 +24,7 @@ pub struct MinecraftLaunchParameters {
     pub profile_id: Uuid,
     pub memory_max_mb: u32,
     pub is_experimental_mode: bool,
+    pub resolution: Option<WindowSize>,
 }
 
 impl MinecraftLaunchParameters {
@@ -38,6 +40,7 @@ impl MinecraftLaunchParameters {
             profile_id,
             memory_max_mb,
             is_experimental_mode: false,
+            resolution: None,
         }
     }
 
@@ -83,6 +86,11 @@ impl MinecraftLaunchParameters {
 
     pub fn with_experimental_mode(mut self, is_experimental: bool) -> Self {
         self.is_experimental_mode = is_experimental;
+        self
+    }
+
+    pub fn with_resolution(mut self, res: Option<WindowSize>) -> Self {
+        self.resolution = res;
         self
     }
 }
@@ -266,7 +274,16 @@ impl MinecraftLauncher {
             }
         }
 
-        // Add additional game arguments
+        // Add resolution arguments if custom resolution is set
+        if let Some(res) = &params.resolution {
+            info!("Appending custom resolution arguments: --width {} --height {}", res.width, res.height);
+            command.arg("--width");
+            command.arg(res.width.to_string());
+            command.arg("--height");
+            command.arg(res.height.to_string());
+        }
+
+        // Add additional game arguments (from profile's extra_game_args)
         for arg in params.additional_game_args {
             command.arg(arg);
         }

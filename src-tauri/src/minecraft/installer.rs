@@ -257,6 +257,7 @@ pub async fn install_minecraft_version(
 
     let mut launch_params = MinecraftLaunchParameters::new(profile.id, profile.settings.memory.max)
         .with_old_minecraft_arguments(piston_meta.minecraft_arguments.clone())
+        .with_resolution(profile.settings.resolution.clone())
         .with_experimental_mode(is_experimental_mode);
 
     // Install modloader using the factory
