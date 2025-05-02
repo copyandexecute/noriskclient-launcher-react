@@ -646,14 +646,20 @@
     }
 
     // Dispatch launch event when ProfileWorlds requests it
-    function handleWorldLaunch(event: CustomEvent<{ profileId: string, quickPlaySingleplayer: string }>) {
-        console.log('[ProfileView] Received launch event from ProfileWorlds, dispatching upwards:', event.detail);
-        // Dispatch the 'launch' event upwards to ProfileManager, passing the world details
+    function handleQuickPlayLaunch(event: CustomEvent<{ profileId: string, quickPlaySingleplayer?: string, quickPlayMultiplayer?: string }>) {
+        console.log('[ProfileView] Received launch event from ProfileWorlds/Servers, dispatching upwards:', event.detail);
+        
+        // Prepare options object based on what's provided in the event
+        let launchOptions = {};
+        if (event.detail.quickPlaySingleplayer) {
+            launchOptions = { quickPlaySingleplayer: event.detail.quickPlaySingleplayer };
+        } else if (event.detail.quickPlayMultiplayer) {
+            launchOptions = { quickPlayMultiplayer: event.detail.quickPlayMultiplayer };
+        }
+        
         dispatch('launch', {
             profileId: event.detail.profileId, // Use the profileId from the event
-            options: { // Pass options object matching ProfileManager's launchGame signature
-                quickPlaySingleplayer: event.detail.quickPlaySingleplayer
-            }
+            options: launchOptions // Pass the constructed options object
         });
     }
 
@@ -1073,7 +1079,7 @@
     {#if profile.id}
         <ProfileWorlds 
             profileId={profile.id} 
-            on:launch={handleWorldLaunch}
+            on:launch={handleQuickPlayLaunch}
         />
     {/if}
 </div>

@@ -2,48 +2,87 @@
     import { invoke } from '@tauri-apps/api/core';
     import { convertFileSrc } from '@tauri-apps/api/core';
     // Removed onMount, onDestroy as $effect handles lifecycle
-    import type { WorldInfo } from '$lib/types/minecraft'; // Updated import path
+    import type { WorldInfo, ServerInfo } from '$lib/types/minecraft'; // Added ServerInfo
     import { createEventDispatcher } from 'svelte';
     import { timeAgo } from '$lib/utils/timeUtils'; // Make sure this path and helper exist
 
     // Props
     let { profileId = null } = $props<{ profileId?: string | null }>();
 
-    // State
+    // State for Worlds
     let worlds = $state<WorldInfo[]>([]);
-    let loading = $state(false);
-    let error = $state<string | null>(null);
+    let worldsLoading = $state(false);
+    let worldsError = $state<string | null>(null);
+
+    // State for Servers
+    let servers = $state<ServerInfo[]>([]);
+    let serversLoading = $state(false);
+    let serversError = $state<string | null>(null);
 
     // Event dispatcher for launching
     const dispatch = createEventDispatcher<{
-        launch: { 
-            profileId: string; 
-            quickPlaySingleplayer: string; 
+        launch: {
+            profileId: string;
+            quickPlaySingleplayer?: string; // Optional
+            quickPlayMultiplayer?: string;  // Optional
         }
     }>();
 
-    async function loadWorlds() {
+    async function loadData() {
         if (!profileId) {
             worlds = [];
-            error = null;
-            loading = false;
+            servers = [];
+            worldsError = null;
+            serversError = null;
+            worldsLoading = false;
+            serversLoading = false;
             return;
         }
 
-        loading = true;
-        error = null;
-        console.log(`[ProfileWorlds] Loading worlds for profile: ${profileId}`);
+        console.log(`[ProfileWorlds] Loading data for profile: ${profileId}`);
+        
+        // Reset states
+        worlds = [];
+        servers = [];
+        worldsError = null;
+        serversError = null;
+        worldsLoading = true;
+        serversLoading = true;
 
         try {
-            worlds = await invoke<WorldInfo[]>('get_worlds_for_profile', { profileId });
-            console.log('[ProfileWorlds] Raw worlds data received:', JSON.stringify(worlds, null, 2));
-            console.log(`[ProfileWorlds] Loaded ${worlds.length} worlds`);
+            // Fetch worlds and servers concurrently
+            const [worldsResult, serversResult] = await Promise.allSettled([
+                invoke<WorldInfo[]>('get_worlds_for_profile', { profileId }),
+                invoke<ServerInfo[]>('get_servers_for_profile', { profileId })
+            ]);
+
+            // Handle worlds result
+            if (worldsResult.status === 'fulfilled') {
+                worlds = worldsResult.value;
+                console.log(`[ProfileWorlds] Loaded ${worlds.length} worlds`);
+            } else {
+                console.error('Failed to load worlds:', worldsResult.reason);
+                worldsError = `Error loading worlds: ${worldsResult.reason instanceof Error ? worldsResult.reason.message : String(worldsResult.reason)}`;
+            }
+
+            // Handle servers result
+            if (serversResult.status === 'fulfilled') {
+                servers = serversResult.value;
+                console.log(`[ProfileWorlds] Loaded ${servers.length} servers`);
+            } else {
+                console.error('Failed to load servers:', serversResult.reason);
+                serversError = `Error loading servers: ${serversResult.reason instanceof Error ? serversResult.reason.message : String(serversResult.reason)}`;
+            }
+
         } catch (err) {
-            console.error('Failed to load worlds:', err);
-            error = `Error loading worlds: ${err instanceof Error ? err.message : String(err)}`;
-            worlds = [];
+            // This catch block might not be strictly necessary with Promise.allSettled
+            // unless invoke itself throws synchronously before returning a promise
+            console.error('Unexpected error during data loading:', err);
+            worldsError = `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
+            serversError = `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
         } finally {
-            loading = false;
+            worldsLoading = false;
+            serversLoading = false;
         }
     }
 
@@ -57,24 +96,32 @@
         });
     }
 
-    // Load worlds when profileId changes
+    // Function to handle joining a server
+    function joinServer(server: ServerInfo) {
+        if (!profileId || !server.address) return; // Need address to join
+        console.log(`[ProfileWorlds] Dispatching launch event for server: ${server.address}`);
+        dispatch('launch', {
+            profileId: profileId,
+            quickPlayMultiplayer: server.address
+        });
+    }
+
+    // Load data when profileId changes
     $effect(() => {
-        loadWorlds();
+        loadData();
     });
 
-    // Helper to get a display name
+    // Helper to get a display name for worlds
     function getWorldDisplayName(world: WorldInfo): string {
         return world.display_name || world.folder_name;
     }
 
-    // Helper to get icon using Tauri's asset protocol
-    function getIconSrc(world: WorldInfo): string | null {
+    // Helper to get icon using Tauri's asset protocol for worlds
+    function getWorldIconSrc(world: WorldInfo): string | null {
         if (world.icon_path) { // Check if the string path exists
             try {
                 // Convert the string path directly
-                console.log(`[ProfileWorlds] Converting path: ${world.icon_path}`); // Log path being converted
                 const url = convertFileSrc(world.icon_path);
-                console.log(`[ProfileWorlds] Converted URL: ${url}`); // Log resulting URL
                 return url;
             } catch (error) {
                 console.error(`Failed to convert icon path for world ${world.folder_name}:`, error);
@@ -84,58 +131,128 @@
         return null;
     }
 
+    // Helper to get a display name for servers
+    function getServerDisplayName(server: ServerInfo): string {
+        return server.name || server.address || 'Unnamed Server';
+    }
+
+    // Helper to get server icon (base64 data URI)
+    function getServerIconSrc(server: ServerInfo): string | null {
+        if (server.icon_base64) {
+            // Ensure it doesn't already have the prefix
+            if (server.icon_base64.startsWith('data:image')) {
+                return server.icon_base64;
+            }
+            return `data:image/png;base64,${server.icon_base64}`;
+        }
+        return null;
+    }
+
 </script>
 
-<div class="profile-worlds">
-    <h4>Singleplayer Worlds</h4>
+<div class="profile-play-options">
 
-    {#if loading}
-        <div class="loading-state">Loading worlds...</div>
-    {:else if error}
-        <div class="error-state">{error}</div>
-    {:else if worlds.length === 0}
-        <div class="empty-state">No singleplayer worlds found in this profile's saves folder.</div>
-    {:else}
-        <ul class="world-list">
-            {#each worlds as world (world.folder_name)}
-                <li class="world-item">
-                    <div class="world-icon">
-                        {#if getIconSrc(world)}
-                            <img src={getIconSrc(world)} alt="World icon" class="world-icon-img">
-                        {:else}
-                            <div class="default-icon">🌍</div> <!-- Default Globe Icon -->
-                        {/if}
-                    </div>
-                    <div class="world-details">
-                        <span class="world-name">{getWorldDisplayName(world)}</span>
-                        <span class="last-played">
-                            {#if world.last_played}
-                                Last played: {timeAgo(world.last_played)}
+    <!-- Worlds Section -->
+    <div class="profile-worlds-section">
+        <h4>Singleplayer Worlds</h4>
+        {#if worldsLoading}
+            <div class="loading-state">Loading worlds...</div>
+        {:else if worldsError}
+            <div class="error-state">{worldsError}</div>
+        {:else if worlds.length === 0}
+            <div class="empty-state">No singleplayer worlds found in this profile's saves folder.</div>
+        {:else}
+            <ul class="item-list">
+                {#each worlds as world (world.folder_name)}
+                    <li class="list-item world-item">
+                        <div class="item-icon">
+                            {#if getWorldIconSrc(world)}
+                                <img src={getWorldIconSrc(world)} alt="World icon" class="item-icon-img">
                             {:else}
-                                Never played
+                                <div class="default-icon world-default-icon">🌍</div> <!-- Default World Icon -->
                             {/if}
-                        </span>
-                    </div>
-                    <button 
-                        class="launch-button" 
-                        onclick={() => launchWorld(world)} 
-                        title="Launch into this world (Quick Play)"
-                    >
-                        ▶ Play
-                    </button>
-                </li>
-            {/each}
-        </ul>
-    {/if}
+                        </div>
+                        <div class="item-details">
+                            <span class="item-name">{getWorldDisplayName(world)}</span>
+                            <span class="item-subtext">
+                                {#if world.last_played}
+                                    Last played: {timeAgo(world.last_played)}
+                                {:else}
+                                    Never played
+                                {/if}
+                            </span>
+                        </div>
+                        <button
+                            class="launch-button world-launch-button"
+                            onclick={() => launchWorld(world)}
+                            title="Launch into this world (Quick Play)"
+                        >
+                            ▶ Play
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+    </div>
+
+    <!-- Servers Section -->
+    <div class="profile-servers-section">
+        <h4>Multiplayer Servers</h4>
+         {#if serversLoading}
+            <div class="loading-state">Loading servers...</div>
+        {:else if serversError}
+            <div class="error-state">{serversError}</div>
+        {:else if servers.length === 0}
+            <div class="empty-state">No multiplayer servers found (servers.dat missing or empty).</div>
+        {:else}
+            <ul class="item-list">
+                 {#each servers as server (server.address || server.name || Math.random())} 
+                    <li class="list-item server-item">
+                        <div class="item-icon">
+                            {#if getServerIconSrc(server)}
+                                <img src={getServerIconSrc(server)} alt="Server icon" class="item-icon-img">
+                            {:else}
+                                <div class="default-icon server-default-icon">🌐</div> <!-- Default Server Icon -->
+                            {/if}
+                        </div>
+                        <div class="item-details">
+                            <span class="item-name">{getServerDisplayName(server)}</span>
+                            <span class="item-subtext">{server.address || 'Address missing'}</span>
+                        </div>
+                        <button
+                            class="launch-button server-join-button"
+                            onclick={() => joinServer(server)}
+                            disabled={!server.address} 
+                            title={server.address ? "Join this server (Quick Play)" : "Cannot join: Server address missing"}
+                        >
+                            ▶ Join
+                        </button>
+                    </li>
+                {/each}
+            </ul>
+        {/if}
+    </div>
+
 </div>
 
 <style>
-    .profile-worlds {
+    .profile-play-options { /* Renamed outer container */
         margin-top: 1.5rem;
+        display: flex; /* Arrange sections side-by-side */
+        gap: 1.5rem; /* Space between sections */
+        flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    }
+
+    .profile-worlds-section,
+    .profile-servers-section {
+        flex: 1; /* Allow sections to grow */
+        min-width: 300px; /* Minimum width before wrapping */
         padding: 1rem;
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: 4px;
+        display: flex;
+        flex-direction: column; /* Stack title and list */
     }
 
     h4 {
@@ -154,6 +271,8 @@
         background-color: #fff;
         border: 1px dashed #ced4da;
         border-radius: 4px;
+        margin-top: auto; /* Push to bottom if list is empty */
+        margin-bottom: auto;
     }
 
     .error-state {
@@ -162,16 +281,18 @@
         border-color: #f5c6cb;
     }
 
-    .world-list {
+    .item-list { /* Generic list style */
         list-style: none;
         padding: 0;
         margin: 0;
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        overflow-y: auto; /* Allow scrolling if list is long */
+        max-height: 400px; /* Example max height */
     }
 
-    .world-item {
+    .list-item { /* Generic item style */
         display: flex;
         align-items: center;
         gap: 1rem;
@@ -182,11 +303,11 @@
         transition: background-color 0.2s ease-in-out;
     }
 
-    .world-item:hover {
+    .list-item:hover {
         background-color: #f1f3f5;
     }
 
-    .world-icon {
+    .item-icon { /* Generic icon container */
         width: 40px;
         height: 40px;
         flex-shrink: 0;
@@ -198,52 +319,69 @@
         overflow: hidden;
     }
     
-    .world-icon-img {
+    .item-icon-img { /* Generic icon image */
         width: 100%;
         height: 100%;
         object-fit: cover;
+        /* Prevents blurry icons in some cases */
+        image-rendering: pixelated; /* Or -webkit-optimize-contrast */
     }
 
-    .default-icon {
+    .default-icon { /* Generic default icon */
         font-size: 24px;
         color: #adb5bd;
     }
 
-    .world-details {
+    .item-details { /* Generic details container */
         flex-grow: 1;
         display: flex;
         flex-direction: column;
+        /* Prevent text overflow */
+        min-width: 0; 
     }
 
-    .world-name {
+    .item-name { /* Generic name style */
         font-weight: 500;
         color: #212529;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
-    .last-played {
+    .item-subtext { /* Generic subtext style */
         font-size: 0.85rem;
         color: #6c757d;
         margin-top: 0.2rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
-    .launch-button {
+    .launch-button { /* Generic button style */
         padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
-        background-color: #28a745;
         color: white;
         border: none;
         border-radius: 4px;
         cursor: pointer;
         transition: background-color 0.2s;
         white-space: nowrap;
+        margin-left: auto; /* Push button to the right */
     }
 
-    .launch-button:hover {
+    .world-launch-button,
+    .server-join-button {
+         background-color: #28a745;
+    }
+
+    .world-launch-button:hover,
+    .server-join-button:hover {
         background-color: #218838;
     }
 
     .launch-button:disabled {
         background-color: #cccccc;
         cursor: not-allowed;
+        opacity: 0.7;
     }
 </style> 
