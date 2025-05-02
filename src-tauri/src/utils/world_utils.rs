@@ -6,6 +6,11 @@ use fs_extra::dir::{copy as copy_dir, CopyOptions};
 use crate::error::{Result, AppError};
 use crate::state::State;
 use sanitize_filename;
+use std::io::Cursor;
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use fastnbt::{from_bytes, to_bytes, Value, error::Error as FastNbtError};
 
 /// Generates a unique, sanitized folder name for a world within a given saves directory.
 ///
@@ -182,7 +187,6 @@ pub async fn copy_world_directory(
     // Create the empty target directory before copying content into it
     fs::create_dir(&target_world_path).await.map_err(|e| {
          error!("Failed to create target world directory '{}': {}", target_world_path.display(), e);
-         // Check if it exists because of a race condition (unlikely but possible)
          if target_world_path.exists() {
              AppError::WorldAlreadyExists { profile_id: target_profile_id, world_folder: final_target_folder_name.clone() }
          } else {
@@ -200,24 +204,99 @@ pub async fn copy_world_directory(
             );
         }
         Err(e) => {
-            error!(
-                "Failed to copy world directory from {} to {}: {}",
-                source_world_path.display(),
-                target_world_path.display(),
-                e
-            );
-            let _ = fs::remove_dir_all(&target_world_path).await;
+            error!("Failed to copy world directory from {} to {}: {}", source_world_path.display(), target_world_path.display(), e);
+            let _ = fs::remove_dir_all(&target_world_path).await; // Cleanup
             return Err(AppError::FsExtra(e));
         }
     }
     
-    // --- TODO: Implement level.dat modification using `target_world_name` ---
-    // ... read target_world_path/level.dat ...
-    // ... modify LevelName to `target_world_name` ...
-    // ... write back ...
+    // --- Modify level.dat in Target Directory ---
+    info!("Modifying level.dat in target directory: {}", target_world_path.display());
+    let target_level_dat_path = target_world_path.join("level.dat");
+
+    if let Err(e) = modify_level_dat_name(&target_level_dat_path, target_world_name).await {
+        error!("Failed to modify level.dat name in target world '{}': {}. Cleaning up.", final_target_folder_name, e);
+        // Cleanup the copied directory if modifying level.dat fails
+        let _ = fs::remove_dir_all(&target_world_path).await;
+        return Err(e);
+    }
 
     info!("World copy process completed successfully for target folder: {}", final_target_folder_name);
     Ok(final_target_folder_name) // Return the generated folder name
+}
+
+/// Reads, modifies the LevelName tag, and writes back a level.dat file.
+async fn modify_level_dat_name(level_dat_path: &Path, new_level_name: &str) -> Result<()> {
+    // 1. Read the file
+    let compressed_bytes = fs::read(level_dat_path).await.map_err(|e| {
+        error!("Failed to read target level.dat at '{}': {}", level_dat_path.display(), e);
+        AppError::Io(e)
+    })?;
+
+    // 2. Decompress
+    let mut decoder = GzDecoder::new(&compressed_bytes[..]);
+    let mut decompressed_bytes = Vec::new();
+    if let Err(e) = std::io::Read::read_to_end(&mut decoder, &mut decompressed_bytes) {
+        error!("Failed to decompress level.dat from '{}': {}", level_dat_path.display(), e);
+        return Err(AppError::Io(e)); // Treat as IO error for now
+    }
+
+    // 3. Parse NBT
+    let mut nbt_value: Value = from_bytes(&decompressed_bytes).map_err(|e| {
+        error!("Failed to parse NBT from decompressed level.dat '{}': {}", level_dat_path.display(), e);
+        AppError::Nbt(e)
+    })?;
+
+    // 4. Modify LevelName
+    let mut modified = false;
+    if let Value::Compound(root) = &mut nbt_value {
+        if let Some(Value::Compound(data)) = root.get_mut("Data") {
+            if let Some(level_name_tag) = data.get_mut("LevelName") {
+                *level_name_tag = Value::String(new_level_name.to_string());
+                modified = true;
+                info!("Set LevelName to '{}' in {}", new_level_name, level_dat_path.display());
+            } else {
+                warn!("'LevelName' tag not found within 'Data' compound in {}", level_dat_path.display());
+            }
+        } else {
+             warn!("'Data' compound not found in {}", level_dat_path.display());
+        }
+    } else {
+         warn!("Root tag in level.dat is not a Compound: {}", level_dat_path.display());
+    }
+
+    if !modified {
+        // If we couldn't modify it, maybe it's okay, but log a warning.
+        // Alternatively, could return an error.
+        warn!("Could not modify LevelName in {}. Proceeding without change.", level_dat_path.display());
+        // Decide if this should be an error: return Err(AppError::Other(...));
+    }
+
+    // 5. Serialize NBT back to bytes
+    let new_decompressed_bytes = to_bytes(&nbt_value).map_err(|e| {
+         error!("Failed to serialize modified NBT for '{}': {}", level_dat_path.display(), e);
+         AppError::Other(format!("NBT serialization error: {}", e)) // Use generic error for ser error
+    })?;
+
+    // 6. Compress
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    if let Err(e) = std::io::Write::write_all(&mut encoder, &new_decompressed_bytes) {
+         error!("Failed to compress modified level.dat bytes for '{}': {}", level_dat_path.display(), e);
+        return Err(AppError::Io(e));
+    }
+    let new_compressed_bytes = encoder.finish().map_err(|e| {
+         error!("Failed finish compression for level.dat '{}': {}", level_dat_path.display(), e);
+        AppError::Io(e)
+    })?;
+
+    // 7. Write back to file
+    fs::write(level_dat_path, &new_compressed_bytes).await.map_err(|e| {
+         error!("Failed to write modified level.dat back to '{}': {}", level_dat_path.display(), e);
+         AppError::Io(e)
+    })?;
+
+    info!("Successfully modified and saved level.dat: {}", level_dat_path.display());
+    Ok(())
 }
 
 // --- Error Enum Extension (add FsExtra and WorldLocked variants in error.rs) ---
