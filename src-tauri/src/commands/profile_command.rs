@@ -1477,3 +1477,34 @@ pub async fn check_world_lock_status(profile_id: Uuid, world_folder: String) -> 
         }
     }
 }
+
+/// Deletes a specific world directory from a profile after checking the session lock.
+#[tauri::command]
+pub async fn delete_world(profile_id: Uuid, world_folder: String) -> Result<(), CommandError> {
+    info!(
+        "Executing delete_world command for profile {}, world '{}'",
+        profile_id, world_folder
+    );
+
+    // Call the utility function to perform the deletion
+    world_utils::delete_world_directory(profile_id, &world_folder).await?;
+
+    // Trigger UI update for the affected profile
+    if let Ok(state) = State::get().await {
+        if let Err(e) = state.event_state.trigger_profile_update(profile_id).await {
+            warn!(
+                "Failed to emit profile update event after deleting world '{}' from profile {}: {}",
+                world_folder,
+                profile_id,
+                e
+            );
+        }
+    } else {
+        warn!(
+            "Could not get state to emit profile update event after world deletion."
+        );
+    }
+
+    info!("Successfully executed delete_world command.");
+    Ok(())
+}

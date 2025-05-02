@@ -32,6 +32,7 @@
     let showCopyDialog = $state(false);
     let worldToCopy = $state<WorldInfo | null>(null);
     let copyLoading = $state(false); // Loading state for the copy operation
+    let deleteLoading = $state<Record<string, boolean>>({}); // Loading state for delete, keyed by folder_name
 
     // Event dispatcher
     const dispatch = createEventDispatcher<{
@@ -148,6 +149,7 @@
         showCopyDialog = false;
         worldToCopy = null;
         copyLoading = false;
+        deleteLoading = {};
     }
 
     // --- Server Pinging ---
@@ -258,6 +260,38 @@
         showCopyDialog = false;
         worldToCopy = null;
         copyLoading = false; // Reset loading state if dialog is closed prematurely
+    }
+
+    // --- World Deletion ---
+    async function handleDeleteWorld(world: WorldInfo) {
+        if (!profileId) return;
+
+        const confirmation = window.confirm(
+            `Are you sure you want to permanently delete the world "${getWorldDisplayName(world)}"? This action cannot be undone.`
+        );
+
+        if (!confirmation) {
+            console.log("[ProfileWorlds] World deletion cancelled by user.");
+            return;
+        }
+
+        console.log(`[ProfileWorlds] Attempting to delete world: ${world.folder_name}`);
+        deleteLoading[world.folder_name] = true;
+        deleteLoading = { ...deleteLoading }; // Trigger reactivity
+
+        try {
+            await invoke('delete_world', { profileId, worldFolder: world.folder_name });
+            notificationStore.success(`World "${getWorldDisplayName(world)}" deleted successfully.`);
+            // Reload data to reflect the deletion
+            await loadData(); 
+        } catch (err) {
+            console.error("World deletion failed:", err);
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            notificationStore.error(`Failed to delete world: ${errorMsg}`);
+        } finally {
+             delete deleteLoading[world.folder_name]; // Remove specific loading state
+             deleteLoading = { ...deleteLoading }; // Trigger reactivity
+        }
     }
 
     // --- Lifecycle and Helpers ---
@@ -411,6 +445,15 @@
                                 disabled={copyLoading} 
                             >
                                 {#if copyLoading && worldToCopy?.folder_name === item.folder_name} <span class="spinner small"></span> {:else} 📋 {/if} <!-- Copy icon -->
+                            </button>
+                             <!-- Delete Button for Worlds -->
+                            <button 
+                                class="action-button delete-button" 
+                                onclick={() => handleDeleteWorld(item)}
+                                title="Delete this world permanently"
+                                disabled={deleteLoading[item.folder_name]}
+                            >
+                                {#if deleteLoading[item.folder_name]} <span class="spinner small"></span> {:else} 🗑️ {/if} <!-- Delete icon -->
                             </button>
                         {/if}
                         <button
@@ -753,5 +796,14 @@
     }
     .spinner.small {
         /* ... ensure small spinner styles exist ... */
+    }
+
+    .delete-button {
+        color: #dc3545; /* Red color for delete */
+    }
+
+    .delete-button:hover:not(:disabled) {
+        background-color: #f8d7da; /* Light red background on hover */
+        border-color: #f5c6cb;
     }
 </style> 

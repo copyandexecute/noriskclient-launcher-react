@@ -379,25 +379,92 @@ pub async fn check_world_session_lock(world_path: &Path) -> Result<()> {
     }
 }
 
+/// Deletes a singleplayer world directory from a profile's saves folder.
+///
+/// # Arguments
+///
+/// * `profile_id` - UUID of the profile containing the world.
+/// * `world_folder` - The name of the world folder to delete within the profile's 'saves' directory.
+///
+/// # Returns
+///
+/// Returns `Ok(())` on success, or an `AppError` variant on failure.
+pub async fn delete_world_directory(profile_id: Uuid, world_folder: &str) -> Result<()> {
+    info!(
+        "Attempting to delete world '{}' from profile {}",
+        world_folder, profile_id
+    );
+
+    // Basic validation
+    if world_folder.is_empty() || world_folder.contains('/') || world_folder.contains('\\') {
+        error!("Invalid world folder name provided for deletion: '{}'", world_folder);
+        return Err(AppError::InvalidInput(
+            "Invalid world folder name provided.".to_string(),
+        ));
+    }
+
+    let state = State::get().await?;
+    let profile_manager = &state.profile_manager;
+
+    // --- Calculate Path ---
+    let instance_path = profile_manager.get_profile_instance_path(profile_id).await?;
+    let saves_path = instance_path.join("saves");
+    let world_path = saves_path.join(world_folder);
+
+    info!("Target world path for deletion: {}", world_path.display());
+
+    // --- Validate Existence ---
+    if !world_path.is_dir() {
+        error!("World directory not found for deletion: {}", world_path.display());
+        // Return WorldNotFound even if it might exist but isn't a directory
+        return Err(AppError::WorldNotFound {
+            profile_id,
+            world_folder: world_folder.to_string(),
+        });
+    }
+
+    // --- Check Session Lock ---
+    if let Err(e) = check_world_session_lock(&world_path).await {
+        if let AppError::WorldLocked { .. } = e {
+            error!(
+                "World '{}' in profile {} is locked and cannot be deleted.",
+                world_folder,
+                profile_id
+            );
+            // Return the specific locked error, enriching it with IDs
+            return Err(AppError::WorldLocked {
+                profile_id,
+                world_folder: world_folder.to_string(),
+            });
+        } else {
+            error!(
+                "Error checking session lock for world '{}' before deletion: {}",
+                world_folder, e
+            );
+            return Err(e); // Propagate other errors from lock check
+        }
+    }
+    info!("World '{}' is not locked, proceeding with deletion.", world_folder);
+
+    // --- Delete Directory ---
+    info!("Attempting recursive delete of: {}", world_path.display());
+    fs::remove_dir_all(&world_path).await.map_err(|e| {
+        error!(
+            "Failed to delete world directory '{}': {}",
+            world_path.display(),
+            e
+        );
+        // Map IO error to a more specific deletion error or keep as AppError::Io
+        AppError::Io(e) // Or create AppError::WorldDeletionError { ... }
+    })?;
+
+    info!(
+        "Successfully deleted world directory '{}' for profile {}",
+        world_folder, profile_id
+    );
+    Ok(())
+}
+
 // --- Error Enum Extension (add FsExtra and WorldLocked variants in error.rs) ---
 // Need to add these to the main AppError enum in src-tauri/src/error.rs
 // #[error("World '{world_folder}' in profile {profile_id} is currently locked (in use).")]
-// WorldLocked {
-//     profile_id: Uuid,
-//     world_folder: String,
-// },
-// #[error("Filesystem operation error (fs_extra): {0}")]
-// FsExtra(#[from] fs_extra::error::Error),
-// #[error("World '{world_folder}' not found in profile {profile_id}.")]
-// WorldNotFound {
-//     profile_id: Uuid,
-//     world_folder: String,
-// },
-// #[error("World '{world_folder}' already exists in profile {profile_id}.")]
-// WorldAlreadyExists {
-//     profile_id: Uuid,
-//     world_folder: String,
-// },
-
-// --- TODO: Session Lock Helper Function ---
-// async fn is_world_locked(world_path: &Path) -> Result<bool> { ... }

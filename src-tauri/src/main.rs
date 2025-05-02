@@ -59,9 +59,10 @@ use commands::profile_command::{
     update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
     is_content_installed, open_profile_latest_log, get_profile_latest_log_content,
     get_worlds_for_profile, get_servers_for_profile, copy_world, check_world_lock_status,
+    delete_world,
 };
 
-// Use statements for registered commands only
+// Use statements for registered commands only  
 use commands::modrinth_commands::{
     check_modrinth_updates, download_and_install_modrinth_modpack,
     get_all_modrinth_versions_for_contexts, get_modrinth_mod_versions,
@@ -364,6 +365,7 @@ async fn main() {
             copy_world,
             check_world_lock_status,
             ping_minecraft_server,
+            delete_world,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
