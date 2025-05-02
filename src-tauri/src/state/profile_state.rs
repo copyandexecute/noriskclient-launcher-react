@@ -158,6 +158,7 @@ pub struct ProfileSettings {
     pub memory: MemorySettings,              // Speicher Einstellungen
     pub resolution: Option<WindowSize>,      // Auflösung
     pub fullscreen: bool,                    // Vollbild
+    #[serde(default)]
     pub extra_game_args: Vec<String>,             // Zusätzliche Argumente für das Spiel
     #[serde(default)] // Für Abwärtskompatibilität
     pub custom_jvm_args: Option<String>,     // Zusätzliche JVM-Argumente als String
