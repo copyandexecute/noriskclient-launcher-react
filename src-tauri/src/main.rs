@@ -71,7 +71,7 @@ use commands::modrinth_commands::{
 
 use commands::file_command::{
     delete_file, get_icons_for_archives, get_icons_for_norisk_mods, open_file_directory,
-    set_file_enabled,
+    set_file_enabled, open_file,
 };
 
 // Import config commands
@@ -368,7 +368,8 @@ async fn main() {
             delete_world,
             get_profile_log_files,
             get_log_file_content,
-            list_profile_screenshots
+            list_profile_screenshots,
+            open_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
