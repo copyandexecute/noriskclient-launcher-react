@@ -15,9 +15,18 @@ use fastnbt::from_bytes; // NBT deserialization
 use fastnbt::value::Value; // Access NBT values
 use std::collections::HashMap; // To represent NBT Compound
 use flate2::read::GzDecoder; // GZip decompression
+use serde::{Serialize}; // Added Serialize directly
+use craftping::tokio::ping;
+use craftping::{Error as CraftPingError, Response}; // Corrected import
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::time::Duration;
+use tokio::net::TcpStream;
+use tokio::time::timeout;
+use base64;
+use base64::Engine as _; // Import the Engine trait for encode/decode methods
 
 // --- Struct for World Info ---
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct WorldInfo {
     pub folder_name: String,
     pub display_name: Option<String>,
@@ -675,4 +684,154 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
 
     info!("[Servers] Found {} server entries in servers.dat for profile {}", server_infos.len(), profile_id);
     Ok(server_infos)
+}
+
+// --- Structures for Server Ping Results ---
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ServerPingInfo {
+    pub description: Option<String>, // Simple text MOTD for now
+    pub description_json: Option<serde_json::Value>, // Full JSON MOTD
+    pub version_name: Option<String>,
+    pub version_protocol: Option<i32>,
+    pub players_online: Option<u32>,
+    pub players_max: Option<u32>,
+    pub favicon_base64: Option<String>, // Base64 PNG string (without data:image/png;base64,)
+    pub latency_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")] // Don't include error if None
+    pub error: Option<String>,
+}
+
+// Simplified version for pinging, add more fields if needed
+impl ServerPingInfo {
+    // Helper to create an error response
+    fn error(address: &str, error_msg: String, latency: Option<u64>) -> Self {
+        warn!("[Server Ping] Error pinging {}: {}", address, error_msg);
+        ServerPingInfo {
+            description: None,
+            description_json: None,
+            version_name: None,
+            version_protocol: None,
+            players_online: None,
+            players_max: None,
+            favicon_base64: None,
+            latency_ms: latency, // Include latency if measured before error
+            error: Some(error_msg),
+        }
+    }
+}
+
+// Function to perform the server ping
+pub async fn ping_server_status(address: &str) -> ServerPingInfo {
+    info!("[Server Ping] Pinging server: {}", address);
+    
+    // Default timeout duration
+    let ping_timeout = Duration::from_secs(5); 
+
+    // Resolve address (handles domain names and includes SRV lookup implicitly via ToSocketAddrs)
+    // Need to parse port manually if not present, or use default 25565
+    let default_port = 25565;
+    let addr_str = if address.contains(':') {
+        address.to_string()
+    } else {
+        format!("{}:{}", address, default_port)
+    };
+
+    let socket_addr = match addr_str.to_socket_addrs() {
+         Ok(mut addrs) => match addrs.next() {
+            Some(addr) => addr,
+            None => return ServerPingInfo::error(address, "Address resolution failed (no addresses found)".to_string(), None),
+        },
+        Err(e) => return ServerPingInfo::error(address, format!("Address resolution failed: {}", e), None),
+    };
+
+    // Extract hostname for the ping function
+    let hostname = socket_addr.ip().to_string(); // Use resolved IP as hostname for ping
+
+    // Connect with timeout
+    let connect_future = TcpStream::connect(socket_addr);
+    let stream_result = match timeout(ping_timeout, connect_future).await {
+        Ok(Ok(stream)) => Ok(stream),
+        Ok(Err(e)) => Err(AppError::Io(e)), // Connection error
+        Err(_) => Err(AppError::Other("Connection timed out".to_string())), // Timeout error
+    };
+
+    let mut stream = match stream_result {
+         Ok(s) => s,
+         Err(e) => return ServerPingInfo::error(address, format!("Connection failed: {}", e), None),
+    };
+    
+    // Start timing the actual ping
+    let start_time = std::time::Instant::now();
+
+    // Perform the ping with timeout
+    let ping_future = ping(&mut stream, &hostname, socket_addr.port());
+    let result: std::result::Result<Response, CraftPingError> = match timeout(ping_timeout, ping_future).await {
+        Ok(res) => res,
+        Err(_) => return ServerPingInfo::error(address, "Ping timed out".to_string(), Some(ping_timeout.as_millis() as u64)), // Timeout error
+    };
+
+    let latency = start_time.elapsed();
+    let latency_ms = latency.as_millis() as u64;
+
+    // Process the result
+    match result {
+        Ok(pong) => {
+            info!(
+                "[Server Ping] Success for {}: Version={}, Players={}/{}, Latency={}ms",
+                address,
+                pong.version,
+                pong.online_players,
+                pong.max_players,
+                latency_ms
+            );
+             // Extract favicon (remove potential prefix)
+             // Extract favicon and encode it as base64 string
+            let favicon_base64 = pong.favicon.map(|bytes| {
+                // Use the imported base64 crate
+                base64::engine::general_purpose::STANDARD.encode(&bytes)
+            });
+
+             // Helper function to extract plain text from serde_json::Value (Chat component format)
+            fn extract_text_from_value(value: &serde_json::Value) -> String {
+                if let Some(text) = value.get("text").and_then(|v| v.as_str()) {
+                    let mut result = text.to_string();
+                    if let Some(extras) = value.get("extra").and_then(|v| v.as_array()) {
+                        for extra_val in extras {
+                            result.push_str(&extract_text_from_value(extra_val));
+                        }
+                    }
+                    result
+                } else if let Some(s) = value.as_str() {
+                    // Fallback if it's just a plain string
+                    s.to_string()
+                } else {
+                    // Fallback for other types or missing text
+                    String::new()
+                }
+            }
+
+            // Extract JSON MOTD is simpler now
+            let json_motd = pong.description.clone(); // pong is Response struct
+
+            // Extract simple text MOTD from the JSON value
+            let simple_motd = match &json_motd {
+                Some(value) => extract_text_from_value(value),
+                None => String::new(), // Or maybe "MOTD not available"
+            };
+
+            ServerPingInfo {
+                description: Some(simple_motd),
+                description_json: json_motd,
+                version_name: Some(pong.version), // Access fields directly from Response
+                version_protocol: Some(pong.protocol),
+                players_online: Some(pong.online_players as u32), // Cast usize to u32
+                players_max: Some(pong.max_players as u32), // Cast usize to u32
+                favicon_base64: favicon_base64,
+                latency_ms: Some(latency_ms),
+                error: None,
+            }
+        }
+        Err(e) => ServerPingInfo::error(address, format!("Ping failed: {}", e), Some(latency_ms)),
+    }
 } 

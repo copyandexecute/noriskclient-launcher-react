@@ -820,6 +820,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "craftping"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02434d58254bc0314d6519413a42c52e51ca2f358b698454d5495ae4775da966"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "crc"
 version = "3.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2988,6 +3000,7 @@ dependencies = [
  "base64 0.21.7",
  "byteorder",
  "chrono",
+ "craftping",
  "dashmap",
  "directories",
  "dirs",

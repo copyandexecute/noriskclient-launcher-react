@@ -230,6 +230,8 @@ async fn main() {
 
                 debug_utils::debug_print_all_profile_worlds().await;
                 debug_utils::debug_print_all_profile_servers().await;
+                let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
+                info!("Ping info: {:?}", ping_info);
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 
