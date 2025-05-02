@@ -52,6 +52,8 @@ pub async fn install_minecraft_version(
     modloader_str: &str,
     profile: &Profile,
     credentials: Option<Credentials>,
+    quick_play_singleplayer: Option<String>,
+    quick_play_multiplayer: Option<String>,
 ) -> Result<()> {
     // Convert string modloader to ModLoader enum
     let modloader_enum = match modloader_str {
@@ -87,6 +89,12 @@ pub async fn install_minecraft_version(
         "[Launch] Using concurrent downloads: {}",
         launcher_config.concurrent_downloads
     );
+
+    if let Some(world) = &quick_play_singleplayer {
+        info!("[Launch] Quick Play: Launching directly into singleplayer world: {}", world);
+    } else if let Some(server) = &quick_play_multiplayer {
+        info!("[Launch] Quick Play: Connecting directly to server: {}", server);
+    }
 
     let api_service = MinecraftApiService::new();
     let manifest = api_service.get_version_manifest().await?;
@@ -333,6 +341,13 @@ pub async fn install_minecraft_version(
         .with_old_minecraft_arguments(piston_meta.minecraft_arguments.clone())
         .with_resolution(profile.settings.resolution.clone())
         .with_experimental_mode(is_experimental_mode);
+
+    // Add Quick Play parameters if provided
+    if let Some(world_name) = quick_play_singleplayer {
+        launch_params = launch_params.with_quick_play_singleplayer(world_name);
+    } else if let Some(server_address) = quick_play_multiplayer {
+        launch_params = launch_params.with_quick_play_multiplayer(server_address);
+    }
 
     // Install modloader using the factory
     if modloader_enum != ModLoader::Vanilla {

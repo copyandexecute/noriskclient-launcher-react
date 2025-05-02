@@ -133,7 +133,11 @@ pub async fn create_profile(params: CreateProfileParams) -> Result<Uuid, Command
 }
 
 #[tauri::command]
-pub async fn launch_profile(id: Uuid) -> Result<(), CommandError> {
+pub async fn launch_profile(
+    id: Uuid, 
+    quick_play_singleplayer: Option<String>,
+    quick_play_multiplayer: Option<String>
+) -> Result<(), CommandError> {
     let state = State::get().await?;
 
     // Try to get the regular profile
@@ -196,6 +200,17 @@ pub async fn launch_profile(id: Uuid) -> Result<(), CommandError> {
     let profile_id = profile.id; // Store profile ID for later use
     let profile_clone = profile.clone();
 
+    // Clone Quick Play parameters for the spawned task
+    let quick_play_sp_clone = quick_play_singleplayer.clone();
+    let quick_play_mp_clone = quick_play_multiplayer.clone();
+
+    // Log if Quick Play is being used
+    if quick_play_singleplayer.is_some() {
+        info!("Launching profile {} with Quick Play singleplayer: {}", id, quick_play_singleplayer.as_ref().unwrap());
+    } else if quick_play_multiplayer.is_some() {
+        info!("Launching profile {} with Quick Play multiplayer: {}", id, quick_play_multiplayer.as_ref().unwrap());
+    }
+
     // Spawn the installation task and get the JoinHandle
     let handle = tokio::spawn(async move {
         let install_result = installer::install_minecraft_version(
@@ -203,6 +218,8 @@ pub async fn launch_profile(id: Uuid) -> Result<(), CommandError> {
             &modloader.as_str(),
             &profile_clone,
             credentials,
+            quick_play_sp_clone,
+            quick_play_mp_clone,
         )
         .await;
 
