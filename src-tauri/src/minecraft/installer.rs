@@ -303,6 +303,22 @@ pub async fn install_minecraft_version(
         launch_params = launch_params.with_main_class(&piston_meta.main_class);
     }
 
+    // Add custom JVM arguments from profile settings string
+    if let Some(jvm_args_str) = &profile.settings.custom_jvm_args {
+        if !jvm_args_str.trim().is_empty() {
+            let mut current_jvm_args = launch_params.additional_jvm_args.clone();
+            let custom_args: Vec<String> = jvm_args_str.split_whitespace().map(String::from).collect();
+            info!("Adding custom JVM arguments from profile: {:?}", custom_args);
+            current_jvm_args.extend(custom_args);
+            launch_params = launch_params.with_additional_jvm_args(current_jvm_args);
+        }
+    }
+
+    // Combine Game arguments from modloader (if any) and profile settings (extra_game_args)
+    let mut final_game_args = launch_params.additional_game_args.clone();
+    final_game_args.extend(profile.settings.extra_game_args.clone());
+    launch_params = launch_params.with_additional_game_args(final_game_args);
+
     // --- Fetch Norisk Config Once if a pack is selected ---
     let loaded_norisk_config: Option<NoriskModpacksConfig> =
         if let Some(pack_id) = &profile.selected_norisk_pack_id {

@@ -158,7 +158,9 @@ pub struct ProfileSettings {
     pub memory: MemorySettings,              // Speicher Einstellungen
     pub resolution: Option<WindowSize>,      // Auflösung
     pub fullscreen: bool,                    // Vollbild
-    pub extra_args: Vec<String>,             // Zusätzliche Argumente
+    pub extra_game_args: Vec<String>,             // Zusätzliche Argumente für das Spiel
+    #[serde(default)] // Für Abwärtskompatibilität
+    pub custom_jvm_args: Option<String>,     // Zusätzliche JVM-Argumente als String
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1272,7 +1274,8 @@ impl Default for ProfileSettings {
             memory: MemorySettings::default(),
             resolution: None,
             fullscreen: false,
-            extra_args: Vec::new(),
+            extra_game_args: Vec::new(),
+            custom_jvm_args: None, // Standardmäßig keine benutzerdefinierten JVM-Args
         }
     }
 }
