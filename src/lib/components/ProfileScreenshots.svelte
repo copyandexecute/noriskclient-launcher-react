@@ -2,8 +2,9 @@
     import { onMount } from 'svelte';
     import { invoke } from '@tauri-apps/api/core';
     import { convertFileSrc } from '@tauri-apps/api/core';
+    import { Image } from '@tauri-apps/api/image'; // Import Tauri Image
     import type { ScreenshotInfo } from '$lib/types/profile';
-    import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+    import { writeText, writeImage } from '@tauri-apps/plugin-clipboard-manager';
     import { notificationStore } from '$lib/stores/notificationStore'; // For feedback
 
     let { profileId } = $props<{ profileId: string }>();
@@ -14,6 +15,7 @@
     let error = $state<string | null>(null);
     let sortOrder = $state<'asc' | 'desc'>('desc'); // Default: newest first
     let deleting = $state<Record<string, boolean>>({}); // Track deletion loading state per path
+    let copyingImage = $state<Record<string, boolean>>({}); // State for image copy loading
 
     $effect(() => {
         console.log("Effect triggered: Sorting screenshots");
@@ -105,6 +107,35 @@
         }
     }
 
+    async function copyScreenshotImage(path: string) {
+        if (copyingImage[path]) return;
+        copyingImage[path] = true;
+        copyingImage = {...copyingImage};
+
+        try {
+            // Call the backend command to get the RAW encoded image bytes
+            const rawImageBytes = await invoke<number[]>('read_file_bytes', { filePath: path });
+            
+            // Convert number[] to Uint8Array for fromBytes
+            const imageBuffer = Uint8Array.from(rawImageBytes);
+
+            // Create a Tauri Image object from the raw encoded bytes
+            // This lets Tauri decode the image (requires image-png feature)
+            const tauriImage = await Image.fromBytes(imageBuffer); 
+
+            // Write the resolved Tauri Image object to the clipboard
+            await writeImage(tauriImage); 
+            notificationStore.info('Screenshot image copied to clipboard!');
+        } catch (err) {
+            console.error(`Failed to copy image data for ${path}:`, err);
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            notificationStore.error(`Failed to copy image: ${errorMsg}`);
+        } finally {
+            delete copyingImage[path];
+            copyingImage = {...copyingImage};
+        }
+    }
+
     onMount(() => {
         fetchScreenshots();
     });
@@ -173,7 +204,15 @@
                         </div>
                         <div class="screenshot-actions">
                             <button 
-                                class="action-button copy-button"
+                                class="action-button copy-image-button"
+                                title="Copy image to clipboard"
+                                on:click={() => copyScreenshotImage(screenshot.path)}
+                                disabled={copyingImage[screenshot.path]}
+                            >
+                                {#if copyingImage[screenshot.path]} <span class="spinner small"></span> {:else} 🖼️ {/if}
+                            </button>
+                            <button 
+                                class="action-button copy-path-button"
                                 title="Copy file path"
                                 on:click={() => copyScreenshotPath(screenshot.path)}
                             >📋</button>
@@ -300,7 +339,7 @@
     .screenshot-actions {
         display: flex;
         justify-content: flex-end;
-        gap: 0.5rem;
+        gap: 0.4rem;
         margin-top: auto;
     }
 
