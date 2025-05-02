@@ -907,3 +907,70 @@ fn add_dir_to_zip<'a>(
         Ok(())
     })
 }
+
+// Added: ScreenshotInfo struct
+#[derive(Serialize, Clone, Debug)]
+pub struct ScreenshotInfo {
+    pub filename: String,
+    pub path: PathBuf,
+    pub modified: Option<chrono::DateTime<chrono::Utc>>, // Use chrono for timestamps
+}
+
+/// Lists screenshot files found in the profile's `screenshots` directory.
+/// Only includes files ending in `.png`.
+pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<ScreenshotInfo>> {
+    let state = State::get().await?;
+    let instance_path = state.profile_manager.get_profile_instance_path(profile_id).await?;
+    let screenshots_path = instance_path.join("screenshots");
+    let mut screenshots = Vec::new();
+
+    if !screenshots_path.exists() {
+        debug!("Screenshots directory {:?} does not exist for profile {}. Returning empty list.", screenshots_path, profile_id);
+        return Ok(screenshots);
+    }
+
+    let mut dir_entries = match fs::read_dir(&screenshots_path).await {
+        Ok(entries) => entries,
+        Err(e) => {
+            error!("Failed to read screenshots directory {:?}: {}", screenshots_path, e);
+            return Err(AppError::Io(e));
+        }
+    };
+
+    while let Some(entry_result) = dir_entries.next_entry().await.map_err(|e| {
+        error!("Failed to read entry in screenshots directory {:?}: {}", screenshots_path, e);
+        AppError::Io(e)
+    })? {
+        let path = entry_result.path();
+        if path.is_file() {
+            if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
+                if filename_str.to_lowercase().ends_with(".png") {
+                    let modified_time = match fs::metadata(&path).await {
+                        Ok(metadata) => match metadata.modified() {
+                            Ok(sys_time) => Some(chrono::DateTime::<chrono::Utc>::from(sys_time)),
+                            Err(e) => {
+                                warn!("Could not get modified time for {:?}: {}", path, e);
+                                None
+                            }
+                        },
+                        Err(e) => {
+                            warn!("Could not get metadata for {:?}: {}", path, e);
+                            None
+                        }
+                    };
+
+                    screenshots.push(ScreenshotInfo {
+                        filename: filename_str.to_string(),
+                        path: path.clone(),
+                        modified: modified_time,
+                    });
+                }
+            }
+        }
+    }
+
+    screenshots.sort_by(|a, b| b.modified.cmp(&a.modified));
+
+    info!("Found {} screenshot(s) in {:?}", screenshots.len(), screenshots_path);
+    Ok(screenshots)
+}

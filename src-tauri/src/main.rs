@@ -59,7 +59,7 @@ use commands::profile_command::{
     update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
     is_content_installed, open_profile_latest_log, get_profile_latest_log_content,
     get_worlds_for_profile, get_servers_for_profile, copy_world, check_world_lock_status,
-    delete_world, get_profile_log_files, get_log_file_content
+    delete_world, get_profile_log_files, get_log_file_content, list_profile_screenshots
 };
 
 // Use statements for registered commands only  
@@ -367,7 +367,8 @@ async fn main() {
             ping_minecraft_server,
             delete_world,
             get_profile_log_files,
-            get_log_file_content
+            get_log_file_content,
+            list_profile_screenshots
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -13,7 +13,7 @@ use crate::state::profile_state::{
 use crate::state::state_manager::State;
 use crate::utils::datapack_utils::DataPackInfo;
 use crate::utils::path_utils::find_unique_profile_segment;
-use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus};
+use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo};
 use crate::utils::resourcepack_utils::ResourcePackInfo;
 use crate::utils::shaderpack_utils::ShaderPackInfo;
 use crate::utils::{
@@ -1541,4 +1541,12 @@ pub async fn delete_world(profile_id: Uuid, world_folder: String) -> Result<(), 
 
     info!("Successfully executed delete_world command.");
     Ok(())
+}
+
+// Added: Command to list screenshots for a profile
+#[tauri::command]
+pub async fn list_profile_screenshots(profile_id: Uuid) -> Result<Vec<ScreenshotInfo>, CommandError> {
+    info!("Executing list_profile_screenshots command for profile {}", profile_id);
+    // Call the utility function from profile_utils, passing only the ID
+    Ok(profile_utils::get_screenshots_for_profile(profile_id).await?)
 }
