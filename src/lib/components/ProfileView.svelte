@@ -13,6 +13,7 @@
     import ProfileContent from "./ProfileContent.svelte"; // Import ProfileContent
     import ProfileCopy from "./ProfileCopy.svelte"; // Import ProfileCopy instead
     import ProfileWorlds from "./ProfileWorlds.svelte"; // Import ProfileWorlds
+    import ProfileLogs from "./ProfileLogs.svelte"; // Import ProfileLogs
     import Modal from "./Modal.svelte"; // Import Modal component
     import { invoke } from "@tauri-apps/api/core";
     import { copyProfile } from "$lib/api/profiles";
@@ -1080,6 +1081,13 @@
         <ProfileWorlds 
             profileId={profile.id} 
             on:launch={handleQuickPlayLaunch}
+        />
+    {/if}
+
+    <!-- NEW: Logs Component -->
+    {#if profile.id}
+        <ProfileLogs 
+            profileId={profile.id} 
         />
     {/if}
 </div>
