@@ -22,7 +22,6 @@
     import type { CustomModInfo } from '$lib/types/profile';
     import type { EventPayload } from '$lib/types/events';
     import type { MinecraftVersion } from '$lib/types/minecraft';
-    import QuickPlayOptions from './QuickPlayOptions.svelte';
 
     let minecraftVersions: MinecraftVersion[] = $state([]);
     let selectedType = $state<string>("release");
