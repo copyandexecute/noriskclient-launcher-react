@@ -10,6 +10,35 @@ use crate::state::State;
 use uuid::Uuid;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::io::Cursor; // Needed for reading NBT from bytes
+use fastnbt::from_bytes; // NBT deserialization
+use fastnbt::value::Value; // Access NBT values
+use std::collections::HashMap; // To represent NBT Compound
+
+// --- Struct for World Info ---
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct WorldInfo {
+    pub folder_name: String,
+    pub display_name: Option<String>,
+    pub last_played: Option<i64>,
+    pub icon_path: Option<PathBuf>,
+}
+
+// --- NBT Structures (simplified for what we need) ---
+#[derive(serde::Deserialize, Debug)]
+struct LevelDat {
+    #[serde(rename = "Data")]
+    data: LevelData,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct LevelData {
+    #[serde(rename = "LevelName")]
+    level_name: Option<String>,
+    #[serde(rename = "LastPlayed")]
+    last_played: Option<i64>,
+    // Add other fields if needed later
+}
 
 /// Returns the path to the default .minecraft directory based on OS
 pub fn get_default_minecraft_dir() -> PathBuf {
@@ -406,4 +435,113 @@ async fn emit_reuse_progress(
         })
         .await?;
     Ok(event_id)
+}
+
+// --- New Function to Get Profile Worlds ---
+/// Lists the singleplayer worlds found in the profile's saves directory.
+/// Currently only returns the folder name.
+pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
+    info!("[Worlds] Getting worlds for profile {}", profile_id);
+    let state = State::get().await?;
+
+    // Try to get the user profile first, or fall back to standard profile if ID matches
+    let profile = match state.profile_manager.get_profile(profile_id).await {
+        Ok(p) => {
+            info!("[Worlds] Found user profile: {}", p.name);
+            p // Found user profile
+        }
+        Err(AppError::ProfileNotFound(_)) => {
+            // Not a user profile, check if it's a standard version
+            match state.norisk_version_manager.get_profile_by_id(profile_id).await {
+                Some(standard_profile) => {
+                    info!("[Worlds] ID {} matches standard profile: {}. Proceeding with standard profile object.", profile_id, standard_profile.name);
+                    standard_profile // Use the standard profile object
+                }
+                None => {
+                    error!("[Worlds] Profile ID {} not found as user profile or standard profile.", profile_id);
+                    return Err(AppError::ProfileNotFound(profile_id)); // ID not found anywhere
+                }
+            }
+        }
+        Err(e) => return Err(e), // Propagate other errors (e.g., IO errors loading profiles.json)
+    };
+
+    // Calculate the instance path (this might not be meaningful for standard profiles)
+    let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
+    let saves_path = instance_path.join("saves");
+    info!("[Worlds] Checking saves directory: {}", saves_path.display());
+
+    if !saves_path.is_dir() {
+        // This will likely be true for standard profiles
+        info!("[Worlds] Saves directory not found or not a directory for profile '{}' (path: {}). Returning empty list.", profile.name, saves_path.display());
+        return Ok(Vec::new());
+    }
+
+    let mut worlds = Vec::new();
+    let mut read_dir = fs::read_dir(&saves_path).await?;
+
+    while let Some(entry_result) = read_dir.next_entry().await? {
+        let entry_path = entry_result.path();
+        // Check if it's a directory AND contains a level.dat file
+        if entry_path.is_dir() {
+            let level_dat_path = entry_path.join("level.dat");
+            if level_dat_path.is_file() {
+                if let Some(folder_name) = entry_path.file_name().and_then(|n| n.to_str()) {
+                    // Basic filtering: ignore folders starting with "."
+                    if !folder_name.starts_with(".") {
+                        let mut world_info = WorldInfo {
+                            folder_name: folder_name.to_string(),
+                            display_name: None,
+                            last_played: None,
+                            icon_path: None,
+                        };
+
+                        // Try to read level.dat
+                        match fs::read(&level_dat_path).await {
+                            Ok(bytes) => {
+                                // fastnbt::de::from_bytes expects a slice
+                                match from_bytes::<LevelDat>(&bytes) {
+                                    Ok(level_dat) => {
+                                        info!("[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}", 
+                                              folder_name, level_dat.data.level_name, level_dat.data.last_played);
+                                        world_info.display_name = level_dat.data.level_name;
+                                        world_info.last_played = level_dat.data.last_played;
+                                    }
+                                    Err(e) => {
+                                        warn!("[Worlds] Failed to parse NBT for '{}': {}. Path: {}", 
+                                              folder_name, e, level_dat_path.display());
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                warn!("[Worlds] Failed to read level.dat for '{}': {}. Path: {}", 
+                                      folder_name, e, level_dat_path.display());
+                            }
+                        }
+
+                        // Check for icon.png
+                        let icon_path = entry_path.join("icon.png");
+                        if icon_path.is_file() {
+                            info!("[Worlds] Found icon.png for '{}'", folder_name);
+                            world_info.icon_path = Some(icon_path);
+                        }
+
+                        worlds.push(world_info);
+                    } else {
+                        debug!("[Worlds] Skipping hidden folder: {}", folder_name);
+                    }
+                } else {
+                     warn!("[Worlds] Skipping entry with non-UTF8 name in saves directory: {:?}", entry_path);
+                }
+            } else {
+                 debug!("[Worlds] Skipping folder without level.dat: {}", entry_path.display());
+            }
+        }
+    }
+
+    // Sort worlds by last played descending (most recent first)
+    worlds.sort_by(|a, b| b.last_played.cmp(&a.last_played));
+
+    info!("[Worlds] Found {} valid world(s) for profile {}", worlds.len(), profile_id);
+    Ok(worlds)
 } 

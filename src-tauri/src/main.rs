@@ -16,6 +16,7 @@ use crate::integrations::norisk_packs;
 use crate::integrations::norisk_versions;
 use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
+use utils::debug_utils;
 use std::sync::Arc;
 use tauri::Listener;
 
@@ -225,6 +226,8 @@ async fn main() {
                     error!("Failed to initialize state: {}", e);
                     // Consider exiting or notifying the user if state init fails critically
                 }
+
+                debug_utils::debug_print_all_profile_worlds().await;
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 
