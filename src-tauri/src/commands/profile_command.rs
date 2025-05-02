@@ -1379,6 +1379,18 @@ pub async fn get_profile_latest_log_content(profile_id: Uuid) -> Result<String, 
     Ok(profile_utils::get_latest_log_content(profile_id).await?)
 }
 
+/// Gets a list of all log file paths (.log and .log.gz) for the specified profile.
+#[tauri::command]
+pub async fn get_profile_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>, CommandError> {
+    info!(
+        "Executing get_profile_log_files command for profile {}",
+        profile_id
+    );
+
+    // Call the utility function
+    Ok(profile_utils::list_log_files(profile_id).await?)
+}
+
 #[tauri::command]
 pub async fn get_worlds_for_profile(profile_id: Uuid) -> Result<Vec<WorldInfo>, CommandError> {
     info!("Executing get_worlds_for_profile command for profile {}", profile_id);

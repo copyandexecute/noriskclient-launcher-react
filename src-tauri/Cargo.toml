@@ -33,6 +33,7 @@ zip = "2.6.1"
 flate2 = "1.0"
 tar = "0.4"
 async_zip = { version = "0.0.17", features = ["full"] }
+async-compression = { version = "0.4", features = ["tokio", "gzip"] }
 semver = "1.0"
 quick-xml = { version = "0.31.0", features = ["serialize"] }
 tracing = "0.1"

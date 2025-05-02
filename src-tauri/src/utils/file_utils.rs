@@ -123,3 +123,78 @@ pub async fn read_file_content_lossy(file_path: &Path) -> Result<String> {
         }
     }
 }
+
+/// Reads the content of a log file (`.log` or `.log.gz`) into a string.
+/// Supports plain text and gzip compressed files.
+///
+/// If the file doesn't exist, returns `Ok("".to_string())`.
+/// Invalid UTF-8 sequences are replaced lossily.
+///
+/// # Arguments
+///
+/// * `log_path` - The path to the log file.
+///
+/// # Returns
+///
+/// A `Result` containing the log content as a `String`, or an `AppError` if reading or decompression fails.
+pub async fn read_log_file_content(log_path: &Path) -> Result<String> {
+    // Check if the file exists
+    if !log_path.exists() {
+        log::warn!(
+            "Log file not found at {}, returning empty content.",
+            log_path.display()
+        );
+        return Ok("".to_string()); // Return empty string if file not found
+    }
+
+    let filename = log_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    if filename.ends_with(".log.gz") {
+        // Handle gzipped file
+        log::debug!("Reading gzipped log file: {}", log_path.display());
+        match tokio::fs::File::open(log_path).await {
+            Ok(file) => {
+                let buf_reader = tokio::io::BufReader::new(file);
+                let mut decoder = async_compression::tokio::bufread::GzipDecoder::new(buf_reader);
+                let mut decompressed_bytes = Vec::new();
+                match tokio::io::copy(&mut decoder, &mut decompressed_bytes).await {
+                    Ok(bytes_copied) => {
+                        let content = String::from_utf8_lossy(&decompressed_bytes).to_string();
+                        log::info!(
+                            "Successfully read and decompressed {} bytes from gzipped log file {}",
+                            bytes_copied,
+                            log_path.display()
+                        );
+                        Ok(content)
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Failed to decompress gzipped log file {}: {}",
+                            log_path.display(),
+                            e
+                        );
+                        Err(AppError::Io(e))
+                    }
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to open gzipped log file {}: {}", log_path.display(), e);
+                Err(AppError::Io(e))
+            }
+        }
+    } else if filename.ends_with(".log") {
+        // Handle plain text file using existing function
+        log::debug!("Reading plain text log file: {}", log_path.display());
+        read_file_content_lossy(log_path).await
+    } else {
+        // Handle unsupported file type
+        log::warn!(
+            "Unsupported log file type at {}, returning empty content.",
+            log_path.display()
+        );
+        Ok("".to_string()) // Or return an error if preferred
+    }
+}

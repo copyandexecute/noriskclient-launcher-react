@@ -625,8 +625,66 @@ pub async fn get_latest_log_content(profile_id: Uuid) -> Result<String> {
     // Construct the path to the log file
     let log_path = instance_path.join("logs").join("latest.log");
 
-    // Use the utility function to read the file content
-    file_utils::read_file_content_lossy(&log_path).await
+    // Use the new utility function to read the log file content
+    file_utils::read_log_file_content(&log_path).await
+}
+
+/// Lists all log files (`.log` and `.log.gz`) for a given profile.
+///
+/// # Arguments
+///
+/// * `profile_id` - The UUID of the profile whose log files should be listed.
+///
+/// # Returns
+///
+/// Returns `Ok(Vec<PathBuf>)` containing the paths to the log files on success.
+/// Returns an empty vector in `Ok` if the logs directory does not exist.
+/// Returns an `AppError` if the profile instance path cannot be determined or reading the directory fails.
+pub async fn list_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>> {
+    info!("Listing log files for profile {}", profile_id);
+
+    // Get the profile instance path
+    let state = State::get().await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
+
+    // Construct the path to the logs directory
+    let logs_dir = instance_path.join("logs");
+    debug!("Logs directory path: {}", logs_dir.display());
+
+    // Check if the logs directory exists
+    if !logs_dir.exists() {
+        warn!("Logs directory not found at {}. Returning empty list.", logs_dir.display());
+        return Ok(Vec::new());
+    }
+
+    let mut log_files = Vec::new();
+    let mut entries = match fs::read_dir(&logs_dir).await {
+        Ok(entries) => entries,
+        Err(e) => {
+            error!("Failed to read logs directory {}: {}", logs_dir.display(), e);
+            return Err(AppError::Io(e));
+        }
+    };
+
+    while let Some(entry_result) = entries.next_entry().await.map_err(|e| {
+        error!("Failed to read entry in logs directory {}: {}", logs_dir.display(), e);
+        AppError::Io(e)
+    })? {
+        let path = entry_result.path();
+        if path.is_file() {
+            if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
+                if filename_str.ends_with(".log") || filename_str.ends_with(".log.gz") {
+                    log_files.push(path);
+                }
+            }
+        }
+    }
+
+    info!("Found {} log file(s) for profile {}", log_files.len(), profile_id);
+    Ok(log_files)
 }
 
 /// Exports a profile to a `.noriskpack` file
