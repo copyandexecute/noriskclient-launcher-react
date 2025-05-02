@@ -45,6 +45,7 @@ use commands::minecraft_command::{
     update_skin_properties,
     upload_log_to_mclogs_command,
     upload_skin,
+    ping_minecraft_server,
 };
 use commands::profile_command::{
     abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
@@ -360,6 +361,7 @@ async fn main() {
             commands::java_command::validate_java_path_command,
             get_worlds_for_profile,
             get_servers_for_profile,
+            ping_minecraft_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
