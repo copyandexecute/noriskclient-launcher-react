@@ -331,3 +331,28 @@ pub async fn open_file(
         }
     }
 }
+
+/// Reads the content of a file as raw bytes.
+#[tauri::command]
+pub async fn read_file_bytes(file_path: String) -> Result<Vec<u8>, CommandError> {
+    let path = PathBuf::from(&file_path);
+    debug!("Reading bytes from file: {}", path.display());
+
+    if !path.exists() {
+        error!("File not found for reading bytes: {}", path.display());
+        return Err(CommandError::from(AppError::FileNotFound(path)));
+    }
+    if !path.is_file() {
+        error!("Path is not a file for reading bytes: {}", path.display());
+        return Err(CommandError::from(AppError::Other(format!(
+            "Path is not a file: {}",
+            path.display()
+        ))));
+    }
+
+    // Read the file content into a vector of bytes
+    fs::read(&path).await.map_err(|e| {
+        error!("Failed to read file bytes {}: {}", path.display(), e);
+        CommandError::from(AppError::Io(e))
+    })
+}
