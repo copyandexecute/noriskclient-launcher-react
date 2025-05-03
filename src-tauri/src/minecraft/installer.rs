@@ -7,12 +7,10 @@ use crate::minecraft::downloads::mc_assets_download::MinecraftAssetsDownloadServ
 use crate::minecraft::downloads::mc_client_download::MinecraftClientDownloadService;
 use crate::minecraft::downloads::mc_libraries_download::MinecraftLibrariesDownloadService;
 use crate::minecraft::downloads::mc_natives_download::MinecraftNativesDownloadService;
-use crate::minecraft::downloads::{ModDownloadService, NoriskClientAssetsDownloadService};
 use crate::minecraft::downloads::NoriskPackDownloadService;
+use crate::minecraft::downloads::{ModDownloadService, NoriskClientAssetsDownloadService};
 use crate::minecraft::dto::JavaDistribution;
-use crate::minecraft::{
-    MinecraftLaunchParameters, MinecraftLauncher,
-};
+use crate::minecraft::{MinecraftLaunchParameters, MinecraftLauncher};
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::profile_state::{ModLoader, Profile};
 use crate::state::state_manager::State;
@@ -21,9 +19,7 @@ use uuid::Uuid;
 
 use super::minecraft_auth::Credentials;
 use super::modloader::ModloaderFactory;
-use crate::minecraft::downloads::{
-    MinecraftLoggingDownloadService,
-};
+use crate::minecraft::downloads::MinecraftLoggingDownloadService;
 
 async fn emit_progress_event(
     state: &State,
@@ -91,9 +87,15 @@ pub async fn install_minecraft_version(
     );
 
     if let Some(world) = &quick_play_singleplayer {
-        info!("[Launch] Quick Play: Launching directly into singleplayer world: {}", world);
+        info!(
+            "[Launch] Quick Play: Launching directly into singleplayer world: {}",
+            world
+        );
     } else if let Some(server) = &quick_play_multiplayer {
-        info!("[Launch] Quick Play: Connecting directly to server: {}", server);
+        info!(
+            "[Launch] Quick Play: Connecting directly to server: {}",
+            server
+        );
     }
 
     let api_service = MinecraftApiService::new();
@@ -125,11 +127,12 @@ pub async fn install_minecraft_version(
 
     // Check if profile uses a custom Java path
     let mut custom_java_valid = false;
-    let java_path = if profile.settings.use_custom_java_path && profile.settings.java_path.is_some() {
+    let java_path = if profile.settings.use_custom_java_path && profile.settings.java_path.is_some()
+    {
         // Try to use the custom Java path
         let custom_path = profile.settings.java_path.as_ref().unwrap();
         info!("Using custom Java path from profile: {}", custom_path);
-        
+
         // Verify that the custom Java path exists and is valid
         let path = std::path::PathBuf::from(custom_path);
         if path.exists() {
@@ -141,11 +144,13 @@ pub async fn install_minecraft_version(
                         "Verified custom Java: Version {}, Major version {}, 64-bit: {}",
                         java_info.version, java_info.major_version, java_info.is_64bit
                     );
-                    
+
                     // Check if the Java version is compatible with the required one
                     if java_info.major_version >= java_version {
-                        info!("Custom Java version {} meets the required version {}", 
-                            java_info.major_version, java_version);
+                        info!(
+                            "Custom Java version {} meets the required version {}",
+                            java_info.major_version, java_version
+                        );
                         custom_java_valid = true;
                         path
                     } else {
@@ -160,13 +165,19 @@ pub async fn install_minecraft_version(
                     }
                 }
                 Err(e) => {
-                    info!("Custom Java path exists but is not valid: {}. Downloading Java...", e);
+                    info!(
+                        "Custom Java path exists but is not valid: {}. Downloading Java...",
+                        e
+                    );
                     // Will be set by the download code below
                     std::path::PathBuf::new()
                 }
             }
         } else {
-            info!("Custom Java path does not exist: {}. Downloading Java...", custom_path);
+            info!(
+                "Custom Java path does not exist: {}. Downloading Java...",
+                custom_path
+            );
             // Will be set by the download code below
             std::path::PathBuf::new()
         }
@@ -178,7 +189,7 @@ pub async fn install_minecraft_version(
     // Download and setup Java if necessary
     let java_path = if custom_java_valid {
         info!("Using verified custom Java path: {:?}", java_path);
-        
+
         // Update progress to 100% since we're using a custom path
         emit_progress_event(
             &state,
@@ -189,7 +200,7 @@ pub async fn install_minecraft_version(
             None,
         )
         .await?;
-        
+
         java_path
     } else {
         // Download Java since custom path is not valid or not set
@@ -202,9 +213,9 @@ pub async fn install_minecraft_version(
                 Some(&piston_meta.java_version.component),
             )
             .await?;
-        
+
         info!("Java installation path: {:?}", downloaded_path);
-        
+
         // Update progress to 100%
         emit_progress_event(
             &state,
@@ -215,7 +226,7 @@ pub async fn install_minecraft_version(
             None,
         )
         .await?;
-        
+
         downloaded_path
     };
 
@@ -293,15 +304,15 @@ pub async fn install_minecraft_version(
 
     // Download NoRiskClient assets if profile has a selected pack
     info!("\nDownloading NoRiskClient assets...");
-    
+
     let norisk_assets_service = NoriskClientAssetsDownloadService::new()
         .with_concurrent_downloads(launcher_config.concurrent_downloads);
-    
+
     // Download assets for this profile - progress events are now handled internally
     norisk_assets_service
         .download_nrc_assets_for_profile(&profile, credentials.as_ref(), is_experimental_mode)
         .await?;
-        
+
     info!("NoRiskClient Asset download completed!");
 
     // Emit client download event
@@ -397,8 +408,12 @@ pub async fn install_minecraft_version(
     if let Some(jvm_args_str) = &profile.settings.custom_jvm_args {
         if !jvm_args_str.trim().is_empty() {
             let mut current_jvm_args = launch_params.additional_jvm_args.clone();
-            let custom_args: Vec<String> = jvm_args_str.split_whitespace().map(String::from).collect();
-            info!("Adding custom JVM arguments from profile: {:?}", custom_args);
+            let custom_args: Vec<String> =
+                jvm_args_str.split_whitespace().map(String::from).collect();
+            info!(
+                "Adding custom JVM arguments from profile: {:?}",
+                custom_args
+            );
             current_jvm_args.extend(custom_args);
             launch_params = launch_params.with_additional_jvm_args(current_jvm_args);
         }
@@ -647,7 +662,9 @@ pub async fn install_minecraft_version(
     )
     .await?;
 
-    launcher.launch(&piston_meta, launch_params, Some(profile.clone())).await?;
+    launcher
+        .launch(&piston_meta, launch_params, Some(profile.clone()))
+        .await?;
 
     emit_progress_event(
         &state,

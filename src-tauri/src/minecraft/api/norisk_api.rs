@@ -1,11 +1,11 @@
+use crate::integrations::norisk_packs::NoriskModpacksConfig;
+use crate::integrations::norisk_versions::NoriskVersionsConfig;
 use crate::minecraft::auth::minecraft_auth::NoRiskToken;
 use crate::minecraft::dto::norisk_meta::NoriskAssets;
 use crate::{
     config::HTTP_CLIENT,
     error::{AppError, Result},
 };
-use crate::integrations::norisk_packs::NoriskModpacksConfig;
-use crate::integrations::norisk_versions::NoriskVersionsConfig;
 use log::{debug, error, info};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -239,13 +239,8 @@ impl NoRiskApi {
             "[NoRisk API] Fetching modpack configuration. Experimental: {}",
             is_experimental
         );
-        Self::get_from_norisk_endpoint(
-            "launcher/modpacks",
-            norisk_token,
-            None,
-            is_experimental,
-        )
-        .await
+        Self::get_from_norisk_endpoint("launcher/modpacks", norisk_token, None, is_experimental)
+            .await
     }
 
     /// Fetches the standard version profiles from the NoRisk API.
@@ -257,13 +252,8 @@ impl NoRiskApi {
             "[NoRisk API] Fetching standard version profiles. Experimental: {}",
             is_experimental
         );
-        Self::get_from_norisk_endpoint(
-            "launcher/versions",
-            norisk_token,
-            None,
-            is_experimental,
-        )
-        .await
+        Self::get_from_norisk_endpoint("launcher/versions", norisk_token, None, is_experimental)
+            .await
     }
 
     // Add more NoRisk API methods as needed

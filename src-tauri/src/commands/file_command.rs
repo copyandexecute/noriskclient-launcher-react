@@ -1,12 +1,12 @@
 use crate::error::{AppError, CommandError};
-use log::{debug, info, error, warn};
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use tokio::fs;
-use tauri_plugin_opener::OpenerExt;
-use crate::utils::file_utils;
 use crate::integrations::norisk_packs::NoriskModEntryDefinition;
+use crate::utils::file_utils;
 use crate::utils::path_utils;
+use log::{debug, error, info, warn};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use tauri_plugin_opener::OpenerExt;
+use tokio::fs;
 
 /// Sets a file as enabled or disabled by adding or removing the .disabled extension
 #[tauri::command]
@@ -124,7 +124,7 @@ pub async fn delete_file(file_path: String) -> Result<(), CommandError> {
 #[tauri::command]
 pub async fn open_file_directory(
     app_handle: tauri::AppHandle,
-    file_path: String
+    file_path: String,
 ) -> Result<(), CommandError> {
     let path = PathBuf::from(&file_path);
     info!("Opening directory for file: {}", path.display());
@@ -213,7 +213,10 @@ pub async fn get_icons_for_archives(
         }
     }
 
-    info!("Finished fetching icons. Returning {} results.", results_map.len());
+    info!(
+        "Finished fetching icons. Returning {} results.",
+        results_map.len()
+    );
     Ok(results_map)
 }
 
@@ -241,16 +244,12 @@ pub async fn get_icons_for_norisk_mods(
 
     // Sammle alle Mod-Cache-Pfade
     let mut mod_paths: Vec<(String, String)> = Vec::new(); // (mod_id, file_path)
-    
+
     for mod_entry in &mods {
-        match path_utils::get_norisk_mod_cache_path(
-            mod_entry,
-            &minecraft_version,
-            &loader
-        ) {
+        match path_utils::get_norisk_mod_cache_path(mod_entry, &minecraft_version, &loader) {
             Ok(path) => {
                 mod_paths.push((mod_entry.id.clone(), path.to_string_lossy().to_string()));
-            },
+            }
             Err(e) => {
                 warn!("Could not get cache path for mod {}: {}", mod_entry.id, e);
                 results_map.insert(mod_entry.id.clone(), None); // Mod nicht gefunden, kein Icon
@@ -274,16 +273,19 @@ pub async fn get_icons_for_norisk_mods(
             }
             Err(AppError::FileNotFound(_)) => {
                 warn!("Archive file not found for mod {}: {}", mod_id, path_str);
-                results_map.insert(mod_id, None); 
+                results_map.insert(mod_id, None);
             }
             Err(e) => {
                 error!("Error processing archive for mod {}: {}", mod_id, e);
-                results_map.insert(mod_id, None); 
+                results_map.insert(mod_id, None);
             }
         }
     }
 
-    info!("Finished fetching Norisk mod icons. Returning {} results.", results_map.len());
+    info!(
+        "Finished fetching Norisk mod icons. Returning {} results.",
+        results_map.len()
+    );
     Ok(results_map)
 }
 
@@ -292,7 +294,7 @@ pub async fn get_icons_for_norisk_mods(
 #[tauri::command]
 pub async fn open_file(
     app_handle: tauri::AppHandle,
-    file_path: String
+    file_path: String,
 ) -> Result<(), CommandError> {
     let path = PathBuf::from(&file_path);
     info!("Attempting to open file: {}", path.display());
@@ -326,7 +328,7 @@ pub async fn open_file(
             // For now, return a generic error
             Err(CommandError::from(AppError::Other(format!(
                 "Failed to open file: {}. Check permissions.",
-                 e // Include the original error message
+                e // Include the original error message
             ))))
         }
     }

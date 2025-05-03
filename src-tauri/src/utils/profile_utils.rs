@@ -1,25 +1,25 @@
 use crate::error::{AppError, Result};
 use crate::integrations::modrinth::{ModrinthProjectType, ModrinthVersion};
-use crate::state::profile_state::Profile;
-use crate::state::profile_state::{Mod, ModSource, ModLoader};
-use crate::utils::{resourcepack_utils, shaderpack_utils, datapack_utils, hash_utils};
-use crate::state::state_manager::State;
 use crate::integrations::norisk_packs;
-use log::{debug, info, warn, error};
-use std::path::{Path, PathBuf};
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use uuid::Uuid;
-use serde_json;
-use tempfile;
+use crate::state::profile_state::Profile;
+use crate::state::profile_state::{Mod, ModLoader, ModSource};
+use crate::state::state_manager::State;
+use crate::utils::file_utils;
+use crate::utils::{datapack_utils, hash_utils, resourcepack_utils, shaderpack_utils};
 use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
 use futures::future::{BoxFuture, FutureExt};
-use serde::{Serialize, Deserialize};
+use log::{debug, error, info, warn};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
-use crate::utils::file_utils;
+use tempfile;
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 
 /// Represents the type of content to be installed
 pub enum ContentType {
@@ -104,7 +104,7 @@ async fn download_content(
 
     // Create a reqwest client
     let client = reqwest::Client::new();
-    
+
     // Download the file
     let response = client
         .get(url)
@@ -135,7 +135,7 @@ async fn download_content(
     // Verify SHA1 hash if expected hash was provided
     if let Some(expected) = expected_sha1 {
         let hash = hash_utils::calculate_sha1_from_bytes(&bytes);
-        
+
         if hash != expected {
             return Err(AppError::Download(format!(
                 "SHA1 hash mismatch. Expected: {}, Got: {}",
@@ -159,9 +159,7 @@ async fn download_content(
         .await
         .map_err(|e| AppError::Io(e))?;
 
-    file.write_all(&bytes)
-        .await
-        .map_err(|e| AppError::Io(e))?;
+    file.write_all(&bytes).await.map_err(|e| AppError::Io(e))?;
 
     info!("Successfully downloaded content to {}", file_path.display());
 
@@ -255,16 +253,18 @@ pub struct ContentInstallStatus {
 ///
 /// Returns `Ok(ContentInstallStatus)` with the status, or `Err` if errors occur.
 #[tauri::command]
-pub async fn check_content_installed(
-    params: CheckContentParams,
-) -> Result<ContentInstallStatus> { 
+pub async fn check_content_installed(params: CheckContentParams) -> Result<ContentInstallStatus> {
     info!(
         "Checking installation status for content in profile {} (MC: {:?}, Loader: {:?}): project_id={:?}, version_id={:?}, hash={:?}, filename={:?}, type={:?}",
         params.profile_id, params.game_version, params.loader, params.project_id, params.version_id, params.file_hash_sha1.is_some(), params.file_name, params.project_type
     );
 
     // Ensure at least one identifier is provided
-    if params.project_id.is_none() && params.version_id.is_none() && params.file_hash_sha1.is_none() && params.file_name.is_none() {
+    if params.project_id.is_none()
+        && params.version_id.is_none()
+        && params.file_hash_sha1.is_none()
+        && params.file_name.is_none()
+    {
         return Err(AppError::Other("At least one identifier (project_id, version_id, file_hash_sha1, file_name) must be provided to check installation status.".to_string()));
     }
 
@@ -276,14 +276,16 @@ pub async fn check_content_installed(
     let profile = state.profile_manager.get_profile(params.profile_id).await?;
 
     // Determine the target loader context
-    let target_loader_str = match &params.loader { // Borrow from params
-        Some(loader_str) => loader_str.as_str(), 
-        None => profile.loader.as_str(),         
+    let target_loader_str = match &params.loader {
+        // Borrow from params
+        Some(loader_str) => loader_str.as_str(),
+        None => profile.loader.as_str(),
     };
 
     // Determine the target game version context
-    let target_game_version_str_buf; 
-    let target_game_version = match &params.game_version { // Borrow from params
+    let target_game_version_str_buf;
+    let target_game_version = match &params.game_version {
+        // Borrow from params
         Some(gv_str) => gv_str.as_str(),
         None => {
             target_game_version_str_buf = profile.game_version.clone();
@@ -291,17 +293,30 @@ pub async fn check_content_installed(
         }
     };
 
-    info!("Using context: MC={}, Loader={}", target_game_version, target_loader_str);
+    info!(
+        "Using context: MC={}, Loader={}",
+        target_game_version, target_loader_str
+    );
 
     // --- Norisk Pack Check (if applicable) ---
     if let Some(pack_id) = &profile.selected_norisk_pack_id {
-        debug!("Profile {} has selected Norisk Pack: {}. Checking pack definition...", params.profile_id, pack_id);
-        let config = state.norisk_pack_manager.get_config().await; 
+        debug!(
+            "Profile {} has selected Norisk Pack: {}. Checking pack definition...",
+            params.profile_id, pack_id
+        );
+        let config = state.norisk_pack_manager.get_config().await;
         match config.get_resolved_pack_definition(pack_id) {
             Ok(resolved_pack) => {
                 for norisk_mod in &resolved_pack.mods {
                     let mut is_potential_project_match = false;
-                    if let (Some(pid_arg), norisk_packs::NoriskModSourceDefinition::Modrinth { project_id: norisk_pid, .. }) = (&params.project_id, &norisk_mod.source) {
+                    if let (
+                        Some(pid_arg),
+                        norisk_packs::NoriskModSourceDefinition::Modrinth {
+                            project_id: norisk_pid,
+                            ..
+                        },
+                    ) = (&params.project_id, &norisk_mod.source)
+                    {
                         if pid_arg == norisk_pid {
                             is_potential_project_match = true;
                         }
@@ -309,35 +324,40 @@ pub async fn check_content_installed(
                     // TODO: Add project matching for other source types if needed
 
                     if is_potential_project_match {
-                        if let Some(loader_map) = norisk_mod.compatibility.get(target_game_version) { 
+                        if let Some(loader_map) = norisk_mod.compatibility.get(target_game_version)
+                        {
                             if let Some(target) = loader_map.get(target_loader_str) {
                                 status.is_included_in_norisk_pack = true;
 
                                 // Check if the SPECIFIC version NUMBER requested matches the pack identifier
-                                if let Some(v_num_arg) = &params.pack_version_number { // Use the new field
+                                if let Some(v_num_arg) = &params.pack_version_number {
+                                    // Use the new field
                                     // TODO: Comparison might need adjustment for non-Modrinth sources if identifier format differs
-                                    if v_num_arg == &target.identifier { 
+                                    if v_num_arg == &target.identifier {
                                         debug!("Specific version number {} IS the one defined in the pack (identifier: {}).", v_num_arg, target.identifier);
                                         status.is_specific_version_in_pack = true;
                                     }
-                                } 
-                                
+                                }
+
                                 if status.is_specific_version_in_pack {
                                     break; // Found specific version in pack
                                 }
                             }
-                        } 
+                        }
                     }
                     if status.is_specific_version_in_pack {
                         break; // Found specific version in pack
                     }
                 }
-                 if status.is_included_in_norisk_pack {
+                if status.is_included_in_norisk_pack {
                     debug!("Found content (some version) in Norisk Pack definition.");
-                 } else {
-                     debug!("Content not found in the definition of Norisk Pack '{}' for MC {} / {}", pack_id, target_game_version, target_loader_str);
-                 }
-            },
+                } else {
+                    debug!(
+                        "Content not found in the definition of Norisk Pack '{}' for MC {} / {}",
+                        pack_id, target_game_version, target_loader_str
+                    );
+                }
+            }
             Err(e) => {
                 warn!("Could not resolve Norisk Pack definition for pack ID '{}': {}. Skipping pack check.", pack_id, e);
             }
@@ -350,23 +370,27 @@ pub async fn check_content_installed(
 
     match target_type {
         "mod" => {
-            debug!("Checking locally installed mods in profile {}...", params.profile_id);
-            for installed_mod in &profile.mods { 
+            debug!(
+                "Checking locally installed mods in profile {}...",
+                params.profile_id
+            );
+            for installed_mod in &profile.mods {
                 let mut mod_project_id: Option<&str> = None;
                 let mut mod_version_id: Option<&str> = None;
                 let mut mod_sha1_hash: Option<&str> = None;
                 let mut mod_file_name: Option<&str> = None;
 
-                if let ModSource::Modrinth { 
-                    project_id: pid, 
-                    version_id: vid, 
-                    file_hash_sha1: hash_opt, 
-                    file_name: fname, 
-                    .. 
-                } = &installed_mod.source {
+                if let ModSource::Modrinth {
+                    project_id: pid,
+                    version_id: vid,
+                    file_hash_sha1: hash_opt,
+                    file_name: fname,
+                    ..
+                } = &installed_mod.source
+                {
                     mod_project_id = Some(pid);
                     mod_version_id = Some(vid);
-                    mod_sha1_hash = hash_opt.as_deref(); 
+                    mod_sha1_hash = hash_opt.as_deref();
                     mod_file_name = Some(fname);
                 }
                 // TODO: Add extraction logic for other source types
@@ -377,7 +401,7 @@ pub async fn check_content_installed(
                 }
                 let mut match_version = true;
                 if let Some(vid) = &params.version_id {
-                    match_version = mod_version_id == Some(vid.as_str()); 
+                    match_version = mod_version_id == Some(vid.as_str());
                 }
                 let mut match_hash = true;
                 if let Some(hash) = &params.file_hash_sha1 {
@@ -387,32 +411,59 @@ pub async fn check_content_installed(
                 if let Some(name) = &params.file_name {
                     match_name = mod_file_name == Some(name.as_str());
                 }
-                let mut match_game_version = true; 
+                let mut match_game_version = true;
                 if let Some(installed_versions) = &installed_mod.game_versions {
-                    match_game_version = installed_versions.contains(&target_game_version.to_string());
+                    match_game_version =
+                        installed_versions.contains(&target_game_version.to_string());
                 }
-                let mut match_loader = true; 
+                let mut match_loader = true;
                 if let Some(installed_loader_enum) = &installed_mod.associated_loader {
                     match_loader = installed_loader_enum.as_str() == target_loader_str;
                 }
 
-                if match_project && match_version && match_hash && match_name && match_game_version && match_loader {
-                    info!("Found matching locally installed mod for context ({} {}): {}", target_game_version, target_loader_str, installed_mod.display_name.as_deref().unwrap_or("[Unknown Name]"));
+                if match_project
+                    && match_version
+                    && match_hash
+                    && match_name
+                    && match_game_version
+                    && match_loader
+                {
+                    info!(
+                        "Found matching locally installed mod for context ({} {}): {}",
+                        target_game_version,
+                        target_loader_str,
+                        installed_mod
+                            .display_name
+                            .as_deref()
+                            .unwrap_or("[Unknown Name]")
+                    );
                     status.is_installed = true;
-                    break; 
+                    break;
                 }
             }
             if !status.is_installed {
-                info!("No matching mod found locally installed in profile {} for context ({} {})", params.profile_id, target_game_version, target_loader_str);
+                info!(
+                    "No matching mod found locally installed in profile {} for context ({} {})",
+                    params.profile_id, target_game_version, target_loader_str
+                );
             }
-        },
+        }
         "resourcepack" => {
-            debug!("Checking locally installed resource packs in profile {}...", params.profile_id);
+            debug!(
+                "Checking locally installed resource packs in profile {}...",
+                params.profile_id
+            );
             match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
                 Ok(packs) => {
                     for pack_info in &packs {
-                        let modrinth_pid = pack_info.modrinth_info.as_ref().map(|m| m.project_id.as_str());
-                        let modrinth_vid = pack_info.modrinth_info.as_ref().map(|m| m.version_id.as_str());
+                        let modrinth_pid = pack_info
+                            .modrinth_info
+                            .as_ref()
+                            .map(|m| m.project_id.as_str());
+                        let modrinth_vid = pack_info
+                            .modrinth_info
+                            .as_ref()
+                            .map(|m| m.version_id.as_str());
                         let pack_hash = pack_info.sha1_hash.as_deref();
                         let pack_filename = Some(pack_info.filename.as_str());
 
@@ -435,27 +486,45 @@ pub async fn check_content_installed(
                         }
 
                         if match_project && match_version && match_hash && match_name {
-                            info!("Found matching locally installed resource pack: {}", pack_info.filename);
+                            info!(
+                                "Found matching locally installed resource pack: {}",
+                                pack_info.filename
+                            );
                             status.is_installed = true;
-                            break; 
+                            break;
                         }
                     }
                     if !status.is_installed {
-                         info!("No matching resource pack found locally installed in profile {}", params.profile_id);
+                        info!(
+                            "No matching resource pack found locally installed in profile {}",
+                            params.profile_id
+                        );
                     }
-                },
+                }
                 Err(e) => {
-                    warn!("Failed to list resource packs for profile {}: {}. Assuming not installed.", params.profile_id, e);
+                    warn!(
+                        "Failed to list resource packs for profile {}: {}. Assuming not installed.",
+                        params.profile_id, e
+                    );
                 }
             }
-        },
+        }
         "shaderpack" => {
-            debug!("Checking locally installed shader packs in profile {}...", params.profile_id);
+            debug!(
+                "Checking locally installed shader packs in profile {}...",
+                params.profile_id
+            );
             match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
                 Ok(packs) => {
                     for pack_info in &packs {
-                        let modrinth_pid = pack_info.modrinth_info.as_ref().map(|m| m.project_id.as_str());
-                        let modrinth_vid = pack_info.modrinth_info.as_ref().map(|m| m.version_id.as_str());
+                        let modrinth_pid = pack_info
+                            .modrinth_info
+                            .as_ref()
+                            .map(|m| m.project_id.as_str());
+                        let modrinth_vid = pack_info
+                            .modrinth_info
+                            .as_ref()
+                            .map(|m| m.version_id.as_str());
                         let pack_hash = pack_info.sha1_hash.as_deref();
                         let pack_filename = Some(pack_info.filename.as_str());
 
@@ -478,27 +547,45 @@ pub async fn check_content_installed(
                         }
 
                         if match_project && match_version && match_hash && match_name {
-                            info!("Found matching locally installed shader pack: {}", pack_info.filename);
+                            info!(
+                                "Found matching locally installed shader pack: {}",
+                                pack_info.filename
+                            );
                             status.is_installed = true;
-                            break; 
+                            break;
                         }
                     }
                     if !status.is_installed {
-                         info!("No matching shader pack found locally installed in profile {}", params.profile_id);
+                        info!(
+                            "No matching shader pack found locally installed in profile {}",
+                            params.profile_id
+                        );
                     }
-                },
+                }
                 Err(e) => {
-                    warn!("Failed to list shader packs for profile {}: {}. Assuming not installed.", params.profile_id, e);
+                    warn!(
+                        "Failed to list shader packs for profile {}: {}. Assuming not installed.",
+                        params.profile_id, e
+                    );
                 }
             }
-        },
+        }
         "datapack" => {
-            debug!("Checking locally installed data packs in profile {}...", params.profile_id);
+            debug!(
+                "Checking locally installed data packs in profile {}...",
+                params.profile_id
+            );
             match datapack_utils::get_datapacks_for_profile(&profile).await {
                 Ok(packs) => {
                     for pack_info in &packs {
-                        let modrinth_pid = pack_info.modrinth_info.as_ref().map(|m| m.project_id.as_str());
-                        let modrinth_vid = pack_info.modrinth_info.as_ref().map(|m| m.version_id.as_str());
+                        let modrinth_pid = pack_info
+                            .modrinth_info
+                            .as_ref()
+                            .map(|m| m.project_id.as_str());
+                        let modrinth_vid = pack_info
+                            .modrinth_info
+                            .as_ref()
+                            .map(|m| m.version_id.as_str());
                         let pack_hash = pack_info.sha1_hash.as_deref();
                         let pack_filename = Some(pack_info.filename.as_str());
 
@@ -521,28 +608,40 @@ pub async fn check_content_installed(
                         }
 
                         if match_project && match_version && match_hash && match_name {
-                            info!("Found matching locally installed data pack: {}", pack_info.filename);
+                            info!(
+                                "Found matching locally installed data pack: {}",
+                                pack_info.filename
+                            );
                             status.is_installed = true;
-                            break; 
+                            break;
                         }
                     }
                     if !status.is_installed {
-                         info!("No matching data pack found locally installed in profile {}", params.profile_id);
+                        info!(
+                            "No matching data pack found locally installed in profile {}",
+                            params.profile_id
+                        );
                     }
-                },
+                }
                 Err(e) => {
-                    warn!("Failed to list data packs for profile {}: {}. Assuming not installed.", params.profile_id, e);
+                    warn!(
+                        "Failed to list data packs for profile {}: {}. Assuming not installed.",
+                        params.profile_id, e
+                    );
                 }
             }
-        },
+        }
         _ => {
-             warn!("Checking installation for content type '{}' is not yet implemented.", target_type);
+            warn!(
+                "Checking installation for content type '{}' is not yet implemented.",
+                target_type
+            );
         }
     }
 
     if status.is_installed {
-         debug!("Final status: Found content installed locally.");
-    } 
+        debug!("Final status: Found content installed locally.");
+    }
 
     Ok(status)
 }
@@ -588,15 +687,15 @@ pub async fn open_latest_log_for_profile<R: tauri::Runtime>(
         .open_path(log_path.to_string_lossy(), None::<&str>)
     {
         Ok(_) => {
-            info!("Successfully requested opening of log file: {}", log_path.display());
+            info!(
+                "Successfully requested opening of log file: {}",
+                log_path.display()
+            );
             Ok(())
         }
         Err(e) => {
             error!("Failed to open log file {}: {}", log_path.display(), e);
-            Err(AppError::Other(format!(
-                "Failed to open log file: {}",
-                e
-            )))
+            Err(AppError::Other(format!("Failed to open log file: {}", e)))
         }
     }
 }
@@ -613,7 +712,10 @@ pub async fn open_latest_log_for_profile<R: tauri::Runtime>(
 /// Returns an empty string in `Ok` if the log file is not found.
 /// Returns an `AppError` if the profile instance path cannot be determined or reading fails.
 pub async fn get_latest_log_content(profile_id: Uuid) -> Result<String> {
-    info!("Attempting to get latest.log content for profile {}", profile_id);
+    info!(
+        "Attempting to get latest.log content for profile {}",
+        profile_id
+    );
 
     // Get the profile instance path
     let state = State::get().await?;
@@ -656,7 +758,10 @@ pub async fn list_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>> {
 
     // Check if the logs directory exists
     if !logs_dir.exists() {
-        warn!("Logs directory not found at {}. Returning empty list.", logs_dir.display());
+        warn!(
+            "Logs directory not found at {}. Returning empty list.",
+            logs_dir.display()
+        );
         return Ok(Vec::new());
     }
 
@@ -664,13 +769,21 @@ pub async fn list_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>> {
     let mut entries = match fs::read_dir(&logs_dir).await {
         Ok(entries) => entries,
         Err(e) => {
-            error!("Failed to read logs directory {}: {}", logs_dir.display(), e);
+            error!(
+                "Failed to read logs directory {}: {}",
+                logs_dir.display(),
+                e
+            );
             return Err(AppError::Io(e));
         }
     };
 
     while let Some(entry_result) = entries.next_entry().await.map_err(|e| {
-        error!("Failed to read entry in logs directory {}: {}", logs_dir.display(), e);
+        error!(
+            "Failed to read entry in logs directory {}: {}",
+            logs_dir.display(),
+            e
+        );
         AppError::Io(e)
     })? {
         let path = entry_result.path();
@@ -683,16 +796,20 @@ pub async fn list_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>> {
         }
     }
 
-    info!("Found {} log file(s) for profile {}", log_files.len(), profile_id);
+    info!(
+        "Found {} log file(s) for profile {}",
+        log_files.len(),
+        profile_id
+    );
     Ok(log_files)
 }
 
 /// Exports a profile to a `.noriskpack` file
-/// 
+///
 /// This creates a zip archive with the .noriskpack extension that contains:
 /// - The profile data as JSON (sanitized to remove user-specific data)
 /// - An "overrides" folder containing any files specified in `include_files`
-/// 
+///
 /// @param profile_id: UUID of the profile to export
 /// @param output_path: Optional path where the .noriskpack file should be saved
 /// @param include_files: Optional list of files/directories to include in the overrides folder
@@ -707,25 +824,36 @@ pub async fn export_profile_to_noriskpack(
     // Get the profile
     let state = crate::state::state_manager::State::get().await?;
     let profile = state.profile_manager.get_profile(profile_id).await?;
-    
+
     // Create a sanitized copy of the profile for export
     let export_profile = sanitize_profile_for_export(&profile);
-    
+
     // Create a temporary directory for the export structure
-    let temp_dir = tempfile::tempdir().map_err(|e| AppError::Other(format!("Failed to create temporary directory: {}", e)))?;
+    let temp_dir = tempfile::tempdir()
+        .map_err(|e| AppError::Other(format!("Failed to create temporary directory: {}", e)))?;
     let temp_path = temp_dir.path();
-    debug!("Created temporary directory for export: {}", temp_path.display());
-    
+    debug!(
+        "Created temporary directory for export: {}",
+        temp_path.display()
+    );
+
     // Create the overrides directory
     let overrides_dir = temp_path.join("overrides");
-    fs::create_dir_all(&overrides_dir).await.map_err(|e| AppError::Io(e))?;
-    
+    fs::create_dir_all(&overrides_dir)
+        .await
+        .map_err(|e| AppError::Io(e))?;
+
     // Write the profile data to a JSON file
     let profile_json_path = temp_path.join("profile.json");
     let profile_json = serde_json::to_string_pretty(&export_profile)?;
-    let mut profile_file = fs::File::create(&profile_json_path).await.map_err(|e| AppError::Io(e))?;
-    profile_file.write_all(profile_json.as_bytes()).await.map_err(|e| AppError::Io(e))?;
-    
+    let mut profile_file = fs::File::create(&profile_json_path)
+        .await
+        .map_err(|e| AppError::Io(e))?;
+    profile_file
+        .write_all(profile_json.as_bytes())
+        .await
+        .map_err(|e| AppError::Io(e))?;
+
     // Copy files to the overrides directory if specified
     if let Some(files) = include_files {
         for file_path in files {
@@ -733,83 +861,108 @@ pub async fn export_profile_to_noriskpack(
                 debug!("Skipping non-existent file: {}", file_path.display());
                 continue;
             }
-            
+
             // Get source path and relative path within the profile
-            let profile_instance_path = state.profile_manager.get_profile_instance_path(profile_id).await?;
-            
+            let profile_instance_path = state
+                .profile_manager
+                .get_profile_instance_path(profile_id)
+                .await?;
+
             // Only process files that are within the profile instance path
             if let Ok(rel_path) = file_path.strip_prefix(&profile_instance_path) {
                 let target_path = overrides_dir.join(rel_path);
-                
+
                 // Create parent directories if needed
                 if let Some(parent) = target_path.parent() {
-                    fs::create_dir_all(parent).await.map_err(|e| AppError::Io(e))?;
+                    fs::create_dir_all(parent)
+                        .await
+                        .map_err(|e| AppError::Io(e))?;
                 }
-                
+
                 if file_path.is_dir() {
                     // Copy directory recursively
                     copy_dir_recursively(&file_path, &target_path).await?;
-                    debug!("Copied directory {} to {}", file_path.display(), target_path.display());
+                    debug!(
+                        "Copied directory {} to {}",
+                        file_path.display(),
+                        target_path.display()
+                    );
                 } else {
                     // Copy file
-                    fs::copy(&file_path, &target_path).await.map_err(|e| AppError::Io(e))?;
-                    debug!("Copied file {} to {}", file_path.display(), target_path.display());
+                    fs::copy(&file_path, &target_path)
+                        .await
+                        .map_err(|e| AppError::Io(e))?;
+                    debug!(
+                        "Copied file {} to {}",
+                        file_path.display(),
+                        target_path.display()
+                    );
                 }
             } else {
-                debug!("Skipping file outside profile path: {}", file_path.display());
+                debug!(
+                    "Skipping file outside profile path: {}",
+                    file_path.display()
+                );
             }
         }
     }
-    
+
     // Determine the output file path
     let output_file = match output_path {
         Some(path) => path,
         None => {
             // Generate a default output path
             let safe_name = profile.name.replace(" ", "_").to_lowercase();
-            let default_name = format!("{}_v{}_{}.noriskpack", 
-                safe_name, 
+            let default_name = format!(
+                "{}_v{}_{}.noriskpack",
+                safe_name,
                 profile.game_version,
-                profile.loader.as_str());
-            
+                profile.loader.as_str()
+            );
+
             // Use the current directory by default
             std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
                 .join(default_name)
         }
     };
-    
+
     // Create the zip file
     info!("Creating .noriskpack archive at: {}", output_file.display());
-    
+
     // Ensure parent directory exists
     if let Some(parent) = output_file.parent() {
         if !parent.exists() {
-            fs::create_dir_all(parent).await.map_err(|e| AppError::Io(e))?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| AppError::Io(e))?;
         }
     }
-    
+
     // Create the zip file
     create_zip_archive(temp_path, &output_file).await?;
-    
-    info!("Successfully exported profile to: {}", output_file.display());
+
+    info!(
+        "Successfully exported profile to: {}",
+        output_file.display()
+    );
     Ok(output_file)
 }
 
 /// Creates a sanitized copy of a profile for export
 fn sanitize_profile_for_export(profile: &Profile) -> Profile {
     let mut export_profile = profile.clone();
-    
+
     // Reset timestamps and other personal data
     export_profile.created = chrono::Utc::now();
     export_profile.last_played = None;
-    
+
     // Reset any absolute paths to relative ones
     //export_profile.path = format!("minecraft-{}-{}",  export_profile.game_version, export_profile.loader.as_str());
-    
+
     // Reset profile ID to ensure it's unique when imported
     export_profile.id = Uuid::new_v4();
-    
+
     // Keep other essential data
     export_profile
 }
@@ -820,40 +973,50 @@ pub fn copy_dir_recursively<'a>(src: &'a Path, dst: &'a Path) -> BoxFuture<'a, R
         if !dst.exists() {
             fs::create_dir_all(dst).await.map_err(|e| AppError::Io(e))?;
         }
-        
+
         let mut entries = fs::read_dir(src).await.map_err(|e| AppError::Io(e))?;
-        
+
         while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
             let entry_path = entry.path();
             let file_name = entry.file_name();
             let target_path = dst.join(file_name);
-            
+
             if entry_path.is_dir() {
                 copy_dir_recursively(&entry_path, &target_path).await?;
             } else {
-                fs::copy(&entry_path, &target_path).await.map_err(|e| AppError::Io(e))?;
+                fs::copy(&entry_path, &target_path)
+                    .await
+                    .map_err(|e| AppError::Io(e))?;
             }
         }
-        
+
         Ok(())
     })
 }
 
 /// Creates a zip archive from a directory
 async fn create_zip_archive(src_dir: &Path, dst_file: &Path) -> Result<()> {
-    debug!("Creating zip archive at {:?} from directory {:?}", dst_file, src_dir);
-    
+    debug!(
+        "Creating zip archive at {:?} from directory {:?}",
+        dst_file, src_dir
+    );
+
     // Create the destination file
-    let file = fs::File::create(dst_file).await.map_err(|e| AppError::Io(e))?;
+    let file = fs::File::create(dst_file)
+        .await
+        .map_err(|e| AppError::Io(e))?;
     let mut writer = ZipFileWriter::with_tokio(file);
-    
+
     // Add all files from the src_dir recursively, but maintain proper relative paths
     // Only files inside the src_dir should be included
     add_dir_to_zip(&mut writer, src_dir, src_dir).await?;
-    
+
     // Close the zip file
-    writer.close().await.map_err(|e| AppError::Other(format!("Failed to finalize zip file: {}", e)))?;
-    
+    writer
+        .close()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to finalize zip file: {}", e)))?;
+
     debug!("Successfully created zip archive at {:?}", dst_file);
     Ok(())
 }
@@ -865,45 +1028,53 @@ fn add_dir_to_zip<'a>(
     current_dir: &'a Path,
 ) -> BoxFuture<'a, Result<()>> {
     Box::pin(async move {
-        let mut entries = fs::read_dir(current_dir).await.map_err(|e| AppError::Io(e))?;
-        
+        let mut entries = fs::read_dir(current_dir)
+            .await
+            .map_err(|e| AppError::Io(e))?;
+
         while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
             let path = entry.path();
-            
+
             // Create relative path from root - this ensures proper directory structure in the zip
-            let rel_path = path.strip_prefix(root_dir)
+            let rel_path = path
+                .strip_prefix(root_dir)
                 .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?
                 .to_string_lossy()
                 .to_string();
-                
+
             if path.is_dir() {
                 // For directories, first add an empty directory entry (if not root)
-                if !rel_path.is_empty() {  // Skip root directory
-                    let dir_path = if rel_path.ends_with('/') { 
-                        rel_path.clone() 
-                    } else { 
-                        format!("{}/", rel_path) 
+                if !rel_path.is_empty() {
+                    // Skip root directory
+                    let dir_path = if rel_path.ends_with('/') {
+                        rel_path.clone()
+                    } else {
+                        format!("{}/", rel_path)
                     };
-                    
+
                     let dir_builder = ZipEntryBuilder::new(dir_path.into(), Compression::Stored);
-                    writer.write_entry_whole(dir_builder, &[])
+                    writer
+                        .write_entry_whole(dir_builder, &[])
                         .await
-                        .map_err(|e| AppError::Other(format!("Failed to add directory to zip: {}", e)))?;
+                        .map_err(|e| {
+                            AppError::Other(format!("Failed to add directory to zip: {}", e))
+                        })?;
                 }
-                
+
                 // Then recursively add its contents
                 add_dir_to_zip(writer, root_dir, &path).await?;
             } else {
                 // For files, read the content and add it
                 let file_data = fs::read(&path).await.map_err(|e| AppError::Io(e))?;
                 let file_builder = ZipEntryBuilder::new(rel_path.into(), Compression::Deflate);
-                
-                writer.write_entry_whole(file_builder, &file_data)
+
+                writer
+                    .write_entry_whole(file_builder, &file_data)
                     .await
                     .map_err(|e| AppError::Other(format!("Failed to add file to zip: {}", e)))?;
             }
         }
-        
+
         Ok(())
     })
 }
@@ -919,13 +1090,13 @@ pub struct ScreenshotInfo {
 /// Recursively finds screenshot files in a directory and its subdirectories.
 pub fn find_screenshots_recursive<'a>(
     dir_path: &'a Path,
-    screenshots: &'a mut Vec<ScreenshotInfo>
+    screenshots: &'a mut Vec<ScreenshotInfo>,
 ) -> BoxFuture<'a, Result<()>> {
     async move {
         if !dir_path.exists() || !dir_path.is_dir() {
             return Ok(()); // Nothing to do if the path doesn't exist or isn't a directory
         }
-    
+
         let mut dir_entries = match fs::read_dir(dir_path).await {
             Ok(entries) => entries,
             Err(e) => {
@@ -933,7 +1104,7 @@ pub fn find_screenshots_recursive<'a>(
                 return Err(AppError::Io(e));
             }
         };
-    
+
         while let Some(entry_result) = dir_entries.next_entry().await.map_err(|e| {
             error!("Failed to read entry in directory {:?}: {}", dir_path, e);
             AppError::Io(e)
@@ -948,7 +1119,9 @@ pub fn find_screenshots_recursive<'a>(
                     if filename_str.to_lowercase().ends_with(".png") {
                         let modified_time = match fs::metadata(&path).await {
                             Ok(metadata) => match metadata.modified() {
-                                Ok(sys_time) => Some(chrono::DateTime::<chrono::Utc>::from(sys_time)),
+                                Ok(sys_time) => {
+                                    Some(chrono::DateTime::<chrono::Utc>::from(sys_time))
+                                }
                                 Err(e) => {
                                     warn!("Could not get modified time for {:?}: {}", path, e);
                                     None
@@ -971,14 +1144,18 @@ pub fn find_screenshots_recursive<'a>(
             // Ignore other entry types (symlinks, etc.)
         }
         Ok(())
-    }.boxed() // Use .boxed() from FutureExt trait
+    }
+    .boxed() // Use .boxed() from FutureExt trait
 }
 
 /// Lists screenshot files found in the profile's `screenshots` directory and its subdirectories.
 /// Only includes files ending in `.png`.
 pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<ScreenshotInfo>> {
     let state = State::get().await?;
-    let instance_path = state.profile_manager.get_profile_instance_path(profile_id).await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
     let screenshots_path = instance_path.join("screenshots");
     let mut screenshots = Vec::new();
 
@@ -988,6 +1165,10 @@ pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<Screens
     // Sort the collected screenshots by modified time (newest first)
     screenshots.sort_by(|a, b| b.modified.cmp(&a.modified));
 
-    info!("Found {} screenshot(s) in total within {:?} and its subdirectories", screenshots.len(), screenshots_path);
+    info!(
+        "Found {} screenshot(s) in total within {:?} and its subdirectories",
+        screenshots.len(),
+        screenshots_path
+    );
     Ok(screenshots)
 }

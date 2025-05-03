@@ -43,58 +43,78 @@ pub struct ResourcePackModrinthInfo {
 
 /// Get all resourcepacks for a profile
 pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<ResourcePackInfo>> {
-    debug!("Getting resourcepacks for profile: {} ({})", profile.name, profile.id);
-    
+    debug!(
+        "Getting resourcepacks for profile: {} ({})",
+        profile.name, profile.id
+    );
+
     // Construct the path to the resourcepacks directory
     let resourcepacks_dir = get_resourcepacks_dir(profile).await?;
-    debug!("Resourcepacks directory path: {}", resourcepacks_dir.display());
-    
+    debug!(
+        "Resourcepacks directory path: {}",
+        resourcepacks_dir.display()
+    );
+
     // Return empty list if directory doesn't exist yet
     if !resourcepacks_dir.exists() {
-        debug!("Resourcepacks directory does not exist for profile: {}", profile.id);
+        debug!(
+            "Resourcepacks directory does not exist for profile: {}",
+            profile.id
+        );
         return Ok(Vec::new());
     }
 
     // Read directory contents
     debug!("Reading contents of resourcepacks directory...");
-    let mut entries = fs::read_dir(&resourcepacks_dir).await
+    let mut entries = fs::read_dir(&resourcepacks_dir)
+        .await
         .map_err(|e| AppError::Other(format!("Failed to read resourcepacks directory: {}", e)))?;
-    
+
     let mut resourcepacks = Vec::new();
     let mut hashes = Vec::new();
     let mut path_to_info = HashMap::new();
-    
+
     // Collect all .zip and .zip.disabled files
     debug!("Scanning resourcepacks directory for valid resource packs...");
     let mut file_count = 0;
     let mut valid_count = 0;
-    
-    while let Some(entry) = entries.next_entry().await
-        .map_err(|e| AppError::Other(format!("Failed to read resourcepack entry: {}", e)))? 
+
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to read resourcepack entry: {}", e)))?
     {
         file_count += 1;
         let path = entry.path();
         debug!("Checking file: {}", path.display());
-        
+
         if is_resourcepack_file(&path) {
             valid_count += 1;
-            let filename = path.file_name()
+            let filename = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
                 .to_string();
-            
+
             let is_disabled = filename.ends_with(".disabled");
             let base_filename = if is_disabled {
-                filename.strip_suffix(".disabled").unwrap_or(&filename).to_string()
+                filename
+                    .strip_suffix(".disabled")
+                    .unwrap_or(&filename)
+                    .to_string()
             } else {
                 filename.clone()
             };
-            
-            debug!("Found valid resourcepack: {} (disabled: {})", base_filename, is_disabled);
-            
-            let metadata = fs::metadata(&path).await
-                .map_err(|e| AppError::Other(format!("Failed to get metadata for {}: {}", filename, e)))?;
-            
+
+            debug!(
+                "Found valid resourcepack: {} (disabled: {})",
+                base_filename, is_disabled
+            );
+
+            let metadata = fs::metadata(&path).await.map_err(|e| {
+                AppError::Other(format!("Failed to get metadata for {}: {}", filename, e))
+            })?;
+
             let file_size = metadata.len();
             debug!("Resourcepack size: {} bytes", file_size);
 
@@ -106,13 +126,16 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
                     // Add to the list of hashes to check against Modrinth
                     hashes.push(hash.clone());
                     Some(hash)
-                },
+                }
                 Err(e) => {
-                    warn!("Failed to compute SHA1 hash for resourcepack {}: {}", filename, e);
+                    warn!(
+                        "Failed to compute SHA1 hash for resourcepack {}: {}",
+                        filename, e
+                    );
                     None
                 }
             };
-            
+
             let info = ResourcePackInfo {
                 filename: base_filename,
                 path: path.to_string_lossy().into_owned(),
@@ -121,7 +144,7 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
                 is_disabled,
                 modrinth_info: None,
             };
-            
+
             // Store info in hashmap to update with Modrinth data later
             if let Some(hash) = sha1_hash {
                 path_to_info.insert(hash, info);
@@ -132,29 +155,44 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
             debug!("Skipping non-resourcepack file: {}", path.display());
         }
     }
-    
-    debug!("Scanned {} files/directories, found {} valid resourcepacks", file_count, valid_count);
-    
+
+    debug!(
+        "Scanned {} files/directories, found {} valid resourcepacks",
+        file_count, valid_count
+    );
+
     // If we have hashes, try to look them up on Modrinth
     if !hashes.is_empty() {
-        debug!("Looking up {} resource packs on Modrinth by hash...", hashes.len());
+        debug!(
+            "Looking up {} resource packs on Modrinth by hash...",
+            hashes.len()
+        );
         match modrinth::get_versions_by_hashes(hashes.clone(), "sha1").await {
             Ok(version_map) => {
-                debug!("Modrinth lookup returned {} matches out of {} requested", version_map.len(), hashes.len());
+                debug!(
+                    "Modrinth lookup returned {} matches out of {} requested",
+                    version_map.len(),
+                    hashes.len()
+                );
                 for (hash, version) in version_map {
                     if let Some(info) = path_to_info.get_mut(&hash) {
-                        debug!("Found Modrinth info for pack with hash {}: project_id={}, name={}", 
-                               hash, version.project_id, version.name);
-                        
+                        debug!(
+                            "Found Modrinth info for pack with hash {}: project_id={}, name={}",
+                            hash, version.project_id, version.name
+                        );
+
                         // Check if this is actually a resourcepack and not something else
                         if version.project_id.is_empty() || version.id.is_empty() {
                             debug!("Skipping invalid Modrinth data for hash {}: empty project_id or version_id", hash);
                             continue;
                         }
-                        
+
                         // Find the primary file for the URL
                         if let Some(primary_file) = version.files.iter().find(|f| f.primary) {
-                            debug!("Using primary file from Modrinth: {}", primary_file.filename);
+                            debug!(
+                                "Using primary file from Modrinth: {}",
+                                primary_file.filename
+                            );
                             info.modrinth_info = Some(ResourcePackModrinthInfo {
                                 project_id: version.project_id.clone(),
                                 version_id: version.id.clone(),
@@ -163,13 +201,16 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
                                 download_url: primary_file.url.clone(),
                             });
                         } else {
-                            debug!("No primary file found in Modrinth version for hash {}", hash);
+                            debug!(
+                                "No primary file found in Modrinth version for hash {}",
+                                hash
+                            );
                         }
                     } else {
                         debug!("Received Modrinth data for unknown hash: {}", hash);
                     }
                 }
-            },
+            }
             Err(e) => {
                 warn!("Failed to lookup resourcepacks on Modrinth: {}", e);
             }
@@ -177,24 +218,37 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
     } else {
         debug!("No resource packs to lookup on Modrinth");
     }
-    
+
     // Add all packs to the result list
     for (hash, info) in path_to_info {
-        debug!("Adding pack with hash {} to result list: {}", hash, info.filename);
+        debug!(
+            "Adding pack with hash {} to result list: {}",
+            hash, info.filename
+        );
         resourcepacks.push(info);
     }
-    
-    info!("Found {} total resourcepacks for profile {}", resourcepacks.len(), profile.id);
-    
+
+    info!(
+        "Found {} total resourcepacks for profile {}",
+        resourcepacks.len(),
+        profile.id
+    );
+
     Ok(resourcepacks)
 }
 
 /// Get the path to the resourcepacks directory for a profile
 pub async fn get_resourcepacks_dir(profile: &Profile) -> Result<PathBuf> {
     let state = State::get().await?;
-    let base_profiles_dir = state.profile_manager.calculate_instance_path_for_profile(profile)?;
+    let base_profiles_dir = state
+        .profile_manager
+        .calculate_instance_path_for_profile(profile)?;
     let resourcepacks_dir = base_profiles_dir.join("resourcepacks");
-    debug!("Resourcepacks directory for profile {}: {}", profile.id, resourcepacks_dir.display());
+    debug!(
+        "Resourcepacks directory for profile {}: {}",
+        profile.id,
+        resourcepacks_dir.display()
+    );
     Ok(resourcepacks_dir)
 }
 
@@ -204,21 +258,24 @@ fn is_resourcepack_file(path: &Path) -> bool {
         debug!("Skipping non-file path: {}", path.display());
         return false;
     }
-    
+
     let file_name = match path.file_name().and_then(|s| s.to_str()) {
         Some(name) => name,
         None => {
             debug!("Path has no valid filename: {}", path.display());
             return false;
-        },
+        }
     };
-    
+
     // Check for .zip or .zip.disabled extension
     let is_zip = file_name.ends_with(".zip") || file_name.ends_with(".zip.disabled");
     if is_zip {
         debug!("File confirmed as resource pack (zip): {}", path.display());
     } else {
-        debug!("File is not a resource pack (not a zip): {}", path.display());
+        debug!(
+            "File is not a resource pack (not a zip): {}",
+            path.display()
+        );
     }
     return is_zip;
 }
@@ -227,52 +284,72 @@ fn is_resourcepack_file(path: &Path) -> bool {
 pub async fn update_resourcepack_from_modrinth(
     profile: &Profile,
     resourcepack: &ResourcePackInfo,
-    new_version: &crate::integrations::modrinth::ModrinthVersion
+    new_version: &crate::integrations::modrinth::ModrinthVersion,
 ) -> Result<()> {
     info!(
         "Updating resource pack '{}' to version {} in profile {}",
         resourcepack.filename, new_version.version_number, profile.id
     );
-    
+
     // Get the resourcepacks directory
     let resourcepacks_dir = get_resourcepacks_dir(profile).await?;
-    
+
     // Check if the directory exists, create if not
     if !resourcepacks_dir.exists() {
-        debug!("Creating resourcepacks directory for profile: {}", profile.id);
-        fs::create_dir_all(&resourcepacks_dir).await
-            .map_err(|e| AppError::Other(format!("Failed to create resourcepacks directory: {}", e)))?;
+        debug!(
+            "Creating resourcepacks directory for profile: {}",
+            profile.id
+        );
+        fs::create_dir_all(&resourcepacks_dir).await.map_err(|e| {
+            AppError::Other(format!("Failed to create resourcepacks directory: {}", e))
+        })?;
     }
-    
+
     // Find and delete the old file (including .disabled variant)
     let old_path = resourcepacks_dir.join(&resourcepack.filename);
     let old_path_disabled = resourcepacks_dir.join(format!("{}.disabled", resourcepack.filename));
-    
+
     let was_disabled = resourcepack.is_disabled;
-    
+
     // Find the primary file in the new version
-    let primary_file = new_version.files.iter().find(|f| f.primary)
-        .ok_or_else(|| AppError::Other(format!(
-            "No primary file found for Modrinth version {} (ID: {})",
-            new_version.name, new_version.id
-        )))?;
-    
+    let primary_file = new_version
+        .files
+        .iter()
+        .find(|f| f.primary)
+        .ok_or_else(|| {
+            AppError::Other(format!(
+                "No primary file found for Modrinth version {} (ID: {})",
+                new_version.name, new_version.id
+            ))
+        })?;
+
     // Check and delete the old file
     if old_path.exists() {
         debug!("Removing old resource pack file: {}", old_path.display());
-        fs::remove_file(&old_path).await
-            .map_err(|e| AppError::Other(format!("Failed to remove old resource pack file: {}", e)))?;
+        fs::remove_file(&old_path).await.map_err(|e| {
+            AppError::Other(format!("Failed to remove old resource pack file: {}", e))
+        })?;
     } else if old_path_disabled.exists() {
-        debug!("Removing old disabled resource pack file: {}", old_path_disabled.display());
-        fs::remove_file(&old_path_disabled).await
-            .map_err(|e| AppError::Other(format!("Failed to remove old disabled resource pack file: {}", e)))?;
+        debug!(
+            "Removing old disabled resource pack file: {}",
+            old_path_disabled.display()
+        );
+        fs::remove_file(&old_path_disabled).await.map_err(|e| {
+            AppError::Other(format!(
+                "Failed to remove old disabled resource pack file: {}",
+                e
+            ))
+        })?;
     } else {
-        warn!("Old resource pack file not found: {}", resourcepack.filename);
+        warn!(
+            "Old resource pack file not found: {}",
+            resourcepack.filename
+        );
     }
-    
+
     // Use the utility function to download the new content
     use crate::utils::profile_utils::{add_modrinth_content_to_profile, ContentType};
-    
+
     // Download the new resource pack
     add_modrinth_content_to_profile(
         profile.id,
@@ -284,19 +361,25 @@ pub async fn update_resourcepack_from_modrinth(
         Some(new_version.name.clone()),
         Some(new_version.version_number.clone()),
         ContentType::ResourcePack,
-    ).await?;
-    
+    )
+    .await?;
+
     // If the old pack was disabled, disable the new one too
     if was_disabled {
         let new_path = resourcepacks_dir.join(&primary_file.filename);
-        let new_path_disabled = resourcepacks_dir.join(format!("{}.disabled", primary_file.filename));
-        
+        let new_path_disabled =
+            resourcepacks_dir.join(format!("{}.disabled", primary_file.filename));
+
         debug!("Old pack was disabled, disabling new pack as well");
-        fs::rename(&new_path, &new_path_disabled).await
+        fs::rename(&new_path, &new_path_disabled)
+            .await
             .map_err(|e| AppError::Other(format!("Failed to disable new resource pack: {}", e)))?;
     }
-    
-    info!("Successfully updated resource pack from '{}' to '{}'", resourcepack.filename, primary_file.filename);
-    
+
+    info!(
+        "Successfully updated resource pack from '{}' to '{}'",
+        resourcepack.filename, primary_file.filename
+    );
+
     Ok(())
-} 
+}

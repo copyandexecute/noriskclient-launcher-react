@@ -1,6 +1,6 @@
 use crate::error::Result;
-use reqwest;
 use crate::minecraft::dto::quilt_meta::QuiltVersionInfo;
+use reqwest;
 
 pub struct QuiltApi {
     base_url: String,
@@ -13,12 +13,15 @@ impl QuiltApi {
         }
     }
 
-    pub async fn get_loader_versions(&self, minecraft_version: &str) -> Result<Vec<QuiltVersionInfo>> {
+    pub async fn get_loader_versions(
+        &self,
+        minecraft_version: &str,
+    ) -> Result<Vec<QuiltVersionInfo>> {
         let url = format!("{}/versions/loader/{}", self.base_url, minecraft_version);
-        
-        let response = reqwest::get(&url)
-            .await
-            .map_err(|e| crate::error::AppError::QuiltError(format!("Failed to fetch Quilt versions: {}", e)))?;
+
+        let response = reqwest::get(&url).await.map_err(|e| {
+            crate::error::AppError::QuiltError(format!("Failed to fetch Quilt versions: {}", e))
+        })?;
 
         if !response.status().is_success() {
             return Err(crate::error::AppError::QuiltError(format!(
@@ -30,17 +33,25 @@ impl QuiltApi {
         let versions = response
             .json::<Vec<QuiltVersionInfo>>()
             .await
-            .map_err(|e| crate::error::AppError::QuiltError(format!("Failed to parse Quilt versions: {}", e)))?;
+            .map_err(|e| {
+                crate::error::AppError::QuiltError(format!("Failed to parse Quilt versions: {}", e))
+            })?;
 
         Ok(versions)
     }
 
-    pub async fn get_latest_stable_version(&self, minecraft_version: &str) -> Result<QuiltVersionInfo> {
+    pub async fn get_latest_stable_version(
+        &self,
+        minecraft_version: &str,
+    ) -> Result<QuiltVersionInfo> {
         let versions = self.get_loader_versions(minecraft_version).await?;
-        
-        versions.into_iter()
+
+        versions
+            .into_iter()
             .filter(|v| v.loader.stable)
             .max_by_key(|v| v.loader.build)
-            .ok_or_else(|| crate::error::AppError::QuiltError("No stable Quilt version found".to_string()))
+            .ok_or_else(|| {
+                crate::error::AppError::QuiltError("No stable Quilt version found".to_string())
+            })
     }
-} 
+}

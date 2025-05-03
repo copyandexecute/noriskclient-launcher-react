@@ -1,23 +1,23 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::error::{AppError, Result};
+use crate::state::profile_state::{ModLoader, Profile, ProfileSettings, ProfileState};
+use crate::state::state_manager::State;
+use crate::utils::profile_utils::copy_dir_recursively;
+use async_zip::tokio::read::seek::ZipFileReader;
+use chrono::Utc;
+use log::{debug, error, info, warn};
+use reqwest::Client;
+use sanitize_filename::sanitize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{PathBuf, Path};
-use tokio::fs::File;
-use tokio::io::{BufReader, AsyncWriteExt};
-use async_zip::tokio::read::seek::ZipFileReader;
-use crate::error::{AppError, Result};
-use uuid::Uuid;
-use chrono::Utc;
-use crate::state::profile_state::{Profile, ProfileSettings, ProfileState, ModLoader};
-use crate::state::state_manager::State;
-use tokio::fs;
-use log::{info, error, warn, debug};
-use sanitize_filename::sanitize;
 use std::collections::HashSet;
+use std::env;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
-use reqwest::Client;
-use crate::utils::profile_utils::copy_dir_recursively;
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
-use std::env; // Added for env! macro
+use tokio::fs;
+use tokio::fs::File;
+use tokio::io::{AsyncWriteExt, BufReader};
+use uuid::Uuid; // Added for env! macro
 
 /// Represents the overall structure of the norisk_modpacks.json file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -114,10 +114,12 @@ pub fn get_norisk_pack_mod_filename(
     source: &NoriskModSourceDefinition,
     target: &CompatibilityTarget,
     mod_id_for_log: &str, // For better error messages
-) -> crate::error::Result<String> { // Use crate::error::Result
+) -> crate::error::Result<String> {
+    // Use crate::error::Result
     match target.filename {
         Some(ref fname) => Ok(fname.clone()),
-        None => { // Derive filename if not provided
+        None => {
+            // Derive filename if not provided
             match source {
                 NoriskModSourceDefinition::Modrinth { project_slug, .. } => {
                     Ok(format!("{}-{}.jar", project_slug, target.identifier))
@@ -131,8 +133,7 @@ pub fn get_norisk_pack_mod_filename(
                         "Filename missing in pack definition compatibility target for URL mod '{}'",
                         mod_id_for_log
                     )))
-                }
-                // Add handling for other source types if they are added later
+                } // Add handling for other source types if they are added later
             }
         }
     }
@@ -151,33 +152,45 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     let mut buf_reader = BufReader::new(file);
 
     // 2. Create zip reader
-    let mut zip = ZipFileReader::with_tokio(&mut buf_reader).await.map_err(|e| {
-        error!("Failed to read noriskpack as ZIP: {}", e);
-        AppError::Other(format!("Failed to read noriskpack zip: {}", e))
-    })?;
+    let mut zip = ZipFileReader::with_tokio(&mut buf_reader)
+        .await
+        .map_err(|e| {
+            error!("Failed to read noriskpack as ZIP: {}", e);
+            AppError::Other(format!("Failed to read noriskpack zip: {}", e))
+        })?;
 
     // 3. Find and read profile.json
     let entries = zip.file().entries();
     let profile_entry_index = entries
         .iter()
-        .position(|e| e.filename().as_str().map_or(false, |name| name == "profile.json"))
+        .position(|e| {
+            e.filename()
+                .as_str()
+                .map_or(false, |name| name == "profile.json")
+        })
         .ok_or_else(|| {
             error!("profile.json not found in archive: {:?}", pack_path);
             AppError::Other("profile.json not found in archive".into())
         })?;
 
     let profile_content = {
-        let mut entry_reader = zip.reader_with_entry(profile_entry_index).await.map_err(|e| {
-            error!("Failed to get entry reader for profile.json: {}", e);
-            AppError::Other(format!("Failed to read profile.json entry: {}", e))
-        })?;
-        
+        let mut entry_reader = zip
+            .reader_with_entry(profile_entry_index)
+            .await
+            .map_err(|e| {
+                error!("Failed to get entry reader for profile.json: {}", e);
+                AppError::Other(format!("Failed to read profile.json entry: {}", e))
+            })?;
+
         let mut buffer = Vec::new();
-        entry_reader.read_to_end_checked(&mut buffer).await.map_err(|e| {
-            error!("Failed to read profile.json content: {}", e);
-            AppError::Other(format!("Zip entry read error: {}", e)) 
-        })?;
-        
+        entry_reader
+            .read_to_end_checked(&mut buffer)
+            .await
+            .map_err(|e| {
+                error!("Failed to read profile.json content: {}", e);
+                AppError::Other(format!("Zip entry read error: {}", e))
+            })?;
+
         String::from_utf8(buffer).map_err(|e| {
             error!("Failed to convert profile.json to string: {}", e);
             AppError::Other(format!("profile.json content is not valid UTF-8: {}", e))
@@ -189,15 +202,17 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
         error!("Failed to parse profile.json: {}", e);
         AppError::Json(e)
     })?;
-    
+
     // 5. Use the filename as the profile name if available
     if let Some(file_name) = pack_path.file_stem().and_then(|s| s.to_str()) {
         info!("Using noriskpack filename as profile name: {}", file_name);
         exported_profile.name = file_name.to_string();
     }
-    
-    info!("Parsed profile data: Name='{}', Game Version={}, Loader={:?}", 
-        exported_profile.name, exported_profile.game_version, exported_profile.loader);
+
+    info!(
+        "Parsed profile data: Name='{}', Game Version={}, Loader={:?}",
+        exported_profile.name, exported_profile.game_version, exported_profile.loader
+    );
 
     // 6. Create a new profile with a unique path
     let base_profiles_dir = crate::state::profile_state::default_profile_path();
@@ -205,50 +220,59 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     if sanitized_base_name.is_empty() {
         // Handle empty name after sanitization
         let default_name = format!("imported-noriskpack-{}", Utc::now().timestamp_millis());
-        warn!("Profile name '{}' became empty after sanitization. Using default: {}", 
-            exported_profile.name, default_name);
+        warn!(
+            "Profile name '{}' became empty after sanitization. Using default: {}",
+            exported_profile.name, default_name
+        );
         exported_profile.name = default_name.clone();
     }
-    
+
     // Find a unique path segment
     let unique_segment = crate::utils::path_utils::find_unique_profile_segment(
-        &base_profiles_dir, 
-        &sanitized_base_name
-    ).await?;
-    
+        &base_profiles_dir,
+        &sanitized_base_name,
+    )
+    .await?;
+
     // Update the profile with new values
     exported_profile.path = unique_segment;
     exported_profile.id = Uuid::new_v4(); // Generate a new UUID
     exported_profile.created = Utc::now(); // Set creation time to now
     exported_profile.last_played = None;
     exported_profile.state = ProfileState::NotInstalled;
-    
+
     info!("Prepared new profile with path: {}", exported_profile.path);
 
     // 7. Ensure the target profile directory exists
     let target_dir = base_profiles_dir.join(&exported_profile.path);
     if !target_dir.exists() {
         fs::create_dir_all(&target_dir).await.map_err(|e| {
-            error!("Failed to create target profile directory {:?}: {}", target_dir, e);
+            error!(
+                "Failed to create target profile directory {:?}: {}",
+                target_dir, e
+            );
             AppError::Io(e)
         })?;
     }
 
     // 8. Extract the overrides directory
-    info!("Extracting overrides to profile directory: {:?}", target_dir);
+    info!(
+        "Extracting overrides to profile directory: {:?}",
+        target_dir
+    );
     let num_entries = zip.file().entries().len();
-    
+
     for index in 0..num_entries {
         let entry = match zip.file().entries().get(index) {
             Some(e) => e,
             None => continue,
         };
-        
+
         let original_file_name = match entry.filename().as_str() {
             Ok(s) => s,
-            Err(_) => { 
-                error!("Non UTF-8 filename at index {}", index); 
-                continue; 
+            Err(_) => {
+                error!("Non UTF-8 filename at index {}", index);
+                continue;
             }
         };
 
@@ -259,7 +283,7 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
         } else {
             0
         };
-        
+
         let owned_filename = original_file_name.to_string();
 
         if is_override {
@@ -267,7 +291,7 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
                 Some(p) if !p.is_empty() => p,
                 _ => continue,
             };
-            
+
             let final_dest_path = target_dir.join(relative_path_in_overrides);
 
             if is_directory {
@@ -281,8 +305,11 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
                 }
             } else {
                 // File Extraction
-                info!("Extracting override file: '{}' -> {:?}", owned_filename, final_dest_path);
-                
+                info!(
+                    "Extracting override file: '{}' -> {:?}",
+                    owned_filename, final_dest_path
+                );
+
                 if let Some(parent) = final_dest_path.parent() {
                     if !fs::try_exists(parent).await? {
                         info!("Creating parent directory: {:?}", parent);
@@ -295,26 +322,38 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
 
                 // Extract file content
                 let mut entry_reader = zip.reader_with_entry(index).await.map_err(|e| {
-                    error!("Failed to get reader for zip entry '{}': {}", owned_filename, e);
+                    error!(
+                        "Failed to get reader for zip entry '{}': {}",
+                        owned_filename, e
+                    );
                     AppError::Other(format!("Failed to read zip entry {}: {}", index, e))
                 })?;
-                
+
                 let mut writer = fs::File::create(&final_dest_path).await.map_err(|e| {
-                    error!("Failed to create destination file {:?}: {}", final_dest_path, e);
+                    error!(
+                        "Failed to create destination file {:?}: {}",
+                        final_dest_path, e
+                    );
                     AppError::Io(e)
                 })?;
 
                 let mut buffer = Vec::with_capacity(uncompressed_size);
-                entry_reader.read_to_end_checked(&mut buffer).await.map_err(|e| {
-                    error!("Failed to read zip entry content '{}': {}", owned_filename, e);
-                    AppError::Other(format!("Failed to read zip entry content: {}", e))
-                })?;
-                
+                entry_reader
+                    .read_to_end_checked(&mut buffer)
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            "Failed to read zip entry content '{}': {}",
+                            owned_filename, e
+                        );
+                        AppError::Other(format!("Failed to read zip entry content: {}", e))
+                    })?;
+
                 writer.write_all(&buffer).await.map_err(|e| {
                     error!("Failed to write content to {:?}: {}", final_dest_path, e);
                     AppError::Io(e)
                 })?;
-                
+
                 info!("Successfully extracted to: {}", final_dest_path.display());
             }
         }
@@ -324,8 +363,14 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
 
     // 9. Save the profile using ProfileManager
     let state = State::get().await?;
-    let profile_id = state.profile_manager.create_profile(exported_profile).await?;
-    info!("Successfully created and saved profile with ID: {}", profile_id);
+    let profile_id = state
+        .profile_manager
+        .create_profile(exported_profile)
+        .await?;
+    info!(
+        "Successfully created and saved profile with ID: {}",
+        profile_id
+    );
 
     Ok(profile_id)
 }
@@ -338,7 +383,10 @@ impl NoriskModpacksConfig {
     ) -> Result<Vec<NoriskModEntryDefinition>> {
         // --- 1. Circular Dependency Check ---
         if !visited.insert(pack_id.to_string()) {
-            error!("Circular inheritance detected involving pack ID: {}", pack_id);
+            error!(
+                "Circular inheritance detected involving pack ID: {}",
+                pack_id
+            );
             return Err(AppError::Other(format!(
                 "Circular inheritance detected involving pack ID: {}",
                 pack_id
@@ -371,7 +419,11 @@ impl NoriskModpacksConfig {
         // --- 5. Handle Local Mods ---
         // Local mods defined directly in the pack override any inherited mods.
         if let local_mods = &base_definition.mods {
-             debug!("Pack '{}': Processing {} local mods", pack_id, local_mods.len());
+            debug!(
+                "Pack '{}': Processing {} local mods",
+                pack_id,
+                local_mods.len()
+            );
             for mod_entry in local_mods {
                 resolved_mods.insert(mod_entry.id.clone(), mod_entry.clone());
             }
@@ -380,12 +432,16 @@ impl NoriskModpacksConfig {
         // --- 6. Handle Exclusions ---
         // Exclusions are applied *after* inheritance and local overrides.
         if let Some(excluded_mod_ids) = &base_definition.exclude_mods {
-            debug!("Pack '{}': Applying {} exclusions", pack_id, excluded_mod_ids.len());
+            debug!(
+                "Pack '{}': Applying {} exclusions",
+                pack_id,
+                excluded_mod_ids.len()
+            );
             for mod_id_to_exclude in excluded_mod_ids {
                 if resolved_mods.remove(mod_id_to_exclude).is_some() {
-                     debug!("Pack '{}': Excluded mod '{}'", pack_id, mod_id_to_exclude);
+                    debug!("Pack '{}': Excluded mod '{}'", pack_id, mod_id_to_exclude);
                 } else {
-                     warn!("Pack '{}': Exclusion requested for mod '{}', but it was not found in the resolved list.", pack_id, mod_id_to_exclude);
+                    warn!("Pack '{}': Exclusion requested for mod '{}', but it was not found in the resolved list.", pack_id, mod_id_to_exclude);
                 }
             }
         }
@@ -395,16 +451,19 @@ impl NoriskModpacksConfig {
         visited.remove(pack_id);
 
         // Convert the HashMap values back to a Vec
-        let final_mod_list: Vec<NoriskModEntryDefinition> =
-            resolved_mods.into_values().collect();
-        
-        debug!("Pack '{}': Resolved to {} final mods.", pack_id, final_mod_list.len());
+        let final_mod_list: Vec<NoriskModEntryDefinition> = resolved_mods.into_values().collect();
+
+        debug!(
+            "Pack '{}': Resolved to {} final mods.",
+            pack_id,
+            final_mod_list.len()
+        );
         Ok(final_mod_list)
     }
 
     // Helper function to get a fully resolved pack definition (including mods)
     // This combines the base definition with the resolved mods.
-     pub fn get_resolved_pack_definition(&self, pack_id: &str) -> Result<NoriskPackDefinition> {
+    pub fn get_resolved_pack_definition(&self, pack_id: &str) -> Result<NoriskPackDefinition> {
         let base_definition = self.packs.get(pack_id).ok_or_else(|| {
             error!("Pack ID '{}' not found in configuration.", pack_id);
             AppError::Other(format!("Pack ID '{}' not found", pack_id))
@@ -443,25 +502,29 @@ impl NoriskModpacksConfig {
                     if let Some(excludes) = &resolved_pack.exclude_mods {
                         debug!("  Excludes Mods: {:?}", excludes);
                     }
-                    
-                    let mod_ids: Vec<&str> = resolved_pack.mods.iter().map(|m| m.id.as_str()).collect();
+
+                    let mod_ids: Vec<&str> =
+                        resolved_pack.mods.iter().map(|m| m.id.as_str()).collect();
                     debug!("  Final Mods ({}): {:?}", mod_ids.len(), mod_ids);
-                    
+
                     // Example of printing more details (optional)
                     // for mod_def in resolved_pack.mods {
-                    //     debug!("    - Mod ID: {}, Source Type: {:?}, Compatibility Keys: {:?}", 
-                    //            mod_def.id, 
+                    //     debug!("    - Mod ID: {}, Source Type: {:?}, Compatibility Keys: {:?}",
+                    //            mod_def.id,
                     //            mod_def.source, // This might be verbose
                     //            mod_def.compatibility.keys().collect::<Vec<_>>()
                     //     );
                     // }
-                    println!("Resolved Pack: '{}' - Final Mod IDs: {:?}", resolved_pack.display_name, mod_ids);
+                    println!(
+                        "Resolved Pack: '{}' - Final Mod IDs: {:?}",
+                        resolved_pack.display_name, mod_ids
+                    );
                 }
                 Err(e) => {
                     error!("Failed to resolve pack '{}': {}", pack_id, e);
                     // Decide if you want to continue or return the error
                     // For a print function, continuing might be acceptable.
-                    // return Err(e); 
+                    // return Err(e);
                 }
             }
         }
@@ -486,15 +549,15 @@ pub async fn load_dummy_modpacks() -> Result<()> {
         //return Ok(());
     }
 
-    // --- Path resolution based on CARGO_MANIFEST_DIR --- 
+    // --- Path resolution based on CARGO_MANIFEST_DIR ---
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // Assuming the project root is one level above the crate's manifest (src-tauri)
     let project_root = manifest_dir.parent().ok_or_else(|| {
         AppError::Other("Failed to get parent directory of CARGO_MANIFEST_DIR".to_string())
     })?;
-    
+
     // Use the test file as the source
-    let source_path = project_root.join("minecraft-data/nrc/norisk_modpacks.json"); 
+    let source_path = project_root.join("minecraft-data/nrc/norisk_modpacks.json");
     // --- End path resolution ---
 
     if source_path.exists() {
@@ -507,12 +570,18 @@ pub async fn load_dummy_modpacks() -> Result<()> {
 
         // Copy the file
         fs::copy(&source_path, &target_file).await.map_err(|e| {
-            error!("Failed to copy dummy modpacks from {:?} to {:?}: {}", source_path, target_file, e);
+            error!(
+                "Failed to copy dummy modpacks from {:?} to {:?}: {}",
+                source_path, target_file, e
+            );
             AppError::Io(e)
         })?;
         info!("Successfully copied dummy modpacks to {:?}", target_file);
     } else {
-        error!("Dummy modpacks source file not found at expected path: {:?}", source_path);
+        error!(
+            "Dummy modpacks source file not found at expected path: {:?}",
+            source_path
+        );
         // Use a more general error as it's not a Tauri resource issue anymore
         return Err(AppError::Other(format!(
             "Source file not found for dummy modpacks: {}",

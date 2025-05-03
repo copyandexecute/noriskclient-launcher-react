@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "noriskclient-launcher-v3",
-  "version": "0.1.0",
+  "version": "0.0.2-beta.4",
   "identifier": "gg.norisk.NoRiskClientLauncherV3",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -11,6 +11,12 @@
   },
   "plugins": {
     "minecraft_auth": {
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [],
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5QkZBNTBGNjhDQTBGOEYKUldTUEQ4cG9ENlcvbVpVTVdnVkNNSGlXWXVXRklqcGFxNnBuRW1LM3VDTXpKcXU2MmdCNVc5S2IK"
     }
   },
   "app": {
@@ -43,13 +49,20 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "app", 
+      "dmg", 
+      "deb", 
+      "appimage", 
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
   }
 }

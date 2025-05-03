@@ -1,8 +1,8 @@
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use crate::minecraft::{NeoForgeApi, NeoForgePatcher};
 use crate::minecraft::downloads::{NeoForgeInstallerDownloadService, NeoForgeLibrariesDownload};
 use crate::minecraft::launch::neo_forge_arguments::NeoForgeArguments;
+use crate::minecraft::{NeoForgeApi, NeoForgePatcher};
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::profile_state::Profile;
 use crate::state::state_manager::State;
@@ -17,18 +17,22 @@ pub struct NeoForgeInstaller {
 
 impl NeoForgeInstaller {
     pub fn new(java_path: PathBuf) -> Self {
-        Self { 
+        Self {
             java_path,
             concurrent_downloads: 10, // Default value
         }
     }
-    
+
     pub fn set_concurrent_downloads(&mut self, count: usize) -> &mut Self {
         self.concurrent_downloads = count;
         self
     }
 
-    pub async fn install(&self, version_id: &str, profile: &Profile) -> Result<NeoForgeInstallResult> {
+    pub async fn install(
+        &self,
+        version_id: &str,
+        profile: &Profile,
+    ) -> Result<NeoForgeInstallResult> {
         // Emit NeoForge installation event
         let neoforge_event_id = Uuid::new_v4();
         let state = State::get().await?;
@@ -49,7 +53,7 @@ impl NeoForgeInstaller {
         let neoforge_api = NeoForgeApi::new();
         let mut neoforge_libraries_download = NeoForgeLibrariesDownload::new();
         let neoforge_installer_download = NeoForgeInstallerDownloadService::new();
-        
+
         // Setze die Anzahl der konkurrenten Downloads
         neoforge_libraries_download.set_concurrent_downloads(self.concurrent_downloads);
 
@@ -65,11 +69,14 @@ impl NeoForgeInstaller {
             )));
         }
 
-        // --- Determine NeoForge Version --- 
+        // --- Determine NeoForge Version ---
         let target_neoforge_version = match &profile.loader_version {
             Some(specific_version_str) if !specific_version_str.is_empty() => {
-                info!("Attempting to find specific NeoForge version: {}", specific_version_str);
-                
+                info!(
+                    "Attempting to find specific NeoForge version: {}",
+                    specific_version_str
+                );
+
                 // Check if the specific version exists in the compatible list
                 if compatible_versions.contains(specific_version_str) {
                     info!("Found specified NeoForge version: {}", specific_version_str);
@@ -85,8 +92,11 @@ impl NeoForgeInstaller {
             }
             _ => {
                 // Fallback to latest compatible if no specific version is set
-                info!("No specific NeoForge version set in profile, using latest for MC {}.", version_id);
-                 compatible_versions.first().unwrap().clone() // Unsafe unwrap okay due to is_empty check above
+                info!(
+                    "No specific NeoForge version set in profile, using latest for MC {}.",
+                    version_id
+                );
+                compatible_versions.first().unwrap().clone() // Unsafe unwrap okay due to is_empty check above
             }
         };
         // --- End Determine NeoForge Version ---
@@ -94,52 +104,73 @@ impl NeoForgeInstaller {
         info!("Using NeoForge version: {}", target_neoforge_version);
 
         // Emit NeoForge version found event (using the determined version)
-        state.emit_event(EventPayload {
-            event_id: neoforge_event_id, 
-            event_type: EventType::InstallingNeoForge, 
-            target_id: Some(profile.id), 
-            message: format!("NeoForge Version {} wird verwendet", target_neoforge_version), 
-            progress: Some(0.1), 
-            error: None 
-        }).await?;
+        state
+            .emit_event(EventPayload {
+                event_id: neoforge_event_id,
+                event_type: EventType::InstallingNeoForge,
+                target_id: Some(profile.id),
+                message: format!(
+                    "NeoForge Version {} wird verwendet",
+                    target_neoforge_version
+                ),
+                progress: Some(0.1),
+                error: None,
+            })
+            .await?;
 
         // Download and extract NeoForge installer (using the determined version)
-        state.emit_event(EventPayload {
-            event_id: neoforge_event_id,
-            event_type: EventType::InstallingNeoForge,
-            target_id: Some(profile.id),
-            message: "NeoForge Installer wird heruntergeladen...".to_string(),
-            progress: Some(0.2),
-            error: None,
-        }).await?;
+        state
+            .emit_event(EventPayload {
+                event_id: neoforge_event_id,
+                event_type: EventType::InstallingNeoForge,
+                target_id: Some(profile.id),
+                message: "NeoForge Installer wird heruntergeladen...".to_string(),
+                progress: Some(0.2),
+                error: None,
+            })
+            .await?;
 
         neoforge_installer_download
             .download_installer(&target_neoforge_version)
             .await?;
 
-        state.emit_event(EventPayload {
-            event_id: neoforge_event_id,
-            event_type: EventType::InstallingNeoForge,
-            target_id: Some(profile.id),
-            message: "NeoForge Installer wird extrahiert...".to_string(),
-            progress: Some(0.3),
-            error: None,
-        }).await?;
+        state
+            .emit_event(EventPayload {
+                event_id: neoforge_event_id,
+                event_type: EventType::InstallingNeoForge,
+                target_id: Some(profile.id),
+                message: "NeoForge Installer wird extrahiert...".to_string(),
+                progress: Some(0.3),
+                error: None,
+            })
+            .await?;
 
-        let neoforge_version = neoforge_installer_download.extract_version_json(&target_neoforge_version).await?;
-        let profile_json = neoforge_installer_download.extract_install_profile(&target_neoforge_version).await?;
-        neoforge_installer_download.extract_data_folder(&target_neoforge_version).await?;
-        neoforge_installer_download.extract_maven_folder(&target_neoforge_version).await?;
-        neoforge_installer_download.extract_jars(&target_neoforge_version).await?;
+        let neoforge_version = neoforge_installer_download
+            .extract_version_json(&target_neoforge_version)
+            .await?;
+        let profile_json = neoforge_installer_download
+            .extract_install_profile(&target_neoforge_version)
+            .await?;
+        neoforge_installer_download
+            .extract_data_folder(&target_neoforge_version)
+            .await?;
+        neoforge_installer_download
+            .extract_maven_folder(&target_neoforge_version)
+            .await?;
+        neoforge_installer_download
+            .extract_jars(&target_neoforge_version)
+            .await?;
 
-        state.emit_event(EventPayload {
-            event_id: neoforge_event_id,
-            event_type: EventType::InstallingNeoForge,
-            target_id: Some(profile.id),
-            message: "NeoForge Libraries werden heruntergeladen...".to_string(),
-            progress: Some(0.4),
-            error: None,
-        }).await?;
+        state
+            .emit_event(EventPayload {
+                event_id: neoforge_event_id,
+                event_type: EventType::InstallingNeoForge,
+                target_id: Some(profile.id),
+                message: "NeoForge Libraries werden heruntergeladen...".to_string(),
+                progress: Some(0.4),
+                error: None,
+            })
+            .await?;
 
         // Download NeoForge libraries
         neoforge_libraries_download
@@ -153,20 +184,24 @@ impl NeoForgeInstaller {
         let neo_forge_game_arguments = NeoForgeArguments::get_game_arguments(&neoforge_version);
 
         // Use determined target_neoforge_version for client path and installer path
-        let custom_client_path = neoforge_installer_download.get_client_path(&target_neoforge_version);
-        let installer_path = neoforge_installer_download.get_installer_path(&target_neoforge_version);
+        let custom_client_path =
+            neoforge_installer_download.get_client_path(&target_neoforge_version);
+        let installer_path =
+            neoforge_installer_download.get_installer_path(&target_neoforge_version);
 
         let mut uses_neoforgeclient = false;
 
         if let Some(neoforge_profile) = profile_json {
-            state.emit_event(EventPayload {
-                event_id: neoforge_event_id,
-                event_type: EventType::InstallingNeoForge,
-                target_id: Some(profile.id),
-                message: "NeoForge Installer Libraries werden heruntergeladen...".to_string(),
-                progress: Some(0.6),
-                error: None,
-            }).await?;
+            state
+                .emit_event(EventPayload {
+                    event_id: neoforge_event_id,
+                    event_type: EventType::InstallingNeoForge,
+                    target_id: Some(profile.id),
+                    message: "NeoForge Installer Libraries werden heruntergeladen...".to_string(),
+                    progress: Some(0.6),
+                    error: None,
+                })
+                .await?;
 
             neoforge_libraries_download
                 .download_installer_libraries(&neoforge_profile)
@@ -206,7 +241,10 @@ impl NeoForgeInstaller {
 
                         // Prüfe ob die Datei existiert
                         if library_path.exists() {
-                            info!("✅ Pre-patched NeoForge client found: {}", library_path.display());
+                            info!(
+                                "✅ Pre-patched NeoForge client found: {}",
+                                library_path.display()
+                            );
                             should_run_patcher = false;
                         } else {
                             info!(
@@ -220,14 +258,16 @@ impl NeoForgeInstaller {
 
             // Patcher nur ausführen, wenn nötig
             if should_run_patcher {
-                state.emit_event(EventPayload {
-                    event_id: neoforge_event_id,
-                    event_type: EventType::InstallingNeoForge,
-                    target_id: Some(profile.id),
-                    message: "NeoForge wird gepatcht...".to_string(),
-                    progress: Some(0.7),
-                    error: None,
-                }).await?;
+                state
+                    .emit_event(EventPayload {
+                        event_id: neoforge_event_id,
+                        event_type: EventType::InstallingNeoForge,
+                        target_id: Some(profile.id),
+                        message: "NeoForge wird gepatcht...".to_string(),
+                        progress: Some(0.7),
+                        error: None,
+                    })
+                    .await?;
 
                 let neoforge_patcher = NeoForgePatcher::new(self.java_path.clone(), version_id);
                 neoforge_patcher
@@ -236,14 +276,18 @@ impl NeoForgeInstaller {
                     .apply_processors(&neoforge_profile, version_id, true, &installer_path)
                     .await?;
             } else {
-                state.emit_event(EventPayload {
-                    event_id: neoforge_event_id,
-                    event_type: EventType::InstallingNeoForge,
-                    target_id: Some(profile.id),
-                    message: "Vorgepatchte NeoForge-Client Datei gefunden, überspringe Patching...".to_string(),
-                    progress: Some(0.7),
-                    error: None,
-                }).await?;
+                state
+                    .emit_event(EventPayload {
+                        event_id: neoforge_event_id,
+                        event_type: EventType::InstallingNeoForge,
+                        target_id: Some(profile.id),
+                        message:
+                            "Vorgepatchte NeoForge-Client Datei gefunden, überspringe Patching..."
+                                .to_string(),
+                        progress: Some(0.7),
+                        error: None,
+                    })
+                    .await?;
             }
 
             // Check if using neoforgeclient flag
@@ -252,14 +296,16 @@ impl NeoForgeInstaller {
             }
         } else {
             // Restore full event payload for legacy library download
-            state.emit_event(EventPayload {
-                event_id: neoforge_event_id,
-                event_type: EventType::InstallingNeoForge,
-                target_id: Some(profile.id),
-                message: "Legacy NeoForge Libraries werden heruntergeladen...".to_string(),
-                progress: Some(0.8),
-                error: None,
-            }).await?;
+            state
+                .emit_event(EventPayload {
+                    event_id: neoforge_event_id,
+                    event_type: EventType::InstallingNeoForge,
+                    target_id: Some(profile.id),
+                    message: "Legacy NeoForge Libraries werden heruntergeladen...".to_string(),
+                    progress: Some(0.8),
+                    error: None,
+                })
+                .await?;
 
             neoforge_libraries_download
                 .download_legacy_libraries(&neoforge_version)
@@ -268,14 +314,16 @@ impl NeoForgeInstaller {
 
         info!("NeoForge installation completed!");
 
-        state.emit_event(EventPayload {
-            event_id: neoforge_event_id,
-            event_type: EventType::InstallingNeoForge,
-            target_id: Some(profile.id),
-            message: "NeoForge Installation abgeschlossen!".to_string(),
-            progress: Some(1.0),
-            error: None,
-        }).await?;
+        state
+            .emit_event(EventPayload {
+                event_id: neoforge_event_id,
+                event_type: EventType::InstallingNeoForge,
+                target_id: Some(profile.id),
+                message: "NeoForge Installation abgeschlossen!".to_string(),
+                progress: Some(1.0),
+                error: None,
+            })
+            .await?;
 
         let result = NeoForgeInstallResult {
             libraries,
@@ -303,4 +351,4 @@ pub struct NeoForgeInstallResult {
     pub minecraft_arguments: Option<String>,
     pub custom_client_path: Option<PathBuf>,
     pub uses_neoforgeclient: bool,
-} 
+}

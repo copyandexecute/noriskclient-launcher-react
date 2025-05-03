@@ -1,6 +1,6 @@
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use log::info;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VersionManifest {
@@ -54,21 +54,24 @@ impl PistonMeta {
         info!("Type: {}", self.version_type);
         info!("Release Time: {}", self.release_time);
         info!("Compliance Level: {}", self.compliance_level);
-        
+
         info!("\nJava Requirements:");
         info!("Component: {}", self.java_version.component);
         info!("Major Version: {}", self.java_version.major_version);
-        
+
         info!("\nAssets:");
         info!("Asset Index: {}", self.asset_index.id);
         info!("Total Size: {} bytes", self.asset_index.total_size);
-        
+
         info!("\nDownloads:");
         info!("Client Size: {} bytes", self.downloads.client.size);
         info!("Client SHA1: {}", self.downloads.client.sha1);
-        
+
         info!("\nMain Class: {}", self.main_class);
-        info!("Minimum Launcher Version: {}", self.minimum_launcher_version);
+        info!(
+            "Minimum Launcher Version: {}",
+            self.minimum_launcher_version
+        );
     }
 }
 
@@ -205,4 +208,4 @@ pub struct AssetIndexContent {
 pub struct AssetObject {
     pub hash: String,
     pub size: i64,
-} 
+}

@@ -1,16 +1,16 @@
-use std::path::PathBuf;
-use std::process::Command;
-use log::info;
-use log::warn;
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
 use crate::minecraft::dto::piston_meta::PistonMeta;
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
 use crate::minecraft::minecraft_auth::Credentials;
 use crate::minecraft::ClasspathBuilder;
 use crate::minecraft::GameArguments;
 use crate::minecraft::JvmArguments;
 use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
+use log::info;
+use log::warn;
+use std::path::PathBuf;
+use std::process::Command;
 use uuid::Uuid;
 
 pub struct MinecraftLaunchParameters {
@@ -116,7 +116,11 @@ pub struct MinecraftLauncher {
 }
 
 impl MinecraftLauncher {
-    pub fn new(java_path: PathBuf, game_directory: PathBuf, credentials: Option<Credentials>) -> Self {
+    pub fn new(
+        java_path: PathBuf,
+        game_directory: PathBuf,
+        credentials: Option<Credentials>,
+    ) -> Self {
         Self {
             java_path,
             game_directory,
@@ -124,7 +128,11 @@ impl MinecraftLauncher {
         }
     }
 
-    fn process_old_arguments(&self, minecraft_arguments: Option<String>, piston_meta: &PistonMeta) -> Option<Vec<String>> {
+    fn process_old_arguments(
+        &self,
+        minecraft_arguments: Option<String>,
+        piston_meta: &PistonMeta,
+    ) -> Option<Vec<String>> {
         minecraft_arguments.map(|args_string| {
             info!("\nProcessing old format arguments (with advanced splitting):");
 
@@ -156,7 +164,7 @@ impl MinecraftLauncher {
         &self,
         piston_meta: &PistonMeta,
         params: MinecraftLaunchParameters,
-        profile: Option<Profile>
+        profile: Option<Profile>,
     ) -> Result<()> {
         let state = State::get().await?;
         let process_manager = &state.process_manager;
@@ -170,7 +178,10 @@ impl MinecraftLauncher {
         command.current_dir(&self.game_directory);
 
         // Define paths
-        let natives_path = LAUNCHER_DIRECTORY.meta_dir().join("natives").join(&piston_meta.id);
+        let natives_path = LAUNCHER_DIRECTORY
+            .meta_dir()
+            .join("natives")
+            .join(&piston_meta.id);
 
         // Build classpath first as it's needed for JVM arguments
         let classpath = if let Some(client_jar) = params.custom_client_jar {
@@ -229,10 +240,18 @@ impl MinecraftLauncher {
             // Get the appropriate NoRisk token based on experimental mode setting
             if let Some(norisk_token) = if params.is_experimental_mode {
                 info!("[NoRisk Launcher] Using experimental mode token");
-                creds.norisk_credentials.experimental.as_ref().map(|t| &t.value)
+                creds
+                    .norisk_credentials
+                    .experimental
+                    .as_ref()
+                    .map(|t| &t.value)
             } else {
                 info!("[NoRisk Launcher] Using production mode token");
-                creds.norisk_credentials.production.as_ref().map(|t| &t.value)
+                creds
+                    .norisk_credentials
+                    .production
+                    .as_ref()
+                    .map(|t| &t.value)
             } {
                 info!("[NoRisk Launcher] Adding NoRisk token to launch parameters");
                 command.arg(format!("-Dnorisk.token={}", norisk_token));
@@ -241,8 +260,14 @@ impl MinecraftLauncher {
             }
 
             // Add experimental mode parameter
-            info!("[NoRisk Launcher] Setting experimental mode: {}", params.is_experimental_mode);
-            command.arg(format!("-Dnorisk.experimental={}", params.is_experimental_mode));
+            info!(
+                "[NoRisk Launcher] Setting experimental mode: {}",
+                params.is_experimental_mode
+            );
+            command.arg(format!(
+                "-Dnorisk.experimental={}",
+                params.is_experimental_mode
+            ));
         } else {
             info!("[NoRisk Launcher] No credentials available, skipping NoRisk parameters");
         }
@@ -254,14 +279,15 @@ impl MinecraftLauncher {
 
         // Add classpath if not already set
         if !has_classpath {
-            command
-                .arg("-cp")
-                .arg(&classpath);
+            command.arg("-cp").arg(&classpath);
         }
 
         // Add natives path if not already set
         if !has_natives {
-            command.arg(format!("-Djava.library.path={}", natives_path.to_string_lossy().replace("\\", "/")));
+            command.arg(format!(
+                "-Djava.library.path={}",
+                natives_path.to_string_lossy().replace("\\", "/")
+            ));
         }
 
         // Add main class
@@ -282,7 +308,9 @@ impl MinecraftLauncher {
             for arg in processed_args {
                 command.arg(arg);
             }
-        } else if let Some(processed_args) = self.process_old_arguments(params.old_minecraft_arguments, piston_meta) {
+        } else if let Some(processed_args) =
+            self.process_old_arguments(params.old_minecraft_arguments, piston_meta)
+        {
             for arg in processed_args {
                 command.arg(arg);
             }
@@ -290,7 +318,10 @@ impl MinecraftLauncher {
 
         // Add resolution arguments if custom resolution is set
         if let Some(res) = &params.resolution {
-            info!("Appending custom resolution arguments: --width {} --height {}", res.width, res.height);
+            info!(
+                "Appending custom resolution arguments: --width {} --height {}",
+                res.width, res.height
+            );
             command.arg("--width");
             command.arg(res.width.to_string());
             command.arg("--height");
@@ -299,11 +330,17 @@ impl MinecraftLauncher {
 
         // Add Quick Play arguments if specified
         if let Some(world_name) = &params.quick_play_singleplayer {
-            info!("Adding quickPlaySingleplayer argument for world: {}", world_name);
+            info!(
+                "Adding quickPlaySingleplayer argument for world: {}",
+                world_name
+            );
             command.arg("--quickPlaySingleplayer");
             command.arg(world_name);
         } else if let Some(server_address) = &params.quick_play_multiplayer {
-            info!("Adding quickPlayMultiplayer argument for server: {}", server_address);
+            info!(
+                "Adding quickPlayMultiplayer argument for server: {}",
+                server_address
+            );
             command.arg("--quickPlayMultiplayer");
             command.arg(server_address);
         }
@@ -317,37 +354,37 @@ impl MinecraftLauncher {
 
         // Extract account information from credentials
         let (account_uuid, account_name) = if let Some(creds) = &self.credentials {
-            (
-                Some(creds.id.to_string()),
-                Some(creds.username.clone())
-            )
+            (Some(creds.id.to_string()), Some(creds.username.clone()))
         } else {
             (None, None)
         };
 
         // Extract optional profile information for process metadata
-        let (profile_loader, profile_loader_version, profile_norisk_pack, profile_name) = match profile {
-            Some(p) => (
-                Some(p.loader.as_str().to_string()),
-                p.loader_version,
-                p.selected_norisk_pack_id,
-                Some(p.name)
-            ),
-            None => (None, None, None, None),
-        };
+        let (profile_loader, profile_loader_version, profile_norisk_pack, profile_name) =
+            match profile {
+                Some(p) => (
+                    Some(p.loader.as_str().to_string()),
+                    p.loader_version,
+                    p.selected_norisk_pack_id,
+                    Some(p.name),
+                ),
+                None => (None, None, None, None),
+            };
 
         // Start the process using ProcessManager with additional metadata
-        process_manager.start_process(
-            params.profile_id,
-            command,
-            account_uuid,
-            account_name,
-            Some(piston_meta.id.clone()),
-            profile_loader,
-            profile_loader_version,
-            profile_norisk_pack,
-            profile_name
-        ).await?;
+        process_manager
+            .start_process(
+                params.profile_id,
+                command,
+                account_uuid,
+                account_name,
+                Some(piston_meta.id.clone()),
+                profile_loader,
+                profile_loader_version,
+                profile_norisk_pack,
+                profile_name,
+            )
+            .await?;
 
         Ok(())
     }

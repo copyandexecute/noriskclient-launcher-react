@@ -1,9 +1,9 @@
-use thiserror::Error;
-use serde::Serialize;
-use std::io;
-use uuid::Uuid;
 use fastnbt::error::Error as FastNbtError;
 use fs_extra::error::Error as FsExtraError;
+use serde::Serialize;
+use std::io;
+use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -138,7 +138,7 @@ pub enum AppError {
 
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
 

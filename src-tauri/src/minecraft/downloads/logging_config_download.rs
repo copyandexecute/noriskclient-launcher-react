@@ -1,11 +1,11 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
 use crate::minecraft::dto::piston_meta::LoggingClient;
-use std::path::PathBuf;
+use log::{error, info};
 use reqwest;
+use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use log::{info, error};
 
 const LOGGING_DIR: &str = "assets/log_configs";
 
@@ -16,7 +16,10 @@ pub struct MinecraftLoggingDownloadService {
 impl MinecraftLoggingDownloadService {
     pub fn new() -> Self {
         let logging_configs_path = LAUNCHER_DIRECTORY.meta_dir().join(LOGGING_DIR);
-        info!("[Logging Config Service] Initialized. Config Path: {}", logging_configs_path.display());
+        info!(
+            "[Logging Config Service] Initialized. Config Path: {}",
+            logging_configs_path.display()
+        );
         Self {
             logging_configs_path,
         }
@@ -37,16 +40,14 @@ impl MinecraftLoggingDownloadService {
             }
         }
 
-        info!("[Logging Config Download] Downloading logging config: {}", file_name);
-        let response = reqwest::get(&logging.file.url)
-            .await
-            .map_err(|e| {
-                error!("[Logging Config Download] Request error: {}", e);
-                AppError::Download(format!(
-                    "Failed to download logging configuration: {}",
-                    e
-                ))
-            })?;
+        info!(
+            "[Logging Config Download] Downloading logging config: {}",
+            file_name
+        );
+        let response = reqwest::get(&logging.file.url).await.map_err(|e| {
+            error!("[Logging Config Download] Request error: {}", e);
+            AppError::Download(format!("Failed to download logging configuration: {}", e))
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -54,24 +55,21 @@ impl MinecraftLoggingDownloadService {
                 .text()
                 .await
                 .unwrap_or_else(|_| "No error details available".to_string());
-            
-            error!("[Logging Config Download] Failed with status {}: {}", status, error_text);
+
+            error!(
+                "[Logging Config Download] Failed with status {}: {}",
+                status, error_text
+            );
             return Err(AppError::Download(format!(
                 "Failed to download logging config - Status {}: {}",
-                status,
-                error_text
+                status, error_text
             )));
         }
 
-        let bytes = response.bytes()
-            .await
-            .map_err(|e| {
-                error!("[Logging Config Download] Failed to read bytes: {}", e);
-                AppError::Download(format!(
-                    "Failed to read logging config data: {}",
-                    e
-                ))
-            })?;
+        let bytes = response.bytes().await.map_err(|e| {
+            error!("[Logging Config Download] Failed to read bytes: {}", e);
+            AppError::Download(format!("Failed to read logging config data: {}", e))
+        })?;
 
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent).await?;
@@ -80,11 +78,17 @@ impl MinecraftLoggingDownloadService {
         let mut file = fs::File::create(&target_path).await?;
         file.write_all(&bytes).await?;
 
-        info!("[Logging Config Download] Successfully downloaded logging config to: {}", target_path.display());
+        info!(
+            "[Logging Config Download] Successfully downloaded logging config to: {}",
+            target_path.display()
+        );
         Ok(target_path)
     }
 
     pub fn get_jvm_argument(&self, logging_config_path: &PathBuf) -> String {
-        format!("-Dlog4j.configurationFile={}", logging_config_path.to_string_lossy())
+        format!(
+            "-Dlog4j.configurationFile={}",
+            logging_config_path.to_string_lossy()
+        )
     }
-} 
+}

@@ -1,24 +1,26 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
+use crate::state::event_state::{
+    EventPayload, EventState, EventType, MinecraftProcessExitedPayload,
+};
 use crate::state::{self, State};
-use crate::state::event_state::{EventState, EventPayload, EventType, MinecraftProcessExitedPayload};
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use log;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::process::ExitStatus;
 use std::sync::Arc;
-use sysinfo::{Pid, System, ProcessesToUpdate};
+use sysinfo::{Pid, ProcessesToUpdate, System};
+use tauri::Manager;
 use tokio::fs::{self as async_fs, File};
+use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
-use uuid::Uuid;
-use tokio::time::{interval, Duration};
-use std::process::ExitStatus;
-use dashmap::DashMap;
 use tokio::task::JoinHandle;
-use tauri::Manager;
+use tokio::time::{interval, Duration};
+use uuid::Uuid;
 
 const PROCESSES_FILENAME: &str = "processes.json";
 
@@ -183,7 +185,9 @@ impl ProcessManager {
 
         if let Some(parent_dir) = self.processes_file_path.parent() {
             if !parent_dir.exists() {
-                async_fs::create_dir_all(parent_dir).await.map_err(AppError::Io)?;
+                async_fs::create_dir_all(parent_dir)
+                    .await
+                    .map_err(AppError::Io)?;
                 log::info!("Created directory for processes file: {:?}", parent_dir);
             }
         }
@@ -246,7 +250,10 @@ impl ProcessManager {
 
         let mut tokio_command = tokio::process::Command::from(command);
         let mut child = tokio_command.spawn().map_err(|e| {
-            log::error!("Failed to spawn process using tokio::process::Command: {}", e);
+            log::error!(
+                "Failed to spawn process using tokio::process::Command: {}",
+                e
+            );
             AppError::ProcessSpawnFailed(e.to_string())
         })?;
 
@@ -287,10 +294,13 @@ impl ProcessManager {
             processes_map.insert(process_id, process_entry);
         }
 
-        // --- BEGIN Discord State Update --- 
+        // --- BEGIN Discord State Update ---
         match State::get().await {
             Ok(state) => {
-                log::debug!("Notifying Discord manager about game process {} start.", process_id);
+                log::debug!(
+                    "Notifying Discord manager about game process {} start.",
+                    process_id
+                );
                 state.discord_manager.notify_game_start(process_id).await;
             }
             Err(e) => {
@@ -301,10 +311,10 @@ impl ProcessManager {
         // --- END Discord State Update ---
 
         if let Err(e) = self.save_processes().await {
-             log::error!(
-                 "Failed to save processes state immediately after starting {}: {}",
-                 process_id,
-                 e
+            log::error!(
+                "Failed to save processes state immediately after starting {}: {}",
+                process_id,
+                e
             );
         }
 
@@ -313,28 +323,45 @@ impl ProcessManager {
 
         tokio::spawn(async move {
             let state = match state_clone_res {
-                 Ok(s) => s,
-                 Err(e) => {
+                Ok(s) => s,
+                Err(e) => {
                     log::error!("Monitor task for process {} failed to get global state: {}. Cannot report exit.", process_id, e);
                     let mut processes_map = processes_arc_clone.write().await;
                     processes_map.remove(&process_id);
-                    log::warn!("Removed process entry {} due to state access failure in monitor task.", process_id);
+                    log::warn!(
+                        "Removed process entry {} due to state access failure in monitor task.",
+                        process_id
+                    );
                     return;
-                 }
+                }
             };
             let event_state = &state.event_state;
 
-            log::info!("Monitor task started for process {} (PID: {})", process_id, pid);
+            log::info!(
+                "Monitor task started for process {} (PID: {})",
+                process_id,
+                pid
+            );
 
             let exit_status_res = child.wait().await;
 
             let exit_status: Option<ExitStatus> = match exit_status_res {
                 Ok(status) => {
-                    log::info!("Process {} (PID: {}) exited with status: {:?}", process_id, pid, status);
+                    log::info!(
+                        "Process {} (PID: {}) exited with status: {:?}",
+                        process_id,
+                        pid,
+                        status
+                    );
                     Some(status)
                 }
                 Err(e) => {
-                    log::error!("Failed to wait for process {} (PID: {}): {}", process_id, pid, e);
+                    log::error!(
+                        "Failed to wait for process {} (PID: {}): {}",
+                        process_id,
+                        pid,
+                        e
+                    );
                     None
                 }
             };
@@ -351,36 +378,57 @@ impl ProcessManager {
             };
 
             // Serialize the specific payload to JSON
-            let specific_payload_json = serde_json::to_string(&specific_payload)
-                .unwrap_or_else(|e| {
-                    log::error!("Failed to serialize MinecraftProcessExitedPayload for {}: {}", process_id, e);
+            let specific_payload_json =
+                serde_json::to_string(&specific_payload).unwrap_or_else(|e| {
+                    log::error!(
+                        "Failed to serialize MinecraftProcessExitedPayload for {}: {}",
+                        process_id,
+                        e
+                    );
                     // Provide a fallback JSON error message if serialization fails
-                    format!("{{\"error\":\"Failed to serialize payload: {}\", \"process_id\":\"{}\"}}", e, process_id)
+                    format!(
+                        "{{\"error\":\"Failed to serialize payload: {}\", \"process_id\":\"{}\"}}",
+                        e, process_id
+                    )
                 });
 
-            log::info!("Emitting MinecraftProcessExited event for process {} with JSON payload: {}", 
-                      process_id, specific_payload_json);
+            log::info!(
+                "Emitting MinecraftProcessExited event for process {} with JSON payload: {}",
+                process_id,
+                specific_payload_json
+            );
 
             // Create the generic payload using the JSON string in the message field
             let generic_payload = EventPayload {
-                 event_id: Uuid::new_v4(),
-                 event_type: EventType::MinecraftProcessExited,
-                 target_id: Some(process_id),
-                 message: specific_payload_json, // <-- Use the JSON string here
-                 progress: None,
-                 // Error field just indicates if there was an error, details are in the message JSON
-                 error: if success { None } else { Some("Process exited non-zero".to_string()) },
+                event_id: Uuid::new_v4(),
+                event_type: EventType::MinecraftProcessExited,
+                target_id: Some(process_id),
+                message: specific_payload_json, // <-- Use the JSON string here
+                progress: None,
+                // Error field just indicates if there was an error, details are in the message JSON
+                error: if success {
+                    None
+                } else {
+                    Some("Process exited non-zero".to_string())
+                },
             };
 
             if let Err(e) = event_state.emit(generic_payload).await {
-                log::error!("Failed to emit MinecraftProcessExited event for process {}: {}", process_id, e);
+                log::error!(
+                    "Failed to emit MinecraftProcessExited event for process {}: {}",
+                    process_id,
+                    e
+                );
             }
 
             log::info!("Removing process entry {} from manager.", process_id);
             {
                 let mut processes_map = processes_arc_clone.write().await;
                 if processes_map.remove(&process_id).is_none() {
-                     log::warn!("Process entry {} was already removed before monitor task cleanup.", process_id);
+                    log::warn!(
+                        "Process entry {} was already removed before monitor task cleanup.",
+                        process_id
+                    );
                 }
             }
 
@@ -436,7 +484,10 @@ impl ProcessManager {
             // Only remove if kill was considered successful (process gone or signal sent)
             if kill_successful {
                 processes_map.remove(&process_id);
-                log::info!("Removed process {} from manager after stop attempt.", process_id);
+                log::info!(
+                    "Removed process {} from manager after stop attempt.",
+                    process_id
+                );
             } else {
                 // Use the cloned state for logging
                 log::warn!(
@@ -460,7 +511,10 @@ impl ProcessManager {
                 e
             );
             if kill_successful {
-                 return Err(AppError::Other(format!("Failed to save state after stopping process {}: {}", process_id, e)));
+                return Err(AppError::Other(format!(
+                    "Failed to save state after stopping process {}: {}",
+                    process_id, e
+                )));
             }
         }
 
@@ -495,11 +549,11 @@ impl ProcessManager {
             .collect()
     }
 
-    async fn periodic_process_check(
-        processes_arc: Arc<RwLock<HashMap<Uuid, Process>>>,
-    ) {
+    async fn periodic_process_check(processes_arc: Arc<RwLock<HashMap<Uuid, Process>>>) {
         let mut interval = interval(Duration::from_secs(10));
-        log::info!("Starting periodic process checker task. (Note: Normal exits handled by monitor tasks)");
+        log::info!(
+            "Starting periodic process checker task. (Note: Normal exits handled by monitor tasks)"
+        );
 
         loop {
             interval.tick().await;
@@ -518,7 +572,9 @@ impl ProcessManager {
                     .collect();
             }
 
-            if pids_to_check.is_empty() { continue; }
+            if pids_to_check.is_empty() {
+                continue;
+            }
 
             let mut sys = System::new();
             let pids_to_refresh: Vec<Pid> = pids_to_check
@@ -536,18 +592,20 @@ impl ProcessManager {
             }
 
             if !dead_process_ids.is_empty() {
-                log::warn!("Periodic check removing {} potentially stale process entries: {:?}", dead_process_ids.len(), dead_process_ids);
-                 let mut processes_map = processes_arc.write().await;
+                log::warn!(
+                    "Periodic check removing {} potentially stale process entries: {:?}",
+                    dead_process_ids.len(),
+                    dead_process_ids
+                );
+                let mut processes_map = processes_arc.write().await;
                 for id in dead_process_ids {
-                     processes_map.remove(&id);
+                    processes_map.remove(&id);
                 }
             }
         }
     }
 
-    async fn periodic_log_tailer(
-        processes_arc: Arc<RwLock<HashMap<Uuid, Process>>>,
-    ) {
+    async fn periodic_log_tailer(processes_arc: Arc<RwLock<HashMap<Uuid, Process>>>) {
         let mut interval = interval(Duration::from_secs(1));
         log::info!("Starting periodic log tailing task.");
 
@@ -558,7 +616,10 @@ impl ProcessManager {
             let app_state = match state::State::get().await {
                 Ok(state) => state,
                 Err(e) => {
-                    log::error!("Log tailer failed to get global state: {}. Skipping cycle.", e);
+                    log::error!(
+                        "Log tailer failed to get global state: {}. Skipping cycle.",
+                        e
+                    );
                     continue;
                 }
             };
@@ -572,14 +633,27 @@ impl ProcessManager {
 
             let processes_to_tail: Vec<(Uuid, Uuid, Arc<Mutex<u64>>)> = processes_map
                 .iter()
-                .filter(|(_, process)| process.metadata.state == ProcessState::Running || process.metadata.state == ProcessState::Starting)
-                .map(|(id, process)| (*id, process.metadata.profile_id, Arc::clone(&process.last_log_position)))
+                .filter(|(_, process)| {
+                    process.metadata.state == ProcessState::Running
+                        || process.metadata.state == ProcessState::Starting
+                })
+                .map(|(id, process)| {
+                    (
+                        *id,
+                        process.metadata.profile_id,
+                        Arc::clone(&process.last_log_position),
+                    )
+                })
                 .collect();
 
             drop(processes_map);
 
             for (process_id, profile_id, last_pos_mutex) in processes_to_tail {
-                let instance_path = match app_state.profile_manager.get_profile_instance_path(profile_id).await {
+                let instance_path = match app_state
+                    .profile_manager
+                    .get_profile_instance_path(profile_id)
+                    .await
+                {
                     Ok(path) => path,
                     Err(e) => {
                         log::warn!("Could not get instance path for profile {} (process {}): {}. Skipping log tail.", profile_id, process_id, e);
@@ -590,12 +664,28 @@ impl ProcessManager {
                 let latest_log_path = instance_path.join("logs").join("latest.log");
 
                 if !latest_log_path.exists() {
-                    log::trace!("Log file {:?} for process {} does not exist yet.", latest_log_path, process_id);
+                    log::trace!(
+                        "Log file {:?} for process {} does not exist yet.",
+                        latest_log_path,
+                        process_id
+                    );
                     continue;
                 }
 
-                if let Err(e) = Self::tail_log_file(&latest_log_path, process_id, &last_pos_mutex, &app_state.event_state).await {
-                     log::warn!("Error tailing log file {:?} for process {}: {}", latest_log_path, process_id, e);
+                if let Err(e) = Self::tail_log_file(
+                    &latest_log_path,
+                    process_id,
+                    &last_pos_mutex,
+                    &app_state.event_state,
+                )
+                .await
+                {
+                    log::warn!(
+                        "Error tailing log file {:?} for process {}: {}",
+                        latest_log_path,
+                        process_id,
+                        e
+                    );
                 }
             }
         }
@@ -605,7 +695,7 @@ impl ProcessManager {
         log_path: &PathBuf,
         process_id: Uuid,
         last_pos_mutex: &Arc<Mutex<u64>>,
-        event_state: &EventState
+        event_state: &EventState,
     ) -> Result<()> {
         let current_metadata = tokio::fs::metadata(log_path).await.map_err(AppError::Io)?;
         let current_size = current_metadata.len();
@@ -623,11 +713,20 @@ impl ProcessManager {
         let mut bytes_actually_read: u64 = 0;
 
         if current_size > read_from_pos {
-            log::trace!("Reading new logs from {:?} for process {} (from byte {} up to {})", log_path, process_id, read_from_pos, current_size);
+            log::trace!(
+                "Reading new logs from {:?} for process {} (from byte {} up to {})",
+                log_path,
+                process_id,
+                read_from_pos,
+                current_size
+            );
             let file = File::open(log_path).await.map_err(AppError::Io)?;
             let mut reader = BufReader::new(file);
 
-            reader.seek(std::io::SeekFrom::Start(read_from_pos)).await.map_err(AppError::Io)?;
+            reader
+                .seek(std::io::SeekFrom::Start(read_from_pos))
+                .await
+                .map_err(AppError::Io)?;
 
             let mut line_buffer = String::new();
             loop {
@@ -661,68 +760,87 @@ impl ProcessManager {
                         line_buffer.clear();
 
                         if read_from_pos + bytes_actually_read > current_size {
-                             log::warn!("Read beyond expected size in log tailer for {:?}. Stopping read.", log_path);
-                             bytes_actually_read = current_size - read_from_pos;
-                             break;
+                            log::warn!(
+                                "Read beyond expected size in log tailer for {:?}. Stopping read.",
+                                log_path
+                            );
+                            bytes_actually_read = current_size - read_from_pos;
+                            break;
                         }
                     }
                     Err(e) => {
-                         log::error!("Error reading line from log file {:?}: {}", log_path, e);
-                         bytes_actually_read = current_size - read_from_pos;
-                         break;
+                        log::error!("Error reading line from log file {:?}: {}", log_path, e);
+                        bytes_actually_read = current_size - read_from_pos;
+                        break;
                     }
                 }
             }
         } else {
-             log::trace!("No new logs found for process {} in {:?}", process_id, log_path);
+            log::trace!(
+                "No new logs found for process {} in {:?}",
+                process_id,
+                log_path
+            );
         }
 
         *last_pos_guard = read_from_pos + bytes_actually_read;
-        log::trace!("Updated log position for process {} to {}", process_id, *last_pos_guard);
+        log::trace!(
+            "Updated log position for process {} to {}",
+            process_id,
+            *last_pos_guard
+        );
 
         Ok(())
     }
 
     /// Retrieves the full content of the latest.log file for a given process.
     /// Internally accesses the global state to get the ProfileManager.
-    pub async fn get_full_log_content(
-        &self,
-        process_id: Uuid,
-    ) -> Result<String> {
-        log::info!("Attempting to get full log content for process {}", process_id);
+    pub async fn get_full_log_content(&self, process_id: Uuid) -> Result<String> {
+        log::info!(
+            "Attempting to get full log content for process {}",
+            process_id
+        );
 
         // 1. Get profile_id from this ProcessManager's state
-        let process_metadata = self.get_process_metadata(process_id).await
-            .ok_or_else(|| {
-                log::warn!("Process {} not found in ProcessManager when getting full log.", process_id);
-                AppError::ProcessNotFound(process_id)
-            })?;
+        let process_metadata = self.get_process_metadata(process_id).await.ok_or_else(|| {
+            log::warn!(
+                "Process {} not found in ProcessManager when getting full log.",
+                process_id
+            );
+            AppError::ProcessNotFound(process_id)
+        })?;
         let profile_id = process_metadata.profile_id;
         log::debug!("Found profile_id {} for process {}", profile_id, process_id);
 
         // 2. Get instance_path using the global state
         let app_state = state::State::get().await?; // Get global state
-        let instance_path = app_state.profile_manager.get_profile_instance_path(profile_id).await?; // Access profile manager
+        let instance_path = app_state
+            .profile_manager
+            .get_profile_instance_path(profile_id)
+            .await?; // Access profile manager
         let log_path = instance_path.join("logs").join("latest.log");
         log::debug!("Constructed log path for full read: {:?}", log_path);
 
         // 3. Read the log file content
         if !log_path.exists() {
             log::warn!("Log file not found at path: {:?}", log_path);
-            return Ok("".to_string()); 
+            return Ok("".to_string());
         }
 
         // Read file as bytes first to handle potential invalid UTF-8
-        let log_bytes = async_fs::read(&log_path).await
-            .map_err(|e| {
-                log::error!("Failed to read log file bytes {:?}: {}", log_path, e);
-                AppError::Io(e)
-            })?;
+        let log_bytes = async_fs::read(&log_path).await.map_err(|e| {
+            log::error!("Failed to read log file bytes {:?}: {}", log_path, e);
+            AppError::Io(e)
+        })?;
 
         // Convert bytes to string, replacing invalid sequences
         let log_content = String::from_utf8_lossy(&log_bytes).to_string();
 
-        log::info!("Successfully read {} bytes (lossy converted to string) from log file for process {}", log_bytes.len(), process_id);
+        log::info!(
+            "Successfully read {} bytes (lossy converted to string) from log file for process {}",
+            log_bytes.len(),
+            process_id
+        );
         Ok(log_content)
     }
 
@@ -745,12 +863,18 @@ impl ProcessManager {
 
             // Abort the task
             handle.abort();
-            log::info!("Successfully aborted launch task for profile ID: {}", profile_id);
+            log::info!(
+                "Successfully aborted launch task for profile ID: {}",
+                profile_id
+            );
 
             return Ok(());
         } else {
             log::warn!("No launching task found for profile ID: {}", profile_id);
-            return Err(AppError::Other(format!("No launching task found for profile ID: {}", profile_id)));
+            return Err(AppError::Other(format!(
+                "No launching task found for profile ID: {}",
+                profile_id
+            )));
         }
     }
 

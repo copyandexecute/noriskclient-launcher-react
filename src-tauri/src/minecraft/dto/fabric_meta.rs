@@ -109,4 +109,4 @@ pub struct FabricVersionInfo {
     pub intermediary: FabricIntermediary,
     #[serde(rename = "launcherMeta")]
     pub launcher_meta: FabricLauncherMeta,
-} 
+}

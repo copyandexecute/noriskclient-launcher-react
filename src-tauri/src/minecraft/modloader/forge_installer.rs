@@ -234,7 +234,10 @@ impl ForgeInstaller {
 
                         // Prüfe ob die Datei existiert
                         if library_path.exists() {
-                            info!("✅ Pre-patched Forge client found: {}", library_path.display());
+                            info!(
+                                "✅ Pre-patched Forge client found: {}",
+                                library_path.display()
+                            );
                             should_run_patcher = false;
                         } else {
                             info!(

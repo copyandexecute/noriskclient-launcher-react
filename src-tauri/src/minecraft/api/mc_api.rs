@@ -1,11 +1,11 @@
-use crate::minecraft::dto::version_manifest::VersionManifest;
-use crate::minecraft::dto::piston_meta::PistonMeta;
-use crate::minecraft::dto::minecraft_profile::MinecraftProfile;
 use crate::error::{AppError, Result};
+use crate::minecraft::dto::minecraft_profile::MinecraftProfile;
+use crate::minecraft::dto::piston_meta::PistonMeta;
+use crate::minecraft::dto::version_manifest::VersionManifest;
+use log::{debug, error, info, warn};
 use reqwest;
-use std::path::Path;
 use std::fs;
-use log::{debug, info, warn, error};
+use std::path::Path;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 const MOJANG_API_URL: &str = "https://api.mojang.com";
@@ -32,9 +32,7 @@ impl MinecraftApiService {
     }
 
     pub async fn get_piston_meta(&self, url: &str) -> Result<PistonMeta> {
-        let response = reqwest::get(url)
-            .await
-            .map_err(AppError::MinecraftApi)?;
+        let response = reqwest::get(url).await.map_err(AppError::MinecraftApi)?;
 
         let meta = response
             .json::<PistonMeta>()
@@ -54,7 +52,7 @@ impl MinecraftApiService {
             Ok(resp) => {
                 debug!("Received response with status: {}", resp.status());
                 resp
-            },
+            }
             Err(e) => {
                 debug!("API request failed: {:?}", e);
                 return Err(AppError::MinecraftApi(e));
@@ -65,7 +63,7 @@ impl MinecraftApiService {
             Ok(p) => {
                 debug!("Successfully parsed profile data for UUID: {}", uuid);
                 p
-            },
+            }
             Err(e) => {
                 debug!("Failed to parse profile data: {:?}", e);
                 return Err(AppError::MinecraftApi(e));
@@ -77,8 +75,17 @@ impl MinecraftApiService {
     }
 
     // Change skin using access token (requires authentication)
-    pub async fn change_skin(&self, access_token: &str, uuid: &str, skin_path: &str, skin_variant: &str) -> Result<()> {
-        debug!("API call: change_skin for UUID: {} with variant: {}", uuid, skin_variant);
+    pub async fn change_skin(
+        &self,
+        access_token: &str,
+        uuid: &str,
+        skin_path: &str,
+        skin_variant: &str,
+    ) -> Result<()> {
+        debug!(
+            "API call: change_skin for UUID: {} with variant: {}",
+            uuid, skin_variant
+        );
         debug!("Skin file path: {}", skin_path);
 
         let url = format!("https://api.minecraftservices.com/minecraft/profile/skins");
@@ -90,7 +97,7 @@ impl MinecraftApiService {
             Ok(content) => {
                 debug!("Successfully read skin file ({} bytes)", content.len());
                 content
-            },
+            }
             Err(e) => {
                 debug!("Failed to read skin file: {}", e);
                 return Err(AppError::Other(format!("Failed to read skin file: {}", e)));
@@ -117,8 +124,10 @@ impl MinecraftApiService {
         }
 
         let form = reqwest::multipart::Form::new()
-            .part("file", mime_result
-                .map_err(|e| AppError::Other(format!("Invalid MIME type: {}", e)))?)
+            .part(
+                "file",
+                mime_result.map_err(|e| AppError::Other(format!("Invalid MIME type: {}", e)))?,
+            )
             .text("variant", skin_variant.to_string());
 
         debug!("Sending skin upload request to Minecraft API");
@@ -147,7 +156,10 @@ impl MinecraftApiService {
 
             let error_text = error_text_result.map_err(AppError::MinecraftApi)?;
             debug!("Skin upload failed: {}", error_text);
-            return Err(AppError::Other(format!("Failed to change skin: {}", error_text)));
+            return Err(AppError::Other(format!(
+                "Failed to change skin: {}",
+                error_text
+            )));
         }
 
         debug!("API call completed: change_skin - Skin uploaded successfully");
@@ -187,7 +199,10 @@ impl MinecraftApiService {
 
             let error_text = error_text_result.map_err(AppError::MinecraftApi)?;
             debug!("Skin reset failed: {}", error_text);
-            return Err(AppError::Other(format!("Failed to reset skin: {}", error_text)));
+            return Err(AppError::Other(format!(
+                "Failed to reset skin: {}",
+                error_text
+            )));
         }
 
         debug!("API call completed: reset_skin - Skin reset successfully");
@@ -195,8 +210,16 @@ impl MinecraftApiService {
     }
 
     // Change skin using base64 data (requires authentication)
-    pub async fn change_skin_from_base64(&self, access_token: &str, base64_data: &str, skin_variant: &str) -> Result<()> {
-        debug!("API call: change_skin_from_base64 with variant: {}", skin_variant);
+    pub async fn change_skin_from_base64(
+        &self,
+        access_token: &str,
+        base64_data: &str,
+        skin_variant: &str,
+    ) -> Result<()> {
+        debug!(
+            "API call: change_skin_from_base64 with variant: {}",
+            skin_variant
+        );
         debug!("Base64 data length: {} characters", base64_data.len());
 
         let url = format!("https://api.minecraftservices.com/minecraft/profile/skins");
@@ -208,10 +231,13 @@ impl MinecraftApiService {
             Ok(content) => {
                 debug!("Successfully decoded base64 data ({} bytes)", content.len());
                 content
-            },
+            }
             Err(e) => {
                 debug!("Failed to decode base64 data: {}", e);
-                return Err(AppError::Other(format!("Failed to decode base64 skin data: {}", e)));
+                return Err(AppError::Other(format!(
+                    "Failed to decode base64 skin data: {}",
+                    e
+                )));
             }
         };
 
@@ -228,8 +254,10 @@ impl MinecraftApiService {
         }
 
         let form = reqwest::multipart::Form::new()
-            .part("file", mime_result
-                .map_err(|e| AppError::Other(format!("Invalid MIME type: {}", e)))?)
+            .part(
+                "file",
+                mime_result.map_err(|e| AppError::Other(format!("Invalid MIME type: {}", e)))?,
+            )
             .text("variant", skin_variant.to_string());
 
         debug!("Sending skin upload request to Minecraft API");
@@ -258,7 +286,10 @@ impl MinecraftApiService {
 
             let error_text = error_text_result.map_err(AppError::MinecraftApi)?;
             debug!("Skin upload failed: {}", error_text);
-            return Err(AppError::Other(format!("Failed to change skin: {}", error_text)));
+            return Err(AppError::Other(format!(
+                "Failed to change skin: {}",
+                error_text
+            )));
         }
 
         debug!("API call completed: change_skin_from_base64 - Skin uploaded successfully");
