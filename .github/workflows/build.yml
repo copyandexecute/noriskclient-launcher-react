@@ -81,6 +81,11 @@ jobs:
       - name: Rename Linux Artifacts
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          echo "--- Listing content BEFORE rename ---"
+          echo "Output path: ${{ matrix.output_path }}"
+          ls -R "${{ matrix.output_path }}/release/bundle" || true
+          echo "-----------------------------------"
+          
           APP_BASE_NAME=noriskclient-launcher-v3 # Dein productName
           APPIMAGE_DIR=${{ matrix.output_path }}/appimage
           DEB_DIR=${{ matrix.output_path }}/deb
@@ -103,11 +108,21 @@ jobs:
           
           echo "Final content of $APPIMAGE_DIR after moves"
           ls -R "$APPIMAGE_DIR" || true
+          
+          echo "--- Listing content AFTER rename ---"
+          echo "Output path: ${{ matrix.output_path }}"
+          ls -R "${{ matrix.output_path }}" || true
+          echo "-----------------------------------"
         shell: bash
         
       - name: Rename Windows Artifacts
         if: matrix.platform == 'windows-latest'
         run: |
+          echo "--- Listing content BEFORE rename ---"
+          echo "Output path: ${{ matrix.output_path }}"
+          Get-ChildItem -Path "${{ matrix.output_path }}\release\bundle" -Recurse -ErrorAction SilentlyContinue
+          echo "-----------------------------------"
+          
           $ARTIFACT_DIR = "${{ matrix.output_path }}\nsis"
           echo "Listing content of $ARTIFACT_DIR"
           Get-ChildItem -Path $ARTIFACT_DIR -Recurse
@@ -116,11 +131,21 @@ jobs:
           Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip.sig" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip.sig" || Write-Host ".nsis.zip.sig not found or move failed."
           echo "Final content of $ARTIFACT_DIR after move"
           Get-ChildItem -Path $ARTIFACT_DIR -Recurse
+          
+          echo "--- Listing content AFTER rename ---"
+          echo "Output path: ${{ matrix.output_path }}"
+          Get-ChildItem -Path "${{ matrix.output_path }}" -Recurse -ErrorAction SilentlyContinue
+          echo "-----------------------------------"
         shell: pwsh
         
       - name: Rename macOS Artifacts
         if: matrix.platform == 'macos-latest'
         run: |
+          echo "--- Listing content BEFORE rename ---"
+          echo "Output path: ${{ matrix.output_path }}"
+          ls -R "${{ matrix.output_path }}" || true 
+          echo "-----------------------------------"
+          
           APP_BASE_NAME=noriskclient-launcher-v3 # Dein productName
           ARTIFACT_DIR_DMG=${{ matrix.output_path }}/dmg
           ARTIFACT_DIR_APP=${{ matrix.output_path }}/macos
@@ -142,6 +167,11 @@ jobs:
           
           echo "Final content of $RENAMED_DIR after move"
           ls -R "$RENAMED_DIR" || true
+          
+          echo "--- Listing content AFTER rename ---"
+          echo "Output path: ${{ matrix.output_path }}"
+          ls -R "${{ matrix.output_path }}" || true
+          echo "-----------------------------------"
         shell: bash
 
       # --- Artefakte hochladen --- 
