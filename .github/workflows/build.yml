@@ -230,5 +230,35 @@ jobs:
             Automated release for tag ${{ github.ref_name }}
             See assets below.
           draft: false
-          prerelease: false # Setze auf true, wenn v*-Tags Pre-Releases sind
+          # Setze auf true, wenn der Tag '-alpha', '-beta' oder '-rc' enthält
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           files: artifacts/**/* # Lädt alle heruntergeladenen Artefakte hoch
+
+      # --- Schritt: Produktions-Backend benachrichtigen --- 
+      - name: Notify Production Backend
+        if: success() # Nur wenn Release-Erstellung erfolgreich war
+        run: |
+          echo "Sending notification to PRODUCTION backend for tag ${{ github.ref_name }}"
+          curl -X POST \
+               -H "Content-Type: application/json" \
+               # Optional: API-Key hinzufügen, falls benötigt
+               # -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
+               https://api.norisk.gg/api/v1/launcher/releases/update
+        shell: bash
+
+  # --- JOB 3: Staging-Backend benachrichtigen ---
+  notify_staging: # Neuer Job für Staging/Manual
+    # Läuft bei Push zu staging ODER bei manuellem Start
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/staging') || (github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    needs: build # Stellt sicher, dass Builds abgeschlossen sind (oder fehlgeschlagen sind)
+    steps:
+      - name: Notify Staging Backend
+        run: |
+          echo "Sending notification to STAGING backend for ref ${{ github.ref_name }}"
+          curl -X POST \
+               -H "Content-Type: application/json" \
+               # Optional: API-Key hinzufügen, falls benötigt
+               # -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
+               https://api-staging.norisk.gg/api/v1/launcher/releases/update
+        shell: bash
