@@ -97,11 +97,11 @@ jobs:
           # Verschiebe und benenne AppImage um (verwende einfachen Wildcard)
           mv "$APPIMAGE_DIR"/*.AppImage "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage
           
-          # Verschiebe und benenne AppImage Tarball um (verwende einfachen Wildcard, ignoriere Fehler)
-          mv "$APPIMAGE_DIR"/*.AppImage.tar.gz "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.tar.gz || true
+          # Verschiebe und benenne AppImage Tarball um (verwende einfachen Wildcard)
+          mv "$APPIMAGE_DIR"/*.AppImage.tar.gz "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.tar.gz
           
-          # Verschiebe und benenne AppImage Signatur um (verwende einfachen Wildcard, ignoriere Fehler)
-          mv "$APPIMAGE_DIR"/*.AppImage.tar.gz.sig "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.tar.gz.sig || true
+          # Verschiebe und benenne AppImage Signatur um (verwende einfachen Wildcard)
+          mv "$APPIMAGE_DIR"/*.AppImage.tar.gz.sig "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.tar.gz.sig
           
           # Verschiebe und benenne Deb Paket um (ignoriere Fehler, falls nicht vorhanden)
           mv "$DEB_DIR"/*.deb "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.deb || true
@@ -127,8 +127,8 @@ jobs:
           echo "Listing content of $ARTIFACT_DIR"
           Get-ChildItem -Path $ARTIFACT_DIR -Recurse
           Move-Item -Path "$ARTIFACT_DIR\*.exe" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.exe"
-          Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip" || Write-Host ".nsis.zip not found or move failed."
-          Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip.sig" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip.sig" || Write-Host ".nsis.zip.sig not found or move failed."
+          Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip"
+          Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip.sig" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip.sig"
           echo "Final content of $ARTIFACT_DIR after move"
           Get-ChildItem -Path $ARTIFACT_DIR -Recurse
           
@@ -163,7 +163,7 @@ jobs:
           mv "$ARTIFACT_DIR_APP/${APP_BASE_NAME}.app.tar.gz" "$RENAMED_DIR"/${{ matrix.asset_name_base }}.app.tar.gz
           
           # Verschiebe App Tarball Signatur (expliziter Name, ignoriere Fehler)
-          mv "$ARTIFACT_DIR_APP/${APP_BASE_NAME}.app.tar.gz.sig" "$RENAMED_DIR"/${{ matrix.asset_name_base }}.app.tar.gz.sig || true
+          mv "$ARTIFACT_DIR_APP/${APP_BASE_NAME}.app.tar.gz.sig" "$RENAMED_DIR"/${{ matrix.asset_name_base }}.app.tar.gz.sig
           
           echo "Final content of $RENAMED_DIR after move"
           ls -R "$RENAMED_DIR" || true
