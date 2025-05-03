@@ -222,22 +222,19 @@ async fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            // Handle für Updater Check
-            let app_handle_for_updater = app.handle().clone();
+            // Handle for the main application logic / window management
+            let app_handle = app.handle().clone();
 
-            // Task für State Init und anschließenden Update Check
-            let app_handle_for_state = Arc::new(app.handle().clone());
+            // Task for State Init and Updater Window
             tauri::async_runtime::spawn(async move {
-                // --- Create Updater Window (but don't show yet) ---
-                // Clone handle for window creation
-                let window_handle = app_handle_for_state.app_handle();
-                let updater_window = match updater_utils::create_updater_window(&window_handle).await {
+                // --- Create Updater Window (but keep hidden initially) ---
+                let updater_window = match updater_utils::create_updater_window(&app_handle).await {
                     Ok(win) => {
-                        info!("Updater window created successfully in setup.");
+                        info!("Updater window created successfully (initially hidden).");
                         Some(win)
                     }
                     Err(e) => {
-                        error!("Failed to create updater window in setup: {}", e);
+                        error!("Failed to create updater window: {}", e);
                         None
                     }
                 };
@@ -248,58 +245,71 @@ async fn main() {
                 let _ = norisk_versions::load_dummy_versions().await;
                 let _ = norisk_packs::load_dummy_modpacks().await;
 
-                if let Err(e) = state::state_manager::State::init(app_handle_for_state).await {
-                    error!("CRITICAL: Failed to initialize state: {}. Update check will be skipped.", e);
-                    return; // Frühzeitiger Ausstieg, da Config benötigt wird
+                if let Err(e) = state::state_manager::State::init(Arc::new(app_handle.clone())).await {
+                    error!("CRITICAL: Failed to initialize state: {}. Update check and main window might not proceed correctly.", e);
+                    // Optionally close updater window if state init fails and it exists
+                    if let Some(win) = updater_window {
+                        // Attempt to close gracefully via event first, then force close if needed
+                        updater_utils::emit_status(&app_handle, "close", "Closing due to state init error.".to_string(), None);
+                        // Allow frontend a moment to process the close event
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        if let Err(close_err) = win.close() {
+                            error!("Failed to close updater window after state init error: {}", close_err);
+                        }
+                    }
+                    return; // Exit task if state fails
                 }
                 info!("State initialization finished successfully.");
 
-                // --- Show Updater Window and Start Update Check ---
-                if let Some(win) = updater_window {
-                    info!("Showing updater window...");
-                    if let Err(e) = win.show() {
-                        error!("Failed to show updater window: {}", e);
-                    } else {
-                        // --- Update Check (Nach State Init und Fensteranzeige) ---
-                        info!("Attempting to retrieve launcher configuration for update check...");
-                        match state::state_manager::State::get().await { // State holen
-                            Ok(state) => {
-                                let config = state.config_manager.get_config().await;
-                                let check_beta_channel = config.check_beta_channel;
-                                info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
-                                // Pass the AppHandle for event emission
-                                utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
-                                info!("Update check process initiated.");
-                            }
-                            Err(e) => {
-                                error!("Failed to get global state after initialization: {}. Update check skipped.", e);
-                                // Optionally close the updater window if state fails
-                                if let Err(close_err) = win.close() {
-                                     error!("Failed to close updater window after state error: {}", close_err);
-                                }
-                            }
-                        }
+                // --- Run Update Check (Await its completion) ---
+                // The updater window handle (if created) is passed to check_for_updates,
+                // which will decide whether to show it.
+                info!("Attempting to retrieve launcher configuration for update check...");
+                match state::state_manager::State::get().await {
+                    Ok(state) => {
+                        let config = state.config_manager.get_config().await;
+                        let check_beta_channel = config.check_beta_channel;
+                        info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
+                        
+                        // Await the update check process, passing the window handle
+                        updater_utils::check_for_updates(app_handle.clone(), check_beta_channel, updater_window.clone()).await; // Pass updater_window clone
+                        
+                        info!("Update check process has finished.");
+                        // Update check finished, the updater window (if shown) should have received the 'close' event
+                        // Now we can show the main window.
+
                     }
-                } else {
-                    warn!("Updater window could not be created, skipping update check visibility.");
-                    // Fallback: Run update check without visible window (original behavior)
-                    info!("Attempting fallback update check without window...");
-                     match state::state_manager::State::get().await { // State holen
-                        Ok(state) => {
-                            let config = state.config_manager.get_config().await;
-                            let check_beta_channel = config.check_beta_channel;
-                            info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
-                            utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
-                            info!("Update check process finished or running in background (fallback).");
-                        }
-                        Err(e) => {
-                             error!("Failed to get global state after initialization: {}. Update check skipped (fallback).", e);
+                    Err(e) => {
+                        error!("Failed to get global state for update check: {}.", e);
+                        // Ensure updater window is closed even if state fetch failed after init
+                        if let Some(win) = updater_window { // Use the original handle here
+                            updater_utils::emit_status(&app_handle, "close", "Closing due to state fetch error.".to_string(), None);
+                            // Allow frontend a moment
+                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                            if let Err(close_err) = win.close() {
+                                error!("Failed to close updater window after state fetch error: {}", close_err);
+                            }
                         }
                     }
                 }
 
-                // --- Weitere asynchrone Setup-Schritte (Beispielhaft) ---
-                // These can run concurrently or after the update check is initiated
+                // --- Updater window should be closed now via event, show main window ---
+                info!("Updater process finished. Attempting to show main window...");
+                /*if let Some(main_window) = app_handle.get_webview_window("main") { // Use get_webview_window
+                    if let Err(e) = main_window.show() {
+                        error!("Failed to show main window: {}", e);
+                    } else {
+                        info!("Main window shown successfully.");
+                        // Optionally focus the main window
+                        if let Err(e) = main_window.set_focus() {
+                            error!("Failed to focus main window: {}", e);
+                        }
+                    }
+                } else {
+                    error!("Could not get main window handle to show it after update check!");
+                }*/
+
+                // --- Other Async Steps (can run after main window is shown) ---
                 debug_utils::debug_print_all_profile_worlds().await;
                 debug_utils::debug_print_all_profile_servers().await;
                 let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
@@ -315,7 +325,7 @@ async fn main() {
                         match state::state_manager::State::get().await {
                             Ok(state) => {
                                 if let Err(e) = state.discord_manager.handle_focus_event().await {
-                                     error!("Error during DiscordManager focus handling: {}", e);
+                                    error!("Error during DiscordManager focus handling: {}", e);
                                 }
                             }
                             Err(e) => {

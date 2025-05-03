@@ -54,11 +54,9 @@ const Updater: React.FC = () => {
         setProgress(null); // Reset progress for other statuses
       }
 
-      // Close the window automatically on certain statuses
-      if (status === 'uptodate' || status === 'error' || status === 'finished' || status === 'close') {
-        setTimeout(() => {
-           appWindow.close().catch((err: Error) => console.error("Failed to close updater window:", err)); // Added type for err
-        }, 3000); // Close after 3 seconds to allow user to read final message
+      // Close the window immediately on "close" status
+      if (status === 'close') {
+        appWindow.close().catch((err: Error) => console.error("Failed to close updater window:", err));
       }
     });
 
