@@ -1,111 +1,31 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import { EmptyState } from "./common/EmptyState";
 import { LoadingSpinner } from "../../ui/LoadingSpinner";
+// Import from the new service
+import {
+    type LogLevel,
+    type ParsedLogLine,
+    LOG_LEVELS,
+    parseLogLinesFromString,
+    getProfileLogFiles,
+    getLogFileContent,
+    uploadLogToMclogs,
+    openLogFileDirectory,
+} from "../../../services/log-service";
 
 interface LogsTabProps {
   profile: Profile;
 }
 
-interface ParsedLogLine {
-  id: number;
-  raw: string;
-  timestamp?: string;
-  thread?: string;
-  level?: LogLevel;
-  text: string;
-}
-
-const LOG_LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'] as const;
-type LogLevel = typeof LOG_LEVELS[number];
-
-// Standard format: [HH:MM:SS] [Thread/Level]: Text
-const logLineRegexStandard = /^\s*\[(\d{2}:\d{2}:\d{2})\]\s+\[([^/]+)\/([^\]]+)\]:\s*(.*)$/;
-// NeoForge format with source: [Timestamp] [Thread/Level] [Source]: Text
-const logLineRegexNeoForgeSource = /^\s*\[([^\]]+)\]\s+\[([^/]+)\/([^\]]+)\]\s+\[[^\]]+\]:\s*(.*)$/;
-// NeoForge format without source: [Timestamp] [Thread/Level]: Text
-const logLineRegexNeoForgeNoSource = /^\s*\[([^\]]+)\]\s+\[([^/]+)\/([^\]]+)\]:\s*(.*)$/;
-
 function getFilename(path: string | null): string {
   if (!path) return '';
   return path.split(/[\\\/]/).pop() || path;
-}
-
-// New parsing function
-function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
-  const linesArray = rawContent.split(/\r?\n/);
-  const processedLines: ParsedLogLine[] = [];
-  let lastKnownLevel: LogLevel | undefined = undefined;
-
-  for (let i = 0; i < linesArray.length; i++) {
-    const line = linesArray[i];
-    let match: RegExpMatchArray | null = null;
-    let timestamp: string | undefined = undefined;
-    let thread: string | undefined = undefined;
-    let level: LogLevel | undefined = undefined;
-    let text: string = line.trimEnd(); // Default text, trim end
-
-    // Try matching standard format
-    match = line.match(logLineRegexStandard);
-    if (match) {
-      timestamp = match[1];
-      thread = match[2];
-      const levelUpper = match[3].toUpperCase() as LogLevel;
-      level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
-      text = match[4].trim(); // Full trim for captured text
-    } else {
-      // Try matching NeoForge with source format
-      match = line.match(logLineRegexNeoForgeSource);
-      if (match) {
-        timestamp = match[1];
-        thread = match[2];
-        const levelUpper = match[3].toUpperCase() as LogLevel;
-        level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
-        text = match[4].trim(); // Full trim
-      } else {
-         // Try matching NeoForge without source format
-         match = line.match(logLineRegexNeoForgeNoSource);
-         if (match) {
-            timestamp = match[1];
-            thread = match[2];
-            const levelUpper = match[3].toUpperCase() as LogLevel;
-            level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
-            text = match[4].trim(); // Full trim
-         }
-      }
-    }
-
-    if (match) {
-      // We found a structured log line
-      processedLines.push({
-        id: i,
-        raw: line,
-        timestamp: timestamp,
-        thread: thread,
-        level: level,
-        text: text,
-      });
-      lastKnownLevel = level; // Remember this level
-    } else {
-      // Line does NOT match any known format - inherit level
-      processedLines.push({
-        id: i,
-        raw: line,
-        timestamp: undefined,
-        thread: undefined,
-        level: lastKnownLevel, // Use the last known level
-        text: text, // Already trimmed end
-      });
-      // Do not update lastKnownLevel here
-    }
-  }
-  return processedLines;
 }
 
 export function LogsTab({ profile }: LogsTabProps) {
@@ -153,7 +73,7 @@ export function LogsTab({ profile }: LogsTabProps) {
       setCopied(false);
 
       try {
-        const paths = await invoke<string[]>('get_profile_log_files', { profileId: profile.id });
+        const paths = await getProfileLogFiles(profile.id);
         paths.sort((a, b) => {
           const aName = getFilename(a).toLowerCase();
           const bName = getFilename(b).toLowerCase();
@@ -201,7 +121,7 @@ export function LogsTab({ profile }: LogsTabProps) {
         setCopied(false);
 
         try {
-          const rawContent = await invoke<string>('get_log_file_content', { logFilePath: selectedLogPath });
+          const rawContent = await getLogFileContent(selectedLogPath);
           setRawLogContentForCopy(rawContent);
 
           // Call the new parsing function
@@ -278,7 +198,7 @@ export function LogsTab({ profile }: LogsTabProps) {
 
     try {
       console.log(`[LogsTab] Uploading log: ${getFilename(selectedLogPath)}`);
-      const resultUrl = await invoke<string>('upload_log_to_mclogs_command', { logContent: rawLogContentForCopy });
+      const resultUrl = await uploadLogToMclogs(rawLogContentForCopy);
       setUploadUrl(resultUrl);
       console.log(`[LogsTab] Upload successful: ${resultUrl}`);
     } catch (err: any) {
@@ -297,7 +217,7 @@ export function LogsTab({ profile }: LogsTabProps) {
     }
     try {
       console.log(`[LogsTab] Requesting to open directory for file: ${path_to_open}`);
-      await invoke('open_file_directory', { filePath: path_to_open });
+      await openLogFileDirectory(path_to_open);
     } catch (err: any) {
       console.error('[LogsTab] Error opening logs folder:', err);
       setErrorList(err?.message ?? 'Failed to open logs folder');
