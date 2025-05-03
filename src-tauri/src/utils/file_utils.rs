@@ -147,10 +147,7 @@ pub async fn read_log_file_content(log_path: &Path) -> Result<String> {
         return Ok("".to_string()); // Return empty string if file not found
     }
 
-    let filename = log_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let filename = log_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     if filename.ends_with(".log.gz") {
         // Handle gzipped file
@@ -181,7 +178,11 @@ pub async fn read_log_file_content(log_path: &Path) -> Result<String> {
                 }
             }
             Err(e) => {
-                log::error!("Failed to open gzipped log file {}: {}", log_path.display(), e);
+                log::error!(
+                    "Failed to open gzipped log file {}: {}",
+                    log_path.display(),
+                    e
+                );
                 Err(AppError::Io(e))
             }
         }

@@ -14,7 +14,7 @@ pub async fn get_launcher_config() -> Result<LauncherConfig> {
 #[command]
 pub async fn set_launcher_config(config: LauncherConfig) -> Result<LauncherConfig> {
     let state = State::get().await?;
-    
+
     // Validate concurrent downloads value
     if config.concurrent_downloads == 0 || config.concurrent_downloads > 10 {
         return Err(CommandError::from(AppError::Other(format!(
@@ -22,10 +22,10 @@ pub async fn set_launcher_config(config: LauncherConfig) -> Result<LauncherConfi
             config.concurrent_downloads
         ))));
     }
-    
+
     // Set the entire configuration
     state.config_manager.set_config(config.clone()).await?;
-    
+
     // Return the updated config
     Ok(config)
 }

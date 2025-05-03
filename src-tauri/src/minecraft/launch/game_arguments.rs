@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
-use crate::minecraft::dto::piston_meta::{GameArgument, ComplexArgument, ArgumentValue};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::minecraft::dto::piston_meta::{ArgumentValue, ComplexArgument, GameArgument};
 use crate::minecraft::minecraft_auth::Credentials;
+use std::path::PathBuf;
 
 pub struct GameArguments {
     credentials: Option<Credentials>,
@@ -68,19 +68,52 @@ impl GameArguments {
     }
 
     pub fn replace_variables(&self, arg: &str) -> String {
-        arg.replace("${auth_player_name}", &self.credentials.as_ref().map(|c| c.username.clone()).unwrap_or_else(|| "Player".to_string()))
-            .replace("${version_name}", &self.version_id)
-            .replace("${game_directory}", &self.game_directory.to_string_lossy())
-            .replace("${assets_root}", &LAUNCHER_DIRECTORY.meta_dir().join("assets").to_string_lossy())
-            .replace("${game_assets}", &LAUNCHER_DIRECTORY.meta_dir().join("assets").to_string_lossy())
-            .replace("${assets_index_name}", &self.asset_index_id)
-            .replace("${auth_uuid}", &self.credentials.as_ref().map(|c| c.id.to_string()).unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string()))
-            .replace("${auth_access_token}", &self.credentials.as_ref().map(|c| c.access_token.clone()).unwrap_or_else(|| "0".to_string()))
-            .replace("${clientid}", "0")
-            .replace("${auth_xuid}", "0")
-            .replace("${user_type}", "legacy")
-            .replace("${version_type}", &self.version_type)
-            .replace("${user_properties}", "{}")
+        arg.replace(
+            "${auth_player_name}",
+            &self
+                .credentials
+                .as_ref()
+                .map(|c| c.username.clone())
+                .unwrap_or_else(|| "Player".to_string()),
+        )
+        .replace("${version_name}", &self.version_id)
+        .replace("${game_directory}", &self.game_directory.to_string_lossy())
+        .replace(
+            "${assets_root}",
+            &LAUNCHER_DIRECTORY
+                .meta_dir()
+                .join("assets")
+                .to_string_lossy(),
+        )
+        .replace(
+            "${game_assets}",
+            &LAUNCHER_DIRECTORY
+                .meta_dir()
+                .join("assets")
+                .to_string_lossy(),
+        )
+        .replace("${assets_index_name}", &self.asset_index_id)
+        .replace(
+            "${auth_uuid}",
+            &self
+                .credentials
+                .as_ref()
+                .map(|c| c.id.to_string())
+                .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string()),
+        )
+        .replace(
+            "${auth_access_token}",
+            &self
+                .credentials
+                .as_ref()
+                .map(|c| c.access_token.clone())
+                .unwrap_or_else(|| "0".to_string()),
+        )
+        .replace("${clientid}", "0")
+        .replace("${auth_xuid}", "0")
+        .replace("${user_type}", "legacy")
+        .replace("${version_type}", &self.version_type)
+        .replace("${user_properties}", "{}")
     }
 
     pub fn process_arguments(&self, arguments: &[GameArgument]) -> Vec<String> {
@@ -103,4 +136,4 @@ impl GameArguments {
 
         processed_args
     }
-} 
+}

@@ -149,7 +149,6 @@ impl RuleProcessor {
                 }
             );
             should_include
-
         } else {
             info!("  ✅ No rules found, including by default");
             true // Standard behavior: include if no rules apply
@@ -176,10 +175,13 @@ impl RuleProcessor {
                         info!("    ❌ Disallow rule conditions matched, rejecting argument");
                         return false;
                     }
-                     info!("    ✅ Disallow rule conditions did not match");
+                    info!("    ✅ Disallow rule conditions did not match");
                 }
-                 _ => {
-                    info!("    ❓ Unknown rule action: {}, rejecting argument", rule.action);
+                _ => {
+                    info!(
+                        "    ❓ Unknown rule action: {}, rejecting argument",
+                        rule.action
+                    );
                     return false;
                 }
             }

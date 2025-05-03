@@ -16,9 +16,9 @@ use crate::integrations::norisk_packs;
 use crate::integrations::norisk_versions;
 use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
-use utils::debug_utils;
 use std::sync::Arc;
 use tauri::Listener;
+use utils::debug_utils;
 
 use crate::commands::process_command::{
     get_full_log, get_process, get_processes, get_processes_by_profile, open_log_window,
@@ -40,29 +40,30 @@ use commands::minecraft_command::{
     get_skin_by_id,
     // Skin management commands
     get_user_skin_data,
+    ping_minecraft_server,
     remove_skin,
     reset_skin,
     update_skin_properties,
     upload_log_to_mclogs_command,
     upload_skin,
-    ping_minecraft_server,
 };
 use commands::profile_command::{
     abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
-    copy_profile, create_profile, delete_custom_mod, delete_mod_from_profile, delete_profile,
-    export_profile, get_custom_mods, get_local_resourcepacks, get_local_shaderpacks, get_local_datapacks,
-    get_norisk_packs, get_profile, get_profile_directory_structure, get_standard_profiles,
-    get_system_ram_mb, import_local_mods, import_profile_from_file, is_profile_launching,
-    launch_profile, list_profiles, open_profile_folder, refresh_norisk_packs,
-    refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
-    set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
-    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
-    is_content_installed, open_profile_latest_log, get_profile_latest_log_content,
-    get_worlds_for_profile, get_servers_for_profile, copy_world, check_world_lock_status,
-    delete_world, get_profile_log_files, get_log_file_content, list_profile_screenshots
+    check_world_lock_status, copy_profile, copy_world, create_profile, delete_custom_mod,
+    delete_mod_from_profile, delete_profile, delete_world, export_profile, get_custom_mods,
+    get_local_datapacks, get_local_resourcepacks, get_local_shaderpacks, get_log_file_content,
+    get_norisk_packs, get_norisk_packs_resolved, get_profile, get_profile_directory_structure,
+    get_profile_latest_log_content, get_profile_log_files, get_servers_for_profile,
+    get_standard_profiles, get_system_ram_mb, get_worlds_for_profile, import_local_mods,
+    import_profile_from_file, is_content_installed, is_profile_launching, launch_profile,
+    list_profile_screenshots, list_profiles, open_profile_folder, open_profile_latest_log,
+    refresh_norisk_packs, refresh_standard_versions, search_profiles, set_custom_mod_enabled,
+    set_norisk_mod_status, set_profile_mod_enabled, update_datapack_from_modrinth,
+    update_modrinth_mod_version, update_profile, update_resourcepack_from_modrinth,
+    update_shaderpack_from_modrinth,
 };
 
-// Use statements for registered commands only  
+// Use statements for registered commands only
 use commands::modrinth_commands::{
     check_modrinth_updates, download_and_install_modrinth_modpack,
     get_all_modrinth_versions_for_contexts, get_modrinth_mod_versions,
@@ -70,8 +71,8 @@ use commands::modrinth_commands::{
 }; // Remove or comment out if not needed
 
 use commands::file_command::{
-    delete_file, get_icons_for_archives, get_icons_for_norisk_mods, open_file_directory,
-    set_file_enabled, open_file, read_file_bytes,
+    delete_file, get_icons_for_archives, get_icons_for_norisk_mods, open_file, open_file_directory,
+    read_file_bytes, set_file_enabled,
 };
 
 // Import config commands
@@ -214,26 +215,56 @@ async fn main() {
     utils::file_utils::get_jar_icon_test().await;
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         //TODO .plugin(minecraft_auth_command::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            // Initialize the state asynchronously
+            // Handle für Updater Check
+            let app_handle_for_updater = app.handle().clone();
+
+            // Task für State Init und anschließenden Update Check
             let app_handle_for_state = Arc::new(app.handle().clone());
             tauri::async_runtime::spawn(async move {
+                // --- State Initialization --- 
+                info!("Initiating state initialization...");
+                // Lade Dummy-Versionen/Packs (Beispielhaft, existierendem Code nachempfunden)
                 let _ = norisk_versions::load_dummy_versions().await;
                 let _ = norisk_packs::load_dummy_modpacks().await;
 
                 if let Err(e) = state::state_manager::State::init(app_handle_for_state).await {
-                    error!("Failed to initialize state: {}", e);
-                    // Consider exiting or notifying the user if state init fails critically
+                    error!("CRITICAL: Failed to initialize state: {}. Update check will be skipped.", e);
+                    return; // Frühzeitiger Ausstieg, da Config benötigt wird
                 }
+                info!("State initialization finished successfully.");
 
+                // --- Weitere asynchrone Setup-Schritte (Beispielhaft) ---
                 debug_utils::debug_print_all_profile_worlds().await;
                 debug_utils::debug_print_all_profile_servers().await;
                 let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
                 info!("Ping info: {:?}", ping_info);
+
+                // --- Update Check (Nach State Init) ---
+                info!("Attempting to retrieve launcher configuration for update check...");
+                match state::state_manager::State::get().await { // State holen
+                    Ok(state) => {
+                        // Config direkt aus dem State lesen (Annahme: State enthält config_manager)
+                        // get_config gibt direkt LauncherConfig zurück, kein Result
+                        let config = state.config_manager.get_config().await;
+
+                        // Das neue Feld `check_beta_channel` direkt aus config verwenden
+                        let check_beta_channel = config.check_beta_channel;
+                        info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
+                        utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
+                        info!("Update check process finished or running in background.");
+
+                        // Der Err-Arm wird entfernt, da get_config kein Result zurückgibt
+                    }
+                    Err(e) => {
+                        error!("Failed to get global state after initialization: {}. Update check skipped.", e);
+                    }
+                }
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 

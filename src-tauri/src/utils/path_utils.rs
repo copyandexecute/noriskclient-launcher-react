@@ -1,10 +1,12 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::error::{AppError, Result}; // Dein Result- und Fehlertyp
+use crate::integrations::norisk_packs::{
+    get_norisk_pack_mod_filename, NoriskModEntryDefinition, NoriskModSourceDefinition,
+};
+use log::{error, info, warn};
 use std::path::{Path, PathBuf};
 use tokio::fs; // Verwende tokio::fs für async checks
-use crate::error::{Result, AppError}; // Dein Result- und Fehlertyp
-use log::{info, error, warn};
 use uuid::Uuid;
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
-use crate::integrations::norisk_packs::{NoriskModSourceDefinition, NoriskModEntryDefinition, get_norisk_pack_mod_filename};
 
 /// Findet einen eindeutigen Verzeichnisnamen (Segment) in einem Basisverzeichnis.
 /// Wenn "desired_segment" schon existiert, werden Suffixe wie "(1)", "(2)" usw. angehängt.
@@ -15,7 +17,8 @@ pub async fn find_unique_profile_segment(
 ) -> Result<String> {
     info!(
         "Finding unique profile segment for '{}' in base dir '{}'",
-        desired_segment, base_profiles_dir.display()
+        desired_segment,
+        base_profiles_dir.display()
     );
 
     // Bereinigen und sicherstellen, dass der Segmentname nicht leer ist
@@ -23,7 +26,9 @@ pub async fn find_unique_profile_segment(
     if clean_segment.is_empty() {
         error!("Desired segment name cannot be empty.");
         // Erwäge, hier einen Standardnamen oder einen eindeutigen Zeitstempel zu generieren
-        return Err(AppError::Other("Desired profile segment name is empty".to_string()));
+        return Err(AppError::Other(
+            "Desired profile segment name is empty".to_string(),
+        ));
     }
 
     let initial_path = base_profiles_dir.join(clean_segment);
@@ -41,7 +46,8 @@ pub async fn find_unique_profile_segment(
         Err(e) => {
             error!(
                 "Error checking existence of path '{}': {}",
-                initial_path.display(), e
+                initial_path.display(),
+                e
             );
             return Err(AppError::Io(e)); // Fehler beim Prüfen weitergeben
         }
@@ -57,31 +63,37 @@ pub async fn find_unique_profile_segment(
 
         match fs::try_exists(&candidate_path).await {
             Ok(false) => {
-                 info!("Found unique segment: '{}'", suffixed_segment);
+                info!("Found unique segment: '{}'", suffixed_segment);
                 return Ok(suffixed_segment); // Eindeutigen Namen gefunden
             }
             Ok(true) => {
                 // Dieser Name ist auch belegt, erhöhe den Zähler
                 counter = counter.checked_add(1).ok_or_else(|| {
-                    error!("Counter overflow while finding unique segment for '{}'", clean_segment);
+                    error!(
+                        "Counter overflow while finding unique segment for '{}'",
+                        clean_segment
+                    );
                     AppError::Other(format!("Counter overflow for segment '{}'", clean_segment))
                 })?;
 
                 // Sicherheitslimit, um Endlosschleifen zu verhindern
-                if counter > 1000 { // Oder ein anderer sinnvoller Wert
+                if counter > 1000 {
+                    // Oder ein anderer sinnvoller Wert
                     error!(
                         "Could not find unique segment for '{}' after {} attempts.",
-                         clean_segment, counter
+                        clean_segment, counter
                     );
                     return Err(AppError::Other(format!(
-                        "Too many profiles with similar names starting with '{}'", clean_segment
+                        "Too many profiles with similar names starting with '{}'",
+                        clean_segment
                     )));
                 }
             }
-             Err(e) => {
+            Err(e) => {
                 error!(
                     "Error checking existence of candidate path '{}': {}",
-                     candidate_path.display(), e
+                    candidate_path.display(),
+                    e
                 );
                 return Err(AppError::Io(e));
             }
@@ -94,38 +106,54 @@ pub async fn find_unique_profile_segment(
 pub async fn copy_as_custom_mod(
     src_path_buf: &PathBuf,
     custom_mods_dir: &PathBuf,
-    profile_id: Uuid, // Keep profile_id for logging context
+    profile_id: Uuid,             // Keep profile_id for logging context
     custom_added_count: &mut u64, // Assuming usize or u64 is better here
     skipped_count: &mut u64,      // Assuming usize or u64 is better here
 ) {
-     // Check extension (optional, but good safeguard)
-    if src_path_buf.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("jar")) {
-         if let Some(filename) = src_path_buf.file_name() {
+    // Check extension (optional, but good safeguard)
+    if src_path_buf
+        .extension()
+        .map_or(false, |ext| ext.eq_ignore_ascii_case("jar"))
+    {
+        if let Some(filename) = src_path_buf.file_name() {
             let dest_path = custom_mods_dir.join(filename);
 
             if dest_path.exists() {
-                 warn!("Skipping custom import: File '{}' already exists in custom_mods for profile {}.", filename.to_string_lossy(), profile_id);
-                 *skipped_count += 1;
-                 return;
+                warn!("Skipping custom import: File '{}' already exists in custom_mods for profile {}.", filename.to_string_lossy(), profile_id);
+                *skipped_count += 1;
+                return;
             }
 
-            match fs::copy(&src_path_buf, &dest_path).await { // Use fs::copy directly
-                 Ok(_) => {
-                    info!("Successfully imported '{}' as custom mod to profile {}.", filename.to_string_lossy(), profile_id);
+            match fs::copy(&src_path_buf, &dest_path).await {
+                // Use fs::copy directly
+                Ok(_) => {
+                    info!(
+                        "Successfully imported '{}' as custom mod to profile {}.",
+                        filename.to_string_lossy(),
+                        profile_id
+                    );
                     *custom_added_count += 1;
-                 }
-                 Err(e) => {
-                    error!("Failed to copy file '{}' as custom mod for profile {}: {}", filename.to_string_lossy(), profile_id, e);
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to copy file '{}' as custom mod for profile {}: {}",
+                        filename.to_string_lossy(),
+                        profile_id,
+                        e
+                    );
                     *skipped_count += 1; // Count as skipped due to error
-                 }
+                }
             }
-         } else {
+        } else {
             warn!("Could not extract filename from path: {:?}", src_path_buf);
             *skipped_count += 1;
-         }
+        }
     } else {
-         warn!("Skipping custom import as it does not have a .jar extension: {:?}", src_path_buf);
-         *skipped_count += 1;
+        warn!(
+            "Skipping custom import as it does not have a .jar extension: {:?}",
+            src_path_buf
+        );
+        *skipped_count += 1;
     }
 }
 
@@ -149,34 +177,29 @@ pub struct FileNode {
 
 /// Gets a tree structure of all files and directories under the given path.
 /// This function traverses directories recursively and builds a hierarchical structure.
-/// 
+///
 /// # Arguments
 /// * `root_path` - The directory to scan
 /// * `include_hidden` - Whether to include hidden files and directories (those starting with `.`)
-/// 
+///
 /// # Returns
 /// A Result containing the root FileNode with all its children
-pub async fn get_directory_structure(
-    root_path: &Path,
-    include_hidden: bool,
-) -> Result<FileNode> {
+pub async fn get_directory_structure(root_path: &Path, include_hidden: bool) -> Result<FileNode> {
     // Get metadata for the root path
-    let metadata = fs::metadata(root_path)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-    
+    let metadata = fs::metadata(root_path).await.map_err(|e| AppError::Io(e))?;
+
     let name = root_path
         .file_name()
         .unwrap_or_else(|| root_path.as_os_str())
         .to_string_lossy()
         .to_string();
-    
+
     let last_modified = metadata
         .modified()
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs());
-    
+
     // If it's a file, return a leaf node
     if !metadata.is_dir() {
         return Ok(FileNode {
@@ -188,28 +211,23 @@ pub async fn get_directory_structure(
             last_modified,
         });
     }
-    
+
     // If it's a directory, read its entries and process each one
     let mut children = Vec::new();
-    let mut entries = fs::read_dir(root_path)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-    
-    while let Some(entry) = entries
-        .next_entry()
-        .await
-        .map_err(|e| AppError::Io(e))?
-    {
+    let mut entries = fs::read_dir(root_path).await.map_err(|e| AppError::Io(e))?;
+
+    while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
         let path = entry.path();
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .unwrap_or_else(|| path.as_os_str())
             .to_string_lossy();
-        
+
         // Skip hidden files/directories if not included
         if !include_hidden && file_name.starts_with('.') {
             continue;
         }
-        
+
         // Recursively process this entry - using Box::pin to handle recursion
         match Box::pin(get_directory_structure(&path, include_hidden)).await {
             Ok(node) => children.push(node),
@@ -219,16 +237,14 @@ pub async fn get_directory_structure(
             }
         }
     }
-    
+
     // Sort children: directories first, then files, both alphabetically
-    children.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
-    
+
     Ok(FileNode {
         name,
         path: root_path.to_path_buf(),
@@ -252,7 +268,7 @@ pub fn flatten_directory_structure(
     result: &mut Vec<(FileNode, usize)>,
 ) {
     result.push((node.clone(), depth));
-    
+
     for child in &node.children {
         flatten_directory_structure(child, depth + 1, result);
     }
@@ -275,18 +291,19 @@ pub fn filter_directory_structure(
     if excluded_paths.contains(&node.path.to_string_lossy().to_string()) {
         return None;
     }
-    
+
     // For files, simply return a clone if not excluded
     if !node.is_dir {
         return Some(node.clone());
     }
-    
+
     // For directories, filter children and keep the directory if it has any children left
-    let filtered_children: Vec<FileNode> = node.children
+    let filtered_children: Vec<FileNode> = node
+        .children
         .iter()
         .filter_map(|child| filter_directory_structure(child, excluded_paths))
         .collect();
-    
+
     // Only return the directory if it has children or is the root
     if !filtered_children.is_empty() || node.path.parent().is_none() {
         let mut filtered_node = node.clone();
@@ -313,18 +330,20 @@ pub fn filter_directory_structure_by_includes(
     // For directories, filter children and keep the directory if it has any children left
     if node.is_dir {
         // Process children first
-        let filtered_children: Vec<FileNode> = node.children
+        let filtered_children: Vec<FileNode> = node
+            .children
             .iter()
             .filter_map(|child| filter_directory_structure_by_includes(child, included_paths))
             .collect();
-        
+
         // Only return the directory if:
         // 1. It has remaining children after filtering, or
         // 2. It's explicitly included, or
         // 3. It's the root node (to maintain structure)
-        if !filtered_children.is_empty() || 
-           included_paths.contains(&node.path.to_string_lossy().to_string()) || 
-           node.path.parent().is_none() {
+        if !filtered_children.is_empty()
+            || included_paths.contains(&node.path.to_string_lossy().to_string())
+            || node.path.parent().is_none()
+        {
             let mut filtered_node = node.clone();
             filtered_node.children = filtered_children;
             Some(filtered_node)
@@ -361,40 +380,42 @@ pub async fn copy_profile_with_includes(
         source_root.display(),
         dest_root.display()
     );
-    
+
     // Get the complete file structure
     let source_structure = get_directory_structure(source_root, false).await?;
-    
+
     // Convert included paths to strings for comparison
     let included_set: std::collections::HashSet<String> = include_paths
         .iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect();
-    
-    info!("Filtering directory structure with {} include paths", included_set.len());
-    
+
+    info!(
+        "Filtering directory structure with {} include paths",
+        included_set.len()
+    );
+
     // Filter the structure to keep only included paths
-    let filtered_structure = filter_directory_structure_by_includes(&source_structure, &included_set)
-        .ok_or_else(|| {
-            AppError::Other("No files matched the include criteria, nothing to copy".to_string())
-        })?;
-    
+    let filtered_structure = filter_directory_structure_by_includes(
+        &source_structure,
+        &included_set,
+    )
+    .ok_or_else(|| {
+        AppError::Other("No files matched the include criteria, nothing to copy".to_string())
+    })?;
+
     // Create the destination directory if it doesn't exist
     if !dest_root.exists() {
         fs::create_dir_all(dest_root)
             .await
             .map_err(|e| AppError::Io(e))?;
     }
-    
+
     // Copy the files according to the filtered structure
-    let files_copied = copy_profile_files(
-        &filtered_structure,
-        source_root,
-        dest_root
-    ).await?;
-    
+    let files_copied = copy_profile_files(&filtered_structure, source_root, dest_root).await?;
+
     info!("Profile copy completed. Copied {} files.", files_copied);
-    
+
     Ok(files_copied)
 }
 
@@ -418,25 +439,27 @@ pub async fn copy_profile_files(
         source_root.display(),
         dest_root.display()
     );
-    
+
     let mut files_copied = 0;
-    
+
     // Create the directory if needed
     if structure.is_dir {
         // Get relative path from source_root
-        let rel_path = structure.path.strip_prefix(source_root)
+        let rel_path = structure
+            .path
+            .strip_prefix(source_root)
             .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?;
-        
+
         let dest_path = dest_root.join(rel_path);
-        
+
         if !dest_path.exists() {
             fs::create_dir_all(&dest_path)
                 .await
                 .map_err(|e| AppError::Io(e))?;
-            
+
             info!("Created directory: {}", dest_path.display());
         }
-        
+
         // Process children
         for child in &structure.children {
             // Using Box::pin to handle recursion
@@ -444,11 +467,13 @@ pub async fn copy_profile_files(
         }
     } else {
         // This is a file, copy it
-        let rel_path = structure.path.strip_prefix(source_root)
+        let rel_path = structure
+            .path
+            .strip_prefix(source_root)
             .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?;
-        
+
         let dest_path = dest_root.join(rel_path);
-        
+
         // Create parent directories if they don't exist
         if let Some(parent) = dest_path.parent() {
             if !parent.exists() {
@@ -457,16 +482,20 @@ pub async fn copy_profile_files(
                     .map_err(|e| AppError::Io(e))?;
             }
         }
-        
+
         // Copy the file
         fs::copy(&structure.path, &dest_path)
             .await
             .map_err(|e| AppError::Io(e))?;
-        
-        info!("Copied file: {} to {}", structure.path.display(), dest_path.display());
+
+        info!(
+            "Copied file: {} to {}",
+            structure.path.display(),
+            dest_path.display()
+        );
         files_copied += 1;
     }
-    
+
     Ok(files_copied)
 }
 
@@ -491,38 +520,33 @@ pub async fn copy_profile_with_exclusions(
         dest_profile_path.display(),
         excluded_paths.len()
     );
-    
+
     // Convert excluded paths to strings and put them in a HashSet for efficient lookup
     let excluded_set: std::collections::HashSet<String> = excluded_paths
         .iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect();
-    
+
     // First, get the complete directory structure
     let dir_structure = get_directory_structure(source_profile_path, false).await?;
-    
+
     // Filter the structure based on exclusions
     let filtered_structure = filter_directory_structure(&dir_structure, &excluded_set)
-        .ok_or_else(|| {
-            AppError::Other("All files were excluded, nothing to copy".to_string())
-        })?;
-    
+        .ok_or_else(|| AppError::Other("All files were excluded, nothing to copy".to_string()))?;
+
     // Create the destination directory if it doesn't exist
     if !dest_profile_path.exists() {
         fs::create_dir_all(dest_profile_path)
             .await
             .map_err(|e| AppError::Io(e))?;
     }
-    
+
     // Copy the files according to the filtered structure
-    let files_copied = copy_profile_files(
-        &filtered_structure,
-        source_profile_path,
-        dest_profile_path
-    ).await?;
-    
+    let files_copied =
+        copy_profile_files(&filtered_structure, source_profile_path, dest_profile_path).await?;
+
     info!("Profile copy completed. Copied {} files.", files_copied);
-    
+
     Ok(files_copied)
 }
 
@@ -561,15 +585,12 @@ pub fn get_norisk_mod_cache_path(
         .clone();
 
     // Ermittle den Dateinamen mit der vorhandenen Hilfsfunktion
-    let filename = get_norisk_pack_mod_filename(
-        &mod_entry.source,
-        &compatibility_target,
-        &mod_entry.id
-    )?;
+    let filename =
+        get_norisk_pack_mod_filename(&mod_entry.source, &compatibility_target, &mod_entry.id)?;
 
     // Erstelle den vollständigen Pfad zum Cache-Verzeichnis
     let mod_cache_dir = LAUNCHER_DIRECTORY.meta_dir().join(MOD_CACHE_DIR_NAME);
-    
+
     // Gib den vollständigen Pfad zur .jar-Datei zurück
     Ok(mod_cache_dir.join(filename))
-} 
+}

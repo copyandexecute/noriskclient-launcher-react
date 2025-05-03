@@ -1,34 +1,34 @@
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::piston_meta::AssetIndex;
-use log::{debug, error, info, warn};
-use std::path::PathBuf;
-use tokio::fs;
-use std::env;
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::State;
-use uuid::Uuid;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::io::{Cursor, Read}; // Needed for reading NBT from bytes and decompression
-use fastnbt::from_bytes; // NBT deserialization
-use fastnbt::value::Value; // Access NBT values
-use std::collections::HashMap; // To represent NBT Compound
-use flate2::read::GzDecoder; // GZip decompression
-use serde::{Serialize}; // Added Serialize directly
-use craftping::tokio::ping;
-use craftping::{Error as CraftPingError, Response}; // Corrected import
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::time::Duration;
-use tokio::net::TcpStream;
-use tokio::time::timeout;
+use async_compression::tokio::bufread::GzipDecoder;
 use base64;
 use base64::Engine as _; // Import the Engine trait for encode/decode methods
-use trust_dns_resolver::TokioAsyncResolver;
+use craftping::tokio::ping;
+use craftping::{Error as CraftPingError, Response}; // Corrected import
+use fastnbt::from_bytes; // NBT deserialization
+use fastnbt::value::Value; // Access NBT values
+use flate2::read::GzDecoder; // GZip decompression
+use log::{debug, error, info, warn};
+use serde::Serialize; // Added Serialize directly
+use std::collections::HashMap; // To represent NBT Compound
+use std::env;
+use std::io::{Cursor, Read}; // Needed for reading NBT from bytes and decompression
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::fs;
+use tokio::io::{AsyncReadExt as _, BufReader};
+use tokio::net::TcpStream;
+use tokio::time::timeout;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::proto::rr::RecordType;
-use async_compression::tokio::bufread::GzipDecoder;
-use tokio::io::{AsyncReadExt as _, BufReader};
+use trust_dns_resolver::TokioAsyncResolver;
+use uuid::Uuid;
 
 // --- Struct for World Info ---
 #[derive(Debug, Clone, Serialize)]
@@ -73,7 +73,10 @@ pub fn get_default_minecraft_dir() -> PathBuf {
     } else if cfg!(target_os = "macos") {
         // macOS: ~/Library/Application Support/minecraft
         match dirs::home_dir() {
-            Some(home) => home.join("Library").join("Application Support").join("minecraft"),
+            Some(home) => home
+                .join("Library")
+                .join("Application Support")
+                .join("minecraft"),
             None => PathBuf::new(),
         }
     } else {
@@ -92,7 +95,10 @@ pub async fn try_reuse_minecraft_assets(asset_index: &AssetIndex) -> Result<bool
 }
 
 /// Version of try_reuse_minecraft_assets that reports progress events
-pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, profile_id: Uuid) -> Result<bool> {
+pub async fn try_reuse_minecraft_assets_with_progress(
+    asset_index: &AssetIndex,
+    profile_id: Uuid,
+) -> Result<bool> {
     // Try to get state for events
     let state = if profile_id != Uuid::nil() {
         match State::get().await {
@@ -105,39 +111,50 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
     } else {
         None
     };
-    
+
     // Send initial progress event
     if let Some(state_ref) = &state {
         emit_reuse_progress(
             state_ref,
             profile_id,
-            &format!("Checking for existing Minecraft assets (index: {})", asset_index.id),
+            &format!(
+                "Checking for existing Minecraft assets (index: {})",
+                asset_index.id
+            ),
             0.01,
-            None
-        ).await?;
+            None,
+        )
+        .await?;
     }
-    
+
     // Log what we're trying to do
-    info!("[MC Utils] Checking for existing Minecraft assets (index: {})", asset_index.id);
-    
+    info!(
+        "[MC Utils] Checking for existing Minecraft assets (index: {})",
+        asset_index.id
+    );
+
     // Get paths
     let default_mc_dir = get_default_minecraft_dir();
     if !default_mc_dir.exists() {
-        info!("[MC Utils] Default Minecraft directory not found at: {}", default_mc_dir.display());
-        
+        info!(
+            "[MC Utils] Default Minecraft directory not found at: {}",
+            default_mc_dir.display()
+        );
+
         if let Some(state_ref) = &state {
             emit_reuse_progress(
                 state_ref,
                 profile_id,
                 "No existing Minecraft installation found, will download assets directly",
                 0.05,
-                None
-            ).await?;
+                None,
+            )
+            .await?;
         }
-        
+
         return Ok(false);
     }
-    
+
     // Progress update
     if let Some(state_ref) = &state {
         emit_reuse_progress(
@@ -145,65 +162,79 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
             profile_id,
             &format!("Found Minecraft directory at: {}", default_mc_dir.display()),
             0.05,
-            None
-        ).await?;
+            None,
+        )
+        .await?;
     }
-    
+
     let source_indexes_dir = default_mc_dir.join("assets").join("indexes");
     let source_index_file = source_indexes_dir.join(format!("{}.json", asset_index.id));
-    
+
     // Check if the source index file exists
     if !source_index_file.exists() {
-        info!("[MC Utils] Asset index file not found at: {}", source_index_file.display());
-        
+        info!(
+            "[MC Utils] Asset index file not found at: {}",
+            source_index_file.display()
+        );
+
         if let Some(state_ref) = &state {
             emit_reuse_progress(
                 state_ref,
                 profile_id,
-                &format!("Asset index {} not found in existing Minecraft installation", asset_index.id),
+                &format!(
+                    "Asset index {} not found in existing Minecraft installation",
+                    asset_index.id
+                ),
                 0.05,
-                None
-            ).await?;
+                None,
+            )
+            .await?;
         }
-        
+
         return Ok(false);
     }
-    
+
     // Get destination dirs
     let dest_assets_dir = LAUNCHER_DIRECTORY.meta_dir().join("assets");
     let dest_indexes_dir = dest_assets_dir.join("indexes");
     let dest_index_file = dest_indexes_dir.join(format!("{}.json", asset_index.id));
-    
+
     // Check if we already have the assets
     if dest_index_file.exists() {
         debug!("[MC Utils] Asset index already exists in launcher directory");
-        
+
         // Check if size matches
         match fs::metadata(&dest_index_file).await {
             Ok(metadata) => {
                 if metadata.len() as i64 == asset_index.size {
-                    info!("[MC Utils] Asset index already exists with correct size, no need to copy");
-                    
+                    info!(
+                        "[MC Utils] Asset index already exists with correct size, no need to copy"
+                    );
+
                     if let Some(state_ref) = &state {
                         emit_reuse_progress(
                             state_ref,
                             profile_id,
                             "Asset index already exists with correct size, no need to copy",
                             0.1,
-                            None
-                        ).await?;
+                            None,
+                        )
+                        .await?;
                     }
-                    
+
                     return Ok(false); // Already have it with correct size
                 }
                 info!("[MC Utils] Asset index exists but size mismatch, will copy from default MC dir");
-            },
+            }
             Err(e) => {
-                warn!("[MC Utils] Failed to get metadata for existing asset index: {}", e);
+                warn!(
+                    "[MC Utils] Failed to get metadata for existing asset index: {}",
+                    e
+                );
             }
         }
     }
-    
+
     // Progress update
     if let Some(state_ref) = &state {
         emit_reuse_progress(
@@ -211,21 +242,25 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
             profile_id,
             "Found existing Minecraft assets, preparing to copy",
             0.1,
-            None
-        ).await?;
+            None,
+        )
+        .await?;
     }
-    
+
     // Create destination directories if they don't exist
     info!("[MC Utils] Creating asset directories if needed");
     fs::create_dir_all(&dest_indexes_dir).await?;
     fs::create_dir_all(dest_assets_dir.join("objects")).await?;
-    
+
     // Copy the index file
-    info!("[MC Utils] Copying asset index from: {}", source_index_file.display());
+    info!(
+        "[MC Utils] Copying asset index from: {}",
+        source_index_file.display()
+    );
     match fs::copy(&source_index_file, &dest_index_file).await {
         Ok(_) => {
             info!("[MC Utils] Successfully copied asset index file");
-            
+
             // Progress update
             if let Some(state_ref) = &state {
                 emit_reuse_progress(
@@ -233,13 +268,14 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
                     profile_id,
                     "Successfully copied asset index file",
                     0.15,
-                    None
-                ).await?;
+                    None,
+                )
+                .await?;
             }
-        },
+        }
         Err(e) => {
             error!("[MC Utils] Failed to copy asset index file: {}", e);
-            
+
             // Error progress update
             if let Some(state_ref) = &state {
                 emit_reuse_progress(
@@ -247,21 +283,25 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
                     profile_id,
                     &format!("Failed to copy asset index file: {}", e),
                     0.15,
-                    Some(e.to_string())
-                ).await?;
+                    Some(e.to_string()),
+                )
+                .await?;
             }
-            
+
             return Err(AppError::Io(e));
         }
     }
-    
+
     // Copy the assets (objects)
     let source_objects_dir = default_mc_dir.join("assets").join("objects");
     let dest_objects_dir = dest_assets_dir.join("objects");
-    
+
     if !source_objects_dir.exists() {
-        warn!("[MC Utils] Source objects directory not found at: {}", source_objects_dir.display());
-        
+        warn!(
+            "[MC Utils] Source objects directory not found at: {}",
+            source_objects_dir.display()
+        );
+
         // Progress update
         if let Some(state_ref) = &state {
             emit_reuse_progress(
@@ -269,152 +309,185 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
                 profile_id,
                 "Copied index but assets directory not found, will download assets directly",
                 0.2,
-                None
-            ).await?;
+                None,
+            )
+            .await?;
         }
-        
+
         // Still return Ok(true) because we copied the index file
         return Ok(true);
     }
-    
+
     // Read index file to get list of objects
     let index_content = fs::read_to_string(&dest_index_file).await?;
     let index_json: serde_json::Value = serde_json::from_str(&index_content)?;
-    
+
     // Extract the objects
     if let Some(objects) = index_json.get("objects").and_then(|o| o.as_object()) {
         let total_objects = objects.len();
         info!("[MC Utils] Found {} assets to copy", total_objects);
-        
+
         // Progress update
         if let Some(state_ref) = &state {
             emit_reuse_progress(
                 state_ref,
                 profile_id,
-                &format!("Found {} assets to reuse from existing Minecraft installation", total_objects),
+                &format!(
+                    "Found {} assets to reuse from existing Minecraft installation",
+                    total_objects
+                ),
                 0.2,
-                None
-            ).await?;
+                None,
+            )
+            .await?;
         }
-        
+
         let mut copied_count = 0;
         let mut skipped_count = 0;
         let mut error_count = 0;
-        
+
         // Use atomic counters for progress tracking
         let progress_counter = Arc::new(AtomicUsize::new(0));
         let total_count = objects.len();
-        
+
         // Batch size for progress updates - update every 5% or 100 files, whichever is smaller
         let update_batch = (total_count / 20).max(1).min(100);
-        
+
         for (asset_name, object) in objects {
-            if let (Some(hash), Some(size)) = (object.get("hash").and_then(|h| h.as_str()), 
-                                               object.get("size").and_then(|s| s.as_i64())) {
+            if let (Some(hash), Some(size)) = (
+                object.get("hash").and_then(|h| h.as_str()),
+                object.get("size").and_then(|s| s.as_i64()),
+            ) {
                 // Create hash folder (first 2 chars of hash)
                 let hash_prefix = &hash[0..2];
                 let source_hash_dir = source_objects_dir.join(hash_prefix);
                 let dest_hash_dir = dest_objects_dir.join(hash_prefix);
-                
+
                 // Create destination hash directory if it doesn't exist
                 if !dest_hash_dir.exists() {
                     if let Err(e) = fs::create_dir_all(&dest_hash_dir).await {
-                        error!("[MC Utils] Failed to create hash directory {}: {}", dest_hash_dir.display(), e);
+                        error!(
+                            "[MC Utils] Failed to create hash directory {}: {}",
+                            dest_hash_dir.display(),
+                            e
+                        );
                         error_count += 1;
                         continue;
                     }
                 }
-                
+
                 let source_file = source_hash_dir.join(hash);
                 let dest_file = dest_hash_dir.join(hash);
-                
+
                 // Skip if dest file already exists with correct size
                 if dest_file.exists() {
                     match fs::metadata(&dest_file).await {
                         Ok(metadata) => {
                             if metadata.len() as i64 == size {
-                                debug!("[MC Utils] Asset already exists with correct size: {}", hash);
+                                debug!(
+                                    "[MC Utils] Asset already exists with correct size: {}",
+                                    hash
+                                );
                                 skipped_count += 1;
-                                
+
                                 // Update progress counter
                                 let progress = progress_counter.fetch_add(1, Ordering::SeqCst) + 1;
-                                
+
                                 // Report progress periodically
                                 if let Some(state_ref) = &state {
                                     let percent_complete = progress as f64 / total_count as f64;
                                     let scaled_progress = 0.2 + (percent_complete * 0.7); // Scale from 20% to 90%
-                                    
+
                                     emit_reuse_progress(
                                         state_ref,
                                         profile_id,
-                                        &format!("Reusing Minecraft assets: {}/{} files processed", progress, total_count),
+                                        &format!(
+                                            "Reusing Minecraft assets: {}/{} files processed",
+                                            progress, total_count
+                                        ),
                                         scaled_progress,
-                                        None
-                                    ).await?;
+                                        None,
+                                    )
+                                    .await?;
                                 }
-                                
+
                                 continue;
                             }
-                        },
+                        }
                         Err(e) => {
-                            warn!("[MC Utils] Failed to get metadata for existing asset: {}", e);
+                            warn!(
+                                "[MC Utils] Failed to get metadata for existing asset: {}",
+                                e
+                            );
                         }
                     }
                 }
-                
+
                 // Copy the file
                 if source_file.exists() {
                     match fs::copy(&source_file, &dest_file).await {
                         Ok(_) => {
                             debug!("[MC Utils] Copied asset: {} ({})", hash, asset_name);
                             copied_count += 1;
-                        },
+                        }
                         Err(e) => {
                             error!("[MC Utils] Failed to copy asset {}: {}", hash, e);
                             error_count += 1;
                         }
                     }
                 } else {
-                    debug!("[MC Utils] Source asset not found: {}", source_file.display());
+                    debug!(
+                        "[MC Utils] Source asset not found: {}",
+                        source_file.display()
+                    );
                     error_count += 1;
                 }
-                
+
                 // Update progress counter
                 let progress = progress_counter.fetch_add(1, Ordering::SeqCst) + 1;
-                
+
                 // Report progress periodically
                 if let Some(state_ref) = &state {
                     let percent_complete = progress as f64 / total_count as f64;
                     let scaled_progress = 0.2 + (percent_complete * 0.7); // Scale from 20% to 90%
-                    
+
                     emit_reuse_progress(
                         state_ref,
                         profile_id,
-                        &format!("Reusing Minecraft assets: {}/{} files processed", progress, total_count),
+                        &format!(
+                            "Reusing Minecraft assets: {}/{} files processed",
+                            progress, total_count
+                        ),
                         scaled_progress,
-                        None
-                    ).await?;
+                        None,
+                    )
+                    .await?;
                 }
             }
         }
-        
-        info!("[MC Utils] Assets copy summary: copied {}, skipped {}, errors {}", 
-              copied_count, skipped_count, error_count);
-              
+
+        info!(
+            "[MC Utils] Assets copy summary: copied {}, skipped {}, errors {}",
+            copied_count, skipped_count, error_count
+        );
+
         // Final progress update
         if let Some(state_ref) = &state {
             emit_reuse_progress(
                 state_ref,
                 profile_id,
-                &format!("Successfully reused Minecraft assets: copied {}, reused {}, errors {}", 
-                    copied_count, skipped_count, error_count),
+                &format!(
+                    "Successfully reused Minecraft assets: copied {}, reused {}, errors {}",
+                    copied_count, skipped_count, error_count
+                ),
                 0.95,
-                None
-            ).await?;
+                None,
+            )
+            .await?;
         }
     } else {
         warn!("[MC Utils] Failed to parse objects from asset index");
-        
+
         // Error progress update
         if let Some(state_ref) = &state {
             emit_reuse_progress(
@@ -422,11 +495,12 @@ pub async fn try_reuse_minecraft_assets_with_progress(asset_index: &AssetIndex, 
                 profile_id,
                 "Failed to parse objects from asset index",
                 0.5,
-                Some("Parse error".to_string())
-            ).await?;
+                Some("Parse error".to_string()),
+            )
+            .await?;
         }
     }
-    
+
     Ok(true)
 }
 
@@ -467,13 +541,20 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
         }
         Err(AppError::ProfileNotFound(_)) => {
             // Not a user profile, check if it's a standard version
-            match state.norisk_version_manager.get_profile_by_id(profile_id).await {
+            match state
+                .norisk_version_manager
+                .get_profile_by_id(profile_id)
+                .await
+            {
                 Some(standard_profile) => {
                     info!("[Worlds] ID {} matches standard profile: {}. Proceeding with standard profile object.", profile_id, standard_profile.name);
                     standard_profile // Use the standard profile object
                 }
                 None => {
-                    error!("[Worlds] Profile ID {} not found as user profile or standard profile.", profile_id);
+                    error!(
+                        "[Worlds] Profile ID {} not found as user profile or standard profile.",
+                        profile_id
+                    );
                     return Err(AppError::ProfileNotFound(profile_id)); // ID not found anywhere
                 }
             }
@@ -482,9 +563,14 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
     };
 
     // Calculate the instance path (this might not be meaningful for standard profiles)
-    let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
+    let instance_path = state
+        .profile_manager
+        .calculate_instance_path_for_profile(&profile)?;
     let saves_path = instance_path.join("saves");
-    info!("[Worlds] Checking saves directory: {}", saves_path.display());
+    info!(
+        "[Worlds] Checking saves directory: {}",
+        saves_path.display()
+    );
 
     if !saves_path.is_dir() {
         // This will likely be true for standard profiles
@@ -575,10 +661,16 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
                         debug!("[Worlds] Skipping hidden folder: {}", folder_name);
                     }
                 } else {
-                     warn!("[Worlds] Skipping entry with non-UTF8 name in saves directory: {:?}", entry_path);
+                    warn!(
+                        "[Worlds] Skipping entry with non-UTF8 name in saves directory: {:?}",
+                        entry_path
+                    );
                 }
             } else {
-                 debug!("[Worlds] Skipping folder without level.dat: {}", entry_path.display());
+                debug!(
+                    "[Worlds] Skipping folder without level.dat: {}",
+                    entry_path.display()
+                );
             }
         }
     }
@@ -586,7 +678,11 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
     // Sort worlds by last played descending (most recent first)
     worlds.sort_by(|a, b| b.last_played.cmp(&a.last_played));
 
-    info!("[Worlds] Found {} valid world(s) for profile {}", worlds.len(), profile_id);
+    info!(
+        "[Worlds] Found {} valid world(s) for profile {}",
+        worlds.len(),
+        profile_id
+    );
     Ok(worlds)
 }
 
@@ -638,12 +734,15 @@ fn parse_minecraft_address(address: &str) -> std::result::Result<(String, u16), 
         } else {
             // Should be "[...]:port"
             if address.as_bytes().get(close_bracket_index + 1) != Some(&b':') {
-                return Err(format!("Only a colon may follow a close bracket: {}", address));
+                return Err(format!(
+                    "Only a colon may follow a close bracket: {}",
+                    address
+                ));
             }
             let port_part = &address[close_bracket_index + 2..];
             // Validate port part contains only digits
             if port_part.is_empty() || port_part.chars().any(|c| !c.is_ascii_digit()) {
-                 return Err(format!("Port must be numeric after brackets: {}", address));
+                return Err(format!("Port must be numeric after brackets: {}", address));
             }
             (&address[1..close_bracket_index], Some(port_part))
         }
@@ -660,7 +759,7 @@ fn parse_minecraft_address(address: &str) -> std::result::Result<(String, u16), 
                     // Standard host:port
                     let host = &address[..colon_pos];
                     let port_part = &address[colon_pos + 1..];
-                     // Validate port part contains only digits
+                    // Validate port part contains only digits
                     if port_part.is_empty() || port_part.chars().any(|c| !c.is_ascii_digit()) {
                         return Err(format!("Port must be numeric: {}", address));
                     }
@@ -675,18 +774,16 @@ fn parse_minecraft_address(address: &str) -> std::result::Result<(String, u16), 
     };
 
     let port = match port_str {
-        Some(p_str) => {
-            match p_str.parse::<u16>() {
-                Ok(p) => p,
-                Err(_) => return Err(format!("Unparseable port number: {}", p_str)),
-            }
-        }
+        Some(p_str) => match p_str.parse::<u16>() {
+            Ok(p) => p,
+            Err(_) => return Err(format!("Unparseable port number: {}", p_str)),
+        },
         None => default_port,
     };
 
     // Basic validation: host part should not be empty
     if host_part.is_empty() {
-         return Err(format!("Host part cannot be empty: {}", address));
+        return Err(format!("Host part cannot be empty: {}", address));
     }
 
     Ok((host_part.to_string(), port))
@@ -705,13 +802,20 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
         }
         Err(AppError::ProfileNotFound(_)) => {
             // Not a user profile, check if it's a standard version
-            match state.norisk_version_manager.get_profile_by_id(profile_id).await {
+            match state
+                .norisk_version_manager
+                .get_profile_by_id(profile_id)
+                .await
+            {
                 Some(standard_profile) => {
                     info!("[Servers] ID {} matches standard profile: {}. Proceeding with standard profile object.", profile_id, standard_profile.name);
                     standard_profile // Use the standard profile object
                 }
                 None => {
-                    error!("[Servers] Profile ID {} not found as user profile or standard profile.", profile_id);
+                    error!(
+                        "[Servers] Profile ID {} not found as user profile or standard profile.",
+                        profile_id
+                    );
                     return Err(AppError::ProfileNotFound(profile_id)); // ID not found anywhere
                 }
             }
@@ -720,12 +824,21 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
     };
 
     // Calculate the instance path
-    let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
+    let instance_path = state
+        .profile_manager
+        .calculate_instance_path_for_profile(&profile)?;
     let servers_dat_path = instance_path.join("servers.dat");
-    info!("[Servers] Looking for servers.dat at: {}", servers_dat_path.display());
+    info!(
+        "[Servers] Looking for servers.dat at: {}",
+        servers_dat_path.display()
+    );
 
     if !servers_dat_path.is_file() {
-        info!("[Servers] servers.dat not found for profile '{}' (path: {}). Returning empty list.", profile.name, servers_dat_path.display());
+        info!(
+            "[Servers] servers.dat not found for profile '{}' (path: {}). Returning empty list.",
+            profile.name,
+            servers_dat_path.display()
+        );
         return Ok(Vec::new()); // No servers.dat means no servers saved
     }
 
@@ -733,8 +846,12 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
     let servers_dat_bytes = match fs::read(&servers_dat_path).await {
         Ok(bytes) => bytes,
         Err(e) => {
-            error!("[Servers] Failed to read servers.dat for profile '{}': {}. Path: {}",
-                   profile.name, e, servers_dat_path.display());
+            error!(
+                "[Servers] Failed to read servers.dat for profile '{}': {}. Path: {}",
+                profile.name,
+                e,
+                servers_dat_path.display()
+            );
             return Err(AppError::Io(e));
         }
     };
@@ -790,17 +907,25 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
     };
 
     // Map the NBT structure to our ServerInfo structure
-    let server_infos: Vec<ServerInfo> = server_list_nbt.servers.into_iter().map(|nbt_entry| {
-        ServerInfo {
-            name: nbt_entry.name,
-            address: nbt_entry.ip, // Map 'ip' to 'address'
-            icon_base64: nbt_entry.icon,
-            accepts_textures: nbt_entry.accept_textures,
-            previews_chat: nbt_entry.previews_chat,
-        }
-    }).collect();
+    let server_infos: Vec<ServerInfo> = server_list_nbt
+        .servers
+        .into_iter()
+        .map(|nbt_entry| {
+            ServerInfo {
+                name: nbt_entry.name,
+                address: nbt_entry.ip, // Map 'ip' to 'address'
+                icon_base64: nbt_entry.icon,
+                accepts_textures: nbt_entry.accept_textures,
+                previews_chat: nbt_entry.previews_chat,
+            }
+        })
+        .collect();
 
-    info!("[Servers] Found {} server entries in servers.dat for profile {}", server_infos.len(), profile_id);
+    info!(
+        "[Servers] Found {} server entries in servers.dat for profile {}",
+        server_infos.len(),
+        profile_id
+    );
     Ok(server_infos)
 }
 
@@ -851,7 +976,10 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
             return ServerPingInfo::error(address, format!("Invalid address format: {}", e), None);
         }
     };
-    info!("[Server Ping] Parsed address: Host='{}', Port={}", host, port);
+    info!(
+        "[Server Ping] Parsed address: Host='{}', Port={}",
+        host, port
+    );
 
     // --- DNS Resolver ---
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
@@ -865,10 +993,16 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
     let (target_host, target_port): (String, u16) = match srv_response {
         Ok(srv) => {
             // Prioritize lower priority, then higher weight (standard SRV behavior)
-            if let Some(record) = srv.iter().min_by_key(|r| (r.priority(), std::cmp::Reverse(r.weight()))) {
+            if let Some(record) = srv
+                .iter()
+                .min_by_key(|r| (r.priority(), std::cmp::Reverse(r.weight())))
+            {
                 let srv_host = record.target().to_utf8(); // Convert Name to String
                 let srv_port = record.port();
-                info!("[Server Ping] SRV lookup successful: Target = {}:{}", srv_host, srv_port);
+                info!(
+                    "[Server Ping] SRV lookup successful: Target = {}:{}",
+                    srv_host, srv_port
+                );
                 (srv_host, srv_port)
             } else {
                 info!("[Server Ping] SRV lookup for '{}' returned no records. Using parsed host/port.", srv_query);
@@ -876,7 +1010,10 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
             }
         }
         Err(e) => {
-            warn!("[Server Ping] SRV lookup for '{}' failed: {}. Falling back to parsed host/port.", srv_query, e);
+            warn!(
+                "[Server Ping] SRV lookup for '{}' failed: {}. Falling back to parsed host/port.",
+                srv_query, e
+            );
             (host.clone(), port) // Use the host parsed earlier
         }
     };
@@ -886,14 +1023,33 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
     let ip_response = resolver.lookup_ip(target_host.as_str()).await;
 
     let socket_addr = match ip_response {
-        Ok(lookup) => match lookup.iter().next() { // Use the first IP address found
+        Ok(lookup) => match lookup.iter().next() {
+            // Use the first IP address found
             Some(ip) => SocketAddr::new(ip, target_port),
-            None => return ServerPingInfo::error(address, format!("DNS lookup for target '{}' returned no IP addresses", target_host), None),
+            None => {
+                return ServerPingInfo::error(
+                    address,
+                    format!(
+                        "DNS lookup for target '{}' returned no IP addresses",
+                        target_host
+                    ),
+                    None,
+                )
+            }
         },
-        Err(e) => return ServerPingInfo::error(address, format!("DNS lookup for target '{}' failed: {}", target_host, e), None),
+        Err(e) => {
+            return ServerPingInfo::error(
+                address,
+                format!("DNS lookup for target '{}' failed: {}", target_host, e),
+                None,
+            )
+        }
     };
 
-    info!("[Server Ping] Resolved '{}:{}' to socket address: {}", target_host, target_port, socket_addr);
+    info!(
+        "[Server Ping] Resolved '{}:{}' to socket address: {}",
+        target_host, target_port, socket_addr
+    );
 
     // --- TCP Connect ---
     let connect_future = TcpStream::connect(socket_addr);
@@ -905,18 +1061,31 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
 
     let mut stream = match stream_result {
         Ok(s) => s,
-        Err(e) => return ServerPingInfo::error(address, format!("Connection to {} failed: {}", socket_addr, e), None),
+        Err(e) => {
+            return ServerPingInfo::error(
+                address,
+                format!("Connection to {} failed: {}", socket_addr, e),
+                None,
+            )
+        }
     };
 
     // --- Ping ---
     let start_time = std::time::Instant::now();
     // Use the target_host (which might be from SRV) for the handshake, but connect to the resolved IP (socket_addr)
     let ping_future = ping(&mut stream, &target_host, target_port);
-    let result: std::result::Result<Response, CraftPingError> = match timeout(ping_timeout, ping_future).await {
-        Ok(res) => res,
-        Err(_) => return ServerPingInfo::error(address, "Ping timed out".to_string(), Some(ping_timeout.as_millis() as u64)),
-    };
-    
+    let result: std::result::Result<Response, CraftPingError> =
+        match timeout(ping_timeout, ping_future).await {
+            Ok(res) => res,
+            Err(_) => {
+                return ServerPingInfo::error(
+                    address,
+                    "Ping timed out".to_string(),
+                    Some(ping_timeout.as_millis() as u64),
+                )
+            }
+        };
+
     let latency = start_time.elapsed();
     let latency_ms = latency.as_millis() as u64;
 
@@ -925,20 +1094,16 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
         Ok(pong) => {
             info!(
                 "[Server Ping] Success for {}: Version={}, Players={}/{}, Latency={}ms",
-                address,
-                pong.version,
-                pong.online_players,
-                pong.max_players,
-                latency_ms
+                address, pong.version, pong.online_players, pong.max_players, latency_ms
             );
-             // Extract favicon (remove potential prefix)
-             // Extract favicon and encode it as base64 string
+            // Extract favicon (remove potential prefix)
+            // Extract favicon and encode it as base64 string
             let favicon_base64 = pong.favicon.map(|bytes| {
                 // Use the imported base64 crate
                 base64::engine::general_purpose::STANDARD.encode(&bytes)
             });
 
-             // Helper function to extract plain text from serde_json::Value (Chat component format)
+            // Helper function to extract plain text from serde_json::Value (Chat component format)
             fn extract_text_from_value(value: &serde_json::Value) -> String {
                 if let Some(text) = value.get("text").and_then(|v| v.as_str()) {
                     let mut result = text.to_string();
@@ -972,7 +1137,7 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
                 version_name: Some(pong.version), // Access fields directly from Response
                 version_protocol: Some(pong.protocol),
                 players_online: Some(pong.online_players as u32), // Cast usize to u32
-                players_max: Some(pong.max_players as u32), // Cast usize to u32
+                players_max: Some(pong.max_players as u32),       // Cast usize to u32
                 favicon_base64: favicon_base64,
                 latency_ms: Some(latency_ms),
                 error: None,
@@ -980,4 +1145,4 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
         }
         Err(e) => ServerPingInfo::error(address, format!("Ping failed: {}", e), Some(latency_ms)),
     }
-} 
+}

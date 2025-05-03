@@ -1,14 +1,14 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::state::profile_state::{ModLoader, Profile, ProfileSettings, ProfileState};
-use log::{self, error, info, warn, debug};
+use chrono::Utc;
+use log::{self, debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::env;
 use std::path::PathBuf;
 use tokio::fs;
 use uuid::Uuid;
-use std::env;
-use chrono::Utc;
 
 const NORISK_API_BASE_URL: &str = "https://api.noriskclient.com/v1";
 
@@ -65,7 +65,7 @@ pub async fn load_local_standard_profiles() -> Result<NoriskVersionsConfig> {
 /// Copies a dummy/default `norisk_versions.json` from the project's source directory
 /// (assuming a development environment structure) to the launcher's root directory
 /// if it doesn't already exist.
-/// 
+///
 /// Note: This path resolution using CARGO_MANIFEST_DIR might not work correctly
 /// in a packaged production build. Consider using Tauri's resource resolver for that.
 pub async fn load_dummy_versions() -> Result<()> {
@@ -77,13 +77,13 @@ pub async fn load_dummy_versions() -> Result<()> {
         //return Ok(());
     }
 
-    // --- Path resolution based on CARGO_MANIFEST_DIR --- 
+    // --- Path resolution based on CARGO_MANIFEST_DIR ---
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // Assuming the project root is one level above the crate's manifest (src-tauri)
     let project_root = manifest_dir.parent().ok_or_else(|| {
         AppError::Other("Failed to get parent directory of CARGO_MANIFEST_DIR".to_string())
     })?;
-    
+
     let source_path = project_root.join("minecraft-data/nrc/norisk_versions.json");
     // --- End path resolution ---
 
@@ -97,12 +97,18 @@ pub async fn load_dummy_versions() -> Result<()> {
 
         // Copy the file
         fs::copy(&source_path, &target_file).await.map_err(|e| {
-            error!("Failed to copy dummy versions from {:?} to {:?}: {}", source_path, target_file, e);
+            error!(
+                "Failed to copy dummy versions from {:?} to {:?}: {}",
+                source_path, target_file, e
+            );
             AppError::Io(e)
         })?;
         info!("Successfully copied dummy versions to {:?}", target_file);
     } else {
-        error!("Dummy versions source file not found at expected path: {:?}", source_path);
+        error!(
+            "Dummy versions source file not found at expected path: {:?}",
+            source_path
+        );
         // Use a more general error as it's not a Tauri resource issue anymore
         return Err(AppError::Other(format!(
             "Source file not found for dummy versions: {}",

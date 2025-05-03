@@ -36,7 +36,9 @@ impl NeoForgeMavenMetadata {
     }
 
     pub fn get_versions_for_minecraft(&self, minecraft_version: &str) -> Vec<String> {
-        self.versioning.versions.versions
+        self.versioning
+            .versions
+            .versions
             .iter()
             .filter(|v| {
                 if let Some(parsed_mc_version) = Self::parse_neoforge_version_to_minecraft(v) {
@@ -103,4 +105,4 @@ impl NeoForgeMavenMetadata {
             );
         }
     }
-} 
+}

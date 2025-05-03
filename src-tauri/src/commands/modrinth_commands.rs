@@ -1,9 +1,13 @@
-use crate::error::{CommandError, AppError};
-use crate::integrations::modrinth::{self, ModrinthProjectContext, search_mods, search_projects, ModrinthSearchHit, ModrinthSearchResponse, get_mod_versions as get_modrinth_versions_api, ModrinthVersion, ModrinthProjectType, ModrinthSortType, ModrinthBulkUpdateRequestBody};
+use crate::error::{AppError, CommandError};
+use crate::integrations::modrinth::{
+    self, get_mod_versions as get_modrinth_versions_api, search_mods, search_projects,
+    ModrinthBulkUpdateRequestBody, ModrinthProjectContext, ModrinthProjectType, ModrinthSearchHit,
+    ModrinthSearchResponse, ModrinthSortType, ModrinthVersion,
+};
 use crate::integrations::mrpack;
 use serde::Serialize;
-use uuid::Uuid;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[tauri::command]
 pub async fn search_modrinth_projects(
@@ -33,9 +37,11 @@ pub async fn search_modrinth_projects(
         loader,
         limit,
         offset,
-        sort
-    ).await.map_err(CommandError::from)?;
-    
+        sort,
+    )
+    .await
+    .map_err(CommandError::from)?;
+
     Ok(result)
 }
 
@@ -45,7 +51,8 @@ pub async fn search_modrinth_mods(
     game_version: Option<String>,
     loader: Option<String>, // Expects loader identifier like "fabric", "forge", "quilt", "neoforge"
     limit: Option<u32>,
-) -> Result<Vec<ModrinthSearchHit>, CommandError> { // Keep CommandError for consistency if used elsewhere
+) -> Result<Vec<ModrinthSearchHit>, CommandError> {
+    // Keep CommandError for consistency if used elsewhere
     // Call the actual API function from the integrations module
     log::debug!(
         "Received search_modrinth_mods command: query={}, version={}, loader={}, limit={:?}",
@@ -55,7 +62,9 @@ pub async fn search_modrinth_mods(
         limit
     );
     // Use map_err to convert AppError to CommandError if necessary, or adjust Result type
-    let result = search_mods(query, game_version, loader, limit).await.map_err(CommandError::from)?;
+    let result = search_mods(query, game_version, loader, limit)
+        .await
+        .map_err(CommandError::from)?;
     Ok(result)
 }
 
@@ -64,7 +73,8 @@ pub async fn get_modrinth_mod_versions(
     project_id_or_slug: String,
     loaders: Option<Vec<String>>,
     game_versions: Option<Vec<String>>,
-) -> Result<Vec<ModrinthVersion>, CommandError> { // Return CommandError for Tauri
+) -> Result<Vec<ModrinthVersion>, CommandError> {
+    // Return CommandError for Tauri
     log::debug!(
         "Received get_modrinth_mod_versions command: project_id={}, loaders={:?}, game_versions={:?}",
         project_id_or_slug,
@@ -72,7 +82,9 @@ pub async fn get_modrinth_mod_versions(
         game_versions
     );
     // Call the actual API function and map error to CommandError
-    get_modrinth_versions_api(project_id_or_slug, loaders, game_versions).await.map_err(CommandError::from)
+    get_modrinth_versions_api(project_id_or_slug, loaders, game_versions)
+        .await
+        .map_err(CommandError::from)
 }
 
 #[derive(Serialize, Debug)]
@@ -105,22 +117,20 @@ pub async fn get_all_modrinth_versions_for_contexts(
                 return Err(CommandError::from(e));
             }
         };
-            
+
     let frontend_results: Vec<ModrinthAllVersionsResult> = result_map
         .into_iter()
-        .map(|(context, versions_result)| {
-            match versions_result {
-                Ok(versions) => ModrinthAllVersionsResult {
-                    context,
-                    versions: Some(versions),
-                    error: None,
-                },
-                Err(app_error) => ModrinthAllVersionsResult {
-                    context,
-                    versions: None,
-                    error: Some(app_error.to_string()),
-                },
-            }
+        .map(|(context, versions_result)| match versions_result {
+            Ok(versions) => ModrinthAllVersionsResult {
+                context,
+                versions: Some(versions),
+                error: None,
+            },
+            Err(app_error) => ModrinthAllVersionsResult {
+                context,
+                versions: None,
+                error: Some(app_error.to_string()),
+            },
         })
         .collect();
 
@@ -133,33 +143,35 @@ pub async fn download_and_install_modrinth_modpack(
     project_id: String,
     version_id: String,
     file_name: String,
-    download_url: String
+    download_url: String,
 ) -> Result<Uuid, CommandError> {
     log::info!(
         "Executing download_and_install_modrinth_modpack for project '{}', version '{}'",
-        project_id, version_id
+        project_id,
+        version_id
     );
-    
+
     // Ensure the file name has .mrpack extension
     let file_name = if !file_name.ends_with(".mrpack") {
         format!("{}.mrpack", file_name)
     } else {
         file_name
     };
-    
+
     let profile_id = mrpack::download_and_process_mrpack(&download_url, &file_name)
         .await
         .map_err(|e| {
             log::error!("Failed to download and process modpack: {}", e);
             CommandError::from(e)
         })?;
-    
+
     // Log success
     log::info!(
         "Successfully downloaded and installed modpack '{}' as profile with ID: {}",
-        file_name, profile_id
+        file_name,
+        profile_id
     );
-    
+
     // Return the new profile ID
     Ok(profile_id)
 }
@@ -167,7 +179,7 @@ pub async fn download_and_install_modrinth_modpack(
 /// Fetches details for multiple Modrinth projects based on their IDs or slugs.
 #[tauri::command]
 pub async fn get_modrinth_project_details(
-    ids: Vec<String>
+    ids: Vec<String>,
 ) -> Result<Vec<modrinth::ModrinthProject>, CommandError> {
     log::debug!(
         "Received get_modrinth_project_details_bulk command for {} project IDs/slugs",
@@ -183,19 +195,19 @@ pub async fn get_modrinth_project_details(
 /// Mods without updates or not found on Modrinth are omitted from the results.
 #[tauri::command]
 pub async fn check_modrinth_updates(
-    request: ModrinthBulkUpdateRequestBody
+    request: ModrinthBulkUpdateRequestBody,
 ) -> Result<HashMap<String, ModrinthVersion>, CommandError> {
     log::debug!(
         "Received check_modrinth_updates command for {} mod hashes",
         request.hashes.len()
     );
-    
+
     // Call the actual API function from the integrations module
     let updates = modrinth::check_bulk_updates(request)
         .await
         .map_err(CommandError::from)?;
-    
+
     log::info!("Found updates for {} mods", updates.len());
-    
+
     Ok(updates)
 }

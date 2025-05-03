@@ -1,10 +1,10 @@
-use serde::{Deserialize, Serialize};
-use crate::error::{Result, AppError};
+use crate::error::{AppError, Result};
+use futures::future::join_all;
+use log::{self, error, info};
 use reqwest;
-use log::{self, info, error};
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
-use futures::future::join_all;
 
 // Base URL for Modrinth API v2
 const MODRINTH_API_BASE_URL: &str = "https://api.modrinth.com/v2";
@@ -22,26 +22,26 @@ pub struct ModrinthSearchResponse {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModrinthSearchHit {
-    pub project_id: String, // Project ID (slug or ID)
-    pub project_type: String, // Type of project (e.g., "mod")
-    pub slug: String,       // Project slug
-    pub author: Option<String>, // Author username (Added based on actual response)
-    pub title: String,      // Project title
-    pub description: String,// Short description
+    pub project_id: String,      // Project ID (slug or ID)
+    pub project_type: String,    // Type of project (e.g., "mod")
+    pub slug: String,            // Project slug
+    pub author: Option<String>,  // Author username (Added based on actual response)
+    pub title: String,           // Project title
+    pub description: String,     // Short description
     pub categories: Vec<String>, // Categories/tags
     pub display_categories: Vec<String>,
     pub client_side: String, // Support status ("required", "optional", "unsupported")
     pub server_side: String, // Support status
     pub downloads: u64,
-    pub follows: u64,      // Sometimes called subscribers
-    pub icon_url: Option<String>, // URL of the project icon
+    pub follows: u64,                   // Sometimes called subscribers
+    pub icon_url: Option<String>,       // URL of the project icon
     pub latest_version: Option<String>, // Version number of the latest version
-    pub date_created: String, // ISO 8601 timestamp
-    pub date_modified: String,// ISO 8601 timestamp
-    pub license: String,    // SPDX license identifier
-    pub gallery: Vec<String>, // List of image URLs
-    // author field seems deprecated or missing in examples, use project relationship later if needed
-    // versions field is also missing in search results, need separate call for version details
+    pub date_created: String,           // ISO 8601 timestamp
+    pub date_modified: String,          // ISO 8601 timestamp
+    pub license: String,                // SPDX license identifier
+    pub gallery: Vec<String>,           // List of image URLs
+                                        // author field seems deprecated or missing in examples, use project relationship later if needed
+                                        // versions field is also missing in search results, need separate call for version details
 }
 
 // Structures for deserializing Modrinth API responses (Project Versions)
@@ -49,21 +49,21 @@ pub struct ModrinthSearchHit {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModrinthVersion {
-    pub id: String,             // Version ID (e.g., "tFw0iWAk")
-    pub project_id: String,     // Associated project ID
-    pub author_id: Option<String>, // ID of the user who published the version
-    pub featured: bool,         // Whether the version is featured
-    pub name: String,           // Version title/name
-    pub version_number: String, // Version number (e.g., "0.100.0+1.21.5")
-    pub changelog: Option<String>, // Changelog text (or null)
+    pub id: String,                            // Version ID (e.g., "tFw0iWAk")
+    pub project_id: String,                    // Associated project ID
+    pub author_id: Option<String>,             // ID of the user who published the version
+    pub featured: bool,                        // Whether the version is featured
+    pub name: String,                          // Version title/name
+    pub version_number: String,                // Version number (e.g., "0.100.0+1.21.5")
+    pub changelog: Option<String>,             // Changelog text (or null)
     pub dependencies: Vec<ModrinthDependency>, // List of dependencies
-    pub game_versions: Vec<String>, // Compatible game versions
-    pub version_type: ModrinthVersionType, // alpha, beta, release
-    pub loaders: Vec<String>,   // Compatible loaders
-    pub files: Vec<ModrinthFile>, // Files associated with this version
-    pub date_published: String, // ISO 8601 timestamp
+    pub game_versions: Vec<String>,            // Compatible game versions
+    pub version_type: ModrinthVersionType,     // alpha, beta, release
+    pub loaders: Vec<String>,                  // Compatible loaders
+    pub files: Vec<ModrinthFile>,              // Files associated with this version
+    pub date_published: String,                // ISO 8601 timestamp
     #[serde(default)]
-    pub downloads: u64,         // Download count for this specific version
+    pub downloads: u64,   // Download count for this specific version
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -93,11 +93,11 @@ pub enum ModrinthVersionType {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModrinthFile {
-    pub hashes: ModrinthHashes, // Hashes of the file
-    pub url: String,            // Download URL
-    pub filename: String,       // File name
-    pub primary: bool,          // Whether this is the primary file for the version
-    pub size: u64,              // File size in bytes
+    pub hashes: ModrinthHashes,    // Hashes of the file
+    pub url: String,               // Download URL
+    pub filename: String,          // File name
+    pub primary: bool,             // Whether this is the primary file for the version
+    pub size: u64,                 // File size in bytes
     pub file_type: Option<String>, // Type of file (e.g., "required-resource-pack", null if main mod file)
 }
 
@@ -107,7 +107,7 @@ pub struct ModrinthHashes {
     pub sha1: Option<String>,
 }
 
-// --- Structures for Bulk Hash Lookup --- 
+// --- Structures for Bulk Hash Lookup ---
 
 #[derive(Serialize)]
 struct HashesRequestBody {
@@ -119,9 +119,9 @@ struct HashesRequestBody {
 // Key: The hash provided in the request
 // Value: The corresponding ModrinthVersion object if found
 
-// --- End Structures for Bulk Hash Lookup --- 
+// --- End Structures for Bulk Hash Lookup ---
 
-// --- Structures for Bulk Project Lookup --- 
+// --- Structures for Bulk Project Lookup ---
 
 // Structures for deserializing Modrinth API responses (Bulk Project Details)
 // Based on https://docs.modrinth.com/api/operations/getprojects/
@@ -130,24 +130,24 @@ pub struct ModrinthProject {
     pub id: String, // The ID of the project, encoded as a base62 string
     pub slug: String,
     pub project_type: ModrinthProjectType, // Reuse existing enum
-    pub team: String, // The ID of the team that has ownership of this project
+    pub team: String,                      // The ID of the team that has ownership of this project
     pub title: String,
     pub description: String, // Short description
-    pub body: String, // Long description
+    pub body: String,        // Long description
     // pub body_url: Option<String>, // Deprecated
-    pub published: String, // ISO 8601
-    pub updated: String, // ISO 8601
+    pub published: String,        // ISO 8601
+    pub updated: String,          // ISO 8601
     pub approved: Option<String>, // ISO 8601
-    pub status: String, // e.g., "approved"
+    pub status: String,           // e.g., "approved"
     // pub requested_status: Option<String>,
     pub moderator_message: Option<ModrinthModeratorMessage>,
     pub license: ModrinthLicense, // Reuse existing struct
-    pub client_side: String, // "required", "optional", "unsupported", "unknown"
-    pub server_side: String, // "required", "optional", "unsupported", "unknown"
+    pub client_side: String,      // "required", "optional", "unsupported", "unknown"
+    pub server_side: String,      // "required", "optional", "unsupported", "unknown"
     pub downloads: u64,
     pub followers: u64,
     pub categories: Vec<String>,
-    pub versions: Vec<String>, // List of version IDs
+    pub versions: Vec<String>,    // List of version IDs
     pub icon_url: Option<String>, // The field we often need
     pub color: Option<u32>,
     // pub thread_id: Option<String>,
@@ -157,10 +157,10 @@ pub struct ModrinthProject {
     pub wiki_url: Option<String>,
     pub discord_url: Option<String>,
     pub donation_urls: Option<Vec<ModrinthDonationUrl>>, // Reuse existing struct
-    pub gallery: Vec<ModrinthGalleryImage>, // Reuse existing struct
+    pub gallery: Vec<ModrinthGalleryImage>,              // Reuse existing struct
     // Custom fields observed but not strictly in doc example
     #[serde(default)]
-    pub game_versions: Option<Vec<String>>, 
+    pub game_versions: Option<Vec<String>>,
     #[serde(default)]
     pub loaders: Option<Vec<String>>,
 }
@@ -195,16 +195,16 @@ pub struct ModrinthGalleryImage {
     pub ordering: u32,
 }
 
-// --- End Structures for Bulk Project Lookup --- 
+// --- End Structures for Bulk Project Lookup ---
 
 // NEUE Struktur für den Input der Bulk-Abfrage
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ModrinthProjectContext {
-    pub project_id: String,     // Modrinth Project ID (oder Slug)
-    pub loader: String,         // Der spezifische Loader-Filter für dieses Projekt
-    pub game_version: String,   // Die spezifische Game-Version für dieses Projekt
-    // Optional: Könnte man erweitern, z.B. um die aktuell installierte version_id für direkten Vergleich
-    // pub current_version_id: Option<String>, 
+    pub project_id: String, // Modrinth Project ID (oder Slug)
+    pub loader: String,     // Der spezifische Loader-Filter für dieses Projekt
+    pub game_version: String, // Die spezifische Game-Version für dieses Projekt
+                            // Optional: Könnte man erweitern, z.B. um die aktuell installierte version_id für direkten Vergleich
+                            // pub current_version_id: Option<String>,
 }
 
 // Enum for project types
@@ -270,11 +270,17 @@ pub async fn search_projects(
 
     // Add mandatory query
     query_params.push(("query".to_string(), query));
-    log::debug!("Modrinth search - Query: {}", query_params.last().unwrap().1);
+    log::debug!(
+        "Modrinth search - Query: {}",
+        query_params.last().unwrap().1
+    );
 
     // Add limit (default or specified)
     query_params.push(("limit".to_string(), limit.unwrap_or(20).to_string()));
-    log::debug!("Modrinth search - Limit: {}", query_params.last().unwrap().1);
+    log::debug!(
+        "Modrinth search - Limit: {}",
+        query_params.last().unwrap().1
+    );
 
     // Add offset for pagination (default is 0)
     if let Some(offset_value) = offset {
@@ -290,9 +296,9 @@ pub async fn search_projects(
 
     // Construct facets for filtering
     let mut facets: Vec<String> = Vec::new();
-    
+
     // Add project type facet
-    facets.push(format!("project_type:{}", project_type.to_string())); 
+    facets.push(format!("project_type:{}", project_type.to_string()));
 
     if let Some(gv) = game_version {
         let version_facet = format!("versions:{}", gv);
@@ -308,10 +314,11 @@ pub async fn search_projects(
 
     // Modrinth expects facets like: [["versions:1.20.1"],["categories:fabric"]]
     // So we need to wrap each facet string in ["..."] and then join them within an outer [
-    let facet_list: Vec<String> = facets.iter()
+    let facet_list: Vec<String> = facets
+        .iter()
         .map(|f| format!("[\"{}\"]", f)) // Wrap each item like ["key:value"]
         .collect();
-    
+
     let facets_str = format!("[{}]", facet_list.join(","));
     log::debug!("Modrinth search - Final facets string: {}", facets_str);
     query_params.push(("facets".to_string(), facets_str));
@@ -322,22 +329,31 @@ pub async fn search_projects(
 
     log::info!("Searching Modrinth: {}", final_url);
 
-    let response = client.get(final_url)
+    let response = client
+        .get(final_url)
         // It's good practice to set a User-Agent
         // Use format! correctly and ensure CARGO_PKG_VERSION is available
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (contact@noriskclient.de)", env!("CARGO_PKG_VERSION")))
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .send()
         .await
         .map_err(|e| AppError::Other(format!("Modrinth API request failed: {}", e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
         log::error!("Modrinth API error ({}): {}", status, error_text);
         return Err(AppError::Other(format!(
             "Modrinth API returned error {}: {}",
-            status,
-            error_text
+            status, error_text
         )));
     }
 
@@ -362,8 +378,9 @@ pub async fn search_mods(
         limit,
         None,
         None,
-    ).await?;
-    
+    )
+    .await?;
+
     Ok(result.hits)
 }
 
@@ -376,8 +393,7 @@ pub async fn get_mod_versions(
     let client = reqwest::Client::new();
     let url = format!(
         "{}/project/{}/version",
-        MODRINTH_API_BASE_URL,
-        project_id_or_slug
+        MODRINTH_API_BASE_URL, project_id_or_slug
     );
 
     let mut query_params: Vec<(String, String)> = Vec::new();
@@ -386,19 +402,27 @@ pub async fn get_mod_versions(
     if let Some(loaders_vec) = loaders {
         if !loaders_vec.is_empty() {
             // Needs to be a JSON array string, e.g., ["fabric", "quilt"]
-            let loaders_json = serde_json::to_string(&loaders_vec)
-                .map_err(|e| AppError::Other(format!("Failed to serialize loaders filter: {}", e)))?;
+            let loaders_json = serde_json::to_string(&loaders_vec).map_err(|e| {
+                AppError::Other(format!("Failed to serialize loaders filter: {}", e))
+            })?;
             query_params.push(("loaders".to_string(), loaders_json));
-            log::debug!("Modrinth versions - Adding loaders filter: {}", query_params.last().unwrap().1);
+            log::debug!(
+                "Modrinth versions - Adding loaders filter: {}",
+                query_params.last().unwrap().1
+            );
         }
     }
     if let Some(versions_vec) = game_versions {
         if !versions_vec.is_empty() {
             // Needs to be a JSON array string, e.g., ["1.20.1", "1.20"]
-            let versions_json = serde_json::to_string(&versions_vec)
-                .map_err(|e| AppError::Other(format!("Failed to serialize game_versions filter: {}", e)))?;
+            let versions_json = serde_json::to_string(&versions_vec).map_err(|e| {
+                AppError::Other(format!("Failed to serialize game_versions filter: {}", e))
+            })?;
             query_params.push(("game_versions".to_string(), versions_json));
-            log::debug!("Modrinth versions - Adding game_versions filter: {}", query_params.last().unwrap().1);
+            log::debug!(
+                "Modrinth versions - Adding game_versions filter: {}",
+                query_params.last().unwrap().1
+            );
         }
     }
 
@@ -408,27 +432,39 @@ pub async fn get_mod_versions(
 
     log::info!("Getting Modrinth versions: {}", final_url);
 
-    let response = client.get(final_url)
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (contact@noriskclient.de)", env!("CARGO_PKG_VERSION")))
+    let response = client
+        .get(final_url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .send()
         .await
         .map_err(|e| AppError::Other(format!("Modrinth API request failed: {}", e)))?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-        log::error!("Modrinth API error getting versions ({}): {}", status, error_text);
-        return Err(AppError::Other(format!(
-            "Modrinth API returned error {}: {}",
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        log::error!(
+            "Modrinth API error getting versions ({}): {}",
             status,
             error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {}: {}",
+            status, error_text
         )));
     }
 
-    let versions_result = response
-        .json::<Vec<ModrinthVersion>>()
-        .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth versions response: {}", e)))?;
+    let versions_result = response.json::<Vec<ModrinthVersion>>().await.map_err(|e| {
+        AppError::Other(format!("Failed to parse Modrinth versions response: {}", e))
+    })?;
 
     Ok(versions_result)
 }
@@ -437,35 +473,52 @@ pub async fn get_mod_versions(
 // Based on https://docs.modrinth.com/api-spec/#tag/versions/operation/getVersion
 pub async fn get_version_details(version_id: String) -> Result<ModrinthVersion> {
     let client = reqwest::Client::new();
-    let url = format!(
-        "{}/version/{}",
-        MODRINTH_API_BASE_URL,
-        version_id
-    );
+    let url = format!("{}/version/{}", MODRINTH_API_BASE_URL, version_id);
 
     log::info!("Getting Modrinth version details: {}", url);
 
-    let response = client.get(url)
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (contact@noriskclient.de)", env!("CARGO_PKG_VERSION")))
+    let response = client
+        .get(url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API request failed for version {}: {}", version_id, e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API request failed for version {}: {}",
+                version_id, e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-        log::error!("Modrinth API error getting version {} details ({}): {}", version_id, status, error_text);
-        return Err(AppError::Other(format!(
-            "Modrinth API returned error {} getting version details: {}",
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        log::error!(
+            "Modrinth API error getting version {} details ({}): {}",
+            version_id,
             status,
             error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} getting version details: {}",
+            status, error_text
         )));
     }
 
-    let version_details = response
-        .json::<ModrinthVersion>()
-        .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth version details response for {}: {}", version_id, e)))?;
+    let version_details = response.json::<ModrinthVersion>().await.map_err(|e| {
+        AppError::Other(format!(
+            "Failed to parse Modrinth version details response for {}: {}",
+            version_id, e
+        ))
+    })?;
 
     Ok(version_details)
 }
@@ -482,41 +535,57 @@ pub async fn get_all_versions_for_projects(
         return Ok(HashMap::new());
     }
 
-    info!("Fetching all compatible versions for {} project contexts.", contexts.len());
+    info!(
+        "Fetching all compatible versions for {} project contexts.",
+        contexts.len()
+    );
 
     let client = reqwest::Client::new();
 
     // Create a list of futures, one for each context
     let futures = contexts.into_iter().map(|context| {
         let client = client.clone();
-        let original_context = context.clone(); 
+        let original_context = context.clone();
 
         async move {
             let loaders = Some(vec![context.loader]);
             let game_versions = Some(vec![context.game_version]);
-            
+
             // Call get_mod_versions and return the Result directly
-            let versions_result: Result<Vec<ModrinthVersion>> = get_mod_versions(context.project_id, loaders, game_versions).await;
-            
+            let versions_result: Result<Vec<ModrinthVersion>> =
+                get_mod_versions(context.project_id, loaders, game_versions).await;
+
             // Log success or failure for this specific context
             match &versions_result {
-                Ok(versions) => info!("Successfully fetched {} versions for project '{}'", versions.len(), original_context.project_id),
-                Err(e) => error!("Failed to fetch versions for project '{}': {}", original_context.project_id, e),
+                Ok(versions) => info!(
+                    "Successfully fetched {} versions for project '{}'",
+                    versions.len(),
+                    original_context.project_id
+                ),
+                Err(e) => error!(
+                    "Failed to fetch versions for project '{}': {}",
+                    original_context.project_id, e
+                ),
             };
 
             // Return the context and the Result<Vec<ModrinthVersion>>
-            (original_context, versions_result) 
+            (original_context, versions_result)
         }
     });
 
     // Execute all futures concurrently
-    let results: Vec<(ModrinthProjectContext, Result<Vec<ModrinthVersion>>)> = join_all(futures).await;
+    let results: Vec<(ModrinthProjectContext, Result<Vec<ModrinthVersion>>)> =
+        join_all(futures).await;
 
     // Collect results into a HashMap
-    let version_map: HashMap<ModrinthProjectContext, Result<Vec<ModrinthVersion>>> = results.into_iter().collect();
+    let version_map: HashMap<ModrinthProjectContext, Result<Vec<ModrinthVersion>>> =
+        results.into_iter().collect();
 
-    info!("Finished fetching all versions. Got results for {} project contexts.", version_map.len());
-    // The outer Result is for potential errors during the setup/collection, 
+    info!(
+        "Finished fetching all versions. Got results for {} project contexts.",
+        version_map.len()
+    );
+    // The outer Result is for potential errors during the setup/collection,
     // individual fetch errors are inside the map values.
     Ok(version_map)
 }
@@ -528,44 +597,75 @@ pub async fn get_version_by_hash(file_hash: String) -> Result<ModrinthVersion> {
     let algorithm = match file_hash.len() {
         40 => "sha1",
         128 => "sha512",
-        _ => return Err(AppError::Other(format!("Invalid hash length provided: {}", file_hash.len())))
+        _ => {
+            return Err(AppError::Other(format!(
+                "Invalid hash length provided: {}",
+                file_hash.len()
+            )))
+        }
     };
 
     let client = reqwest::Client::new();
     let url = format!(
         "{}/version_file/{}?algorithm={}", // Correct endpoint path
-        MODRINTH_API_BASE_URL,
-        file_hash,
-        algorithm
+        MODRINTH_API_BASE_URL, file_hash, algorithm
     );
 
-    log::info!("Getting Modrinth version details by hash ({}): {}", algorithm, url);
+    log::info!(
+        "Getting Modrinth version details by hash ({}): {}",
+        algorithm,
+        url
+    );
 
-    let response = client.get(&url) // Pass URL by reference
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (support@norisk.gg)", env!("CARGO_PKG_VERSION")))
+    let response = client
+        .get(&url) // Pass URL by reference
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (support@norisk.gg)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API request failed for hash {}: {}", file_hash, e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API request failed for hash {}: {}",
+                file_hash, e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-        log::error!("Modrinth API error getting version by hash {} ({}): {}", file_hash, status, error_text);
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
+        log::error!(
+            "Modrinth API error getting version by hash {} ({}): {}",
+            file_hash,
+            status,
+            error_text
+        );
         // Handle 404 specifically as "hash not found"
         if status == reqwest::StatusCode::NOT_FOUND {
             return Err(AppError::ModrinthHashNotFound(file_hash));
         }
         return Err(AppError::Other(format!(
             "Modrinth API returned error {} getting version by hash: {}",
-            status,
-            error_text
+            status, error_text
         )));
     }
 
     let version_details = response
         .json::<ModrinthVersion>() // The endpoint returns a Version object
         .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth version details response for hash {}: {}", file_hash, e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Failed to parse Modrinth version details response for hash {}: {}",
+                file_hash, e
+            ))
+        })?;
 
     Ok(version_details)
 }
@@ -580,7 +680,10 @@ pub async fn get_versions_by_hashes(
         return Ok(HashMap::new()); // Nothing to fetch
     }
     if algorithm != "sha1" && algorithm != "sha512" {
-        return Err(AppError::Other(format!("Invalid hash algorithm provided: {}", algorithm)));
+        return Err(AppError::Other(format!(
+            "Invalid hash algorithm provided: {}",
+            algorithm
+        )));
     }
 
     let client = reqwest::Client::new();
@@ -591,27 +694,48 @@ pub async fn get_versions_by_hashes(
         algorithm: algorithm.to_string(),
     };
 
-    log::info!("Getting Modrinth versions for {} hashes ({}): {}", hashes.len(), algorithm, url);
+    log::info!(
+        "Getting Modrinth versions for {} hashes ({}): {}",
+        hashes.len(),
+        algorithm,
+        url
+    );
 
-    let response = client.post(&url) // Use POST
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (support@norisk.gg)", env!("CARGO_PKG_VERSION")))
+    let response = client
+        .post(&url) // Use POST
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (support@norisk.gg)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .header("Content-Type", "application/json") // Set content type
         .json(&request_body) // Send the serialized request body
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API POST request failed for hashes: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API POST request failed for hashes: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
         log::error!(
             "Modrinth API error getting versions by hashes (Algorithm: {}) ({}): {}",
-            algorithm, status, error_text
+            algorithm,
+            status,
+            error_text
         );
         return Err(AppError::Other(format!(
             "Modrinth API returned error {} getting versions by hashes: {}",
-            status,
-            error_text
+            status, error_text
         )));
     }
 
@@ -620,9 +744,18 @@ pub async fn get_versions_by_hashes(
     let versions_map = response
         .json::<HashMap<String, ModrinthVersion>>()
         .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth versions by hashes response: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Failed to parse Modrinth versions by hashes response: {}",
+                e
+            ))
+        })?;
 
-    log::info!("Successfully retrieved version info for {} out of {} requested hashes.", versions_map.len(), hashes.len());
+    log::info!(
+        "Successfully retrieved version info for {} out of {} requested hashes.",
+        versions_map.len(),
+        hashes.len()
+    );
 
     Ok(versions_map)
 }
@@ -645,13 +778,18 @@ impl ModrinthBulkUpdateRequestBody {
         game_versions: Vec<String>,
     ) -> Result<Self> {
         if hashes.is_empty() {
-            return Err(AppError::Other("No hashes provided for update check".to_string()));
+            return Err(AppError::Other(
+                "No hashes provided for update check".to_string(),
+            ));
         }
-        
+
         if algorithm != "sha1" && algorithm != "sha512" {
-            return Err(AppError::Other(format!("Invalid hash algorithm provided: {}", algorithm)));
+            return Err(AppError::Other(format!(
+                "Invalid hash algorithm provided: {}",
+                algorithm
+            )));
         }
-        
+
         Ok(Self {
             hashes,
             algorithm,
@@ -676,27 +814,46 @@ pub async fn check_bulk_updates(
     let client = reqwest::Client::new();
     let url = format!("{}/version_files/update", MODRINTH_API_BASE_URL); // Update check endpoint
 
-    log::info!("Checking for updates for {} mods via Modrinth bulk API", request.hashes.len());
+    log::info!(
+        "Checking for updates for {} mods via Modrinth bulk API",
+        request.hashes.len()
+    );
 
-    let response = client.post(&url)
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (support@norisk.gg)", env!("CARGO_PKG_VERSION")))
+    let response = client
+        .post(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (support@norisk.gg)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .header("Content-Type", "application/json")
         .json(&request)
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API bulk update check request failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API bulk update check request failed: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
         log::error!(
             "Modrinth API error checking for updates (Algorithm: {}) ({}): {}",
-            request.algorithm, status, error_text
+            request.algorithm,
+            status,
+            error_text
         );
         return Err(AppError::Other(format!(
             "Modrinth API returned error {} checking for updates: {}",
-            status,
-            error_text
+            status, error_text
         )));
     }
 
@@ -705,10 +862,19 @@ pub async fn check_bulk_updates(
     let updates_map = response
         .json::<HashMap<String, ModrinthVersion>>()
         .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth bulk update response: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Failed to parse Modrinth bulk update response: {}",
+                e
+            ))
+        })?;
 
     let update_count = updates_map.len();
-    log::info!("Found updates for {}/{} mods checked", update_count, request.hashes.len());
+    log::info!(
+        "Found updates for {}/{} mods checked",
+        update_count,
+        request.hashes.len()
+    );
 
     Ok(updates_map)
 }
@@ -721,47 +887,72 @@ pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProje
     }
 
     // Modrinth expects the IDs as a JSON array string in the query parameter
-    let ids_json = serde_json::to_string(&ids)
-        .map_err(|e| AppError::Json(e))?; // Use appropriate error type
+    let ids_json = serde_json::to_string(&ids).map_err(|e| AppError::Json(e))?; // Use appropriate error type
 
     let client = reqwest::Client::new();
     // Note: No trailing slash needed for the base URL when using parse_with_params
-    let base_url = format!("{}/projects", MODRINTH_API_BASE_URL); 
+    let base_url = format!("{}/projects", MODRINTH_API_BASE_URL);
 
-    let final_url = reqwest::Url::parse_with_params(&base_url, &[("ids", ids_json)])
-        .map_err(|e| AppError::Other(format!("Failed to build Modrinth bulk projects URL: {}", e)))?;
+    let final_url =
+        reqwest::Url::parse_with_params(&base_url, &[("ids", ids_json)]).map_err(|e| {
+            AppError::Other(format!("Failed to build Modrinth bulk projects URL: {}", e))
+        })?;
 
-    log::info!("Getting Modrinth project details for {} projects: {}", ids.len(), final_url);
+    log::info!(
+        "Getting Modrinth project details for {} projects: {}",
+        ids.len(),
+        final_url
+    );
 
-    let response = client.get(final_url) 
-        .header("User-Agent", format!("NoRiskClient-Launcher/{} (support@norisk.gg)", env!("CARGO_PKG_VERSION")))
+    let response = client
+        .get(final_url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (support@norisk.gg)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
         .send()
         .await
-        .map_err(|e| AppError::RequestError(format!("Modrinth API request failed for bulk projects: {}", e)))?;
+        .map_err(|e| {
+            AppError::RequestError(format!(
+                "Modrinth API request failed for bulk projects: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body".to_string());
         log::error!(
             "Modrinth API error getting bulk project details (Status: {}): {}",
-            status, error_text
+            status,
+            error_text
         );
         // We could check for 404, but the API might just return an empty list or partial results for valid IDs mixed with invalid ones.
         // It's probably best to return a general error here.
         return Err(AppError::Other(format!(
             "Modrinth API returned error {} getting bulk project details: {}",
-            status,
-            error_text
+            status, error_text
         )));
     }
 
     // The response is a JSON array of Project objects.
-    let projects = response
-        .json::<Vec<ModrinthProject>>()
-        .await
-        .map_err(|e| AppError::RequestError(format!("Failed to parse Modrinth bulk projects response: {}", e)))?; // Use appropriate error type
+    let projects = response.json::<Vec<ModrinthProject>>().await.map_err(|e| {
+        AppError::RequestError(format!(
+            "Failed to parse Modrinth bulk projects response: {}",
+            e
+        ))
+    })?; // Use appropriate error type
 
-    log::info!("Successfully retrieved details for {} projects.", projects.len());
+    log::info!(
+        "Successfully retrieved details for {} projects.",
+        projects.len()
+    );
 
     Ok(projects)
-} 
+}

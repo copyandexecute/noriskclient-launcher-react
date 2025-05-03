@@ -84,7 +84,10 @@ pub async fn browse_capes(
             uuid
         }
         None => {
-            debug!("No request UUID provided, using active account ID: {}", active_account.id);
+            debug!(
+                "No request UUID provided, using active account ID: {}",
+                active_account.id
+            );
             active_account.id.to_string()
         }
     };
@@ -192,7 +195,10 @@ pub async fn get_player_capes(
             uuid
         }
         None => {
-            debug!("No request UUID provided, using active account ID: {}", active_account.id);
+            debug!(
+                "No request UUID provided, using active account ID: {}",
+                active_account.id
+            );
             active_account.id.to_string()
         }
     };
@@ -234,7 +240,10 @@ pub async fn equip_cape(
     norisk_token: Option<String>,
     player_uuid: Option<Uuid>, // Changed to Option<Uuid>
 ) -> Result<(), CommandError> {
-    debug!("Command called: equip_cape for cape_hash: {}, player_uuid: {:?}", cape_hash, player_uuid);
+    debug!(
+        "Command called: equip_cape for cape_hash: {}, player_uuid: {:?}",
+        cape_hash, player_uuid
+    );
 
     // Get the state manager
     let state = State::get().await?;
@@ -273,7 +282,10 @@ pub async fn equip_cape(
             uuid
         }
         None => {
-            debug!("No player UUID provided, using active account ID: {}", active_account.id);
+            debug!(
+                "No player UUID provided, using active account ID: {}",
+                active_account.id
+            );
             active_account.id
         }
     };
@@ -312,7 +324,10 @@ pub async fn delete_cape(
     norisk_token: Option<String>,
     player_uuid: Option<Uuid>, // Changed to Option<Uuid>
 ) -> Result<(), CommandError> {
-    debug!("Command called: delete_cape for cape_hash: {}, player_uuid: {:?}", cape_hash, player_uuid);
+    debug!(
+        "Command called: delete_cape for cape_hash: {}, player_uuid: {:?}",
+        cape_hash, player_uuid
+    );
 
     // Get the state manager
     let state = State::get().await?;
@@ -351,7 +366,10 @@ pub async fn delete_cape(
             uuid
         }
         None => {
-            debug!("No player UUID provided, using active account ID: {}", active_account.id);
+            debug!(
+                "No player UUID provided, using active account ID: {}",
+                active_account.id
+            );
             active_account.id
         }
     };
@@ -390,7 +408,10 @@ pub async fn upload_cape(
     norisk_token: Option<String>,
     player_uuid: Option<Uuid>, // Changed to Option<Uuid>
 ) -> Result<String, CommandError> {
-    debug!("Command called: upload_cape with image_path: {}, player_uuid: {:?}", image_path, player_uuid);
+    debug!(
+        "Command called: upload_cape with image_path: {}, player_uuid: {:?}",
+        image_path, player_uuid
+    );
 
     // Get the state manager
     let state = State::get().await?;
@@ -429,7 +450,10 @@ pub async fn upload_cape(
             uuid
         }
         None => {
-            debug!("No player UUID provided, using active account ID: {}", active_account.id);
+            debug!(
+                "No player UUID provided, using active account ID: {}",
+                active_account.id
+            );
             active_account.id
         }
     };
@@ -469,7 +493,10 @@ pub async fn unequip_cape(
     norisk_token: Option<String>,
     player_uuid: Option<Uuid>, // Changed to Option<Uuid>
 ) -> Result<(), CommandError> {
-    debug!("Command called: unequip_cape for player_uuid: {:?}", player_uuid);
+    debug!(
+        "Command called: unequip_cape for player_uuid: {:?}",
+        player_uuid
+    );
 
     // Get the state manager
     let state = State::get().await?;
@@ -508,7 +535,10 @@ pub async fn unequip_cape(
             uuid
         }
         None => {
-            debug!("No player UUID provided, using active account ID: {}", active_account.id);
+            debug!(
+                "No player UUID provided, using active account ID: {}",
+                active_account.id
+            );
             active_account.id
         }
     };

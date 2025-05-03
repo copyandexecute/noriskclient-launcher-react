@@ -1,37 +1,47 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
-use tokio::sync::Mutex;
-use serde_json;
-use std::collections::{HashMap, HashSet};
-use log::{info, warn, error};
-use uuid::Uuid;
 use crate::config::LAUNCHER_DIRECTORY;
-use crate::error::Result;
 use crate::error::AppError;
+use crate::error::Result;
 use crate::integrations::modrinth::{self, ModrinthDependencyType, ModrinthVersion};
-use tokio::fs;
-use futures::future::BoxFuture;
-use tauri_plugin_dialog::FilePath;
 use crate::utils::hash_utils;
 use crate::utils::path_utils;
+use chrono::{DateTime, Utc};
+use futures::future::BoxFuture;
+use log::{error, info, warn};
+use serde::{Deserialize, Serialize};
+use serde_json;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::sync::Arc;
+use tauri_plugin_dialog::FilePath;
+use tokio::fs;
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum ModSource {
-    Local { file_name: String },
-    Url { url: String, file_name: Option<String> },
-    Maven { coordinates: String, repository_url: Option<String> }, // e.g., "net.fabricmc:fabric-api:0.91.0+1.20.1"
-    Embedded { name: String },      // e.g., "Fabric API" provided by the loader itself
-    Modrinth { 
-        project_id: String,         // Modrinth Project ID (e.g., "AANobbMI")
-        version_id: String,         // Modrinth Version ID (e.g., "tFw0iWAk")
-        file_name: String,          // The actual filename (e.g., "sodium-fabric-mc1.20.1-0.5.3.jar")
-        download_url: String,       // The direct download URL used when adding
-        file_hash_sha1: Option<String> // Optional SHA1 hash for verification
-    } // New variant for Modrinth mods
+    Local {
+        file_name: String,
+    },
+    Url {
+        url: String,
+        file_name: Option<String>,
+    },
+    Maven {
+        coordinates: String,
+        repository_url: Option<String>,
+    }, // e.g., "net.fabricmc:fabric-api:0.91.0+1.20.1"
+    Embedded {
+        name: String,
+    }, // e.g., "Fabric API" provided by the loader itself
+    Modrinth {
+        project_id: String,             // Modrinth Project ID (e.g., "AANobbMI")
+        version_id: String,             // Modrinth Version ID (e.g., "tFw0iWAk")
+        file_name: String, // The actual filename (e.g., "sodium-fabric-mc1.20.1-0.5.3.jar")
+        download_url: String, // The direct download URL used when adding
+        file_hash_sha1: Option<String>, // Optional SHA1 hash for verification
+    }, // New variant for Modrinth mods
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -52,20 +62,28 @@ pub struct Mod {
 pub struct NoriskModIdentifier {
     pub pack_id: String,
     pub mod_id: String,
-    pub game_version: String, 
-    pub loader: ModLoader,    
+    pub game_version: String,
+    pub loader: ModLoader,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum ImageSource {
-    Url { url: String },
-    RelativePath { path: String }, // Relative to launcher_directory
-    RelativeProfile { path: String }, // Relative to profile directory
-    AbsolutePath { path: String },
-    Base64 { 
-        data: String, 
-        mime_type: Option<String> // Optional MIME type, e.g., "image/png"
+    Url {
+        url: String,
+    },
+    RelativePath {
+        path: String,
+    }, // Relative to launcher_directory
+    RelativeProfile {
+        path: String,
+    }, // Relative to profile directory
+    AbsolutePath {
+        path: String,
+    },
+    Base64 {
+        data: String,
+        mime_type: Option<String>, // Optional MIME type, e.g., "image/png"
     },
 }
 
@@ -77,21 +95,21 @@ pub struct ProfileBanner {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Profile {
     #[serde(default = "Uuid::new_v4")] // Use new_v4 for a default ID
-    pub id: Uuid,                    // Eindeutige ID
-    pub name: String,                // Anzeigename
-    pub path: String,                // Dateipfad
-    pub game_version: String,        // Minecraft Version
-    pub loader: ModLoader,           // Modloader Typ
+    pub id: Uuid, // Eindeutige ID
+    pub name: String,                   // Anzeigename
+    pub path: String,                   // Dateipfad
+    pub game_version: String,           // Minecraft Version
+    pub loader: ModLoader,              // Modloader Typ
     pub loader_version: Option<String>, // Modloader Version
     #[serde(default)]
-    pub created: DateTime<Utc>,      // Erstellungsdatum
+    pub created: DateTime<Utc>, // Erstellungsdatum
     pub last_played: Option<DateTime<Utc>>, // Letzter Start
     #[serde(default)]
-    pub settings: ProfileSettings,    // Profil Einstellungen
+    pub settings: ProfileSettings, // Profil Einstellungen
     #[serde(default)]
-    pub state: ProfileState,         // Aktueller Status
+    pub state: ProfileState, // Aktueller Status
     #[serde(default)] // Add default for backward compatibility when loading old profiles
-    pub mods: Vec<Mod>,              // List of mods for this profile
+    pub mods: Vec<Mod>, // List of mods for this profile
     #[serde(default)] // Add default for backward compatibility
     pub selected_norisk_pack_id: Option<String>, // ID of the selected Norisk Pack (e.g., "norisk-prod")
     #[serde(default)] // Keep track of disabled mods per pack/version/loader context
@@ -104,7 +122,7 @@ pub struct Profile {
     pub group: Option<String>,
     /// True if this is a standard profile template, false if it's a user profile.
     #[serde(default)] // Defaults to false for existing user profiles
-    pub is_standard_version: bool, 
+    pub is_standard_version: bool,
     pub description: Option<String>,
     #[serde(default)]
     pub banner: Option<ProfileBanner>, // Banner/background image for the profile
@@ -154,22 +172,22 @@ impl ModLoader {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProfileSettings {
-    pub java_path: Option<String>,           // Java Pfad
+    pub java_path: Option<String>, // Java Pfad
     #[serde(default)]
-    pub use_custom_java_path: bool,          // Ob der benutzerdefinierte Java-Pfad verwendet werden soll
-    pub memory: MemorySettings,              // Speicher Einstellungen
-    pub resolution: Option<WindowSize>,      // Auflösung
-    pub fullscreen: bool,                    // Vollbild
+    pub use_custom_java_path: bool, // Ob der benutzerdefinierte Java-Pfad verwendet werden soll
+    pub memory: MemorySettings,    // Speicher Einstellungen
+    pub resolution: Option<WindowSize>, // Auflösung
+    pub fullscreen: bool,          // Vollbild
     #[serde(default)]
-    pub extra_game_args: Vec<String>,             // Zusätzliche Argumente für das Spiel
+    pub extra_game_args: Vec<String>, // Zusätzliche Argumente für das Spiel
     #[serde(default)] // Für Abwärtskompatibilität
-    pub custom_jvm_args: Option<String>,     // Zusätzliche JVM-Argumente als String
+    pub custom_jvm_args: Option<String>, // Zusätzliche JVM-Argumente als String
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MemorySettings {
-    pub min: u32,    // in MB
-    pub max: u32,    // in MB
+    pub min: u32, // in MB
+    pub max: u32, // in MB
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -181,11 +199,11 @@ pub struct WindowSize {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ProfileState {
-    NotInstalled,    // Profil existiert nur in der DB
-    Installing,      // Wird installiert
-    Installed,       // Installiert und bereit
-    Running,         // Läuft gerade
-    Error,           // Fehler aufgetreten
+    NotInstalled, // Profil existiert nur in der DB
+    Installing,   // Wird installiert
+    Installed,    // Installiert und bereit
+    Running,      // Läuft gerade
+    Error,        // Fehler aufgetreten
 }
 
 impl Default for ProfileState {
@@ -198,9 +216,9 @@ impl Default for ProfileState {
 
 #[derive(Serialize, Clone, Debug)]
 pub struct CustomModInfo {
-    pub filename: String,    // Base filename (e.g., OptiFine.jar)
-    pub is_enabled: bool,    // True if the file doesn't end with .disabled
-    pub path: PathBuf,       // Full path to the file in custom_mods directory
+    pub filename: String, // Base filename (e.g., OptiFine.jar)
+    pub is_enabled: bool, // True if the file doesn't end with .disabled
+    pub path: PathBuf,    // Full path to the file in custom_mods directory
 }
 
 // Profile Manager
@@ -239,13 +257,13 @@ impl ProfileManager {
             let profiles_vec: Vec<&Profile> = profiles_guard.values().collect();
             serde_json::to_string_pretty(&profiles_vec)?
         };
-        
+
         if let Some(parent_dir) = self.profiles_path.parent() {
-             if !parent_dir.exists() {
+            if !parent_dir.exists() {
                 fs::create_dir_all(parent_dir).await?;
             }
         }
-        
+
         fs::write(&self.profiles_path, profiles_data).await?;
         Ok(())
     }
@@ -253,7 +271,7 @@ impl ProfileManager {
     // CRUD Operationen
     pub async fn create_profile(&self, profile: Profile) -> Result<Uuid> {
         info!("Creating profile with path: {:?}", profile.path);
-        
+
         let profiles_dir = self.profiles_path.parent().unwrap_or(&self.profiles_path);
         info!("Ensuring profiles directory exists: {:?}", profiles_dir);
         fs::create_dir_all(profiles_dir).await?;
@@ -274,7 +292,8 @@ impl ProfileManager {
 
     pub async fn get_profile(&self, id: Uuid) -> Result<Profile> {
         let profiles = self.profiles.read().await;
-        profiles.get(&id)
+        profiles
+            .get(&id)
             .cloned()
             .ok_or_else(|| crate::error::AppError::ProfileNotFound(id))
     }
@@ -291,26 +310,32 @@ impl ProfileManager {
     pub async fn delete_profile(&self, id: Uuid) -> Result<()> {
         let profile_to_delete: Option<Profile>;
         let profile_dir_path: Option<PathBuf>;
-        
+
         // Scope to release the read lock quickly
         {
             let profiles = self.profiles.read().await;
             profile_to_delete = profiles.get(&id).cloned(); // Clone the profile data if it exists
         }
-        
+
         // If the profile exists, determine its path using the helper function
         if let Some(profile) = &profile_to_delete {
             match self.calculate_instance_path_for_profile(&profile) {
                 Ok(path) => {
                     profile_dir_path = Some(path.clone());
-                    info!("Profile '{}' marked for deletion. Directory path: {:?}", profile.name, path);
-                },
+                    info!(
+                        "Profile '{}' marked for deletion. Directory path: {:?}",
+                        profile.name, path
+                    );
+                }
                 Err(e) => {
                     // Should not happen if profile object is valid, but handle defensively
                     error!("Failed to calculate instance path for profile '{}': {}. Aborting directory deletion.", profile.name, e);
                     profile_dir_path = None;
                     // Return an error, as we can't be sure about the path
-                    return Err(AppError::Other(format!("Could not calculate profile path: {}", e)));
+                    return Err(AppError::Other(format!(
+                        "Could not calculate profile path: {}",
+                        e
+                    )));
                 }
             }
         } else {
@@ -319,7 +344,7 @@ impl ProfileManager {
             info!("Profile with ID {} not found for deletion.", id);
             return Err(AppError::ProfileNotFound(id)); // Return error if profile doesn't exist
         }
-        
+
         // Attempt to delete the directory (outside the profile map lock)
         if let Some(path) = profile_dir_path {
             if path.exists() {
@@ -330,11 +355,14 @@ impl ProfileManager {
                         // Log the error but continue to remove from config
                         error!("Failed to delete profile directory {:?}: {}. Proceeding to remove profile entry.", path, e);
                         // Depending on requirements, you might want to return an error here instead:
-                        return Err(AppError::Io(e)); 
+                        return Err(AppError::Io(e));
                     }
                 }
             } else {
-                info!("Profile directory {:?} does not exist. Skipping directory deletion.", path);
+                info!(
+                    "Profile directory {:?} does not exist. Skipping directory deletion.",
+                    path
+                );
             }
         }
 
@@ -343,36 +371,57 @@ impl ProfileManager {
             let mut profiles = self.profiles.write().await;
             if profiles.remove(&id).is_none() {
                 // This case should ideally not happen if we found it earlier, but log just in case
-                warn!("Profile {} was not found in the map during final removal step.", id);
+                warn!(
+                    "Profile {} was not found in the map during final removal step.",
+                    id
+                );
             }
         }
-        
+
         // Save the updated profiles list
         self.save_profiles().await?;
-        info!("Successfully removed profile entry {} from configuration.", id);
-        
+        info!(
+            "Successfully removed profile entry {} from configuration.",
+            id
+        );
+
         Ok(())
     }
 
     // Add a new mod to a specific profile
     pub async fn add_mod(&self, profile_id: Uuid, mod_info: Mod) -> Result<()> {
-        info!("Adding mod '{}' (Source: {:?}) to profile {}", 
-              mod_info.display_name.as_deref().unwrap_or(&mod_info.id.to_string()), 
-              mod_info.source, 
-              profile_id);
+        info!(
+            "Adding mod '{}' (Source: {:?}) to profile {}",
+            mod_info
+                .display_name
+                .as_deref()
+                .unwrap_or(&mod_info.id.to_string()),
+            mod_info.source,
+            profile_id
+        );
 
         let mut profiles = self.profiles.write().await;
-        
+
         if let Some(profile) = profiles.get_mut(&profile_id) {
-            if !profile.mods.iter().any(|existing_mod| existing_mod.source == mod_info.source) {
+            if !profile
+                .mods
+                .iter()
+                .any(|existing_mod| existing_mod.source == mod_info.source)
+            {
                 profile.mods.push(mod_info);
                 drop(profiles);
-                self.save_profiles().await?; 
+                self.save_profiles().await?;
                 info!("Successfully added mod to profile {}", profile_id);
                 Ok(())
             } else {
-                info!("Mod with the same source already exists in profile {}", profile_id);
-                Err(AppError::Other(format!("Mod already exists in profile {}", profile_id)))
+                info!(
+                    "Mod with the same source already exists in profile {}",
+                    profile_id
+                );
+                Err(AppError::Other(format!(
+                    "Mod already exists in profile {}",
+                    profile_id
+                )))
             }
         } else {
             Err(AppError::ProfileNotFound(profile_id))
@@ -393,25 +442,28 @@ impl ProfileManager {
         mod_name: Option<String>,
         version_number: Option<String>,
         // Loaders and game versions associated with *this specific version* being added
-        loaders: Option<Vec<String>>, 
+        loaders: Option<Vec<String>>,
         game_versions: Option<Vec<String>>,
         // Flag to control dependency fetching
         add_dependencies: bool,
         // Internal parameter to prevent infinite loops
-        visited_mods: HashSet<(String, String)>, 
-    ) -> BoxFuture<'a, Result<()>> { // Return type is BoxFuture
+        visited_mods: HashSet<(String, String)>,
+    ) -> BoxFuture<'a, Result<()>> {
+        // Return type is BoxFuture
         Box::pin(async move {
             let display_name_log = mod_name.as_deref().unwrap_or(&project_id);
             let version_log = version_number.as_deref().unwrap_or(&version_id);
-            info!("Processing Modrinth mod {} (Version {}) for profile {}. Add dependencies: {}", 
-                   display_name_log, 
-                   version_log,
-                   profile_id,
-                   add_dependencies);
-            
+            info!(
+                "Processing Modrinth mod {} (Version {}) for profile {}. Add dependencies: {}",
+                display_name_log, version_log, profile_id, add_dependencies
+            );
+
             let mod_key = (project_id.clone(), version_id.clone());
             if visited_mods.contains(&mod_key) {
-                info!("Skipping already processed mod/dependency: {} ({})", display_name_log, version_log);
+                info!(
+                    "Skipping already processed mod/dependency: {} ({})",
+                    display_name_log, version_log
+                );
                 return Ok(());
             }
             let mut visited_mods_clone = visited_mods.clone();
@@ -421,7 +473,7 @@ impl ProfileManager {
                 project_id: project_id.clone(),
                 version_id: version_id.clone(),
                 file_name: file_name.clone(),
-                download_url: download_url.clone(), 
+                download_url: download_url.clone(),
                 file_hash_sha1: file_hash_sha1.clone(),
             };
 
@@ -430,8 +482,11 @@ impl ProfileManager {
                 let mut profiles = self.profiles.write().await;
                 if let Some(profile) = profiles.get_mut(&profile_id) {
                     if !profile.mods.iter().any(|m| m.source == source) {
-                        info!("Adding mod {} ({}) to profile {}", display_name_log, version_log, profile_id);
-                        
+                        info!(
+                            "Adding mod {} ({}) to profile {}",
+                            display_name_log, version_log, profile_id
+                        );
+
                         let new_mod = Mod {
                             id: Uuid::new_v4(),
                             source: source.clone(),
@@ -440,42 +495,60 @@ impl ProfileManager {
                             version: version_number.clone(),
                             game_versions: game_versions.clone(),
                             file_name_override: None,
-                            associated_loader: loaders.clone().and_then(|l| l.first().and_then(|s| ModLoader::from_str(s).ok())),
+                            associated_loader: loaders
+                                .clone()
+                                .and_then(|l| l.first().and_then(|s| ModLoader::from_str(s).ok())),
                         };
                         profile.mods.push(new_mod);
                         needs_save = true;
                     } else {
-                        info!("Mod {} ({}) already exists in profile {}. Skipping addition.", display_name_log, version_log, profile_id);
+                        info!(
+                            "Mod {} ({}) already exists in profile {}. Skipping addition.",
+                            display_name_log, version_log, profile_id
+                        );
                     }
                 } else {
-                     return Err(AppError::ProfileNotFound(profile_id));
+                    return Err(AppError::ProfileNotFound(profile_id));
                 }
             }
-           
+
             if needs_save {
-                 self.save_profiles().await?; 
-                 info!("Profile saved after adding mod {} ({})", display_name_log, version_log);
+                self.save_profiles().await?;
+                info!(
+                    "Profile saved after adding mod {} ({})",
+                    display_name_log, version_log
+                );
             }
 
             if add_dependencies {
-                info!("Fetching dependencies for {} ({})", display_name_log, version_log);
-                
-                let profile_details = self.get_profile(profile_id).await?; 
+                info!(
+                    "Fetching dependencies for {} ({})",
+                    display_name_log, version_log
+                );
+
+                let profile_details = self.get_profile(profile_id).await?;
                 let profile_loader_str = profile_details.loader.as_str().to_string();
                 let profile_game_version = profile_details.game_version.clone();
 
                 match modrinth::get_mod_versions(project_id.clone(), None, None).await {
                     Ok(versions) => {
-                        if let Some(version_info) = versions.into_iter().find(|v| v.id == version_id) {
-                            info!("Found {} dependencies for {} ({})", version_info.dependencies.len(), display_name_log, version_log);
-                            
+                        if let Some(version_info) =
+                            versions.into_iter().find(|v| v.id == version_id)
+                        {
+                            info!(
+                                "Found {} dependencies for {} ({})",
+                                version_info.dependencies.len(),
+                                display_name_log,
+                                version_log
+                            );
+
                             for dependency in version_info.dependencies {
                                 if dependency.dependency_type == ModrinthDependencyType::Required {
                                     info!("Processing required dependency: Project={:?}, Version={:?}", dependency.project_id, dependency.version_id);
 
                                     if let Some(dep_project_id) = dependency.project_id {
-                                         info!("Attempting to find compatible version for dependency project '{}'", dep_project_id);
-                                        
+                                        info!("Attempting to find compatible version for dependency project '{}'", dep_project_id);
+
                                         let target_version_id = dependency.version_id;
 
                                         // Fetch dependency versions compatible with the profile's loader, but *without* filtering by game version yet.
@@ -555,15 +628,22 @@ impl ProfileManager {
                                              },
                                              Err(e) => error!("Failed to fetch versions for dependency project '{}': {}", dep_project_id, e),
                                          }
-
                                     } else {
-                                         if let Some(dep_version_id_only) = dependency.version_id {
-                                             warn!("Dependency has only version_id ('{}'). Attempting to fetch details directly.", dep_version_id_only);
-                                             match modrinth::get_version_details(dep_version_id_only.clone()).await {
-                                                 Ok(dep_version_details) => {
-                                                     info!("Successfully fetched details for version '{}': Project='{}'", dep_version_id_only, dep_version_details.project_id);
-                                                     if let Some(primary_file) = dep_version_details.files.iter().find(|f| f.primary) {
-                                                         match self.add_modrinth_mod_internal(
+                                        if let Some(dep_version_id_only) = dependency.version_id {
+                                            warn!("Dependency has only version_id ('{}'). Attempting to fetch details directly.", dep_version_id_only);
+                                            match modrinth::get_version_details(
+                                                dep_version_id_only.clone(),
+                                            )
+                                            .await
+                                            {
+                                                Ok(dep_version_details) => {
+                                                    info!("Successfully fetched details for version '{}': Project='{}'", dep_version_id_only, dep_version_details.project_id);
+                                                    if let Some(primary_file) = dep_version_details
+                                                        .files
+                                                        .iter()
+                                                        .find(|f| f.primary)
+                                                    {
+                                                        match self.add_modrinth_mod_internal(
                                                              profile_id,
                                                              dep_version_details.project_id.clone(),
                                                              dep_version_details.id.clone(),
@@ -580,17 +660,17 @@ impl ProfileManager {
                                                              Ok(_) => info!("Successfully processed dependency by version_id '{}'", dep_version_id_only),
                                                              Err(e) => error!("Failed processing dependency by version_id '{}': {}", dep_version_id_only, e),
                                                          }
-                                                     } else {
-                                                         error!("Could not find primary file for dependency version fetched by ID '{}'", dep_version_id_only);
-                                                     }
-                                                 },
-                                                 Err(e) => {
-                                                     error!("Failed to fetch details for dependency version_id '{}': {}. Cannot add dependency.", dep_version_id_only, e);
-                                                 }
-                                             }
-                                         } else {
-                                             error!("Required dependency is missing project_id and version_id. Cannot resolve. File: {:?}", dependency.file_name);
-                                         }
+                                                    } else {
+                                                        error!("Could not find primary file for dependency version fetched by ID '{}'", dep_version_id_only);
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    error!("Failed to fetch details for dependency version_id '{}': {}. Cannot add dependency.", dep_version_id_only, e);
+                                                }
+                                            }
+                                        } else {
+                                            error!("Required dependency is missing project_id and version_id. Cannot resolve. File: {:?}", dependency.file_name);
+                                        }
                                     }
                                 } else {
                                     // Optional/Incompatible/Embedded dependencies are ignored for now
@@ -598,15 +678,21 @@ impl ProfileManager {
                                 }
                             }
                         } else {
-                             warn!("Could not find details for version ID '{}' of project '{}' on Modrinth after fetching versions.", version_id, project_id);
+                            warn!("Could not find details for version ID '{}' of project '{}' on Modrinth after fetching versions.", version_id, project_id);
                         }
-                    },
+                    }
                     Err(e) => {
-                        error!("Failed to fetch versions for project '{}' to resolve dependencies: {}", project_id, e);
+                        error!(
+                            "Failed to fetch versions for project '{}' to resolve dependencies: {}",
+                            project_id, e
+                        );
                     }
                 }
             } else {
-                 info!("Skipping dependency check for {} ({}) as requested.", display_name_log, version_log);
+                info!(
+                    "Skipping dependency check for {} ({}) as requested.",
+                    display_name_log, version_log
+                );
             }
 
             Ok(())
@@ -625,7 +711,7 @@ impl ProfileManager {
         // Optional details for better Mod struct population
         mod_name: Option<String>,
         version_number: Option<String>,
-        loaders: Option<Vec<String>>, 
+        loaders: Option<Vec<String>>,
         game_versions: Option<Vec<String>>,
         add_dependencies: bool, // Allow caller to decide
     ) -> Result<()> {
@@ -642,12 +728,21 @@ impl ProfileManager {
             game_versions,
             add_dependencies,
             HashSet::new(),
-        ).await
+        )
+        .await
     }
 
     // Set the enabled status of a specific mod within a profile
-    pub async fn set_mod_enabled(&self, profile_id: Uuid, mod_id: Uuid, enabled: bool) -> Result<()> {
-        info!("Setting mod {} enabled status to {} for profile {}", mod_id, enabled, profile_id);
+    pub async fn set_mod_enabled(
+        &self,
+        profile_id: Uuid,
+        mod_id: Uuid,
+        enabled: bool,
+    ) -> Result<()> {
+        info!(
+            "Setting mod {} enabled status to {} for profile {}",
+            mod_id, enabled, profile_id
+        );
 
         let mut profiles = self.profiles.write().await;
 
@@ -657,13 +752,22 @@ impl ProfileManager {
                     mod_to_update.enabled = enabled;
                     drop(profiles);
                     self.save_profiles().await?;
-                    info!("Successfully updated mod {} enabled status in profile {}", mod_id, profile_id);
+                    info!(
+                        "Successfully updated mod {} enabled status in profile {}",
+                        mod_id, profile_id
+                    );
                 } else {
-                    info!("Mod {} enabled status already {}. No change needed.", mod_id, enabled);
+                    info!(
+                        "Mod {} enabled status already {}. No change needed.",
+                        mod_id, enabled
+                    );
                 }
                 Ok(())
             } else {
-                Err(AppError::Other(format!("Mod with ID {} not found in profile {}", mod_id, profile_id)))
+                Err(AppError::Other(format!(
+                    "Mod with ID {} not found in profile {}",
+                    mod_id, profile_id
+                )))
             }
         } else {
             Err(AppError::ProfileNotFound(profile_id))
@@ -684,10 +788,16 @@ impl ProfileManager {
             if final_len < initial_len {
                 drop(profiles);
                 self.save_profiles().await?;
-                info!("Successfully deleted mod {} from profile {}", mod_id, profile_id);
+                info!(
+                    "Successfully deleted mod {} from profile {}",
+                    mod_id, profile_id
+                );
                 Ok(())
             } else {
-                Err(AppError::Other(format!("Mod with ID {} not found in profile {}", mod_id, profile_id)))
+                Err(AppError::Other(format!(
+                    "Mod with ID {} not found in profile {}",
+                    mod_id, profile_id
+                )))
             }
         } else {
             Err(AppError::ProfileNotFound(profile_id))
@@ -758,7 +868,8 @@ impl ProfileManager {
     pub async fn search_profiles(&self, query: &str) -> Result<Vec<Profile>> {
         let query = query.to_lowercase();
         let profiles = self.profiles.read().await;
-        Ok(profiles.values()
+        Ok(profiles
+            .values()
             .filter(|p| p.name.to_lowercase().contains(&query))
             .cloned()
             .collect())
@@ -780,14 +891,21 @@ impl ProfileManager {
 
         let mut profiles = self.profiles.write().await;
 
-        let profile = profiles.get_mut(&profile_id)
-            .ok_or_else(|| {
-                error!("Profile {} not found during mod update attempt.", profile_id);
-                AppError::ProfileNotFound(profile_id)
-            })?;
+        let profile = profiles.get_mut(&profile_id).ok_or_else(|| {
+            error!(
+                "Profile {} not found during mod update attempt.",
+                profile_id
+            );
+            AppError::ProfileNotFound(profile_id)
+        })?;
 
-        info!("Checking required dependencies for new version {}...", new_version_details.id);
-        let existing_project_ids: HashSet<String> = profile.mods.iter()
+        info!(
+            "Checking required dependencies for new version {}...",
+            new_version_details.id
+        );
+        let existing_project_ids: HashSet<String> = profile
+            .mods
+            .iter()
             .filter_map(|m| match &m.source {
                 ModSource::Modrinth { project_id, .. } => Some(project_id.clone()),
                 _ => None,
@@ -797,7 +915,7 @@ impl ProfileManager {
         for dependency in &new_version_details.dependencies {
             if dependency.dependency_type == ModrinthDependencyType::Required {
                 if let Some(dep_project_id) = &dependency.project_id {
-                     if !existing_project_ids.contains(dep_project_id) {
+                    if !existing_project_ids.contains(dep_project_id) {
                         error!(
                             "Update check failed for mod {}: Required dependency project '{}' is missing in profile {}.",
                             mod_id, dep_project_id, profile_id
@@ -808,10 +926,16 @@ impl ProfileManager {
                             missing_project_id: dep_project_id.clone(),
                         });
                     } else {
-                         info!("Required dependency project '{}' found in profile.", dep_project_id);
+                        info!(
+                            "Required dependency project '{}' found in profile.",
+                            dep_project_id
+                        );
                     }
                 } else {
-                    warn!("Required dependency found without a project_id in version {}: {:?}", new_version_details.id, dependency);
+                    warn!(
+                        "Required dependency found without a project_id in version {}: {:?}",
+                        new_version_details.id, dependency
+                    );
                 }
             }
         }
@@ -820,16 +944,21 @@ impl ProfileManager {
         let mod_to_update_index = profile.mods.iter().position(|m| m.id == mod_id);
 
         if let Some(index) = mod_to_update_index {
-             let mod_to_update = &mut profile.mods[index];
+            let mod_to_update = &mut profile.mods[index];
 
-            if let ModSource::Modrinth { project_id: old_project_id, .. } = &mod_to_update.source {
+            if let ModSource::Modrinth {
+                project_id: old_project_id,
+                ..
+            } = &mod_to_update.source
+            {
                 if old_project_id != &new_version_details.project_id {
-                     error!(
+                    error!(
                         "Project ID mismatch when updating mod {}! Expected '{}', got '{}'. Aborting update.",
                          mod_id, old_project_id, new_version_details.project_id
                     );
                     return Err(AppError::Other(format!(
-                        "Project ID mismatch for mod {}", mod_id
+                        "Project ID mismatch for mod {}",
+                        mod_id
                     )));
                 }
 
@@ -852,8 +981,12 @@ impl ProfileManager {
                         };
 
                         mod_to_update.version = Some(new_version_details.version_number.clone());
-                        mod_to_update.game_versions = Some(new_version_details.game_versions.clone());
-                        mod_to_update.associated_loader = new_version_details.loaders.first().and_then(|s| ModLoader::from_str(s).ok());
+                        mod_to_update.game_versions =
+                            Some(new_version_details.game_versions.clone());
+                        mod_to_update.associated_loader = new_version_details
+                            .loaders
+                            .first()
+                            .and_then(|s| ModLoader::from_str(s).ok());
 
                         info!("Mod instance {} updated successfully in memory.", mod_id);
                     }
@@ -862,29 +995,35 @@ impl ProfileManager {
                             "No primary file found for Modrinth version {} (ID: {})",
                             new_version_details.name, new_version_details.id
                         );
-                         return Err(AppError::ModrinthPrimaryFileNotFound { version_id: new_version_details.id.clone() });
+                        return Err(AppError::ModrinthPrimaryFileNotFound {
+                            version_id: new_version_details.id.clone(),
+                        });
                     }
                 }
             } else {
-                 error!(
+                error!(
                     "Mod instance {} in profile {} is not a Modrinth mod.",
                     mod_id, profile_id
                 );
                 return Err(AppError::Other(format!(
-                    "Mod {} is not a Modrinth mod", mod_id
+                    "Mod {} is not a Modrinth mod",
+                    mod_id
                 )));
             }
         } else {
-             error!(
+            error!(
                 "Mod instance with ID {} not found in profile {} during update.",
                 mod_id, profile_id
             );
-             return Err(AppError::ModNotFoundInProfile {profile_id, mod_id });
+            return Err(AppError::ModNotFoundInProfile { profile_id, mod_id });
         }
 
         drop(profiles);
         self.save_profiles().await?;
-        info!("Profile {} saved after updating mod {}.", profile_id, mod_id);
+        info!(
+            "Profile {} saved after updating mod {}.",
+            profile_id, mod_id
+        );
 
         Ok(())
     }
@@ -895,22 +1034,36 @@ impl ProfileManager {
         let profiles_map = self.profiles.read().await;
         match profiles_map.get(&profile_id) {
             Some(profile) => {
-                log::trace!("Found instance path {:?} for profile {}", &profile.path, profile_id);
-                 // Reuse the logic by calling the new method
+                log::trace!(
+                    "Found instance path {:?} for profile {}",
+                    &profile.path,
+                    profile_id
+                );
+                // Reuse the logic by calling the new method
                 self.calculate_instance_path_for_profile(profile)
             }
             None => {
-                log::info!("Profile {} not found, checking standard versions", profile_id);
+                log::info!(
+                    "Profile {} not found, checking standard versions",
+                    profile_id
+                );
                 // Get state to access norisk_version_manager
                 let state = crate::state::state_manager::State::get().await?;
-                
+
                 // Check if it's a standard version ID
-                if let Some(standard_profile) = state.norisk_version_manager.get_profile_by_id(profile_id).await {
-                    log::info!("Found standard profile '{}', converting to temporary profile", standard_profile.name);
+                if let Some(standard_profile) = state
+                    .norisk_version_manager
+                    .get_profile_by_id(profile_id)
+                    .await
+                {
+                    log::info!(
+                        "Found standard profile '{}', converting to temporary profile",
+                        standard_profile.name
+                    );
                     // Convert to a temporary profile
                     return self.calculate_instance_path_for_profile(&standard_profile);
                 }
-                
+
                 log::warn!("Profile {} not found when getting instance path (not in regular profiles or standard versions).", profile_id);
                 Err(AppError::ProfileNotFound(profile_id))
             }
@@ -920,20 +1073,31 @@ impl ProfileManager {
     /// Calculates the instance path for a given Profile object based on its properties.
     /// This method does NOT check if the profile exists in the manager.
     pub fn calculate_instance_path_for_profile(&self, profile: &Profile) -> Result<PathBuf> {
-         log::trace!("Calculating instance path for profile '{}' (Version: {})", profile.name, profile.game_version);
-         // TODO: The path structure might need refinement later (e.g., using profile.path or id)
-         // Currently matches the logic in get_profile_instance_path
-         Ok(default_profile_path().join(&profile.path))
+        log::trace!(
+            "Calculating instance path for profile '{}' (Version: {})",
+            profile.name,
+            profile.game_version
+        );
+        // TODO: The path structure might need refinement later (e.g., using profile.path or id)
+        // Currently matches the logic in get_profile_instance_path
+        Ok(default_profile_path().join(&profile.path))
     }
 
     /// Returns the path to the custom_mods directory for a given profile ID.
     /// The directory is located next to the .minecraft directory within the instance folder.
     pub async fn get_profile_custom_mods_path(&self, profile_id: Uuid) -> Result<PathBuf> {
-        log::debug!("Attempting to get custom_mods path for profile {}", profile_id);
+        log::debug!(
+            "Attempting to get custom_mods path for profile {}",
+            profile_id
+        );
         let minecraft_dir_path = self.get_profile_instance_path(profile_id).await?;
 
         let custom_mods_dir = minecraft_dir_path.join("custom_mods");
-        log::trace!("Determined custom_mods path {:?} for profile {}", custom_mods_dir, profile_id);
+        log::trace!(
+            "Determined custom_mods path {:?} for profile {}",
+            custom_mods_dir,
+            profile_id
+        );
         Ok(custom_mods_dir)
     }
 
@@ -944,21 +1108,37 @@ impl ProfileManager {
         let mut custom_mods = Vec::new();
 
         if !custom_mods_path.exists() {
-            log::debug!("Custom mods directory {:?} does not exist for profile {}. Returning empty list.", custom_mods_path, profile.id);
+            log::debug!(
+                "Custom mods directory {:?} does not exist for profile {}. Returning empty list.",
+                custom_mods_path,
+                profile.id
+            );
             // Attempt to create it for next time?
             if let Err(e) = tokio::fs::create_dir_all(&custom_mods_path).await {
-                 log::warn!("Failed to create custom_mods directory {:?}: {}", custom_mods_path, e);
+                log::warn!(
+                    "Failed to create custom_mods directory {:?}: {}",
+                    custom_mods_path,
+                    e
+                );
             }
             return Ok(custom_mods); // Return empty list if dir doesn't exist initially
         }
 
         let mut dir_entries = tokio::fs::read_dir(&custom_mods_path).await.map_err(|e| {
-            log::error!("Failed to read custom_mods directory {:?}: {}", custom_mods_path, e);
+            log::error!(
+                "Failed to read custom_mods directory {:?}: {}",
+                custom_mods_path,
+                e
+            );
             AppError::Io(e)
         })?;
 
         while let Some(entry_result) = dir_entries.next_entry().await.map_err(|e| {
-            log::error!("Failed to read entry in custom_mods directory {:?}: {}", custom_mods_path, e);
+            log::error!(
+                "Failed to read entry in custom_mods directory {:?}: {}",
+                custom_mods_path,
+                e
+            );
             AppError::Io(e)
         })? {
             let path = entry_result.path();
@@ -973,7 +1153,7 @@ impl ProfileManager {
                     let is_enabled = !filename_str.ends_with(".disabled");
                     let base_filename_opt = if is_enabled {
                         if filename_str.ends_with(".jar") {
-                             Some(filename_str.to_string())
+                            Some(filename_str.to_string())
                         } else {
                             None // Skip if enabled but not a .jar
                         }
@@ -991,19 +1171,26 @@ impl ProfileManager {
                     };
 
                     if let Some(base_filename) = base_filename_opt {
-                         custom_mods.push(CustomModInfo {
+                        custom_mods.push(CustomModInfo {
                             filename: base_filename,
                             is_enabled,
                             path: path.clone(),
                         });
                     } else {
-                         log::trace!("Skipping file in custom_mods (not .jar or .jar.disabled): {:?}", path);
+                        log::trace!(
+                            "Skipping file in custom_mods (not .jar or .jar.disabled): {:?}",
+                            path
+                        );
                     }
                 }
             }
         }
 
-        log::info!("Found {} relevant custom mod file(s) in {:?}", custom_mods.len(), custom_mods_path);
+        log::info!(
+            "Found {} relevant custom mod file(s) in {:?}",
+            custom_mods.len(),
+            custom_mods_path
+        );
         Ok(custom_mods)
     }
 
@@ -1015,13 +1202,17 @@ impl ProfileManager {
         profile_id: Uuid,
         filename: String,
         set_enabled: bool,
-    ) -> Result<()> { // Changed return type to Result<()>
+    ) -> Result<()> {
+        // Changed return type to Result<()>
         let custom_mods_path = self.get_profile_custom_mods_path(profile_id).await?;
 
         // Ensure the filename itself doesn't end with .disabled - we expect the base name.
         if filename.ends_with(".disabled") {
-             log::warn!("set_custom_mod_enabled called with filename ending in .disabled: '{}'. Please provide the base filename.", filename);
-             return Err(AppError::Other(format!("Invalid filename provided to set_custom_mod_enabled: {}", filename)));
+            log::warn!("set_custom_mod_enabled called with filename ending in .disabled: '{}'. Please provide the base filename.", filename);
+            return Err(AppError::Other(format!(
+                "Invalid filename provided to set_custom_mod_enabled: {}",
+                filename
+            )));
         }
 
         let enabled_path = custom_mods_path.join(&filename);
@@ -1033,34 +1224,72 @@ impl ProfileManager {
 
         if !current_enabled && !currently_exists_as_disabled {
             // Neither file exists
-            log::error!("Could not find custom mod file '{}' or '{}' in {:?}", filename, disabled_filename, custom_mods_path);
-            return Err(AppError::Other(format!("Custom mod file not found: {} in {:?}", filename, custom_mods_path)));
+            log::error!(
+                "Could not find custom mod file '{}' or '{}' in {:?}",
+                filename,
+                disabled_filename,
+                custom_mods_path
+            );
+            return Err(AppError::Other(format!(
+                "Custom mod file not found: {} in {:?}",
+                filename, custom_mods_path
+            )));
         }
 
         // Check if the state is already the desired one
         if current_enabled == set_enabled {
-            log::info!("Custom mod '{}' is already {}. No action needed.", filename, if set_enabled { "enabled" } else { "disabled" });
+            log::info!(
+                "Custom mod '{}' is already {}. No action needed.",
+                filename,
+                if set_enabled { "enabled" } else { "disabled" }
+            );
             return Ok(());
         }
 
         // Perform the rename if the state needs changing
         if set_enabled {
             // --> Enable it: Rename file.disabled to file
-            log::info!("Enabling custom mod: Renaming {:?} to {:?}", disabled_path, enabled_path);
-             tokio::fs::rename(&disabled_path, &enabled_path).await.map_err(|e| {
-                 log::error!("Failed to rename custom mod {:?} to {:?}: {}", disabled_path, enabled_path, e);
-                 AppError::Io(e)
-            })?;
+            log::info!(
+                "Enabling custom mod: Renaming {:?} to {:?}",
+                disabled_path,
+                enabled_path
+            );
+            tokio::fs::rename(&disabled_path, &enabled_path)
+                .await
+                .map_err(|e| {
+                    log::error!(
+                        "Failed to rename custom mod {:?} to {:?}: {}",
+                        disabled_path,
+                        enabled_path,
+                        e
+                    );
+                    AppError::Io(e)
+                })?;
         } else {
-             // --> Disable it: Rename file to file.disabled
-            log::info!("Disabling custom mod: Renaming {:?} to {:?}", enabled_path, disabled_path);
-            tokio::fs::rename(&enabled_path, &disabled_path).await.map_err(|e| {
-                log::error!("Failed to rename custom mod {:?} to {:?}: {}", enabled_path, disabled_path, e);
-                AppError::Io(e)
-            })?;
+            // --> Disable it: Rename file to file.disabled
+            log::info!(
+                "Disabling custom mod: Renaming {:?} to {:?}",
+                enabled_path,
+                disabled_path
+            );
+            tokio::fs::rename(&enabled_path, &disabled_path)
+                .await
+                .map_err(|e| {
+                    log::error!(
+                        "Failed to rename custom mod {:?} to {:?}: {}",
+                        enabled_path,
+                        disabled_path,
+                        e
+                    );
+                    AppError::Io(e)
+                })?;
         }
 
-        log::info!("Successfully set custom mod '{}' state to: {}", filename, if set_enabled { "enabled" } else { "disabled" });
+        log::info!(
+            "Successfully set custom mod '{}' state to: {}",
+            filename,
+            if set_enabled { "enabled" } else { "disabled" }
+        );
         Ok(())
     }
 
@@ -1071,60 +1300,77 @@ impl ProfileManager {
     pub async fn import_local_mods_to_profile(
         &self,
         profile_id: Uuid,
-        paths_enums: Vec<FilePath>
+        paths_enums: Vec<FilePath>,
     ) -> Result<()> {
-        info!("Processing {} selected files for import into profile {}", paths_enums.len(), profile_id);
+        info!(
+            "Processing {} selected files for import into profile {}",
+            paths_enums.len(),
+            profile_id
+        );
 
-        // --- Collect Hashes and Paths --- 
+        // --- Collect Hashes and Paths ---
         let mut hashes_to_check: Vec<String> = Vec::new();
         let mut path_map: HashMap<String, PathBuf> = HashMap::new(); // Map: sha1 -> PathBuf
         let mut path_conversion_errors = 0;
 
         for file_path_enum in paths_enums {
-             let src_path_buf = match file_path_enum.into_path() {
-                 Ok(path) => path,
-                 Err(e) => {
+            let src_path_buf = match file_path_enum.into_path() {
+                Ok(path) => path,
+                Err(e) => {
                     error!("Failed to convert selected file path: {}", e);
                     path_conversion_errors += 1;
                     continue;
-                 }
+                }
             };
 
-             // Calculate hash using the async util function
-             match hash_utils::calculate_sha1(&src_path_buf).await {
-                 Ok(hash) => {
-                     // Avoid checking the same hash multiple times if user selects same file twice
-                     if !path_map.contains_key(&hash) {
-                         hashes_to_check.push(hash.clone());
-                         path_map.insert(hash, src_path_buf);
-                     } else {
-                        warn!("Skipping duplicate file selection: {:?}", src_path_buf.file_name().unwrap_or_default());
-                     }
-                 },
-                 Err(e) => {
-                     error!("Failed to calculate SHA1 for {:?}: {}", src_path_buf, e);
-                     path_conversion_errors += 1;
-                 }
-             }
+            // Calculate hash using the async util function
+            match hash_utils::calculate_sha1(&src_path_buf).await {
+                Ok(hash) => {
+                    // Avoid checking the same hash multiple times if user selects same file twice
+                    if !path_map.contains_key(&hash) {
+                        hashes_to_check.push(hash.clone());
+                        path_map.insert(hash, src_path_buf);
+                    } else {
+                        warn!(
+                            "Skipping duplicate file selection: {:?}",
+                            src_path_buf.file_name().unwrap_or_default()
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to calculate SHA1 for {:?}: {}", src_path_buf, e);
+                    path_conversion_errors += 1;
+                }
+            }
         }
 
         if hashes_to_check.is_empty() {
-            info!("No valid files found to process after hashing/path conversion for profile {}.", profile_id);
+            info!(
+                "No valid files found to process after hashing/path conversion for profile {}.",
+                profile_id
+            );
             // Still return Ok, as no critical error occurred, just nothing to import
-            return Ok(()); 
+            return Ok(());
         }
 
-        info!("Attempting to look up {} unique hashes on Modrinth for profile {}...", hashes_to_check.len(), profile_id);
+        info!(
+            "Attempting to look up {} unique hashes on Modrinth for profile {}...",
+            hashes_to_check.len(),
+            profile_id
+        );
 
-        // --- Modrinth Bulk Lookup ---    
+        // --- Modrinth Bulk Lookup ---
         // Use qualified path if modrinth module is imported directly
-        let versions_map_result = crate::integrations::modrinth::get_versions_by_hashes(hashes_to_check, "sha1").await;
+        let versions_map_result =
+            crate::integrations::modrinth::get_versions_by_hashes(hashes_to_check, "sha1").await;
 
-        // --- Process Results --- 
+        // --- Process Results ---
         // Get custom_mods_dir ONCE
-        let custom_mods_dir = self.get_profile_custom_mods_path(profile_id).await?; 
+        let custom_mods_dir = self.get_profile_custom_mods_path(profile_id).await?;
         // Ensure custom_mods_dir exists ONCE
-        fs::create_dir_all(&custom_mods_dir).await.map_err(AppError::Io)?;
+        fs::create_dir_all(&custom_mods_dir)
+            .await
+            .map_err(AppError::Io)?;
 
         let mut modrinth_added_count: u64 = 0;
         let mut custom_added_count: u64 = 0;
@@ -1133,27 +1379,46 @@ impl ProfileManager {
 
         match versions_map_result {
             Ok(versions_map) => {
-                info!("Successfully received results for {} hashes from Modrinth for profile {}.", versions_map.len(), profile_id);
-                for (hash, src_path_buf) in path_map { // Iterate through the originally collected paths/hashes
+                info!(
+                    "Successfully received results for {} hashes from Modrinth for profile {}.",
+                    versions_map.len(),
+                    profile_id
+                );
+                for (hash, src_path_buf) in path_map {
+                    // Iterate through the originally collected paths/hashes
                     if let Some(modrinth_version) = versions_map.get(&hash) {
                         // Found on Modrinth
-                        log::debug!("Processing Modrinth match for hash {} for profile {}: {:?}", hash, profile_id, src_path_buf.file_name().unwrap_or_default());
-                        if let Some(primary_file) = modrinth_version.files.iter().find(|f| f.primary) {
-                             match self.add_modrinth_mod( // Use self
-                                profile_id,
-                                modrinth_version.project_id.clone(),
-                                modrinth_version.id.clone(),
-                                primary_file.filename.clone(),
-                                primary_file.url.clone(),
-                                primary_file.hashes.sha1.clone(),
-                                Some(modrinth_version.name.clone()),
-                                Some(modrinth_version.version_number.clone()),
-                                Some(modrinth_version.loaders.clone()),
-                                Some(modrinth_version.game_versions.clone()),
-                                true, // add_dependencies = true
-                             ).await {
+                        log::debug!(
+                            "Processing Modrinth match for hash {} for profile {}: {:?}",
+                            hash,
+                            profile_id,
+                            src_path_buf.file_name().unwrap_or_default()
+                        );
+                        if let Some(primary_file) =
+                            modrinth_version.files.iter().find(|f| f.primary)
+                        {
+                            match self
+                                .add_modrinth_mod(
+                                    // Use self
+                                    profile_id,
+                                    modrinth_version.project_id.clone(),
+                                    modrinth_version.id.clone(),
+                                    primary_file.filename.clone(),
+                                    primary_file.url.clone(),
+                                    primary_file.hashes.sha1.clone(),
+                                    Some(modrinth_version.name.clone()),
+                                    Some(modrinth_version.version_number.clone()),
+                                    Some(modrinth_version.loaders.clone()),
+                                    Some(modrinth_version.game_versions.clone()),
+                                    true, // add_dependencies = true
+                                )
+                                .await
+                            {
                                 Ok(_) => {
-                                    info!("Successfully added '{}' as Modrinth mod to profile {}.", primary_file.filename, profile_id);
+                                    info!(
+                                        "Successfully added '{}' as Modrinth mod to profile {}.",
+                                        primary_file.filename, profile_id
+                                    );
                                     modrinth_added_count += 1;
                                 }
                                 Err(e) => {
@@ -1166,26 +1431,47 @@ impl ProfileManager {
                             // Log error, count it, and fallback
                             error!("Modrinth version {} found for hash {}, but no primary file found. Falling back to custom mod import for profile {} - {:?}.", modrinth_version.id, hash, profile_id, src_path_buf.file_name().unwrap_or_default());
                             error_count += 1; // Count as error because Modrinth add failed essentially
-                            path_utils::copy_as_custom_mod(&src_path_buf, &custom_mods_dir, profile_id, &mut custom_added_count, &mut skipped_count).await;
+                            path_utils::copy_as_custom_mod(
+                                &src_path_buf,
+                                &custom_mods_dir,
+                                profile_id,
+                                &mut custom_added_count,
+                                &mut skipped_count,
+                            )
+                            .await;
                         }
                     } else {
                         // Not found in Modrinth results -> Treat as custom mod
-                         log::info!("Mod {:?} (hash: {}) not found on Modrinth for profile {}. Importing as custom mod.", src_path_buf.file_name().unwrap_or_default(), hash, profile_id);
-                         path_utils::copy_as_custom_mod(&src_path_buf, &custom_mods_dir, profile_id, &mut custom_added_count, &mut skipped_count).await;
+                        log::info!("Mod {:?} (hash: {}) not found on Modrinth for profile {}. Importing as custom mod.", src_path_buf.file_name().unwrap_or_default(), hash, profile_id);
+                        path_utils::copy_as_custom_mod(
+                            &src_path_buf,
+                            &custom_mods_dir,
+                            profile_id,
+                            &mut custom_added_count,
+                            &mut skipped_count,
+                        )
+                        .await;
                     }
                 }
             }
             Err(e) => {
                 log::error!("Failed to perform bulk hash lookup on Modrinth for profile {}: {}. Falling back to importing all as custom mods.", profile_id, e);
                 error_count += path_map.len() as u64; // Count all as errors for Modrinth lookup
-                 // Fallback: Try adding all as custom mods
-                 for (_hash, src_path_buf) in path_map {
-                     path_utils::copy_as_custom_mod(&src_path_buf, &custom_mods_dir, profile_id, &mut custom_added_count, &mut skipped_count).await;
-                 }
+                                                      // Fallback: Try adding all as custom mods
+                for (_hash, src_path_buf) in path_map {
+                    path_utils::copy_as_custom_mod(
+                        &src_path_buf,
+                        &custom_mods_dir,
+                        profile_id,
+                        &mut custom_added_count,
+                        &mut skipped_count,
+                    )
+                    .await;
+                }
             }
         }
 
-         log::info!(
+        log::info!(
             "Import process finished for profile {}. Added as Modrinth: {}, Added as Custom: {}, Skipped (exists/other): {}, Hashing/Path/Lookup Errors: {}",
             profile_id, modrinth_added_count, custom_added_count, skipped_count, error_count
         );
@@ -1197,7 +1483,10 @@ impl ProfileManager {
 
     /// Deletes a custom mod file (either .jar or .jar.disabled) from the profile's custom_mods directory.
     pub async fn delete_custom_mod_file(&self, profile_id: Uuid, filename: &str) -> Result<()> {
-        info!("Attempting to delete custom mod file '{}' for profile {}", filename, profile_id);
+        info!(
+            "Attempting to delete custom mod file '{}' for profile {}",
+            filename, profile_id
+        );
 
         // Note: Validation that filename doesn't end with .disabled should happen in the caller (command)
 
@@ -1218,7 +1507,11 @@ impl ProfileManager {
         if let Some(path_to_delete) = file_to_delete {
             log::debug!("Deleting custom mod file at path: {:?}", path_to_delete);
             fs::remove_file(&path_to_delete).await.map_err(|e| {
-                log::error!("Failed to delete custom mod file {:?}: {}", path_to_delete, e);
+                log::error!(
+                    "Failed to delete custom mod file {:?}: {}",
+                    path_to_delete,
+                    e
+                );
                 AppError::Io(e)
             })?; // Propagate IO error
             info!(
@@ -1229,13 +1522,13 @@ impl ProfileManager {
         } else {
             log::warn!(
                 "Custom mod file '{}' not found (neither enabled nor disabled) in profile {}.",
-                filename, profile_id
+                filename,
+                profile_id
             );
             // Return specific error indicating file not found
             Err(AppError::Profile(format!(
                 "Custom mod {} in profile {}",
-                filename,
-                profile_id
+                filename, profile_id
             )))
         }
     }
@@ -1246,29 +1539,23 @@ pub fn get_profile_mod_filename(source: &ModSource) -> crate::error::Result<Stri
     match source {
         ModSource::Modrinth { file_name, .. } => Ok(file_name.clone()),
         ModSource::Local { file_name } => Ok(file_name.clone()),
-        ModSource::Url { file_name, url } => {
-            file_name.clone().ok_or_else(|| crate::error::AppError::Other(format!(
-                "Filename missing for URL mod source: {}", url
-            )))
-        }
-        ModSource::Maven { coordinates, .. } => {
-            Err(crate::error::AppError::Other(format!(
-                "Cannot determine filename for profile Maven mod source: {}", coordinates
-            )))
-        }
-        ModSource::Embedded { name } => {
-            Err(crate::error::AppError::Other(format!(
-                "Cannot get filename for embedded mod source: {}", name
-            )))
-        }
+        ModSource::Url { file_name, url } => file_name.clone().ok_or_else(|| {
+            crate::error::AppError::Other(format!("Filename missing for URL mod source: {}", url))
+        }),
+        ModSource::Maven { coordinates, .. } => Err(crate::error::AppError::Other(format!(
+            "Cannot determine filename for profile Maven mod source: {}",
+            coordinates
+        ))),
+        ModSource::Embedded { name } => Err(crate::error::AppError::Other(format!(
+            "Cannot get filename for embedded mod source: {}",
+            name
+        ))),
     }
 }
 
 pub fn default_profile_path() -> PathBuf {
-    LAUNCHER_DIRECTORY
-            .data_dir()
-            .join("profiles")
-} 
+    LAUNCHER_DIRECTORY.data_dir().join("profiles")
+}
 
 impl Default for ProfileSettings {
     fn default() -> Self {
@@ -1287,8 +1574,8 @@ impl Default for ProfileSettings {
 impl Default for MemorySettings {
     fn default() -> Self {
         Self {
-            min: 1024,  // 1GB
-            max: 2048,  // 2GB
+            min: 1024, // 1GB
+            max: 2048, // 2GB
         }
     }
 }

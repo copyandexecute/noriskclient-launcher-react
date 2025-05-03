@@ -1,12 +1,12 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use crate::minecraft::dto::piston_meta::{Library, DownloadInfo};
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
-use std::path::PathBuf;
+use crate::minecraft::dto::piston_meta::{DownloadInfo, Library};
+use futures::stream::{iter, StreamExt};
+use log::info;
 use reqwest;
+use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use futures::stream::{StreamExt, iter};
-use log::info;
 
 const LIBRARIES_DIR: &str = "libraries";
 const DEFAULT_CONCURRENT_DOWNLOADS: usize = 12;
@@ -21,7 +21,7 @@ pub struct MinecraftLibrariesDownloadService {
 impl MinecraftLibrariesDownloadService {
     pub fn new() -> Self {
         let base_path = LAUNCHER_DIRECTORY.meta_dir().join(LIBRARIES_DIR);
-        Self { 
+        Self {
             base_path,
             concurrent_downloads: DEFAULT_CONCURRENT_DOWNLOADS,
             concurrent_libraries: DEFAULT_CONCURRENT_LIBRARIES,
@@ -39,7 +39,7 @@ impl MinecraftLibrariesDownloadService {
             let library_clone = library;
             async move { self_clone.download_library(&library_clone).await }
         });
-        
+
         let results: Vec<Result<()>> = futures::future::join_all(futures).await;
         for result in results {
             result?;
@@ -64,7 +64,7 @@ impl MinecraftLibrariesDownloadService {
             .buffer_unordered(self.concurrent_downloads)
             .collect()
             .await;
-        
+
         for result in results {
             result?;
         }
@@ -74,31 +74,34 @@ impl MinecraftLibrariesDownloadService {
 
     async fn download_file(&self, download_info: &DownloadInfo) -> Result<()> {
         let target_path = self.get_library_path(download_info);
-        
+
         if fs::try_exists(&target_path).await? {
             let metadata = fs::metadata(&target_path).await?;
             if metadata.len() as i64 == download_info.size {
-                info!("File already exists with correct size: {}", target_path.display());
+                info!(
+                    "File already exists with correct size: {}",
+                    target_path.display()
+                );
                 return Ok(());
             }
         }
 
         let url = &download_info.url;
-        let response = reqwest::get(url)
-            .await
-            .map_err(AppError::MinecraftApi)?;
+        let response = reqwest::get(url).await.map_err(AppError::MinecraftApi)?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| "No error details available".to_string());
-            return Err(AppError::Download(
-                format!("Failed to download file from {} - Status {}: {}", url, status, error_text)
-            ));
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "No error details available".to_string());
+            return Err(AppError::Download(format!(
+                "Failed to download file from {} - Status {}: {}",
+                url, status, error_text
+            )));
         }
 
-        let bytes = response.bytes()
-            .await
-            .map_err(AppError::MinecraftApi)?;
+        let bytes = response.bytes().await.map_err(AppError::MinecraftApi)?;
 
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent).await?;
@@ -112,9 +115,11 @@ impl MinecraftLibrariesDownloadService {
 
     fn get_library_path(&self, download_info: &DownloadInfo) -> PathBuf {
         let url = &download_info.url;
-        let path = url.split("libraries.minecraft.net/").nth(1)
+        let path = url
+            .split("libraries.minecraft.net/")
+            .nth(1)
             .expect("Invalid library URL");
-        
+
         self.base_path.join(path)
     }
-} 
+}

@@ -9,6 +9,7 @@
     "opener:allow-open-path",
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-write-image",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default"
   ]
 }

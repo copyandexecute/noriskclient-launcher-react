@@ -1,9 +1,9 @@
+use crate::error::Result;
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::Emitter;
 use uuid::Uuid;
-use serde::{Serialize, Deserialize};
-use dashmap::DashMap;
-use crate::error::Result;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -119,4 +119,4 @@ impl EventState {
             .map(|entry| (entry.key().clone(), entry.value().clone()))
             .collect()
     }
-} 
+}

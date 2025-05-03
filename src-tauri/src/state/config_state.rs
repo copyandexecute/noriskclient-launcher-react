@@ -23,6 +23,8 @@ pub struct LauncherConfig {
     pub concurrent_downloads: usize,
     #[serde(default = "default_discord_presence")]
     pub enable_discord_presence: bool,
+    #[serde(default = "default_discord_presence")]
+    pub check_beta_channel: bool,
 }
 
 fn default_config_version() -> u32 {
@@ -45,6 +47,7 @@ impl Default for LauncherConfig {
             auto_check_updates: true,
             concurrent_downloads: default_concurrent_downloads(),
             enable_discord_presence: default_discord_presence(),
+            check_beta_channel: false,
         }
     }
 }
@@ -59,19 +62,19 @@ impl ConfigManager {
     pub async fn new() -> Result<Self> {
         let config_path = LAUNCHER_DIRECTORY.root_dir().join(CONFIG_FILENAME);
         info!("Initializing ConfigManager with path: {:?}", config_path);
-        
+
         let manager = Self {
             config: Arc::new(RwLock::new(LauncherConfig::default())),
             config_path,
             save_lock: Mutex::new(()),
         };
-        
+
         // Load config if it exists
         manager.load_config().await?;
-        
+
         Ok(manager)
     }
-    
+
     async fn load_config(&self) -> Result<()> {
         if !self.config_path.exists() {
             info!("Config file not found, using default configuration");
@@ -79,19 +82,22 @@ impl ConfigManager {
             self.save_config().await?;
             return Ok(());
         }
-        
-        info!("Loading launcher configuration from: {:?}", self.config_path);
+
+        info!(
+            "Loading launcher configuration from: {:?}",
+            self.config_path
+        );
         let config_data = fs::read_to_string(&self.config_path).await?;
-        
+
         match serde_json::from_str::<LauncherConfig>(&config_data) {
             Ok(loaded_config) => {
                 info!("Successfully loaded launcher configuration");
                 debug!("Loaded config: {:?}", loaded_config);
-                
+
                 // Update the stored config
                 let mut config = self.config.write().await;
                 *config = loaded_config;
-            },
+            }
             Err(e) => {
                 error!("Failed to parse config file: {}", e);
                 warn!("Using default configuration and saving it");
@@ -99,14 +105,14 @@ impl ConfigManager {
                 self.save_config().await?;
             }
         }
-        
+
         Ok(())
     }
-    
+
     async fn save_config(&self) -> Result<()> {
         let _guard = self.save_lock.lock().await;
         debug!("Acquired save lock, proceeding to save config...");
-        
+
         // Ensure directory exists
         if let Some(parent_dir) = self.config_path.parent() {
             if !parent_dir.exists() {
@@ -114,22 +120,25 @@ impl ConfigManager {
                 info!("Created directory for config file: {:?}", parent_dir);
             }
         }
-        
+
         let config = self.config.read().await;
         let config_data = serde_json::to_string_pretty(&*config)?;
-        
+
         fs::write(&self.config_path, config_data).await?;
-        info!("Successfully saved launcher configuration to: {:?}", self.config_path);
-        
+        info!(
+            "Successfully saved launcher configuration to: {:?}",
+            self.config_path
+        );
+
         Ok(())
     }
-    
+
     // Public methods for accessing and modifying configuration
-    
+
     pub async fn get_config(&self) -> LauncherConfig {
         self.config.read().await.clone()
     }
-    
+
     pub async fn is_experimental_mode(&self) -> bool {
         self.config.read().await.is_experimental
     }
@@ -138,32 +147,52 @@ impl ConfigManager {
         let should_save = {
             let mut config = self.config.write().await;
             let current = &*config;
-            
+
             // Check if there's any change to avoid unnecessary saves
-            if current.is_experimental == new_config.is_experimental && 
-               current.auto_check_updates == new_config.auto_check_updates &&
-               current.concurrent_downloads == new_config.concurrent_downloads &&
-               current.enable_discord_presence == new_config.enable_discord_presence {
+            if current.is_experimental == new_config.is_experimental
+                && current.auto_check_updates == new_config.auto_check_updates
+                && current.concurrent_downloads == new_config.concurrent_downloads
+                && current.enable_discord_presence == new_config.enable_discord_presence
+                && current.check_beta_channel == new_config.check_beta_channel
+            {
                 debug!("No config changes detected, skipping save");
                 false
             } else {
                 // Preserve version during replacement
                 let version = config.version;
-                
+
                 // Log changes
                 if current.is_experimental != new_config.is_experimental {
-                    info!("Changing experimental mode: {} -> {}", current.is_experimental, new_config.is_experimental);
+                    info!(
+                        "Changing experimental mode: {} -> {}",
+                        current.is_experimental, new_config.is_experimental
+                    );
                 }
                 if current.auto_check_updates != new_config.auto_check_updates {
-                    info!("Changing auto check updates: {} -> {}", current.auto_check_updates, new_config.auto_check_updates);
+                    info!(
+                        "Changing auto check updates: {} -> {}",
+                        current.auto_check_updates, new_config.auto_check_updates
+                    );
                 }
                 if current.concurrent_downloads != new_config.concurrent_downloads {
-                    info!("Changing concurrent downloads: {} -> {}", current.concurrent_downloads, new_config.concurrent_downloads);
+                    info!(
+                        "Changing concurrent downloads: {} -> {}",
+                        current.concurrent_downloads, new_config.concurrent_downloads
+                    );
                 }
                 if current.enable_discord_presence != new_config.enable_discord_presence {
-                    info!("Changing Discord Rich Presence: {} -> {}", current.enable_discord_presence, new_config.enable_discord_presence);
+                    info!(
+                        "Changing Discord Rich Presence: {} -> {}",
+                        current.enable_discord_presence, new_config.enable_discord_presence
+                    );
                 }
-                
+                if current.check_beta_channel != new_config.check_beta_channel {
+                    info!(
+                        "Changing beta channel check: {} -> {}",
+                        current.check_beta_channel, new_config.check_beta_channel
+                    );
+                }
+
                 // Update config while preserving version
                 *config = LauncherConfig {
                     version,
@@ -171,30 +200,34 @@ impl ConfigManager {
                     auto_check_updates: new_config.auto_check_updates,
                     concurrent_downloads: new_config.concurrent_downloads,
                     enable_discord_presence: new_config.enable_discord_presence,
+                    check_beta_channel: new_config.check_beta_channel,
                 };
-                
+
                 true
             }
         };
-        
+
         // Save the updated config if needed
         if should_save {
             self.save_config().await?;
-            
+
             // Update Discord status if it changed
             if let Ok(state) = crate::state::State::get().await {
                 // Check if Discord status changed
                 let discord_enabled = new_config.enable_discord_presence;
                 if let Err(e) = state.discord_manager.set_enabled(discord_enabled).await {
-                    warn!("Error updating Discord after config change: {}, continuing anyway", e);
+                    warn!(
+                        "Error updating Discord after config change: {}, continuing anyway",
+                        e
+                    );
                 }
             }
         }
-        
+
         Ok(())
     }
 }
 
 pub fn default_config_path() -> PathBuf {
     LAUNCHER_DIRECTORY.root_dir().join(CONFIG_FILENAME)
-} 
+}

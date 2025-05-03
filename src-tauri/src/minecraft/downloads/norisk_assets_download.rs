@@ -832,7 +832,7 @@ impl NoriskClientAssetsDownloadService {
 
             for (name, _asset) in chunk {
                 let source_path = source_dir.join(&name);
-                
+
                 // Special handling for override assets
                 let (target_path, is_override) = if name.starts_with("overrides/") {
                     // For overrides, copy to Minecraft directory and strip the "overrides/" prefix

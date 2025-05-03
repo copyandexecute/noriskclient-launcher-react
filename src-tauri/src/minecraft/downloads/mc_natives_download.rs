@@ -1,12 +1,12 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use crate::minecraft::dto::piston_meta::{Library, DownloadInfo};
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::minecraft::dto::piston_meta::{DownloadInfo, Library};
+use async_zip::tokio::read::seek::ZipFileReader;
+use log::info;
+use std::io::Cursor;
 use std::path::PathBuf;
 use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufReader};
-use std::io::Cursor;
-use async_zip::tokio::read::seek::ZipFileReader;
-use log::info;
 
 const NATIVES_DIR: &str = "natives";
 
@@ -17,9 +17,7 @@ pub struct MinecraftNativesDownloadService {
 impl MinecraftNativesDownloadService {
     pub fn new() -> Self {
         let base_path = LAUNCHER_DIRECTORY.meta_dir().join(NATIVES_DIR);
-        Self { 
-            base_path,
-        }
+        Self { base_path }
     }
 
     pub async fn extract_natives(&self, libraries: &[Library], version_id: &str) -> Result<()> {
@@ -43,7 +41,7 @@ impl MinecraftNativesDownloadService {
                             }
                         }
                     }
-                },
+                }
                 Err(e) => {
                     info!("Could not clean natives directory: {}. Will try to use existing directory.", e);
                     // Continue with existing directory
@@ -80,16 +78,24 @@ impl MinecraftNativesDownloadService {
         info!("Looking for natives for OS: {} and arch: {}", os, arch);
 
         // Try old method first
-        self.extract_old_natives(libraries, os, arch, &natives_path).await?;
+        self.extract_old_natives(libraries, os, arch, &natives_path)
+            .await?;
 
         // Then try new method
-        self.extract_new_natives(libraries, os, arch, &natives_path).await?;
+        self.extract_new_natives(libraries, os, arch, &natives_path)
+            .await?;
 
         info!("\nNative extraction completed!");
         Ok(())
     }
 
-    async fn extract_old_natives(&self, libraries: &[Library], os: &str, arch: &str, natives_path: &PathBuf) -> Result<()> {
+    async fn extract_old_natives(
+        &self,
+        libraries: &[Library],
+        os: &str,
+        arch: &str,
+        natives_path: &PathBuf,
+    ) -> Result<()> {
         info!("\nStarting old natives detection method...");
 
         for library in libraries {
@@ -99,7 +105,8 @@ impl MinecraftNativesDownloadService {
                 info!("  Found natives field: {:?}", natives);
                 if let Some(classifier) = natives.get(os) {
                     info!("    Found classifier for {}: {}", os, classifier);
-                    let classifier = classifier.replace("${arch}", if arch == "x86" { "64" } else { arch });
+                    let classifier =
+                        classifier.replace("${arch}", if arch == "x86" { "64" } else { arch });
                     info!("    Resolved classifier: {}", classifier);
 
                     if let Some(classifiers) = &library.downloads.classifiers {
@@ -108,9 +115,13 @@ impl MinecraftNativesDownloadService {
                             info!("      Size: {} bytes", native_info.size);
                             info!("      SHA1: {}", native_info.sha1);
                             info!("      Extracting...");
-                            self.extract_native_archive(native_info, natives_path, library).await?;
+                            self.extract_native_archive(native_info, natives_path, library)
+                                .await?;
                         } else {
-                            info!("    No native artifact found for classifier: {}", classifier);
+                            info!(
+                                "    No native artifact found for classifier: {}",
+                                classifier
+                            );
                         }
                     } else {
                         info!("    No classifiers found in downloads");
@@ -127,7 +138,13 @@ impl MinecraftNativesDownloadService {
         Ok(())
     }
 
-    async fn extract_new_natives(&self, libraries: &[Library], os: &str, arch: &str, natives_path: &PathBuf) -> Result<()> {
+    async fn extract_new_natives(
+        &self,
+        libraries: &[Library],
+        os: &str,
+        arch: &str,
+        natives_path: &PathBuf,
+    ) -> Result<()> {
         info!("\nStarting new natives detection method...");
 
         for library in libraries {
@@ -162,7 +179,8 @@ impl MinecraftNativesDownloadService {
                         info!("      Size: {} bytes", artifact.size);
                         info!("      SHA1: {}", artifact.sha1);
                         info!("      Extracting...");
-                        self.extract_native_archive(artifact, natives_path, library).await?;
+                        self.extract_native_archive(artifact, natives_path, library)
+                            .await?;
                     } else {
                         info!("      No artifact found");
                     }
@@ -174,7 +192,12 @@ impl MinecraftNativesDownloadService {
         Ok(())
     }
 
-    async fn extract_native_archive(&self, native: &DownloadInfo, natives_path: &PathBuf, library: &Library) -> Result<()> {
+    async fn extract_native_archive(
+        &self,
+        native: &DownloadInfo,
+        natives_path: &PathBuf,
+        library: &Library,
+    ) -> Result<()> {
         let target_path = self.get_library_path(native);
 
         // Read the zip file content
@@ -182,7 +205,9 @@ impl MinecraftNativesDownloadService {
         let cursor = Cursor::new(file_content);
         let mut reader = BufReader::new(cursor);
 
-        let mut zip = ZipFileReader::with_tokio(&mut reader).await.map_err(|e| AppError::Download(e.to_string()))?;
+        let mut zip = ZipFileReader::with_tokio(&mut reader)
+            .await
+            .map_err(|e| AppError::Download(e.to_string()))?;
 
         // Extract exclude patterns if any
         let exclude_patterns = if let Some(extract) = &library.extract {
@@ -196,13 +221,18 @@ impl MinecraftNativesDownloadService {
 
         for index in 0..zip.file().entries().len() {
             let entry = &zip.file().entries().get(index).unwrap();
-            let file_name = entry.filename().as_str().map_err(|e| AppError::Download(e.to_string()))?;
+            let file_name = entry
+                .filename()
+                .as_str()
+                .map_err(|e| AppError::Download(e.to_string()))?;
 
             info!("  Extracting file: {}", file_name);
 
             // Check if file should be excluded
-            let should_exclude = !exclude_patterns.is_empty() && 
-                exclude_patterns.iter().any(|pattern| file_name.starts_with(pattern));
+            let should_exclude = !exclude_patterns.is_empty()
+                && exclude_patterns
+                    .iter()
+                    .any(|pattern| file_name.starts_with(pattern));
 
             if should_exclude {
                 info!("    Skipping excluded entry: {}", file_name);
@@ -227,7 +257,7 @@ impl MinecraftNativesDownloadService {
                 if let Some(parent) = path.parent() {
                     if !fs::try_exists(parent).await? {
                         match fs::create_dir_all(parent).await {
-                            Ok(_) => {},
+                            Ok(_) => {}
                             Err(e) => {
                                 info!("    Error creating parent directory {:?}: {}. Directory might be in use by another instance.", parent, e);
                                 // Continue with next file, but the file creation will likely fail too
@@ -247,7 +277,7 @@ impl MinecraftNativesDownloadService {
                 // Read the entry content into a buffer
                 let mut buffer = Vec::new();
                 match entry_reader.read_to_end_checked(&mut buffer).await {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => {
                         info!("    Error reading entry content: {}. Skipping file.", e);
                         continue;
@@ -265,7 +295,7 @@ impl MinecraftNativesDownloadService {
                                 // Continue with next file
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         info!("    Error creating file {:?}: {}. File might be in use by another instance.", path, e);
                         // Continue with next file
@@ -279,9 +309,11 @@ impl MinecraftNativesDownloadService {
 
     fn get_library_path(&self, download_info: &DownloadInfo) -> PathBuf {
         let url = &download_info.url;
-        let path = url.split("libraries.minecraft.net/").nth(1)
+        let path = url
+            .split("libraries.minecraft.net/")
+            .nth(1)
             .expect("Invalid library URL");
 
         LAUNCHER_DIRECTORY.meta_dir().join("libraries").join(path)
     }
-} 
+}
