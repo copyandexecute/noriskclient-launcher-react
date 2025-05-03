@@ -16,6 +16,7 @@ import { ActionButton } from "../ui/ActionButton";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
+import * as ProfileService from "../../services/profile-service";
 
 export function ProfilesTab() {
   const {
@@ -34,12 +35,60 @@ export function ProfilesTab() {
   const [showDetailView, setShowDetailView] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [groupBy, setGroupBy] = useState<"none" | "group">("none");
+  const [standardProfiles, setStandardProfiles] = useState<Profile[]>([]);
+  const [loadingStandard, setLoadingStandard] = useState(false);
+  const [standardError, setStandardError] = useState<string | null>(null);
+  const [refreshingStandard, setRefreshingStandard] = useState(false);
 
   useEffect(() => {
     fetchProfiles();
+    fetchStandardProfiles();
   }, [fetchProfiles]);
 
-  const filteredProfiles = profiles.filter((profile) => {
+  const fetchStandardProfiles = async () => {
+    try {
+      setLoadingStandard(true);
+      setStandardError(null);
+      const result = await ProfileService.getStandardProfiles();
+
+      // Ensure we have a valid array of profiles
+      if (result && result.profiles && Array.isArray(result.profiles)) {
+        setStandardProfiles(result.profiles);
+      } else if (Array.isArray(result)) {
+        setStandardProfiles(result);
+      } else {
+        console.warn("Unexpected format for standard profiles:", result);
+        setStandardProfiles([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch standard profiles:", error);
+      setStandardError("Failed to load NoRisk versions");
+      setStandardProfiles([]);
+    } finally {
+      setLoadingStandard(false);
+    }
+  };
+
+  const handleRefreshStandard = async () => {
+    try {
+      setRefreshingStandard(true);
+      await ProfileService.refreshStandardVersions();
+      await fetchStandardProfiles();
+    } catch (error) {
+      console.error("Failed to refresh standard versions:", error);
+      setStandardError("Failed to refresh NoRisk versions");
+    } finally {
+      setRefreshingStandard(false);
+    }
+  };
+
+  // Ensure standardProfiles is always an array before spreading
+  const standardProfilesArray = Array.isArray(standardProfiles)
+    ? standardProfiles
+    : [];
+  const allProfiles = [...profiles, ...standardProfilesArray];
+
+  const filteredProfiles = allProfiles.filter((profile) => {
     if (
       searchQuery &&
       !profile.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -47,10 +96,10 @@ export function ProfilesTab() {
       return false;
     }
 
-    if (filter === "downloaded" && profile.state !== "installed") {
+    if (filter === "custom" && profile.is_standard_version) {
       return false;
     }
-    if (filter === "custom" && profile.is_standard_version) {
+    if (filter === "standard" && !profile.is_standard_version) {
       return false;
     }
 
@@ -77,6 +126,9 @@ export function ProfilesTab() {
   };
 
   const handleEditProfile = (profile: Profile) => {
+    // Don't allow editing standard profiles
+    if (profile.is_standard_version) return;
+
     setSelectedProfile(profile);
     setShowSettings(true);
   };
@@ -93,8 +145,8 @@ export function ProfilesTab() {
 
   const filterOptions = [
     { id: "all", label: "all", icon: "pixel:grid-solid" },
-    { id: "downloaded", label: "downloaded", icon: "pixel:download-solid" },
-    { id: "custom", label: "custom", icon: "pixel:wrench-solid" },
+    { id: "custom", label: "custom", icon: "pixel:futurism" },
+    { id: "standard", label: "norisk", icon: "pixel:crown-solid" },
   ];
 
   const groupOptions = [
@@ -111,6 +163,18 @@ export function ProfilesTab() {
             onChange={setSearchQuery}
             className="w-48"
           />
+          {filter === "standard" && (
+            <ActionButton
+              label={refreshingStandard ? "refreshing..." : "refresh"}
+              icon={
+                refreshingStandard
+                  ? "pixel:spinner-solid"
+                  : "pixel:arrow-rotate-right-solid"
+              }
+              onClick={handleRefreshStandard}
+              className={refreshingStandard ? "animate-spin" : ""}
+            />
+          )}
           <ActionButton
             label="import"
             icon="pixel:file-import-solid"
@@ -138,10 +202,15 @@ export function ProfilesTab() {
       </div>
 
       <TabContent className="p-6 pt-4">
-        {loading ? (
+        {(loading || loadingStandard) &&
+        filter !== "standard" &&
+        filter !== "custom" ? (
           <LoadingState message="loading profiles..." />
-        ) : error ? (
-          <EmptyState icon="pixel:exclamation-triangle-solid" message={error} />
+        ) : error || standardError ? (
+          <EmptyState
+            icon="pixel:exclamation-triangle-solid"
+            message={error || standardError || ""}
+          />
         ) : (
           Object.entries(groupedProfiles).map(([group, groupProfiles]) => (
             <div key={group} className="mb-8">
@@ -169,9 +238,13 @@ export function ProfilesTab() {
           ))
         )}
 
-        {!loading && !error && filteredProfiles.length === 0 && (
-          <EmptyState icon="pixel:grid-solid" message="no profiles found" />
-        )}
+        {!loading &&
+          !loadingStandard &&
+          !error &&
+          !standardError &&
+          filteredProfiles.length === 0 && (
+            <EmptyState icon="pixel:grid-solid" message="no profiles found" />
+          )}
       </TabContent>
 
       {showWizard && (
@@ -181,16 +254,18 @@ export function ProfilesTab() {
         />
       )}
 
-      {showSettings && selectedProfile && (
-        <ProfileSettings
-          profile={selectedProfile}
-          onClose={() => {
-            setShowSettings(false);
-            setSelectedProfile(null);
-            fetchProfiles();
-          }}
-        />
-      )}
+      {showSettings &&
+        selectedProfile &&
+        !selectedProfile.is_standard_version && (
+          <ProfileSettings
+            profile={selectedProfile}
+            onClose={() => {
+              setShowSettings(false);
+              setSelectedProfile(null);
+              fetchProfiles();
+            }}
+          />
+        )}
 
       {showDetailView && selectedProfile && (
         <ProfileDetailView
@@ -200,8 +275,10 @@ export function ProfilesTab() {
             setSelectedProfile(null);
           }}
           onEdit={() => {
-            setShowDetailView(false);
-            setShowSettings(true);
+            if (!selectedProfile.is_standard_version) {
+              setShowDetailView(false);
+              setShowSettings(true);
+            }
           }}
         />
       )}

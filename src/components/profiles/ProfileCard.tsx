@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { cn } from "../../lib/utils";
@@ -10,7 +10,10 @@ import {
   LaunchState,
   useLaunchStateStore,
 } from "../../store/launch-state-store";
-import { IconButton } from ".././ui/IconButton";
+import { IconButton } from "../ui/IconButton";
+import * as ProcessService from "../../services/process-service";
+import { processMonitor } from "../../services/process-monitor";
+import { listen } from "@tauri-apps/api/event";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -19,20 +22,14 @@ interface ProfileCardProps {
 }
 
 export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
-  const {
-    launchProfile,
-    installProfile,
-    isProfileLaunching,
-    abortProfileLaunch,
-  } = useProfileStore();
-
-  const { initializeProfile, getProfileState } = useLaunchStateStore();
+  const { initializeProfile, getProfileState, resetLaunchState } =
+    useLaunchStateStore();
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
-  const [isInstalling, setIsInstalling] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const eventListenersSetUp = useRef(false);
 
   useEffect(() => {
     initializeProfile(profile.id);
@@ -44,21 +41,101 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   const isProfileCurrentlyLaunching = launchState === LaunchState.LAUNCHING;
 
   useEffect(() => {
+    if (eventListenersSetUp.current) return;
+
+    const setupListeners = async () => {
+      const unlistenEvent = await listen("event", (event) => {
+        const payload = event.payload as any;
+        if (
+          payload.target_id === profile.id &&
+          payload.event_type?.toLowerCase() === "minecraft_output"
+        ) {
+          console.log("Game started event received, resetting button");
+          setIsLaunching(false);
+          resetLaunchState(profile.id);
+        }
+      });
+
+      const unlistenExit = await listen("minecraft_process_exited", (event) => {
+        const payload = event.payload as any;
+        if (payload.profile_id === profile.id) {
+          console.log("Process exited event received, resetting button");
+          setIsLaunching(false);
+          resetLaunchState(profile.id);
+        }
+      });
+
+      const unlistenState = await listen("state_event", (event) => {
+        const payload = event.payload as any;
+        if (payload.target_id === profile.id) {
+          if (payload.event_type?.toLowerCase() === "minecraft_output") {
+            console.log("State event: game started, resetting button");
+            setIsLaunching(false);
+            resetLaunchState(profile.id);
+          } else if (
+            payload.event_type?.toLowerCase() === "minecraft_process_exited"
+          ) {
+            console.log("State event: process exited, resetting button");
+            setIsLaunching(false);
+            resetLaunchState(profile.id);
+          }
+        }
+      });
+
+      return () => {
+        unlistenEvent();
+        unlistenExit();
+        unlistenState();
+      };
+    };
+
+    setupListeners();
+    eventListenersSetUp.current = true;
+
+    const intervalId = setInterval(() => {
+      if (isLaunching || isProfileCurrentlyLaunching) {
+        ProcessService.isMinecraftRunning(profile.id)
+          .then((isRunning) => {
+            if (isRunning) {
+              console.log(
+                "Game is running, resetting button state to allow multiple instances",
+              );
+              setIsLaunching(false);
+              resetLaunchState(profile.id);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [profile.id, isLaunching, isProfileCurrentlyLaunching, resetLaunchState]);
+
+  useEffect(() => {
     const checkStatus = async () => {
       try {
-        if (profile.state === "installing") {
-          setIsInstalling(true);
+        const isRunning = await ProcessService.isMinecraftRunning(profile.id);
+        if (isRunning) {
+          if (isLaunching || isProfileCurrentlyLaunching) {
+            setIsLaunching(false);
+            resetLaunchState(profile.id);
+          }
         }
-
-        const launching = await isProfileLaunching(profile.id);
-        setIsLaunching(launching);
       } catch (err) {
         console.error("Error checking profile status:", err);
       }
     };
 
     checkStatus();
-  }, [profile.id, profile.state, isProfileLaunching]);
+  }, [
+    profile.id,
+    profile.state,
+    isLaunching,
+    isProfileCurrentlyLaunching,
+    resetLaunchState,
+  ]);
 
   const getModLoaderIcon = () => {
     switch (profile.loader) {
@@ -86,75 +163,46 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
     e.stopPropagation();
     setLaunchError(null);
 
-    if (profile.state === "not_installed") {
-      await handleInstall(e);
+    if (isLaunching) {
+      try {
+        await ProcessService.abort(profile.id);
+        processMonitor.stopMonitoring();
+        resetLaunchState(profile.id);
+      } catch (error) {
+        console.error("Failed to abort launch:", error);
+        setLaunchError(
+          error instanceof Error ? error.message : "Failed to abort launch",
+        );
+      } finally {
+        setIsLaunching(false);
+      }
       return;
     }
 
+    setIsLaunching(true);
     try {
-      setIsLaunching(true);
-      await launchProfile(profile.id);
+      await ProcessService.launch(profile.id);
 
-      const interval = setInterval(async () => {
-        try {
-          const isStillLaunching = await isProfileLaunching(profile.id);
-          if (!isStillLaunching) {
+      setTimeout(() => {
+        ProcessService.isMinecraftRunning(profile.id)
+          .then((isRunning) => {
+            if (isRunning) {
+              console.log("Game is running after timeout, resetting button");
+              setIsLaunching(false);
+              resetLaunchState(profile.id);
+            }
+          })
+          .catch(() => {
             setIsLaunching(false);
-            clearInterval(interval);
-          }
-        } catch (err) {
-          console.error("Error checking launch status:", err);
-          setIsLaunching(false);
-          clearInterval(interval);
-        }
-      }, 2000);
-
-      setTimeout(() => {
-        setIsLaunching(false);
-        clearInterval(interval);
-      }, 60000);
-    } catch (err) {
-      console.error("Error launching profile:", err);
+            resetLaunchState(profile.id);
+          });
+      }, 5000);
+    } catch (error) {
+      console.error("Failed to launch profile:", error);
       setIsLaunching(false);
+      resetLaunchState(profile.id);
       setLaunchError(
-        err instanceof Error ? err.message : "Failed to launch profile",
-      );
-    }
-  };
-
-  const handleInstall = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setLaunchError(null);
-
-    try {
-      setIsInstalling(true);
-      await installProfile(profile.id);
-
-      const interval = setInterval(async () => {
-        try {
-          const updatedProfile = await useProfileStore
-            .getState()
-            .getProfile(profile.id);
-          if (updatedProfile.state !== "installing") {
-            setIsInstalling(false);
-            clearInterval(interval);
-          }
-        } catch (err) {
-          console.error("Error checking installation status:", err);
-          setIsInstalling(false);
-          clearInterval(interval);
-        }
-      }, 2000);
-
-      setTimeout(() => {
-        setIsInstalling(false);
-        clearInterval(interval);
-      }, 300000);
-    } catch (err) {
-      console.error("Error installing profile:", err);
-      setIsInstalling(false);
-      setLaunchError(
-        err instanceof Error ? err.message : "Failed to install profile",
+        error instanceof Error ? error.message : "Failed to launch profile",
       );
     }
   };
@@ -162,8 +210,9 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   const handleAbort = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      await abortProfileLaunch(profile.id);
+      await ProcessService.abort(profile.id);
       setIsLaunching(false);
+      resetLaunchState(profile.id);
     } catch (err) {
       console.error("Error aborting launch:", err);
       setLaunchError(
@@ -190,28 +239,11 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   };
 
   const getButtonContent = () => {
-    if (isLaunching || isProfileCurrentlyLaunching) {
+    if (isLaunching) {
       return (
         <>
-          <Icon
-            icon="pixel:spinner-solid"
-            className="w-4 h-4 animate-spin text-red-400"
-          />
-          <span>STARTING</span>
-        </>
-      );
-    } else if (isInstalling) {
-      return (
-        <>
-          <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
-          <span>INSTALLING</span>
-        </>
-      );
-    } else if (profile.state === "not_installed") {
-      return (
-        <>
-          <Icon icon="pixel:download-solid" className="w-4 h-4" />
-          <span>INSTALL</span>
+          <Icon icon="pixel:stop-solid" className="w-4 h-4 text-red-400" />
+          <span>STOP</span>
         </>
       );
     } else {
@@ -223,9 +255,6 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
       );
     }
   };
-
-  const isButtonDisabled =
-    isLaunching || isInstalling || isProfileCurrentlyLaunching;
 
   return (
     <div
@@ -294,15 +323,17 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
             disabled={isCloning}
             title="Clone Profile"
           />
-          <IconButton
-            icon={<Icon icon="pixel:cog-solid" className="w-4 h-4" />}
-            // @ts-ignore
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            title="Settings"
-          />
+          {!profile.is_standard_version && (
+            <IconButton
+              icon={<Icon icon="pixel:cog-solid" className="w-4 h-4" />}
+              // @ts-ignore
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              title="Settings"
+            />
+          )}
         </div>
       </div>
 
@@ -314,7 +345,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
         )}
 
         <div className="flex flex-col gap-3">
-          {isLaunching || isProfileCurrentlyLaunching ? (
+          {isLaunching ? (
             <div className="flex flex-col gap-2">
               <button
                 className="backdrop-blur-sm border-2 border-red-400/50 bg-red-900/30 py-4 px-6 text-2xl text-white font-minecraft flex items-center justify-center gap-3 transition-all uppercase whitespace-nowrap hover:bg-red-900/40 select-none"
@@ -337,14 +368,9 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
             <button
               className={cn(
                 "backdrop-blur-sm border-2 border-white/30 py-4 px-6 text-2xl text-white font-minecraft flex items-center justify-center gap-3 transition-all uppercase whitespace-nowrap select-none",
-                isButtonDisabled
-                  ? "bg-black/60 cursor-wait"
-                  : "bg-black/40 hover:bg-black/60 active:bg-black/70 active:scale-[0.99]",
+                "bg-black/40 hover:bg-black/60 active:bg-black/70 active:scale-[0.99]",
               )}
-              onClick={
-                profile.state === "not_installed" ? handleInstall : handlePlay
-              }
-              disabled={isButtonDisabled}
+              onClick={handlePlay}
             >
               {getButtonContent()}
             </button>
