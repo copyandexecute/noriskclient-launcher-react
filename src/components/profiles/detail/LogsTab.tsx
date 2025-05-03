@@ -55,6 +55,8 @@ export function LogsTab({ profile }: LogsTabProps) {
   const [uploadUrl, setUploadUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  const [displayLines, setDisplayLines] = useState<ParsedLogLine[]>([]);
+
   useEffect(() => {
     if (!profile?.id) return;
 
@@ -74,6 +76,7 @@ export function LogsTab({ profile }: LogsTabProps) {
 
       try {
         const paths = await getProfileLogFiles(profile.id);
+        // Sort: latest.log first, then reverse alpha
         paths.sort((a, b) => {
           const aName = getFilename(a).toLowerCase();
           const bName = getFilename(b).toLowerCase();
@@ -86,6 +89,15 @@ export function LogsTab({ profile }: LogsTabProps) {
         });
         setLogFiles(paths);
         console.log(`[LogsTab] Found ${paths.length} log files.`);
+
+        // Automatically select latest.log or the first log if available
+        if (paths.length > 0) {
+          setSelectedLogPath(paths[0]); 
+          console.log(`[LogsTab] Automatically selected log: ${paths[0]}`);
+        } else {
+            setSelectedLogPath(null); // Ensure it's null if no logs found
+        }
+
       } catch (err: any) {
         console.error('[LogsTab] Error fetching log files:', err);
         setErrorList(err?.message ?? 'Failed to load log files');
@@ -141,20 +153,13 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   }, [selectedLogPath]);
 
-  const displayLines = useMemo(() => {
-    const searchLower = searchTerm.toLowerCase().trim();
-    const isSearchActive = searchLower !== '';
-    const activeLevelFilters = new Set(
-      LOG_LEVELS.filter(level => levelFilters[level])
-    );
-
-    return parsedLogLines.filter(line => {
-      const levelMatch = !line.level || activeLevelFilters.has(line.level);
-      if (!levelMatch) return false;
-
-      const searchMatch = !isSearchActive || line.raw.toLowerCase().includes(searchLower);
-      return searchMatch;
+  useEffect(() => {
+    const filteredLines = parsedLogLines.filter(line => {
+      const levelMatch = !line.level || (levelFilters[line.level] && line.level !== 'TRACE');
+      const searchMatch = !searchTerm || line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
+      return levelMatch && searchMatch;
     });
+    setDisplayLines(filteredLines);
   }, [parsedLogLines, searchTerm, levelFilters]);
 
   useEffect(() => {
@@ -178,16 +183,19 @@ export function LogsTab({ profile }: LogsTabProps) {
   }, []);
 
   const handleCopyLog = useCallback(async () => {
-    if (!rawLogContentForCopy) return;
+    if (displayLines.length === 0) return; 
+    
+    const filteredLogContent = displayLines.map(line => line.raw).join('\n');
+
     try {
-      await writeText(rawLogContentForCopy);
+      await writeText(filteredLogContent);
       setCopied(true);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => { setCopied(false); }, 2000);
     } catch (err) {
       console.error('[LogsTab] Failed to copy log to clipboard:', err);
     }
-  }, [rawLogContentForCopy]);
+  }, [displayLines]);
 
   const handleUploadLog = useCallback(async () => {
     if (!rawLogContentForCopy || !selectedLogPath) return;
@@ -256,24 +264,12 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   return (
     <div className="h-full flex flex-col select-none text-sm">
+
       <div className="flex justify-between items-center mb-3 flex-shrink-0 px-1">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
             <h3 className="text-white font-minecraft text-lg lowercase tracking-wide">
                 Log Files
-        </h3>
-            {logFiles.length > 0 && (
-                <button
-                    onClick={handleOpenLogsFolder}
-                    title="Open Logs Folder"
-                    disabled={isLoadingList}
-                    className="flex items-center gap-1.5 px-2 py-1 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Icon icon="pixelarticons:folder" className="w-4 h-4" />
-                    open folder
-                </button>
-            )}
-        </div>
-        <div className="flex items-center gap-2">
+            </h3>
             <select
                 value={selectedLogPath ?? ''}
                 onChange={handleLogSelect}
@@ -285,11 +281,26 @@ export function LogsTab({ profile }: LogsTabProps) {
                     <option key={path} value={path}>{getFilename(path)}</option>
                 ))}
             </select>
+        </div>
+        
+        <div className="flex items-center gap-2">
+            {logFiles.length > 0 && (
+                <button
+                    onClick={handleOpenLogsFolder}
+                    title="Open Logs Folder"
+                    disabled={isLoadingList}
+                    className="flex items-center gap-1.5 px-2 py-1 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <Icon icon="pixelarticons:folder" className="w-4 h-4" />
+                    open folder
+                </button>
+            )}
 
+            {/* Copy Button */}
             <button
                 onClick={handleCopyLog}
-                disabled={!rawLogContentForCopy || isLoadingContent || copied}
-                title="Copy full log content to clipboard"
+                disabled={displayLines.length === 0 || isLoadingContent || copied}
+                title="Copy filtered log lines to clipboard"
                 className={`flex items-center gap-1.5 px-2 py-1 rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                     copied
                     ? 'bg-green-600 hover:bg-green-700 text-white'
@@ -362,7 +373,7 @@ export function LogsTab({ profile }: LogsTabProps) {
                     {LOG_LEVELS.map((level) => (
                         <label
                             key={level}
-                             className={`flex items-center gap-1 px-1.5 py-0.5 rounded-sm border cursor-pointer transition-colors text-2xl font-minecraft lowercase ${
+                             className={`flex items-center gap-1 px-1.5 py-0.5 rounded-sm border cursor-pointer transition-colors text-xl font-minecraft lowercase ${
                                 levelFilters[level]
                                 ? `${getLevelBgClass(level)} text-white/90`
                                 : 'bg-black/20 border-white/20 text-white/50 hover:bg-white/10 hover:border-white/30 hover:text-white/70'
