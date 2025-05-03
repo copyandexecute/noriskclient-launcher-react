@@ -1,10 +1,41 @@
 use log::{error, info};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Result, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_updater::UpdaterExt; // Import the trait
 use std::error::Error;
 
 const GITHUB_USER: &str = "<YOUR_GITHUB_USER>"; // <-- TODO: Ersetze dies!
 const GITHUB_REPO: &str = "<YOUR_GITHUB_REPO>"; // <-- TODO: Ersetze dies!
+
+/// Creates and configures the dedicated updater window.
+///
+/// # Arguments
+///
+/// * `app_handle` - The Tauri AppHandle.
+///
+/// # Returns
+///
+/// * `Result<WebviewWindow>` - The created Tauri webview window instance or an error.
+pub async fn create_updater_window(app_handle: &AppHandle) -> Result<WebviewWindow> {
+    info!("Creating updater window...");
+    let window = WebviewWindowBuilder::new(
+        app_handle,
+        "updater", // Unique label
+        WebviewUrl::App("updater.html".into()) // Load local HTML file
+    )
+    .title("NoRiskClient Updater")
+    .inner_size(350.0, 350.0)
+    .resizable(false)
+    .center()
+    .decorations(false) // Optional: remove window chrome
+    .transparent(false) // Optional: make background transparent (requires frontend setup)
+    .skip_taskbar(false) // Optional: hide from taskbar
+    .always_on_top(false) // Keep updater visible
+    .visible(false) // Start hidden, show when needed
+    .build()?;
+
+    info!("Updater window created successfully (label: 'updater').");
+    Ok(window)
+}
 
 /// Versucht, ein gefundenes Update herunterzuladen, zu installieren und ggf. die App neu zu starten.
 async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHandle) {

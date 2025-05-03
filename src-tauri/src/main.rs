@@ -19,6 +19,7 @@ use rand::seq::SliceRandom;
 use std::sync::Arc;
 use tauri::Listener;
 use utils::debug_utils;
+use utils::updater_utils;
 
 use crate::commands::process_command::{
     get_full_log, get_process, get_processes, get_processes_by_profile, open_log_window,
@@ -227,6 +228,20 @@ async fn main() {
             // Task für State Init und anschließenden Update Check
             let app_handle_for_state = Arc::new(app.handle().clone());
             tauri::async_runtime::spawn(async move {
+                // --- Create Updater Window (but don't show yet) ---
+                // Clone handle for window creation
+                let window_handle = app_handle_for_state.app_handle();
+                let updater_window = match updater_utils::create_updater_window(&window_handle).await {
+                    Ok(win) => {
+                        info!("Updater window created successfully in setup.");
+                        Some(win)
+                    }
+                    Err(e) => {
+                        error!("Failed to create updater window in setup: {}", e);
+                        None
+                    }
+                };
+
                 // --- State Initialization --- 
                 info!("Initiating state initialization...");
                 // Lade Dummy-Versionen/Packs (Beispielhaft, existierendem Code nachempfunden)
@@ -239,32 +254,56 @@ async fn main() {
                 }
                 info!("State initialization finished successfully.");
 
+                // --- Show Updater Window and Start Update Check ---
+                if let Some(win) = updater_window {
+                    info!("Showing updater window...");
+                    if let Err(e) = win.show() {
+                        error!("Failed to show updater window: {}", e);
+                    } else {
+                        // --- Update Check (Nach State Init und Fensteranzeige) ---
+                        info!("Attempting to retrieve launcher configuration for update check...");
+                        match state::state_manager::State::get().await { // State holen
+                            Ok(state) => {
+                                let config = state.config_manager.get_config().await;
+                                let check_beta_channel = config.check_beta_channel;
+                                info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
+                                // Pass the AppHandle for event emission
+                                utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
+                                info!("Update check process initiated.");
+                            }
+                            Err(e) => {
+                                error!("Failed to get global state after initialization: {}. Update check skipped.", e);
+                                // Optionally close the updater window if state fails
+                                if let Err(close_err) = win.close() {
+                                     error!("Failed to close updater window after state error: {}", close_err);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    warn!("Updater window could not be created, skipping update check visibility.");
+                    // Fallback: Run update check without visible window (original behavior)
+                    info!("Attempting fallback update check without window...");
+                     match state::state_manager::State::get().await { // State holen
+                        Ok(state) => {
+                            let config = state.config_manager.get_config().await;
+                            let check_beta_channel = config.check_beta_channel;
+                            info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
+                            utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
+                            info!("Update check process finished or running in background (fallback).");
+                        }
+                        Err(e) => {
+                             error!("Failed to get global state after initialization: {}. Update check skipped (fallback).", e);
+                        }
+                    }
+                }
+
                 // --- Weitere asynchrone Setup-Schritte (Beispielhaft) ---
+                // These can run concurrently or after the update check is initiated
                 debug_utils::debug_print_all_profile_worlds().await;
                 debug_utils::debug_print_all_profile_servers().await;
                 let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
                 info!("Ping info: {:?}", ping_info);
-
-                // --- Update Check (Nach State Init) ---
-                info!("Attempting to retrieve launcher configuration for update check...");
-                match state::state_manager::State::get().await { // State holen
-                    Ok(state) => {
-                        // Config direkt aus dem State lesen (Annahme: State enthält config_manager)
-                        // get_config gibt direkt LauncherConfig zurück, kein Result
-                        let config = state.config_manager.get_config().await;
-
-                        // Das neue Feld `check_beta_channel` direkt aus config verwenden
-                        let check_beta_channel = config.check_beta_channel;
-                        info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
-                        utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
-                        info!("Update check process finished or running in background.");
-
-                        // Err-Arm wird entfernt, da get_config kein Result zurückgibt
-                    }
-                    Err(e) => {
-                        error!("Failed to get global state after initialization: {}. Update check skipped.", e);
-                    }
-                }
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 
