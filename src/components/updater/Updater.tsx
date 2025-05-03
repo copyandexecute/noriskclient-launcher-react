@@ -11,20 +11,26 @@ interface UpdaterStatusPayload {
   chunk?: number; // Optional chunk size for download
 }
 
-// Helper component to inject global styles
+// Helper component to inject global styles, now including keyframes
 const GlobalStyles = () => (
   <style>{`
+    /* Define the pulse animation */
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); } /* Slightly larger */
+      100% { transform: scale(1); }
+    }
+
     html, body {
       margin: 0;
       padding: 0;
-      overflow: hidden; /* Remove scrollbars */
-      /* Set body background to match container background */
-      background-color: rgba(30, 30, 30, 0.9); 
-      height: 100%; 
+      overflow: hidden;
+      background-color: rgba(30, 30, 30, 0.9);
+      height: 100%;
       width: 100%;
     }
     #root {
-       height: 100%; 
+       height: 100%;
        width: 100%;
     }
   `}</style>
@@ -33,8 +39,9 @@ const GlobalStyles = () => (
 const Updater: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState<string>('Initializing...');
   const [progress, setProgress] = useState<number | null>(null);
+  const [isAnimating, setIsAnimating] = useState<boolean>(false); // State for animation
   const appWindow = getCurrentWindow();
-  const closeTimerRef = useRef<NodeJS.Timeout | null>(null); // Ref to store timer ID
+  const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Clear any existing timer when the component mounts or dependencies change
@@ -53,29 +60,22 @@ const Updater: React.FC = () => {
         closeTimerRef.current = null;
       }
 
-      setStatusMessage(message); // Use the message from backend by default
-      setProgress(null); // Reset progress by default
+      setStatusMessage(message);
+      setProgress(null);
+      setIsAnimating(false); // Reset animation by default
 
       switch (status) {
         case 'checking':
-          // Message set by default
-          break;
         case 'pending':
-          // Message set by default
-          break;
         case 'downloading':
-          if (typeof eventProgress === 'number' && eventProgress >= 0 && eventProgress <= 100) {
+        case 'installing':
+          setIsAnimating(true); // Start animation for active states
+          if (status === 'downloading' && typeof eventProgress === 'number' && eventProgress >= 0 && eventProgress <= 100) {
              setProgress(eventProgress);
-             // Optionally override message if progress is available
              setStatusMessage(`Downloading... ${eventProgress}%`);
-          } else {
-             // Keep the message from backend if progress is not available/valid
-             // setProgress remains null
           }
           break;
-        case 'installing':
-           // Maybe show indeterminate progress later? For now, just message.
-          break;
+        // Cases for uptodate, finished, error, close remain the same, animation stops (setIsAnimating(false) above)
         case 'uptodate':
         case 'finished':
         case 'error':
@@ -107,10 +107,17 @@ const Updater: React.FC = () => {
     };
   }, [appWindow]); // Add appWindow to dependency array
 
+  // Combine base logo style with animation style if animating
+  const logoStyle = isAnimating
+    ? { ...styles.logo, ...styles.logoAnimating }
+    : styles.logo;
+
   return (
     <>
       <GlobalStyles /> {/* Inject global styles */} 
       <div style={styles.container}>
+        {/* Add the logo image */}
+        <img src="/logo.png" alt="NoRiskClient Logo" style={logoStyle} />
         <h4 style={styles.title}>NoRiskClient Updater</h4>
         <p style={styles.status}>{statusMessage}</p>
         {progress !== null && (
@@ -143,6 +150,21 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '8px', // Rounded corners if decorations are false
     color: '#eee',
     textAlign: 'center'
+  },
+  // Add styles for the logo
+  logo: {
+    width: '160px', // Increased size
+    height: 'auto',
+    marginBottom: '15px', // Space below the logo
+    // Base transition for smooth start/stop (optional)
+    transition: 'transform 0.3s ease-in-out',
+  },
+  // Style containing the animation properties
+  logoAnimating: {
+    animationName: 'pulse',
+    animationDuration: '2s',
+    animationIterationCount: 'infinite',
+    animationTimingFunction: 'ease-in-out',
   },
   title: {
     margin: '0 0 10px 0',
