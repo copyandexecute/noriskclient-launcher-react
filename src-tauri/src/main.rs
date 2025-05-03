@@ -76,7 +76,7 @@ use commands::file_command::{
 };
 
 // Import config commands
-use commands::config_commands::{get_launcher_config, set_launcher_config};
+use commands::config_commands::{get_launcher_config, set_launcher_config, get_app_version};
 
 // Import path commands
 use commands::path_commands::{get_launcher_directory, resolve_image_path};
@@ -401,7 +401,8 @@ async fn main() {
             get_log_file_content,
             list_profile_screenshots,
             open_file,
-            read_file_bytes
+            read_file_bytes,
+            get_app_version
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

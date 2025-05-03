@@ -24,6 +24,7 @@
     import type { MinecraftVersion } from '$lib/types/minecraft';
 
     let minecraftVersions: MinecraftVersion[] = $state([]);
+    let appVersion = $state<string | null>(null); // State for app version
     let selectedType = $state<string>("release");
     let selectedVersion = $state<string>("");
     let selectedModLoader = $state<string>("vanilla");
@@ -121,6 +122,14 @@
         console.log('ProfileManager mounted, loading initial data...');
         isLoading = true; // Set loading true initially
         await loadMinecraftVersions();
+        // Load app version
+        try {
+            appVersion = await invoke("get_app_version");
+            console.log(`App Version: ${appVersion}`);
+        } catch (err) {
+            console.error("Failed to get app version:", err);
+            appVersion = "Error"; // Indicate error fetching version
+        }
         console.log('Versions loading attempted.');
         await loadProfilesFromStore(); // Load profiles first
         console.log('Profiles loaded into store');
@@ -1194,6 +1203,9 @@
 
 <div class="profile-manager">    
     <h2>Profile</h2>
+    {#if appVersion}
+        <p class="app-version">Launcher Version: {appVersion}</p>
+    {/if}
 
     <!-- Debug Events Section - Replaced with component -->
     <DebugEvents {activeEvents} />
@@ -1793,6 +1805,13 @@
     .error-message.small {
         font-size: 0.9em;
         padding: 5px 8px;
+    }
+
+    .app-version {
+        font-size: 0.8em;
+        color: #666;
+        margin-top: -15px; /* Adjust spacing */
+        margin-bottom: 15px;
     }
 
 </style>

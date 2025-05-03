@@ -1,6 +1,7 @@
 use crate::error::{AppError, CommandError};
 use crate::state::{config_state::LauncherConfig, State};
 use tauri::command;
+use tauri::AppHandle;
 
 type Result<T> = std::result::Result<T, CommandError>;
 
@@ -28,4 +29,9 @@ pub async fn set_launcher_config(config: LauncherConfig) -> Result<LauncherConfi
 
     // Return the updated config
     Ok(config)
+}
+
+#[command]
+pub fn get_app_version(app_handle: AppHandle) -> Result<String> {
+    Ok(app_handle.package_info().version.to_string())
 }
