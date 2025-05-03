@@ -10,10 +10,25 @@ import { ContentTable } from "./common/ContentTable";
 import { LoadingState } from "./common/LoadingState";
 import { ErrorState } from "./common/ErrorState";
 import { EmptyState } from "./common/EmptyState";
+import { Icon } from "@iconify/react";
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  ModrinthBulkUpdateRequestBody,
+  ModrinthHashAlgorithm,
+  ModrinthVersion,
+} from "../../../types/modrinth";
 
 interface ModsTabProps {
   profile: Profile;
   onRefresh?: () => void;
+}
+
+interface ModSourceModrinth {
+  type: "modrinth";
+  project_id: string;
+  version_id: string;
+  file_name: string;
+  file_hash_sha1?: string;
 }
 
 export function ModsTab({ profile, onRefresh }: ModsTabProps) {
@@ -25,10 +40,79 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
 
+  const [modUpdates, setModUpdates] = useState<Record<string, ModrinthVersion>>(
+    {},
+  );
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updatingMods, setUpdatingMods] = useState<Set<string>>(new Set());
+
+  const handleUpdateMod = async (mod: Mod, updateVersion: ModrinthVersion) => {
+    if (
+      mod.source?.type !== "modrinth" ||
+      !(mod.source as ModSourceModrinth).file_hash_sha1
+    ) {
+      console.error("Cannot update non-Modrinth mod or mod without hash");
+      return;
+    }
+
+    setUpdatingMods((prev) => new Set(prev).add(mod.id));
+
+    try {
+      const newUpdates = { ...modUpdates };
+      delete newUpdates[(mod.source as ModSourceModrinth).file_hash_sha1!];
+      setModUpdates(newUpdates);
+
+      console.log(
+        `Updating mod ${mod.display_name || mod.id} from ${mod.version} to ${updateVersion.version_number}`,
+      );
+
+      await invoke("update_modrinth_mod_version", {
+        profileId: profile.id,
+        modInstanceId: mod.id,
+        newVersionDetails: updateVersion,
+      });
+
+      console.log(`Successfully updated mod ${mod.display_name || mod.id}`);
+
+      setMods((currentMods) =>
+        currentMods.map((m) =>
+          m.id === mod.id
+            ? {
+                ...m,
+                version: updateVersion.version_number,
+                source:
+                  m.source?.type === "modrinth"
+                    ? {
+                        ...m.source,
+                        version_id: updateVersion.id,
+                      }
+                    : m.source,
+              }
+            : m,
+        ),
+      );
+
+      await fetchMods();
+    } catch (error) {
+      console.error("Failed to update mod:", error);
+      setError(
+        `Failed to update mod: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setUpdatingMods((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(mod.id);
+        return newSet;
+      });
+    }
+  };
+
   const fetchMods = async () => {
     try {
       setIsLoading(true);
       setError(null);
+
       const updatedProfile = await ProfileService.getProfile(profile.id);
       setMods(updatedProfile.mods || []);
       if (onRefresh) onRefresh();
@@ -42,15 +126,95 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     }
   };
 
+  const checkForModUpdates = async (currentProfile = profile) => {
+    if (!currentProfile.mods || currentProfile.mods.length === 0) return;
+
+    const modsWithHashes = currentProfile.mods.filter(
+      (mod: Mod) =>
+        mod.source?.type === "modrinth" &&
+        (mod.source as ModSourceModrinth).file_hash_sha1 != null,
+    );
+
+    if (modsWithHashes.length === 0) return;
+
+    const hashes = modsWithHashes.map(
+      (mod: Mod) => (mod.source as ModSourceModrinth).file_hash_sha1!,
+    );
+
+    setCheckingUpdates(true);
+    setUpdateError(null);
+
+    try {
+      const request: ModrinthBulkUpdateRequestBody = {
+        hashes,
+        algorithm: "sha1" as ModrinthHashAlgorithm,
+        loaders: [currentProfile.loader],
+        game_versions: [currentProfile.game_version],
+      };
+
+      console.log(`Checking for updates for ${hashes.length} mods...`);
+
+      const updates = await invoke<Record<string, ModrinthVersion>>(
+        "check_modrinth_updates",
+        { request },
+      );
+
+      setModUpdates({});
+
+      const filteredUpdates: Record<string, ModrinthVersion> = {};
+
+      const modsByHash = new Map<string, Mod>();
+      for (const mod of modsWithHashes) {
+        const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+        modsByHash.set(hash, mod);
+      }
+
+      for (const [hash, version] of Object.entries(updates)) {
+        const mod = modsByHash.get(hash);
+        if (mod && mod.version !== version.version_number) {
+          filteredUpdates[hash] = version;
+          console.log(
+            `Update available for mod ${mod.display_name || mod.id}: Current: ${mod.version}, New: ${version.version_number}`,
+          );
+        } else if (mod) {
+          console.log(
+            `Mod ${mod.display_name || mod.id} is already at the latest version: ${mod.version}`,
+          );
+        }
+      }
+      if (Object.keys(filteredUpdates).length > 0) {
+        setModUpdates(filteredUpdates);
+        console.log(
+          `Found updates for ${Object.keys(filteredUpdates).length} mods`,
+        );
+      } else {
+        console.log("No updates available for any mods");
+      }
+    } catch (error) {
+      console.error("Error checking for mod updates:", error);
+      setUpdateError(
+        error instanceof Error
+          ? error.message
+          : "Error checking for mod updates",
+      );
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
   useEffect(() => {
     fetchMods();
-
-    const refreshInterval = setInterval(() => {
-      fetchMods();
-    }, 10000);
-
-    return () => clearInterval(refreshInterval);
   }, [profile.id]);
+
+  const handleCheckUpdates = () => {
+    checkForModUpdates({ ...profile, mods });
+  };
+
+  useEffect(() => {
+    if (profile.mods && profile.mods.length > 0) {
+      checkForModUpdates(profile);
+    }
+  }, []);
 
   const handleToggleMod = async (modId: string) => {
     try {
@@ -162,6 +326,18 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     }
   };
 
+  const getModUpdateVersion = (mod: Mod): ModrinthVersion | null => {
+    if (
+      mod.source?.type !== "modrinth" ||
+      !(mod.source as ModSourceModrinth).file_hash_sha1
+    ) {
+      return null;
+    }
+
+    const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+    return hash in modUpdates ? modUpdates[hash] : null;
+  };
+
   const filteredMods = mods.filter(
     (mod) =>
       mod.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -186,6 +362,13 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     return sortDirection === "asc" ? comparison : -comparison;
   });
 
+  const modsWithUpdates = mods.filter(
+    (mod) =>
+      mod.source?.type === "modrinth" &&
+      (mod.source as ModSourceModrinth).file_hash_sha1 &&
+      (mod.source as ModSourceModrinth).file_hash_sha1! in modUpdates,
+  ).length;
+
   return (
     <div className="h-full flex flex-col select-none">
       <div className="flex items-center justify-between mb-5">
@@ -195,12 +378,24 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
           placeholder="search mods..."
         />
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           <ActionButton
             icon="pixel:upload-solid"
             label="import"
             onClick={handleImportLocalMods}
           />
+          <ActionButton
+            icon="pixel:arrow-up"
+            label="check updates"
+            onClick={handleCheckUpdates}
+            disabled={checkingUpdates}
+          >
+            {modsWithUpdates > 0 && (
+              <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm font-sans ml-1">
+                {modsWithUpdates}
+              </span>
+            )}
+          </ActionButton>
           <ActionButton
             icon="pixel:trash-solid"
             label="delete selected"
@@ -210,14 +405,20 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
           >
             ({selectedMods.size})
           </ActionButton>
-          <ActionButton
-            icon="pixel:refresh-solid"
-            onClick={fetchMods}
-            className="w-11 h-11"
-            title="Refresh mods"
-          />
         </div>
       </div>
+
+      {updateError && (
+        <div className="bg-red-900/50 border border-red-700/50 text-white p-3 mb-4 rounded">
+          <div className="flex items-center gap-2">
+            <Icon
+              icon="pixel:exclamation-triangle-solid"
+              className="w-5 h-5 text-red-400"
+            />
+            <span>Error checking for updates: {updateError}</span>
+          </div>
+        </div>
+      )}
 
       <ContentTable
         headers={[
@@ -268,16 +469,17 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
               onSelect={() => handleSelectMod(mod.id)}
               onToggle={() => handleToggleMod(mod.id)}
               onDelete={() => handleDeleteMod(mod.id)}
+              onUpdate={handleUpdateMod}
+              updateVersion={getModUpdateVersion(mod)}
+              checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
             />
           ))
         ) : (
           <EmptyState
             icon="pixel:grid-solid"
-            title={
+            message={
               searchQuery ? "no mods match your search" : "no mods installed"
             }
-            actionLabel={searchQuery ? undefined : "import local mods"}
-            onAction={searchQuery ? undefined : handleImportLocalMods}
           />
         )}
       </ContentTable>

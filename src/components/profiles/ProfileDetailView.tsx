@@ -24,7 +24,9 @@ export function ProfileDetailView({
   onClose,
   onEdit,
 }: ProfileDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<TabType>("content");
+  const [activeTab, setActiveTab] = useState<TabType>(
+    profile.is_standard_version ? "logs" : "content",
+  );
   const [currentProfile, setCurrentProfile] = useState<Profile>(profile);
   const [browseContentType, setBrowseContentType] = useState<string>("mods");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -99,12 +101,17 @@ export function ProfileDetailView({
     }
   };
 
-  const tabs = [
-    { id: "content", label: "content", icon: "pixel:grid-solid" },
-    { id: "browse", label: "browse", icon: "pixel:search-solid" },
-    { id: "worlds", label: "worlds", icon: "pixel:globe" },
-    { id: "logs", label: "logs", icon: "pixel:file-text" },
-  ];
+  const tabs = profile.is_standard_version
+    ? [
+        { id: "worlds", label: "worlds", icon: "pixel:globe" },
+        { id: "logs", label: "logs", icon: "pixel:file-text" },
+      ]
+    : [
+        { id: "content", label: "content", icon: "pixel:grid-solid" },
+        { id: "browse", label: "browse", icon: "pixel:search-solid" },
+        { id: "worlds", label: "worlds", icon: "pixel:globe" },
+        { id: "logs", label: "logs", icon: "pixel:file-text" },
+      ];
 
   return (
     <div
@@ -124,7 +131,8 @@ export function ProfileDetailView({
         <DetailHeader
           profile={currentProfile}
           onClose={handleClose}
-          onEdit={onEdit}
+          // @ts-ignore
+          onEdit={profile.is_standard_version ? undefined : onEdit}
           onRefresh={handleRefresh}
           isRefreshing={isRefreshing}
         />
@@ -147,14 +155,14 @@ export function ProfileDetailView({
         </div>
 
         <div ref={contentRef} className="flex-1 p-5 overflow-hidden">
-          {activeTab === "content" && (
+          {activeTab === "content" && !profile.is_standard_version && (
             <ContentTab
               profile={currentProfile}
               onRefresh={handleRefresh}
               onBrowse={handleBrowseContent}
             />
           )}
-          {activeTab === "browse" && (
+          {activeTab === "browse" && !profile.is_standard_version && (
             <BrowseTab
               profile={currentProfile}
               initialContentType={browseContentType}

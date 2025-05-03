@@ -1,5 +1,10 @@
 import type {
+  ModrinthAllVersionsResult,
+  ModrinthBulkUpdateRequestBody,
+  ModrinthProject,
+  ModrinthProjectContext,
   ModrinthProjectType,
+  ModrinthSearchHit,
   ModrinthSearchResponse,
   ModrinthSortType,
   ModrinthVersion,
@@ -27,65 +32,54 @@ export class ModrinthService {
     });
   }
 
+  static async searchMods(
+    query: string,
+    gameVersion?: string,
+    loader?: string,
+    limit = 20,
+  ): Promise<ModrinthSearchHit[]> {
+    return invoke<ModrinthSearchHit[]>("search_modrinth_mods", {
+      query,
+      gameVersion,
+      loader,
+      limit,
+    });
+  }
+
   static async getModVersions(
     projectIdOrSlug: string,
-    gameVersions?: string[],
     loaders?: string[],
+    gameVersions?: string[],
   ): Promise<ModrinthVersion[]> {
     return invoke<ModrinthVersion[]>("get_modrinth_mod_versions", {
       projectIdOrSlug,
-      gameVersions,
-      loaders,
-    });
-  }
-
-  static async addModToProfile(
-    profileId: string,
-    projectId: string,
-    versionId: string,
-    fileName: string,
-    downloadUrl: string,
-    fileHashSha1: string | undefined,
-    modName: string,
-    versionNumber: string,
-    loaders: string[],
-    gameVersions: string[],
-  ): Promise<void> {
-    return invoke("add_modrinth_mod_to_profile", {
-      profileId,
-      projectId,
-      versionId,
-      fileName,
-      downloadUrl,
-      fileHashSha1,
-      modName,
-      versionNumber,
       loaders,
       gameVersions,
     });
   }
 
-  static async addContentToProfile(
-    profileId: string,
-    projectId: string,
-    versionId: string,
-    fileName: string,
-    downloadUrl: string,
-    fileHashSha1: string | undefined,
-    contentName: string,
-    versionNumber: string,
-    projectType: ModrinthProjectType,
-  ): Promise<void> {
-    return invoke("add_modrinth_content_to_profile", {
-      profileId,
-      projectId,
-      versionId,
-      fileName,
-      downloadUrl,
-      fileHashSha1,
-      contentName,
-      versionNumber,
-      projectType,
+  static async getAllVersionsForContexts(
+    contexts: ModrinthProjectContext[],
+  ): Promise<ModrinthAllVersionsResult[]> {
+    return invoke<ModrinthAllVersionsResult[]>(
+      "get_all_modrinth_versions_for_contexts",
+      {
+        contexts,
+      },
+    );
+  }
+
+  static async getProjectDetails(ids: string[]): Promise<ModrinthProject[]> {
+    return invoke<ModrinthProject[]>("get_modrinth_project_details", {
+      ids,
+    });
+  }
+
+  static async checkUpdates(
+    request: ModrinthBulkUpdateRequestBody,
+  ): Promise<Record<string, ModrinthVersion>> {
+    return invoke<Record<string, ModrinthVersion>>("check_modrinth_updates", {
+      request,
     });
   }
 

@@ -166,7 +166,7 @@ export interface ProfileGroup {
   profiles: string[];
 }
 
-export type ProfileFilterType = "all" | "downloaded" | "custom";
+export type ProfileFilterType = "all" | "custom" | "standard";
 
 export interface CreateProfileParams {
   name: string;

@@ -1,91 +1,55 @@
-import { listen } from "@tauri-apps/api/event";
+import { useLaunchStateStore } from "../store/launch-state-store";
 import * as ProcessService from "./process-service";
 
 class ProcessMonitor {
-  private monitoredProfiles: Set<string> = new Set();
-  private intervalId: number | null = null;
-  private initialized = false;
+  private monitoringInterval: number | null = null;
+  private currentProfileId: string | null = null;
 
-  constructor() {
-    this.initialize();
-  }
+  startMonitoring(profileId: string) {
+    this.currentProfileId = profileId;
+    const store = useLaunchStateStore.getState();
+    store.addDebugLog(`Starting process monitoring for profile ${profileId}`);
 
-  private initialize() {
-    if (this.initialized) return;
+    this.stopMonitoring();
 
-    listen("minecraft_process_exited", (event) => {
-      const payload = event.payload as any;
-      if (
-        payload.profile_id &&
-        this.monitoredProfiles.has(payload.profile_id)
-      ) {
-        console.log(
-          `[ProcessMonitor] Minecraft process exited for profile ${payload.profile_id}`,
-        );
-      }
-    });
-
-    this.intervalId = setInterval(() => this.checkProcesses(), 2000);
-
-    this.initialized = true;
-  }
-
-  public startMonitoring(profileId: string) {
-    console.log(
-      `[ProcessMonitor] Starting monitoring for profile ${profileId}`,
-    );
-    this.monitoredProfiles.add(profileId);
-  }
-
-  public stopMonitoring(profileId: string) {
-    console.log(
-      `[ProcessMonitor] Stopping monitoring for profile ${profileId}`,
-    );
-    this.monitoredProfiles.delete(profileId);
-  }
-
-  private async checkProcesses() {
-    if (this.monitoredProfiles.size === 0) return;
-
-    try {
-      for (const profileId of this.monitoredProfiles) {
-        const processes = await ProcessService.getProcessesByProfile(profileId);
-        const hasRunningProcess = processes.some(
-          (p) => p.state === "Running" || p.state === "Starting",
-        );
-
-        if (!hasRunningProcess) {
-          console.log(
-            `[ProcessMonitor] No running processes found for profile ${profileId}`,
+    this.monitoringInterval = window.setInterval(async () => {
+      try {
+        const isRunning = await this.checkIfProcessIsRunning(profileId);
+        if (!isRunning) {
+          store.addDebugLog(
+            `Process for profile ${profileId} is no longer running`,
           );
+          // @ts-ignore
+          store.setProfileLaunchState(profileId, "idle");
+          this.stopMonitoring();
         }
+      } catch (error) {
+        store.addDebugLog(`Error monitoring process: ${error}`);
       }
-    } catch (err) {
-      console.error("[ProcessMonitor] Error checking processes:", err);
+    }, 5000) as unknown as number;
+  }
+
+  stopMonitoring() {
+    if (this.monitoringInterval !== null) {
+      window.clearInterval(this.monitoringInterval);
+      this.monitoringInterval = null;
+      this.currentProfileId = null;
     }
   }
 
-  public async isProfileRunning(profileId: string): Promise<boolean> {
+  private async checkIfProcessIsRunning(profileId: string): Promise<boolean> {
     try {
-      const processes = await ProcessService.getProcessesByProfile(profileId);
-      return processes.some(
-        (p) => p.state === "Running" || p.state === "Starting",
-      );
-    } catch (err) {
-      console.error(
-        `[ProcessMonitor] Error checking if profile ${profileId} is running:`,
-        err,
-      );
+      return await ProcessService.isMinecraftRunning(profileId);
+    } catch (error) {
+      console.error("Error checking if process is running:", error);
       return false;
     }
   }
 
-  public dispose() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-    this.monitoredProfiles.clear();
+  isMonitoring(profileId: string): boolean {
+    return (
+      this.currentProfileId === profileId && this.monitoringInterval !== null
+    );
   }
 }
 

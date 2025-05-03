@@ -4,6 +4,10 @@ import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { Card } from "../ui/Card";
+import {
+  LaunchState,
+  useLaunchStateStore,
+} from "../../store/launch-state-store";
 
 interface LaunchStatusProps {
   profileId: string;
@@ -17,6 +21,7 @@ interface LaunchStatusProps {
 }
 
 export function LaunchStatus({
+  profileId,
   isLaunching,
   currentStep,
   progress,
@@ -25,12 +30,46 @@ export function LaunchStatus({
   className,
 }: LaunchStatusProps) {
   const logEndRef = useRef<HTMLDivElement>(null);
+  const { getProfileState } = useLaunchStateStore();
+  const profileState = getProfileState(profileId);
 
   useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [logHistory]);
+
+  const getStatusIcon = () => {
+    if (profileState.launchState === LaunchState.LAUNCHING) {
+      return (
+        <Icon
+          icon="pixel:spinner-solid"
+          className="w-5 h-5 mr-3 text-red-400 animate-spin flex-shrink-0"
+        />
+      );
+    } else if (profileState.launchState === LaunchState.ERROR) {
+      return (
+        <Icon
+          icon="pixel:exclamation-triangle-solid"
+          className="w-5 h-5 mr-3 text-red-400 flex-shrink-0"
+        />
+      );
+    } else {
+      return (
+        <Icon
+          icon="pixel:check-solid"
+          className="w-5 h-5 mr-3 text-green-400 flex-shrink-0"
+        />
+      );
+    }
+  };
+
+  const getStatusText = () => {
+    if (profileState.error) {
+      return profileState.error;
+    }
+    return currentStep || "Idle";
+  };
 
   return (
     <Card
@@ -41,19 +80,9 @@ export function LaunchStatus({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center flex-1 min-w-0 px-3 py-2">
-          {isLaunching ? (
-            <Icon
-              icon="pixel:spinner-solid"
-              className="w-5 h-5 mr-3 text-red-400 animate-spin flex-shrink-0"
-            />
-          ) : (
-            <Icon
-              icon="pixel:check-solid"
-              className="w-5 h-5 mr-3 text-green-400 flex-shrink-0"
-            />
-          )}
+          {getStatusIcon()}
           <span className="text-sm font-minecraft text-white truncate">
-            {currentStep}
+            {getStatusText()}
           </span>
         </div>
 

@@ -6,6 +6,7 @@ import { cn } from "../../../lib/utils";
 import type { Mod } from "../../../types/profile";
 import { ToggleSwitch } from "./common/ToggleSwitch";
 import { invoke } from "@tauri-apps/api/core";
+import type { ModrinthVersion } from "../../../types/modrinth";
 
 interface ModRowProps {
   mod: Mod;
@@ -13,6 +14,9 @@ interface ModRowProps {
   onSelect: () => void;
   onToggle: () => void;
   onDelete: () => void;
+  onUpdate?: (mod: Mod, version: ModrinthVersion) => void;
+  updateVersion?: ModrinthVersion | null;
+  checkingUpdates?: boolean;
 }
 
 export function ModRow({
@@ -21,16 +25,18 @@ export function ModRow({
   onSelect,
   onToggle,
   onDelete,
+  onUpdate,
+  updateVersion,
 }: ModRowProps) {
   const [, setIsHovered] = useState(false);
   const [iconUrl, setIconUrl] = useState<string | null>(null);
   const [localIcon, setLocalIcon] = useState<string | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const fetchModIcon = async () => {
       try {
-        // Try to get Modrinth icon if available
         if (mod.source?.type === "modrinth" && mod.source.project_id) {
           try {
             const projectDetails = await invoke<any[]>(
@@ -49,7 +55,6 @@ export function ModRow({
           }
         }
 
-        // Try to get local icon as fallback
         try {
           if (mod.source?.type === "local" && mod.source.file_name) {
             const iconsResult = await invoke<Record<string, string | null>>(
@@ -85,6 +90,20 @@ export function ModRow({
       setTimeout(() => setIsConfirmingDelete(false), 3000);
     }
   };
+
+  const handleUpdate = async () => {
+    if (!updateVersion || !onUpdate) return;
+
+    setIsUpdating(true);
+    try {
+      await onUpdate(mod, updateVersion);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const hasUpdate =
+    !!updateVersion && updateVersion.version_number !== mod.version;
 
   return (
     <div
@@ -128,8 +147,16 @@ export function ModRow({
           )}
         </div>
         <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-lg lowercase tracking-wide truncate">
+          <div className="text-white font-minecraft text-lg lowercase tracking-wide truncate flex items-center gap-2">
             {mod.display_name || "unknown mod"}
+            {hasUpdate && (
+              <span
+                onClick={handleUpdate}
+                className=" cursor-pointer tbg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm "
+              >
+                update
+              </span>
+            )}
           </div>
           <div className="text-white/60 text-base lowercase truncate">
             {mod.source?.type === "modrinth"
@@ -141,7 +168,7 @@ export function ModRow({
         </div>
       </div>
 
-      <div className="w-28 text-white/70 text-base font-minecraft tracking-wide">
+      <div className="w-28 text-white/70 text-base font-minecraft tracking-wide flex items-center gap-1">
         {mod.version || "?"}
       </div>
 
@@ -153,7 +180,7 @@ export function ModRow({
         />
       </div>
 
-      <div className="w-20 flex items-center justify-center">
+      <div className="w-20 flex items-center justify-center gap-1">
         <button
           className={cn(
             "w-10 h-10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/20 active:scale-95 transition-all",

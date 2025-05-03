@@ -8,7 +8,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { FormSection } from "../../ui/FormSection";
 import { FormField } from "../../ui/FormField";
 import { TextInput } from "../../ui/TextInput";
-import { Button } from "../../ui/Button";
 import { StatusMessage } from "../../ui/StatusMessage";
 import { TabButton } from "../../ui/TabButton";
 import { ModLoaderButton } from "../../ui/ModLoaderButton";
@@ -198,9 +197,6 @@ export function InstallationSettingsTab({
                 </div>
               </div>
             </div>
-            <Button variant="secondary" className="text-base tracking-wide">
-              repair
-            </Button>
           </div>
         </FormField>
       </FormSection>
@@ -429,15 +425,6 @@ export function InstallationSettingsTab({
           </FormField>
         )}
       </FormSection>
-
-      <div className="flex flex-wrap gap-5">
-        <Button variant="primary" className="text-base tracking-wide">
-          install
-        </Button>
-        <Button variant="secondary" className="text-base tracking-wide">
-          reset to current
-        </Button>
-      </div>
     </div>
   );
 }

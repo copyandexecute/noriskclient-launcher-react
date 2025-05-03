@@ -7,18 +7,12 @@ import { Logo } from "../../ui/Logo";
 interface DetailHeaderProps {
   profile: Profile;
   onClose: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
   onRefresh?: () => void;
   isRefreshing?: boolean;
 }
 
-export function DetailHeader({
-  profile,
-  onClose,
-  onEdit,
-  onRefresh,
-  isRefreshing = false,
-}: DetailHeaderProps) {
+export function DetailHeader({ profile, onClose, onEdit }: DetailHeaderProps) {
   return (
     <div className="flex items-center justify-between bg-black/30 backdrop-blur-md border-b-2 border-white/30 p-5 select-none">
       <div className="flex items-center">
@@ -61,29 +55,16 @@ export function DetailHeader({
         </div>
       </div>
       <div className="flex items-center space-x-4">
-        {onRefresh && (
+        {onEdit && !profile.is_standard_version && (
           <button
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors disabled:opacity-50"
-            title="Refresh profile"
+            onClick={onEdit}
+            className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-2 text-white/80 hover:text-white font-minecraft text-base transition-colors flex items-center gap-2"
+            title="Edit profile settings"
           >
-            <Icon
-              icon={
-                isRefreshing ? "pixel:spinner-solid" : "pixel:refresh-solid"
-              }
-              className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`}
-            />
+            <Icon icon="pixel:cog-solid" className="w-4 h-4" />
+            settings
           </button>
         )}
-        <button
-          onClick={onEdit}
-          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 px-4 py-2 text-white/80 hover:text-white font-minecraft text-base transition-colors flex items-center gap-2"
-          title="Edit profile settings"
-        >
-          <Icon icon="pixel:cog-solid" className="w-4 h-4" />
-          settings
-        </button>
         <button
           onClick={onClose}
           className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 w-10 h-10 flex items-center justify-center text-white/80 hover:text-white transition-colors"

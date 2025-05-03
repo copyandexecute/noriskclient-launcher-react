@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Profile } from "../../../types/profile";
-import type {
-  ModrinthVersion,
-  ResourcePackInfo,
-} from "../../../types/modrinth";
+import type { DataPackInfo, ModrinthVersion } from "../../../types/modrinth";
 import { ContentPackRow } from "./ContentPackRow";
 import { SearchInput } from "./common/SearchInput";
 import { ActionButton } from "./common/ActionButton";
@@ -18,48 +15,43 @@ import { Icon } from "@iconify/react";
 import { formatFileSize } from "../../../utils/format-file-size";
 import { cn } from "../../../lib/utils";
 
-interface ResourcePacksTabProps {
+interface DataPacksTabProps {
   profile: Profile;
   onRefresh?: () => void;
   isActive?: boolean;
 }
 
-export function ResourcePacksTab({
+export function DataPacksTab({
   profile,
   onRefresh,
   isActive = false,
-}: ResourcePacksTabProps) {
-  const [resourcePacks, setResourcePacks] = useState<ResourcePackInfo[]>([]);
+}: DataPacksTabProps) {
+  const [dataPacks, setDataPacks] = useState<DataPackInfo[]>([]);
   const [selectedPacks, setSelectedPacks] = useState<Set<string>>(new Set());
-  const [loadingResourcePacks, setLoadingResourcePacks] = useState(false);
-  const [resourcePacksError, setResourcePacksError] = useState<string | null>(
-    null,
-  );
+  const [loadingDataPacks, setLoadingDataPacks] = useState(false);
+  const [dataPacksError, setDataPacksError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "enabled">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [loadingOperation, setLoadingOperation] = useState(false);
-  const [resourcePackUpdates, setResourcePackUpdates] = useState<
+  const [dataPackUpdates, setDataPackUpdates] = useState<
     Record<string, ModrinthVersion>
   >({});
   const [updatingPacks, setUpdatingPacks] = useState<Set<string>>(new Set());
   const [lastUpdateCheck, setLastUpdateCheck] = useState<number>(0);
 
-  const fetchResourcePacks = async () => {
-    setLoadingResourcePacks(true);
-    setResourcePacksError(null);
+  const fetchDataPacks = async () => {
+    setLoadingDataPacks(true);
+    setDataPacksError(null);
 
     try {
-      const packs = await invoke<ResourcePackInfo[]>(
-        "get_local_resourcepacks",
-        {
-          profileId: profile.id,
-        },
-      );
+      const packs = await invoke<DataPackInfo[]>("get_local_datapacks", {
+        profileId: profile.id,
+      });
 
-      console.log("Raw resource packs data:", packs);
+      console.log("Raw data packs data:", packs);
 
       const processedPacks = (packs || []).map((pack) => {
         let fileName = pack.filename;
@@ -78,35 +70,35 @@ export function ResourcePacksTab({
         };
       });
 
-      setResourcePacks(processedPacks);
+      setDataPacks(processedPacks);
 
       if (processedPacks.length > 0) {
-        checkForResourcePackUpdates();
+        checkForDataPackUpdates();
       }
 
       if (onRefresh) onRefresh();
     } catch (error) {
-      console.error("Failed to load resource packs:", error);
-      setResourcePacksError(
-        `Failed to load resource packs: ${error instanceof Error ? error.message : String(error)}`,
+      console.error("Failed to load data packs:", error);
+      setDataPacksError(
+        `Failed to load data packs: ${error instanceof Error ? error.message : String(error)}`,
       );
     } finally {
-      setLoadingResourcePacks(false);
+      setLoadingDataPacks(false);
     }
   };
 
-  const checkForResourcePackUpdates = async () => {
+  const checkForDataPackUpdates = async () => {
     const now = Date.now();
     if (now - lastUpdateCheck < 30000 && lastUpdateCheck > 0) {
       console.debug(
-        "[ResourcePacksTab] Skipping update check, last check was less than 30 seconds ago",
+        "[DataPacksTab] Skipping update check, last check was less than 30 seconds ago",
       );
       return;
     }
 
     if (!profile.game_version) {
       console.debug(
-        "[ResourcePacksTab] Cannot check resource pack updates without game_version.",
+        "[DataPacksTab] Cannot check data pack updates without game_version.",
       );
       return;
     }
@@ -115,18 +107,18 @@ export function ResourcePacksTab({
     setUpdateError(null);
 
     try {
-      const packsWithHashes = resourcePacks.filter(
+      const packsWithHashes = dataPacks.filter(
         (pack) => pack.modrinth_info && pack.sha1_hash,
       );
 
       console.debug(
-        "[ResourcePacksTab] Packs eligible for resource pack update check:",
+        "[DataPacksTab] Packs eligible for data pack update check:",
         packsWithHashes,
       );
 
       if (packsWithHashes.length === 0) {
         console.debug(
-          "[ResourcePacksTab] No resource packs eligible for update check.",
+          "[DataPacksTab] No data packs eligible for update check.",
         );
         setCheckingUpdates(false);
         return;
@@ -138,7 +130,7 @@ export function ResourcePacksTab({
 
       if (hashes.length === 0) {
         console.debug(
-          "[ResourcePacksTab] No valid hashes found for resource pack update check.",
+          "[DataPacksTab] No valid hashes found for data pack update check.",
         );
         setCheckingUpdates(false);
         return;
@@ -152,7 +144,7 @@ export function ResourcePacksTab({
       };
 
       console.debug(
-        "[ResourcePacksTab] Checking for updates for resource packs with request:",
+        "[DataPacksTab] Checking for updates for data packs with request:",
         request,
       );
 
@@ -162,47 +154,46 @@ export function ResourcePacksTab({
       );
 
       console.debug(
-        "[ResourcePacksTab] Received raw resource pack updates from backend:",
+        "[DataPacksTab] Received raw data pack updates from backend:",
         updates,
       );
 
-      setResourcePackUpdates(updates);
+      setDataPackUpdates(updates);
       setLastUpdateCheck(now);
       console.log(
-        `[ResourcePacksTab] Found updates for ${Object.keys(updates).length} resource packs`,
+        `[DataPacksTab] Found updates for ${Object.keys(updates).length} data packs`,
       );
     } catch (error) {
-      console.error("Error checking for resource pack updates:", error);
+      console.error("Error checking for data pack updates:", error);
       setUpdateError(
         error instanceof Error
           ? error.message
-          : "Error checking for resource pack updates",
+          : "Error checking for data pack updates",
       );
-      setResourcePackUpdates({});
+      setDataPackUpdates({});
     } finally {
       setCheckingUpdates(false);
     }
   };
 
-  function hasResourcePackUpdate(pack: ResourcePackInfo): boolean {
+  function hasDataPackUpdate(pack: DataPackInfo): boolean {
     if (!pack.sha1_hash || !pack.modrinth_info) return false;
 
     const updateVersion =
-      pack.sha1_hash in resourcePackUpdates
-        ? resourcePackUpdates[pack.sha1_hash]
+      pack.sha1_hash in dataPackUpdates
+        ? dataPackUpdates[pack.sha1_hash]
         : null;
     if (!updateVersion) return false;
 
     return updateVersion.id !== pack.modrinth_info.version_id;
   }
 
-  function getResourcePackUpdateVersion(
-    pack: ResourcePackInfo,
+  function getDataPackUpdateVersion(
+    pack: DataPackInfo,
   ): ModrinthVersion | null {
-    if (!pack.sha1_hash || !(pack.sha1_hash in resourcePackUpdates))
-      return null;
+    if (!pack.sha1_hash || !(pack.sha1_hash in dataPackUpdates)) return null;
 
-    const updateVersion = resourcePackUpdates[pack.sha1_hash];
+    const updateVersion = dataPackUpdates[pack.sha1_hash];
 
     if (
       pack.modrinth_info &&
@@ -215,19 +206,19 @@ export function ResourcePacksTab({
   }
 
   useEffect(() => {
-    fetchResourcePacks();
+    fetchDataPacks();
   }, [profile.id]);
 
   useEffect(() => {
-    if (isActive && resourcePacks.length > 0) {
-      checkForResourcePackUpdates();
+    if (isActive && dataPacks.length > 0) {
+      checkForDataPackUpdates();
     }
-  }, [isActive, resourcePacks.length]);
+  }, [isActive, dataPacks.length]);
 
   const togglePackEnabled = async (packId: string) => {
     if (loadingOperation) return;
 
-    const pack = resourcePacks.find((p) => p.filename === packId);
+    const pack = dataPacks.find((p) => p.filename === packId);
     if (!pack || !pack.path) return;
 
     setLoadingOperation(true);
@@ -244,16 +235,16 @@ export function ResourcePacksTab({
         enabled: shouldBeEnabled,
       });
 
-      setResourcePacks((packs) =>
+      setDataPacks((packs) =>
         packs.map((p) =>
           p.filename === packId ? { ...p, is_disabled: !shouldBeEnabled } : p,
         ),
       );
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to toggle pack enabled state:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to toggle pack: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -264,13 +255,13 @@ export function ResourcePacksTab({
   const updatePack = async (packId: string) => {
     if (loadingOperation) return;
 
-    const pack = resourcePacks.find((p) => p.filename === packId);
-    if (!pack || !hasResourcePackUpdate(pack)) return;
+    const pack = dataPacks.find((p) => p.filename === packId);
+    if (!pack || !hasDataPackUpdate(pack)) return;
 
-    const updateVersion = getResourcePackUpdateVersion(pack);
+    const updateVersion = getDataPackUpdateVersion(pack);
     if (!updateVersion) {
       console.error(
-        "Update version not found despite hasResourcePackUpdate returning true",
+        "Update version not found despite hasDataPackUpdate returning true",
       );
       return;
     }
@@ -279,33 +270,32 @@ export function ResourcePacksTab({
 
     try {
       console.log(
-        `Updating resource pack ${pack.filename} to version ${updateVersion.version_number}`,
+        `Updating data pack ${pack.filename} to version ${updateVersion.version_number}`,
       );
 
-      if (pack.sha1_hash && pack.sha1_hash in resourcePackUpdates) {
-        const newUpdates = { ...resourcePackUpdates };
+      if (pack.sha1_hash && pack.sha1_hash in dataPackUpdates) {
+        const newUpdates = { ...dataPackUpdates };
         delete newUpdates[pack.sha1_hash];
-        setResourcePackUpdates(newUpdates);
+        setDataPackUpdates(newUpdates);
       }
 
-      await invoke("update_resourcepack_from_modrinth", {
+      await invoke("update_datapack_from_modrinth", {
         profileId: profile.id,
-        resourcepack: pack,
+        datapack: pack,
         newVersionDetails: updateVersion,
       });
 
       console.log(
-        `Successfully updated resource pack ${pack.filename} to version ${updateVersion.version_number}`,
+        `Successfully updated data pack ${pack.filename} to version ${updateVersion.version_number}`,
       );
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to update pack:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to update pack: ${err instanceof Error ? err.message : String(err)}`,
       );
-
-      setResourcePackUpdates({ ...resourcePackUpdates });
+      setDataPackUpdates({ ...dataPackUpdates });
     } finally {
       setUpdatingPacks((prev) => {
         const updated = new Set(prev);
@@ -316,9 +306,7 @@ export function ResourcePacksTab({
   };
 
   const updateAllPacks = async () => {
-    const packsToUpdate = resourcePacks.filter((pack) =>
-      hasResourcePackUpdate(pack),
-    );
+    const packsToUpdate = dataPacks.filter((pack) => hasDataPackUpdate(pack));
     if (packsToUpdate.length === 0 || loadingOperation) return;
 
     setLoadingOperation(true);
@@ -327,28 +315,28 @@ export function ResourcePacksTab({
 
     try {
       for (const pack of packsToUpdate) {
-        const updateVersion = getResourcePackUpdateVersion(pack);
+        const updateVersion = getDataPackUpdateVersion(pack);
         if (!updateVersion) continue;
 
         try {
           console.log(
-            `Updating resource pack ${pack.filename} to version ${updateVersion.version_number}`,
+            `Updating data pack ${pack.filename} to version ${updateVersion.version_number}`,
           );
 
-          await invoke("update_resourcepack_from_modrinth", {
+          await invoke("update_datapack_from_modrinth", {
             profileId: profile.id,
-            resourcepack: pack,
+            datapack: pack,
             newVersionDetails: updateVersion,
           });
 
           console.log(
-            `Successfully updated resource pack ${pack.filename} to version ${updateVersion.version_number}`,
+            `Successfully updated data pack ${pack.filename} to version ${updateVersion.version_number}`,
           );
 
           if (pack.sha1_hash) {
-            const newUpdates = { ...resourcePackUpdates };
+            const newUpdates = { ...dataPackUpdates };
             delete newUpdates[pack.sha1_hash];
-            setResourcePackUpdates(newUpdates);
+            setDataPackUpdates(newUpdates);
           }
 
           setUpdatingPacks((prev) => {
@@ -361,10 +349,10 @@ export function ResourcePacksTab({
         }
       }
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to update all packs:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to update all packs: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -376,7 +364,7 @@ export function ResourcePacksTab({
   const deletePack = async (packId: string) => {
     if (loadingOperation) return;
 
-    const pack = resourcePacks.find((p) => p.filename === packId);
+    const pack = dataPacks.find((p) => p.filename === packId);
     if (!pack || !pack.path) return;
 
     if (
@@ -394,17 +382,17 @@ export function ResourcePacksTab({
         filePath: pack.path,
       });
 
-      setResourcePacks((packs) => packs.filter((p) => p.filename !== packId));
+      setDataPacks((packs) => packs.filter((p) => p.filename !== packId));
       setSelectedPacks((prev) => {
         const updated = new Set(prev);
         updated.delete(packId);
         return updated;
       });
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to delete pack:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to delete pack: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -422,7 +410,7 @@ export function ResourcePacksTab({
       });
     } catch (err) {
       console.error("Failed to open directory:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to open directory: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -436,7 +424,7 @@ export function ResourcePacksTab({
 
     try {
       const promises = Array.from(selectedPacks).map(async (packId) => {
-        const pack = resourcePacks.find((p) => p.filename === packId);
+        const pack = dataPacks.find((p) => p.filename === packId);
         if (!pack || !pack.path || !pack.is_disabled) return;
 
         return invoke("set_file_enabled", {
@@ -447,10 +435,10 @@ export function ResourcePacksTab({
 
       await Promise.all(promises);
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to enable selected packs:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to enable selected packs: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -464,7 +452,7 @@ export function ResourcePacksTab({
 
     try {
       const promises = Array.from(selectedPacks).map(async (packId) => {
-        const pack = resourcePacks.find((p) => p.filename === packId);
+        const pack = dataPacks.find((p) => p.filename === packId);
         if (!pack || !pack.path || pack.is_disabled) return;
 
         return invoke("set_file_enabled", {
@@ -475,10 +463,10 @@ export function ResourcePacksTab({
 
       await Promise.all(promises);
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to disable selected packs:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to disable selected packs: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -491,7 +479,7 @@ export function ResourcePacksTab({
 
     if (
       !confirm(
-        `Are you sure you want to delete ${selectedPacks.size} selected resource pack${
+        `Are you sure you want to delete ${selectedPacks.size} selected data pack${
           selectedPacks.size !== 1 ? "s" : ""
         }? This cannot be undone.`,
       )
@@ -503,7 +491,7 @@ export function ResourcePacksTab({
 
     try {
       const promises = Array.from(selectedPacks).map(async (packId) => {
-        const pack = resourcePacks.find((p) => p.filename === packId);
+        const pack = dataPacks.find((p) => p.filename === packId);
         if (!pack || !pack.path) return;
 
         return invoke("delete_file", {
@@ -513,15 +501,15 @@ export function ResourcePacksTab({
 
       await Promise.all(promises);
 
-      setResourcePacks((packs) =>
+      setDataPacks((packs) =>
         packs.filter((p) => !selectedPacks.has(p.filename)),
       );
       setSelectedPacks(new Set());
 
-      fetchResourcePacks();
+      fetchDataPacks();
     } catch (err) {
       console.error("Failed to delete selected packs:", err);
-      setResourcePacksError(
+      setDataPacksError(
         `Failed to delete selected packs: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
@@ -558,7 +546,7 @@ export function ResourcePacksTab({
     }
   };
 
-  const filteredPacks = resourcePacks.filter((pack) =>
+  const filteredPacks = dataPacks.filter((pack) =>
     pack.filename.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -582,9 +570,8 @@ export function ResourcePacksTab({
     (p) => p.is_disabled !== true,
   ).length;
 
-  // Count packs with updates
-  const packsWithUpdates = resourcePacks.filter((pack) =>
-    hasResourcePackUpdate(pack),
+  const packsWithUpdates = dataPacks.filter((pack) =>
+    hasDataPackUpdate(pack),
   ).length;
 
   return (
@@ -593,7 +580,7 @@ export function ResourcePacksTab({
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder="search resource packs..."
+          placeholder="search data packs..."
         />
 
         <div className="flex items-center gap-4">
@@ -620,7 +607,7 @@ export function ResourcePacksTab({
           <ActionButton
             icon="pixel:arrow-up"
             label="check updates"
-            onClick={checkForResourcePackUpdates}
+            onClick={checkForDataPackUpdates}
             disabled={checkingUpdates || loadingOperation}
           />
           {packsWithUpdates > 0 && (
@@ -699,25 +686,22 @@ export function ResourcePacksTab({
         sortDirection={sortDirection}
         onSort={handleSort}
         selectedCount={selectedPacks.size}
-        totalCount={resourcePacks.length}
+        totalCount={dataPacks.length}
         filteredCount={filteredPacks.length}
         enabledCount={enabledPacks}
         onSelectAll={handleSelectAll}
-        contentType="resourcepack"
+        contentType="datapack"
         searchQuery={searchQuery}
       >
-        {loadingResourcePacks ? (
-          <LoadingState message="loading resource packs..." />
-        ) : resourcePacksError ? (
-          <ErrorState
-            message={resourcePacksError}
-            onRetry={fetchResourcePacks}
-          />
+        {loadingDataPacks ? (
+          <LoadingState message="loading data packs..." />
+        ) : dataPacksError ? (
+          <ErrorState message={dataPacksError} onRetry={fetchDataPacks} />
         ) : sortedPacks.length > 0 ? (
           sortedPacks.map((pack) => {
-            const hasUpdate = hasResourcePackUpdate(pack);
+            const hasUpdate = hasDataPackUpdate(pack);
             const updateVersion = hasUpdate
-              ? getResourcePackUpdateVersion(pack)
+              ? getDataPackUpdateVersion(pack)
               : null;
             const isUpdating = updatingPacks.has(pack.filename);
 
@@ -746,19 +730,19 @@ export function ResourcePacksTab({
                 onUpdate={hasUpdate ? updatePack : undefined}
                 updateVersion={updateVersion}
                 checkingUpdates={checkingUpdates || isUpdating}
-                iconType="pixel:image-solid"
+                iconType="pixel:cube-solid"
                 formatFileSize={formatFileSize}
-                onCheckForUpdates={checkForResourcePackUpdates}
+                onCheckForUpdates={checkForDataPackUpdates}
               />
             );
           })
         ) : (
           <EmptyState
-            icon="pixel:image-solid"
+            icon="pixel:cube-solid"
             message={
               searchQuery
-                ? "no resource packs match your search"
-                : "no resource packs installed"
+                ? "no data packs match your search"
+                : "no data packs installed"
             }
           />
         )}

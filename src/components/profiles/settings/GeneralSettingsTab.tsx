@@ -6,11 +6,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { FormSection } from "../../ui/FormSection";
 import { FormField } from "../../ui/FormField";
 import { TextInput } from "../../ui/TextInput";
-import { TextArea } from "../../ui/TextArea";
 import { SelectInput } from "../../ui/SelectInput";
 import { Button } from "../../ui/Button";
 import { StatusMessage } from "../../ui/StatusMessage";
 import { LoadingIndicator } from "../../ui/LoadingIndicator";
+import { Icon } from "@iconify/react";
 
 interface GeneralSettingsTabProps {
   profile: Profile;
@@ -117,15 +117,6 @@ export function GeneralSettingsTab({
           />
         </FormField>
 
-        <FormField label="description">
-          <TextArea
-            value={editedProfile.description || ""}
-            onChange={(value) => updateProfile({ description: value || null })}
-            placeholder="enter a description for this profile"
-            className="text-2xl tracking-wide"
-          />
-        </FormField>
-
         <FormField label="norisk client pack">
           {loading ? (
             <LoadingIndicator message="loading norisk packs..." />
@@ -155,20 +146,6 @@ export function GeneralSettingsTab({
         </FormField>
       </FormSection>
 
-      <FormSection>
-        <FormField
-          label="library groups"
-          description="library groups allow you to organize your instances into different sections in your library."
-        >
-          <TextInput
-            value={editedProfile.group || ""}
-            onChange={(value) => updateProfile({ group: value || null })}
-            placeholder="enter group name"
-            className="text-2xl tracking-wide"
-          />
-        </FormField>
-      </FormSection>
-
       <div className="flex flex-wrap gap-6">
         <FormSection className="flex-1 min-w-[300px]">
           <FormField
@@ -178,10 +155,10 @@ export function GeneralSettingsTab({
             <Button
               onClick={handleDuplicate}
               disabled={loading}
-              icon="pixel:copy-solid"
               variant="secondary"
               className="text-2xl py-3 px-6 tracking-wide"
             >
+              <Icon icon={"pixel:copy-solid"} />
               duplicate
             </Button>
           </FormField>
@@ -195,9 +172,9 @@ export function GeneralSettingsTab({
             <Button
               onClick={handleDelete}
               variant="danger"
-              icon="pixel:trash-solid"
               className="text-2xl py-3 px-6 tracking-wide"
             >
+              <Icon icon={"pixel:trash-alt-solid"} />
               {confirmDelete ? "confirm delete" : "delete instance"}
             </Button>
           </FormField>
