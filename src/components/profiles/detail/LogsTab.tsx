@@ -25,32 +25,87 @@ interface ParsedLogLine {
 const LOG_LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'] as const;
 type LogLevel = typeof LOG_LEVELS[number];
 
-const logLineRegex = /^\s*\[(\d{2}:\d{2}:\d{2})\]\s+\[([^\[\/\r\n]+)\/([^\]\r\n]+)\]:(.*)$/;
+// Standard format: [HH:MM:SS] [Thread/Level]: Text
+const logLineRegexStandard = /^\s*\[(\d{2}:\d{2}:\d{2})\]\s+\[([^/]+)\/([^\]]+)\]:\s*(.*)$/;
+// NeoForge format with source: [Timestamp] [Thread/Level] [Source]: Text
+const logLineRegexNeoForgeSource = /^\s*\[([^\]]+)\]\s+\[([^/]+)\/([^\]]+)\]\s+\[[^\]]+\]:\s*(.*)$/;
+// NeoForge format without source: [Timestamp] [Thread/Level]: Text
+const logLineRegexNeoForgeNoSource = /^\s*\[([^\]]+)\]\s+\[([^/]+)\/([^\]]+)\]:\s*(.*)$/;
 
 function getFilename(path: string | null): string {
   if (!path) return '';
   return path.split(/[\\\/]/).pop() || path;
 }
 
-function parseLogLine(line: string, id: number): ParsedLogLine {
-  const match = line.match(logLineRegex);
-  if (match) {
-    const levelUpper = match[3].toUpperCase() as LogLevel;
-    const level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
-    return {
-      id,
-      raw: line,
-      timestamp: match[1],
-      thread: match[2],
-      level: level,
-      text: match[4].trimEnd(),
-    };
+// New parsing function
+function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
+  const linesArray = rawContent.split(/\r?\n/);
+  const processedLines: ParsedLogLine[] = [];
+  let lastKnownLevel: LogLevel | undefined = undefined;
+
+  for (let i = 0; i < linesArray.length; i++) {
+    const line = linesArray[i];
+    let match: RegExpMatchArray | null = null;
+    let timestamp: string | undefined = undefined;
+    let thread: string | undefined = undefined;
+    let level: LogLevel | undefined = undefined;
+    let text: string = line.trimEnd(); // Default text, trim end
+
+    // Try matching standard format
+    match = line.match(logLineRegexStandard);
+    if (match) {
+      timestamp = match[1];
+      thread = match[2];
+      const levelUpper = match[3].toUpperCase() as LogLevel;
+      level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
+      text = match[4].trim(); // Full trim for captured text
+    } else {
+      // Try matching NeoForge with source format
+      match = line.match(logLineRegexNeoForgeSource);
+      if (match) {
+        timestamp = match[1];
+        thread = match[2];
+        const levelUpper = match[3].toUpperCase() as LogLevel;
+        level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
+        text = match[4].trim(); // Full trim
+      } else {
+         // Try matching NeoForge without source format
+         match = line.match(logLineRegexNeoForgeNoSource);
+         if (match) {
+            timestamp = match[1];
+            thread = match[2];
+            const levelUpper = match[3].toUpperCase() as LogLevel;
+            level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
+            text = match[4].trim(); // Full trim
+         }
+      }
+    }
+
+    if (match) {
+      // We found a structured log line
+      processedLines.push({
+        id: i,
+        raw: line,
+        timestamp: timestamp,
+        thread: thread,
+        level: level,
+        text: text,
+      });
+      lastKnownLevel = level; // Remember this level
+    } else {
+      // Line does NOT match any known format - inherit level
+      processedLines.push({
+        id: i,
+        raw: line,
+        timestamp: undefined,
+        thread: undefined,
+        level: lastKnownLevel, // Use the last known level
+        text: text, // Already trimmed end
+      });
+      // Do not update lastKnownLevel here
+    }
   }
-  return {
-    id,
-    raw: line,
-    text: line.trimEnd(),
-  };
+  return processedLines;
 }
 
 export function LogsTab({ profile }: LogsTabProps) {
@@ -149,37 +204,8 @@ export function LogsTab({ profile }: LogsTabProps) {
           const rawContent = await invoke<string>('get_log_file_content', { logFilePath: selectedLogPath });
           setRawLogContentForCopy(rawContent);
 
-          const linesArray = rawContent.split(/\r?\n/);
-          const processedLines: ParsedLogLine[] = [];
-          let lastKnownLevel: LogLevel | undefined = undefined;
-
-          for (let i = 0; i < linesArray.length; i++) {
-            const line = linesArray[i];
-            const match = line.match(logLineRegex);
-
-            if (match) {
-              const levelUpper = match[3].toUpperCase() as LogLevel;
-              const currentLevel = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
-              processedLines.push({
-                id: i,
-                raw: line,
-                timestamp: match[1],
-                thread: match[2],
-                level: currentLevel,
-                text: match[4].trimEnd(),
-              });
-              lastKnownLevel = currentLevel;
-            } else {
-              processedLines.push({
-                id: i,
-                raw: line,
-                timestamp: undefined,
-                thread: undefined,
-                level: lastKnownLevel,
-                text: line.trimEnd(),
-              });
-            }
-          }
+          // Call the new parsing function
+          const processedLines = parseLogLinesFromString(rawContent);
 
           setParsedLogLines(processedLines);
           console.log(`[LogsTab] Loaded and parsed ${processedLines.length} lines for ${selectedLogPath}`);
