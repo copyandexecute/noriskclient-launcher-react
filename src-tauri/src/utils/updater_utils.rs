@@ -4,9 +4,7 @@ use tauri_plugin_updater::UpdaterExt;
 use std::error::Error as StdError;
 use serde::Serialize;
 use crate::error::{AppError, Result as AppResult};
-
-const GITHUB_USER: &str = "<YOUR_GITHUB_USER>"; // <-- TODO: Ersetze dies!
-const GITHUB_REPO: &str = "<YOUR_GITHUB_REPO>"; // <-- TODO: Ersetze dies!
+use tokio::time::{sleep, Duration};
 
 // Define the payload structure for updater status events
 #[derive(Clone, Serialize)] // Add derive macros
@@ -49,13 +47,13 @@ pub async fn create_updater_window(app_handle: &AppHandle) -> tauri::Result<Webv
         WebviewUrl::App("updater.html".into()) // Load local HTML file
     )
     .title("NoRiskClient Updater")
-    .inner_size(350.0, 350.0)
+    .inner_size(325.0, 375.0)
     .resizable(false)
     .center()
     .decorations(false) // Optional: remove window chrome
     .transparent(false) // Optional: make background transparent (requires frontend setup)
     .skip_taskbar(false) // Optional: hide from taskbar
-    .always_on_top(false) // Keep updater visible
+    .always_on_top(true) // Keep updater visible
     .visible(false) // Start hidden, show when needed
     .build()?;
 
@@ -68,26 +66,40 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
     info!("Attempting to automatically download and install update...");
     emit_status(&app_handle, "pending", "Update found, preparing download...".to_string(), None);
 
+    // --- Debug Delay 1 --- 
+    #[cfg(debug_assertions)]
+    {
+        info!("DEBUG: Pausing after 'pending' status...");
+        sleep(Duration::from_secs(2)).await;
+    }
+    // --- End Debug Delay --- 
+
     let app_handle_progress = app_handle.clone();
+    let mut total_downloaded: u64 = 0; // Track total downloaded bytes
 
     // Define closures for download progress and finish
     let on_chunk = move |chunk_length: usize, content_length: Option<u64>| {
         let chunk_u64 = chunk_length as u64;
+        total_downloaded += chunk_u64; // Accumulate downloaded bytes
         let total_u64_opt = content_length;
 
         if let Some(total_u64) = total_u64_opt {
-            let msg = format!("Downloading update: {} / {} bytes", chunk_u64, total_u64);
-            info!("{}", msg);
-            emit_status(&app_handle_progress, "downloading", msg, Some((chunk_u64, total_u64)));
+            // Use total_downloaded for the message and progress calculation
+            let msg = format!("Downloading update: {} / {} bytes", total_downloaded, total_u64);
+            // Log the cumulative progress
+            info!("{}", msg); 
+            // Pass the cumulative total_downloaded to emit_status
+            emit_status(&app_handle_progress, "downloading", msg, Some((total_downloaded, total_u64)));
         } else {
-            let msg = format!("Downloading update: {} bytes (total size unknown)", chunk_u64);
+            // Handle download without total size known
+            let msg = format!("Downloading update: {} bytes", total_downloaded); // Show accumulated bytes
             info!("{}", msg);
             let payload = UpdaterStatusPayload {
                 message: msg,
                 status: "downloading".to_string(),
-                progress: None,
+                progress: None, // No percentage available
                 total: None,
-                chunk: Some(chunk_u64),
+                chunk: Some(total_downloaded), // Send accumulated bytes
             };
             if let Err(e) = app_handle_progress.emit("updater_status", payload) {
                 error!("Failed to emit updater status event (no total): {}", e);
@@ -96,7 +108,6 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
     };
     let on_download_finish = || {
         info!("Download complete. Preparing installation...");
-        // Note: We emit "installing" status AFTER the install call below
     };
 
     // --- Step 1: Download the update --- 
@@ -111,6 +122,14 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
         })?;
     info!("Update download finished successfully ({} bytes).", bytes.len());
 
+    // --- Debug Delay 2 --- 
+    #[cfg(debug_assertions)]
+    {
+        info!("DEBUG: Pausing after download completed...");
+        sleep(Duration::from_secs(2)).await;
+    }
+    // --- End Debug Delay --- 
+
     // --- Step 2: Install the update --- 
     // This block can be commented out for testing to prevent actual installation
     /* START INSTALL BLOCK */
@@ -122,7 +141,17 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
             // Convert updater::Error to AppError::Other for install step
             AppError::Other(format!("Updater install error: {}", e))
         })?;*/
-    info!("Update installation finished successfully.");
+    // Simulate install time if commented out
+    #[cfg(debug_assertions)]
+    if true { // Change to check if install block IS commented out if needed
+        info!("DEBUG: Simulating installation time...");
+        sleep(Duration::from_secs(2)).await;
+        info!("DEBUG: Simulated installation finished.");
+    } else {
+        info!("DEBUG: Installation block active (no extra delay added here).");
+    }
+    // Remove the line below if install block is active
+    info!("Skipping actual installation (commented out)."); 
     /* END INSTALL BLOCK */
 
     // Emit final statuses after successful install (or after download if install is commented out)

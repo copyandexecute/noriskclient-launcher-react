@@ -293,9 +293,9 @@ async fn main() {
                     }
                 }
 
-                // --- Updater window should be closed now via event, show main window ---
+                // --- Updater window should be closed now via event, show main window --- 
                 info!("Updater process finished. Attempting to show main window...");
-                /*if let Some(main_window) = app_handle.get_webview_window("main") { // Use get_webview_window
+                if let Some(main_window) = app_handle.get_webview_window("main") { // Use get_webview_window
                     if let Err(e) = main_window.show() {
                         error!("Failed to show main window: {}", e);
                     } else {
@@ -307,7 +307,7 @@ async fn main() {
                     }
                 } else {
                     error!("Could not get main window handle to show it after update check!");
-                }*/
+                }
 
                 // --- Other Async Steps (can run after main window is shown) ---
                 debug_utils::debug_print_all_profile_worlds().await;
