@@ -126,9 +126,15 @@ jobs:
           $ARTIFACT_DIR = "${{ matrix.output_path }}\nsis"
           echo "Listing content of $ARTIFACT_DIR"
           Get-ChildItem -Path $ARTIFACT_DIR -Recurse
-          Move-Item -Path "$ARTIFACT_DIR\*.exe" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.exe"
-          Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip"
-          Move-Item -Path "$ARTIFACT_DIR\*.nsis.zip.sig" -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.nsis.zip.sig"
+          # Finde die Originalnamen (angenommen nur eine .exe und eine .exe.sig)
+          $ExeFile = Get-ChildItem -Path $ARTIFACT_DIR -Filter *.exe
+          $SigFile = Get-ChildItem -Path $ARTIFACT_DIR -Filter *.exe.sig
+
+          # Benenne .exe um
+          Move-Item -Path $ExeFile.FullName -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.exe"
+          # Benenne .exe.sig um
+          Move-Item -Path $SigFile.FullName -Destination "$ARTIFACT_DIR\${{ matrix.asset_name_base }}.exe.sig"
+
           echo "Final content of $ARTIFACT_DIR after move"
           Get-ChildItem -Path $ARTIFACT_DIR -Recurse
           
@@ -241,8 +247,7 @@ jobs:
           echo "Sending notification to PRODUCTION backend for tag ${{ github.ref_name }}"
           curl -X POST \
                -H "Content-Type: application/json" \
-               # Optional: API-Key hinzufügen, falls benötigt
-               # -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
+               -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
                https://api.norisk.gg/api/v1/launcher/releases/update
         shell: bash
 
@@ -258,7 +263,6 @@ jobs:
           echo "Sending notification to STAGING backend for ref ${{ github.ref_name }}"
           curl -X POST \
                -H "Content-Type: application/json" \
-               # Optional: API-Key hinzufügen, falls benötigt
-               # -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
+               -H "Authorization: Bearer ${{ secrets.BACKEND_API_KEY }}" \
                https://api-staging.norisk.gg/api/v1/launcher/releases/update
         shell: bash
