@@ -83,7 +83,7 @@ jobs:
         run: |
           echo "--- Listing content BEFORE rename ---"
           echo "Output path: ${{ matrix.output_path }}"
-          ls -R "${{ matrix.output_path }}/release/bundle" || true
+          ls -R "${{ matrix.output_path }}" || true
           echo "-----------------------------------"
           
           APP_BASE_NAME=noriskclient-launcher-v3 # Dein productName
@@ -97,14 +97,14 @@ jobs:
           # Verschiebe und benenne AppImage um (verwende einfachen Wildcard)
           mv "$APPIMAGE_DIR"/*.AppImage "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage
           
-          # Verschiebe und benenne AppImage Tarball um (verwende einfachen Wildcard)
-          mv "$APPIMAGE_DIR"/*.AppImage.tar.gz "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.tar.gz
-          
           # Verschiebe und benenne AppImage Signatur um (verwende einfachen Wildcard)
-          mv "$APPIMAGE_DIR"/*.AppImage.tar.gz.sig "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.tar.gz.sig
+          mv "$APPIMAGE_DIR"/*.AppImage.sig "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.AppImage.sig
           
-          # Verschiebe und benenne Deb Paket um (ignoriere Fehler, falls nicht vorhanden)
-          mv "$DEB_DIR"/*.deb "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.deb || true
+          # Verschiebe und benenne Deb Paket um
+          mv "$DEB_DIR"/*.deb "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.deb
+          
+          # Verschiebe und benenne Deb Signatur um
+          mv "$DEB_DIR"/*.deb.sig "$APPIMAGE_DIR"/${{ matrix.asset_name_base }}.deb.sig
           
           echo "Final content of $APPIMAGE_DIR after moves"
           ls -R "$APPIMAGE_DIR" || true
