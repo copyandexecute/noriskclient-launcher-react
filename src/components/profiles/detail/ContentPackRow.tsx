@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { ToggleSwitch } from "./common/ToggleSwitch";
+import type { ModrinthVersion } from "../../../types/modrinth";
+import { cn } from "../../../lib/utils";
 import { invoke } from "@tauri-apps/api/core";
 
 interface ContentPack {
-  id: string;
+  id?: string;
   display_name?: string | null;
-  file_name: string;
-  enabled: boolean;
+  file_name?: string;
+  enabled?: boolean;
   icon_url?: string;
   version?: string;
   creator?: string;
@@ -17,6 +19,15 @@ interface ContentPack {
   path?: string;
   file_size?: number;
   is_disabled?: boolean;
+  sha1_hash?: string;
+  modrinth_info?: {
+    project_id: string;
+    version_id: string;
+    name: string;
+    version_number: string;
+    download_url: string;
+  } | null;
+  filename?: string;
 }
 
 interface ContentPackRowProps {
@@ -25,8 +36,13 @@ interface ContentPackRowProps {
   onSelect: () => void;
   onToggle: () => void;
   onDelete: () => void;
-  formatFileSize: (bytes?: number) => string;
+  onOpenDirectory?: () => void;
+  onUpdate?: (packId: string) => void;
+  updateVersion?: ModrinthVersion | null;
+  checkingUpdates?: boolean;
   iconType?: string;
+  formatFileSize?: (size: number) => string;
+  onCheckForUpdates?: () => void;
 }
 
 export function ContentPackRow({
@@ -35,19 +51,49 @@ export function ContentPackRow({
   onSelect,
   onToggle,
   onDelete,
-  formatFileSize,
+  onOpenDirectory,
+  onUpdate,
+  updateVersion,
   iconType = "pixel:image-solid",
+  formatFileSize,
+  onCheckForUpdates,
 }: ContentPackRowProps) {
+  const [, setIsHovered] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [localIcon, setLocalIcon] = useState<string | null>(null);
+  const [, setIsUpdating] = useState(false);
+
+  const extractFileName = (path?: string): string => {
+    if (!path) return "Unknown file";
+    const parts = path.split(/[/\\]/);
+    return parts[parts.length - 1] || "Unknown file";
+  };
+
+  const getDisplayName = (): string => {
+    if (contentPack.file_name && contentPack.file_name !== "0")
+      return contentPack.file_name;
+
+    if (contentPack.path) return extractFileName(contentPack.path);
+
+    if (contentPack.display_name) return contentPack.display_name;
+
+    if (contentPack.modrinth_info?.name) return contentPack.modrinth_info.name;
+
+    return "Unknown pack";
+  };
+
+  const getFormattedFileSize = (): string | null => {
+    if (contentPack.file_size && contentPack.file_size > 0 && formatFileSize) {
+      return formatFileSize(contentPack.file_size);
+    }
+    return null;
+  };
 
   useEffect(() => {
     const fetchPackIcon = async () => {
-      // Skip if we already have an icon URL
       if (contentPack.icon_url) return;
 
       try {
-        // Try to get icon from local archive
         if (contentPack.path) {
           const iconsResult = await invoke<Record<string, string | null>>(
             "get_icons_for_archives",
@@ -68,96 +114,156 @@ export function ContentPackRow({
     fetchPackIcon();
   }, [contentPack]);
 
+  useEffect(() => {
+    if (
+      onCheckForUpdates &&
+      contentPack.modrinth_info &&
+      contentPack.sha1_hash
+    ) {
+      onCheckForUpdates();
+    }
+  }, []);
+
   const handleDelete = () => {
     if (deleteConfirm) {
       onDelete();
+      setDeleteConfirm(false);
     } else {
       setDeleteConfirm(true);
       setTimeout(() => setDeleteConfirm(false), 3000);
     }
   };
 
+  const handleUpdate = async () => {
+    if (!updateVersion || !onUpdate) return;
+
+    setIsUpdating(true);
+    try {
+      await onUpdate(contentPack.filename || contentPack.id || "");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const hasUpdate =
+    !!updateVersion &&
+    contentPack.modrinth_info &&
+    updateVersion.id !== contentPack.modrinth_info.version_id;
+
+  const packName = getDisplayName();
+  const fileSize = getFormattedFileSize();
+
   return (
     <div
-      className={`flex items-center p-5 border-b border-white/20 hover:bg-white/5 transition-colors select-none ${
-        isSelected ? "bg-white/10" : ""
-      }`}
+      className={cn(
+        "flex items-center py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
+        isSelected && "bg-white/10",
+      )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex items-center mr-4">
+      <div className="w-8 flex justify-center">
         <input
           type="checkbox"
+          className="w-5 h-5 accent-white/70 cursor-pointer"
           checked={isSelected}
           onChange={onSelect}
-          className="w-5 h-5 accent-white/70 cursor-pointer"
+          aria-label={`Select ${packName}`}
         />
       </div>
 
-      <div className="flex-shrink-0 w-12 h-12 mr-4 bg-black/30 flex items-center justify-center overflow-hidden">
-        {contentPack.icon_url ? (
-          <img
-            src={contentPack.icon_url || "/placeholder.svg"}
-            alt={contentPack.display_name || contentPack.file_name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = "none";
-              const parent = target.parentElement;
-              if (parent) {
-                parent.innerHTML = `<span class="icon"><Icon icon="${iconType}" class="w-7 h-7 text-white/50" /></span>`;
-              }
-            }}
-          />
-        ) : localIcon ? (
-          <img
-            src={`data:image/png;base64,${localIcon}`}
-            alt={contentPack.display_name || contentPack.file_name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-            onError={() => setLocalIcon(null)}
-          />
-        ) : (
-          <Icon icon={iconType} className="w-7 h-7 text-white/50" />
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="font-minecraft text-white text-lg truncate tracking-wide lowercase">
-          {contentPack.display_name || contentPack.file_name}
-        </div>
-        <div className="text-base text-white/60 truncate">
-          {contentPack.creator && (
-            <span className="mr-2">by {contentPack.creator}</span>
-          )}
-          {contentPack.version && (
-            <>
-              <span className="opacity-50 mx-1">•</span>
-              <span>v{contentPack.version}</span>
-            </>
-          )}
-          {contentPack.file_size && (
-            <>
-              <span className="opacity-50 mx-1">•</span>
-              <span>{formatFileSize(contentPack.file_size)}</span>
-            </>
+      <div className="flex items-center gap-4 flex-1 min-w-0 px-3">
+        <div className="w-12 h-12 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {contentPack.icon_url ? (
+            <img
+              src={contentPack.icon_url || "/placeholder.svg"}
+              alt={packName}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={() => setLocalIcon(null)}
+            />
+          ) : localIcon ? (
+            <img
+              src={`data:image/png;base64,${localIcon}`}
+              alt={packName}
+              className="w-full h-full object-cover"
+              loading="lazy"
+              onError={() => setLocalIcon(null)}
+            />
+          ) : (
+            <Icon icon={iconType} className="w-7 h-7 text-white/60" />
           )}
         </div>
-        {contentPack.display_name && contentPack.file_name && (
-          <div className="text-sm text-white/50 italic truncate mt-1">
-            file: {contentPack.file_name}
+        <div className="flex flex-col min-w-0">
+          <div className="text-white font-minecraft text-lg lowercase tracking-wide truncate flex items-center gap-2">
+            {packName}
+            {hasUpdate && (
+              <span
+                onClick={handleUpdate}
+                className=" cursor-pointer tbg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm "
+              >
+                update
+              </span>
+            )}
           </div>
-        )}
+          <div className="text-white/60 text-base lowercase truncate">
+            {contentPack.creator && (
+              <span className="mr-2">by {contentPack.creator}</span>
+            )}
+            {contentPack.version && (
+              <>
+                {contentPack.creator && (
+                  <span className="opacity-50 mx-1">•</span>
+                )}
+                <span>v{contentPack.version}</span>
+              </>
+            )}
+            {fileSize && (
+              <>
+                {(contentPack.creator || contentPack.version) && (
+                  <span className="opacity-50 mx-1">•</span>
+                )}
+                <span className="text-white/50">{fileSize}</span>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 ml-4">
-        <ToggleSwitch enabled={contentPack.enabled} onChange={onToggle} />
+      <div className="w-28 flex justify-center">
+        <ToggleSwitch
+          enabled={
+            contentPack.enabled !== false && contentPack.is_disabled !== true
+          }
+          onChange={onToggle}
+          title={
+            contentPack.enabled !== false && contentPack.is_disabled !== true
+              ? "Disable pack"
+              : "Enable pack"
+          }
+        />
+      </div>
+
+      <div className="w-20 flex items-center justify-center gap-1">
+        {onOpenDirectory && (
+          <button
+            className="w-10 h-10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/20 active:scale-95 transition-all rounded-sm"
+            onClick={onOpenDirectory}
+            title="Open containing folder"
+          >
+            <Icon icon="pixel:folder-open-solid" className="w-5 h-5" />
+          </button>
+        )}
 
         <button
-          className={`p-2.5 text-white/60 hover:text-white transition-colors ${
-            deleteConfirm ? "text-red-500 animate-pulse" : ""
-          }`}
+          className={cn(
+            "w-10 h-10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/20 active:scale-95 transition-all",
+            deleteConfirm && "bg-red-500/50 text-white",
+          )}
           onClick={handleDelete}
-          title={deleteConfirm ? "Click again to confirm" : "Delete"}
+          title={
+            deleteConfirm ? "Click again to confirm deletion" : "Delete pack"
+          }
         >
           <Icon icon="pixel:trash-solid" className="w-5 h-5" />
         </button>

@@ -47,12 +47,7 @@ export function LogsTab({}: LogsTabProps) {
       </div>
 
       <div className="flex-1 pl-5">
-        <EmptyState
-          icon="pixel:file-text"
-          title="log viewer"
-          description="coming soon"
-          actionLabel={undefined}
-        />
+        <EmptyState icon="pixel:file-text" message="log viewer" />
       </div>
     </div>
   );

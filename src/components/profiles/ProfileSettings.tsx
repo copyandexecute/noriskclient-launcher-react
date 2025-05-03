@@ -171,8 +171,8 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     { id: "general", label: "General", icon: "pixel:cog-solid" },
     { id: "installation", label: "Installation", icon: "pixel:download-solid" },
     { id: "java", label: "Java", icon: "pixel:code-solid" },
-    { id: "window", label: "Window", icon: "pixel:window-maximize-solid" },
-    { id: "export", label: "Export", icon: "pixel:file-export-solid" },
+    { id: "window", label: "Window", icon: "pixel:grid-solid" },
+    { id: "export", label: "Export", icon: "pixel:file-import-solid" },
   ];
 
   const renderExportTab = () => (

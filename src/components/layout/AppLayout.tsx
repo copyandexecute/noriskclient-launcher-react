@@ -109,8 +109,8 @@ export function AppLayout({
             ref={backgroundPatternRef}
             className="absolute inset-0 opacity-90 pointer-events-none"
             style={{
-              backgroundImage: "url('/background.jpeg')",
-              backgroundSize: "200% 200%",
+              backgroundImage: "url('/4e9851eedd0e229bf4a9fb4c85207b93.gif')",
+              backgroundSize: "100% 100%",
               backgroundPosition: "0% 0%",
               filter: "blur(8px)",
             }}
@@ -157,6 +157,7 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
 
       <div className="flex items-center gap-4">
         <UserProfileBar
+          //@ts-ignore
           username={userData.username}
           avatarUrl={userData.avatarUrl}
         />

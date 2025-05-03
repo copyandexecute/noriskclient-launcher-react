@@ -141,12 +141,7 @@ export function ProfilesTab() {
         {loading ? (
           <LoadingState message="loading profiles..." />
         ) : error ? (
-          <EmptyState
-            icon="pixel:exclamation-triangle-solid"
-            title={error}
-            actionLabel="retry"
-            onAction={() => fetchProfiles()}
-          />
+          <EmptyState icon="pixel:exclamation-triangle-solid" message={error} />
         ) : (
           Object.entries(groupedProfiles).map(([group, groupProfiles]) => (
             <div key={group} className="mb-8">
@@ -159,7 +154,7 @@ export function ProfilesTab() {
                 </h3>
               )}
               {groupProfiles.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
                   {groupProfiles.map((profile) => (
                     <ProfileCard
                       key={profile.id}
@@ -175,12 +170,7 @@ export function ProfilesTab() {
         )}
 
         {!loading && !error && filteredProfiles.length === 0 && (
-          <EmptyState
-            icon="pixel:grid-solid"
-            title="no profiles found"
-            actionLabel="create new"
-            onAction={() => setShowWizard(true)}
-          />
+          <EmptyState icon="pixel:grid-solid" message="no profiles found" />
         )}
       </TabContent>
 

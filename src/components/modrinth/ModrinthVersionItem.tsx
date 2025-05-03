@@ -1,12 +1,15 @@
 "use client";
+
 import { Icon } from "@iconify/react";
 import type { ModrinthFile, ModrinthVersion } from "../../types/modrinth";
+import { formatFileSize } from "../../utils/format-file-size";
 
 interface ModrinthVersionItemProps {
   version: ModrinthVersion;
   file: ModrinthFile;
-  installState: "idle" | "installing" | "success" | "error";
+  installState: "idle" | "installing" | "adding" | "success" | "error";
   onInstall: () => void;
+  isModpack?: boolean;
 }
 
 export function ModrinthVersionItem({
@@ -14,123 +17,121 @@ export function ModrinthVersionItem({
   file,
   installState,
   onInstall,
+  isModpack = false,
 }: ModrinthVersionItemProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
+  const isInstalling =
+    installState === "installing" || installState === "adding";
+  const isInstalled = installState === "success";
+  const hasError = installState === "error";
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const formattedSize = formatFileSize(file.size);
 
-  const getGameVersions = () => {
-    if (!version.game_versions || version.game_versions.length === 0)
-      return "Unknown";
-    return version.game_versions.join(", ");
-  };
+  const gameVersions = version.game_versions?.join(", ") || "Unknown";
+  const loaders = version.loaders?.join(", ") || "Any";
 
-  const getLoaders = () => {
-    if (!version.loaders || version.loaders.length === 0) return "Any";
-    return version.loaders.join(", ");
-  };
-
-  const getButtonContent = () => {
-    switch (installState) {
-      case "installing":
-        return (
-          <>
-            <Icon
-              icon="pixel:circle-notch-solid"
-              className="animate-spin w-4 h-4 mr-1"
-            />
-            <span>Installing...</span>
-          </>
-        );
-      case "success":
-        return (
-          <>
-            <Icon icon="pixel:check" className="w-4 h-4 mr-1" />
-            <span>Installed</span>
-          </>
-        );
-      case "error":
-        return (
-          <>
-            <Icon
-              icon="pixel:exclamation-triangle-solid"
-              className="w-4 h-4 mr-1"
-            />
-            <span>Retry</span>
-          </>
-        );
-      default:
-        return (
-          <>
-            <Icon icon="pixel:download" className="w-4 h-4 mr-1" />
-            <span>Install</span>
-          </>
-        );
-    }
-  };
+  // @ts-ignore
+  let buttonText = isModpack ? "Create Profile" : "Install";
+  if (isInstalling) {
+    buttonText = isModpack ? "Creating..." : "Installing...";
+  } else if (isInstalled) {
+    buttonText = isModpack ? "Profile Created" : "Installed";
+  } else if (hasError) {
+    buttonText = "Error";
+  }
 
   return (
-    <div className="bg-black/30 border border-white/10 p-3 rounded">
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <h5 className="text-white font-minecraft text-3xl tracking-wide lowercase select-none">
-            {version.name || `Version ${version.version_number}`}
-          </h5>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-            <span className="text-white/70 font-minecraft-ten text-xs tracking-wide lowercase select-none">
-              {formatDate(version.date_published)}
+    <div className="version-item bg-black/20 backdrop-blur-md border border-white/10 p-2 flex flex-col">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <h4 className="text-white font-minecraft text-xl tracking-wide lowercase select-none">
+            {version.name || version.version_number}
+          </h4>
+          <div className="text-white/70 text-xs font-minecraft-ten tracking-wide lowercase select-none">
+            <span className="mr-2">
+              <Icon
+                icon="pixel:calendar-alt-solid"
+                className="inline-block mr-1 w-3 h-3"
+              />
+              {new Date(version.date_published).toLocaleDateString()}
             </span>
-            <span className="text-white/70 font-minecraft-ten text-xs tracking-wide lowercase select-none">
-              MC: {getGameVersions()}
+            <span className="mr-2">
+              <Icon
+                icon="pixel:cube-solid"
+                className="inline-block mr-1 w-3 h-3"
+              />
+              {gameVersions}
             </span>
-            <span className="text-white/70 font-minecraft-ten text-xs tracking-wide lowercase select-none">
-              {getLoaders()}
-            </span>
-            <span className="text-white/70 font-minecraft-ten text-xs tracking-wide lowercase select-none">
-              {formatFileSize(file.size)}
-            </span>
+            {version.loaders && version.loaders.length > 0 && (
+              <span>
+                <Icon
+                  icon="pixel:cogs-solid"
+                  className="inline-block mr-1 w-3 h-3"
+                />
+                {loaders}
+              </span>
+            )}
           </div>
         </div>
         <button
           onClick={onInstall}
-          disabled={installState === "installing" || installState === "success"}
-          className={`flex items-center px-3 py-1 font-minecraft text-base rounded transition-colors ${
+          disabled={installState === "adding" || installState === "success"}
+          className={`px-4 py-2 font-minecraft text-lg tracking-wide lowercase select-none transition-colors ${
             installState === "success"
-              ? "bg-green-800/50 text-white/70 cursor-default"
-              : installState === "installing"
-                ? "bg-blue-800/50 text-white/70 cursor-wait"
-                : "bg-black/40 hover:bg-black/60 text-white"
+              ? "bg-green-700 text-white cursor-default border-2 border-green-500"
+              : installState === "adding"
+                ? "bg-blue-700 text-white cursor-wait border-2 border-blue-500"
+                : installState === "error"
+                  ? "bg-red-700 text-white hover:bg-red-600 border-2 border-red-500"
+                  : "bg-white/10 text-white hover:bg-white/20 border-2 border-white/30 hover:border-white/50 minecraft-button-hover"
           }`}
         >
-          {getButtonContent()}
+          {installState === "adding" ? (
+            <>
+              <Icon
+                icon="pixel:circle-notch-solid"
+                className="w-4 h-4 mr-2 inline-block animate-spin"
+              />
+              {isModpack ? "Creating Profile..." : "Installing..."}
+            </>
+          ) : installState === "success" ? (
+            <>
+              <Icon icon="pixel:check" className="w-4 h-4 mr-2 inline-block" />
+              {isModpack ? "Profile Created" : "Installed"}
+            </>
+          ) : installState === "error" ? (
+            <>
+              <Icon
+                icon="pixel:exclamation-triangle-solid"
+                className="w-4 h-4 mr-2 inline-block"
+              />
+              Retry
+            </>
+          ) : (
+            <>
+              <Icon
+                icon={
+                  isModpack ? "pixel:folder-plus-solid" : "pixel:download-solid"
+                }
+                className="w-4 h-4 mr-2 inline-block"
+              />
+              {isModpack ? "Create Profile" : "Install"}
+            </>
+          )}
         </button>
       </div>
-
-      {version.changelog && (
-        <div className="mt-2">
-          <details className="group">
-            <summary className="flex items-center cursor-pointer text-white/80 font-minecraft-ten text-xs tracking-wide lowercase select-none">
-              <Icon
-                icon="pixel:angle-right"
-                className="w-3 h-3 mr-1 transition-transform group-open:rotate-90"
-              />
-              Changelog
-            </summary>
-            <div className="pl-4 mt-2 border-l-2 border-white/10">
-              <p className="text-white/70 font-minecraft-ten text-xs whitespace-pre-line tracking-wide lowercase select-none">
-                {version.changelog}
-              </p>
-            </div>
-          </details>
-        </div>
-      )}
+      <div className="text-white/50 text-xs font-minecraft-ten mt-1 tracking-wide lowercase select-none">
+        <span className="mr-2">
+          <Icon
+            icon="pixel:file-alt-solid"
+            className="inline-block mr-1 w-3 h-3"
+          />
+          {file.filename}
+        </span>
+        <span>
+          <Icon icon="pixel:hdd-solid" className="inline-block mr-1 w-3 h-3" />
+          {formattedSize}
+        </span>
+      </div>
     </div>
   );
 }

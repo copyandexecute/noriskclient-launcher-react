@@ -29,14 +29,23 @@ export function BrowseTab({
     }
   };
 
+  if (!profile || !profile.id) {
+    console.error("BrowseTab: No valid profile provided");
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-white font-minecraft text-2xl">
+          No profile selected
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-hidden">
         <ModrinthSearch
+          profiles={[profile]}
           selectedProfileId={profile.id}
-          // @ts-ignore
-          gameVersion={profile.game_version}
-          loader={profile.loader}
           initialProjectType={getProjectType()}
           onInstallSuccess={onRefresh}
           className="h-full"

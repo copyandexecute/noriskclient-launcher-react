@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
 import type { EventPayload } from "../types/events";
 import { EventType } from "../types/events";
+import * as ProcessService from "../services/process-service";
 import * as ProfileService from "../services/profile-service";
 import { processMonitor } from "../services/process-monitor";
 
@@ -11,17 +12,16 @@ export enum LaunchState {
   ERROR = "error",
 }
 
+interface ProfileStateData {
+  launchState: LaunchState;
+  launchProgress: number;
+  currentStep: string;
+  error: string | null;
+  logHistory: string[];
+}
+
 interface LaunchStateStore {
-  profileStates: Record<
-    string,
-    {
-      launchState: LaunchState;
-      launchProgress: number;
-      currentStep: string;
-      error: string | null;
-      logHistory: string[];
-    }
-  >;
+  profileStates: Record<string, ProfileStateData>;
 
   initializeProfile: (profileId: string) => void;
   setProfileLaunchState: (profileId: string, state: LaunchState) => void;
@@ -29,18 +29,22 @@ interface LaunchStateStore {
   setProfileCurrentStep: (profileId: string, step: string) => void;
   setProfileError: (profileId: string, error: string | null) => void;
   addProfileLogEntry: (profileId: string, log: string) => void;
+  addDebugLog: (message: string) => void;
+  setLaunchState: (state: string) => void;
   launchProfile: (profileId: string) => Promise<void>;
   abortProfileLaunch: (profileId: string) => Promise<void>;
-
-  getProfileState: (profileId: string) => {
-    launchState: LaunchState;
-    launchProgress: number;
-    currentStep: string;
-    error: string | null;
-    logHistory: string[];
-  };
+  getProfileState: (profileId: string) => ProfileStateData;
+  isLaunching: (profileId: string) => boolean;
 }
 
+const defaultProfileState: ProfileStateData = {
+  launchState: LaunchState.IDLE,
+  launchProgress: 0,
+  currentStep: "",
+  error: null,
+  logHistory: [],
+};
+// @ts-ignore
 export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
   const setupEventListeners = async (profileId: string) => {
     listen<EventPayload>("state_event", (event) => {
@@ -77,8 +81,8 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         const eventType = payload.event_type.toLowerCase();
 
         if (eventType === EventType.MinecraftOutput.toLowerCase()) {
-          get().setProfileLaunchState(profileId, LaunchState.IDLE);
           get().addProfileLogEntry(profileId, "Game has started");
+          get().setProfileLaunchState(profileId, LaunchState.IDLE);
         } else if (
           eventType === EventType.MinecraftProcessExited.toLowerCase()
         ) {
@@ -108,39 +112,30 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
   const startPolling = (profileId: string) => {
     const checkProfileState = async () => {
       try {
-        const isLaunching = await ProfileService.isProfileLaunching(profileId);
-
+        const isRunning = await ProcessService.isMinecraftRunning(profileId);
         const currentState = get().getProfileState(profileId).launchState;
 
-        if (isLaunching && currentState !== LaunchState.LAUNCHING) {
-          get().setProfileLaunchState(profileId, LaunchState.LAUNCHING);
-        } else if (!isLaunching && currentState === LaunchState.LAUNCHING) {
+        if (isRunning && currentState === LaunchState.IDLE) {
+        } else if (!isRunning && currentState === LaunchState.LAUNCHING) {
           get().setProfileLaunchState(profileId, LaunchState.IDLE);
         }
       } catch (err) {}
     };
 
     checkProfileState();
-
     const intervalId = setInterval(checkProfileState, 1000);
-
     return intervalId;
   };
 
   return {
     profileStates: {},
+
     initializeProfile: (profileId) => {
       if (!get().profileStates[profileId]) {
         set((state) => ({
           profileStates: {
             ...state.profileStates,
-            [profileId]: {
-              launchState: LaunchState.IDLE,
-              launchProgress: 0,
-              currentStep: "",
-              error: null,
-              logHistory: [],
-            },
+            [profileId]: { ...defaultProfileState },
           },
         }));
 
@@ -153,12 +148,7 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         profileStates: {
           ...store.profileStates,
           [profileId]: {
-            ...(store.profileStates[profileId] || {
-              launchProgress: 0,
-              currentStep: "",
-              error: null,
-              logHistory: [],
-            }),
+            ...(store.profileStates[profileId] || { ...defaultProfileState }),
             launchState: state,
           },
         },
@@ -170,12 +160,7 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         profileStates: {
           ...store.profileStates,
           [profileId]: {
-            ...(store.profileStates[profileId] || {
-              launchState: LaunchState.IDLE,
-              currentStep: "",
-              error: null,
-              logHistory: [],
-            }),
+            ...(store.profileStates[profileId] || { ...defaultProfileState }),
             launchProgress: progress,
           },
         },
@@ -187,12 +172,7 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         profileStates: {
           ...store.profileStates,
           [profileId]: {
-            ...(store.profileStates[profileId] || {
-              launchState: LaunchState.IDLE,
-              launchProgress: 0,
-              error: null,
-              logHistory: [],
-            }),
+            ...(store.profileStates[profileId] || { ...defaultProfileState }),
             currentStep: step,
           },
         },
@@ -204,12 +184,7 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         profileStates: {
           ...store.profileStates,
           [profileId]: {
-            ...(store.profileStates[profileId] || {
-              launchState: LaunchState.IDLE,
-              launchProgress: 0,
-              currentStep: "",
-              logHistory: [],
-            }),
+            ...(store.profileStates[profileId] || { ...defaultProfileState }),
             error,
           },
         },
@@ -219,13 +194,8 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
     addProfileLogEntry: (profileId, log) => {
       set((store) => {
         const currentState = store.profileStates[profileId] || {
-          launchState: LaunchState.IDLE,
-          launchProgress: 0,
-          currentStep: "",
-          error: null,
-          logHistory: [],
+          ...defaultProfileState,
         };
-
         const newLogHistory = [...currentState.logHistory, log];
 
         if (newLogHistory.length > 100) {
@@ -244,6 +214,10 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
       });
     },
 
+    addDebugLog: (message) => {
+      console.log(`[DEBUG] ${message}`);
+    },
+
     launchProfile: async (profileId) => {
       try {
         get().setProfileError(profileId, null);
@@ -252,11 +226,12 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         get().addProfileLogEntry(profileId, "Starting launch process...");
 
         await ProfileService.launchProfile(profileId);
-
         processMonitor.startMonitoring(profileId);
       } catch (err) {
-        get().setProfileError(profileId, "Failed to launch profile");
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        get().setProfileError(profileId, errorMessage);
         get().setProfileLaunchState(profileId, LaunchState.ERROR);
+        get().addProfileLogEntry(profileId, `Error: ${errorMessage}`);
 
         setTimeout(() => {
           get().setProfileLaunchState(profileId, LaunchState.IDLE);
@@ -270,25 +245,29 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => {
         get().setProfileCurrentStep(profileId, "Aborting launch process...");
         get().addProfileLogEntry(profileId, "Aborting launch process...");
 
-        await ProfileService.abortProfileLaunch(profileId);
+        await ProcessService.killMinecraft(profileId);
+        processMonitor.stopMonitoring();
 
         get().setProfileLaunchState(profileId, LaunchState.IDLE);
       } catch (err) {
-        get().setProfileError(profileId, "Failed to abort launch");
-        get().setProfileLaunchState(profileId, LaunchState.IDLE);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        get().setProfileError(profileId, `Failed to abort: ${errorMessage}`);
+        get().addProfileLogEntry(profileId, `Error aborting: ${errorMessage}`);
+
+        setTimeout(() => {
+          get().setProfileLaunchState(profileId, LaunchState.IDLE);
+          get().setProfileError(profileId, null);
+        }, 5000);
       }
     },
 
     getProfileState: (profileId) => {
-      return (
-        get().profileStates[profileId] || {
-          launchState: LaunchState.IDLE,
-          launchProgress: 0,
-          currentStep: "",
-          error: null,
-          logHistory: [],
-        }
-      );
+      return get().profileStates[profileId] || { ...defaultProfileState };
+    },
+
+    isLaunching: (profileId) => {
+      const state = get().getProfileState(profileId);
+      return state.launchState === LaunchState.LAUNCHING;
     },
   };
 });

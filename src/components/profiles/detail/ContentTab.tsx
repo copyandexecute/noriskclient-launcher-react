@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Icon } from "@iconify/react";
 import { ModsTab } from "./ModsTab";
 import { ResourcePacksTab } from "./ResourcePacksTab";
 import { ShaderPacksTab } from "./ShaderPacksTab";
+import { DataPacksTab } from "./DataPacksTab";
+import { NoRiskModsTab } from "./NoRiskModsTab";
 import type { Profile } from "../../../types/profile";
 
 interface ContentTabProps {
@@ -13,9 +14,9 @@ interface ContentTabProps {
   onBrowse?: (contentType: string) => void;
 }
 
-export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
+export function ContentTab({ profile, onRefresh }: ContentTabProps) {
   const [contentType, setContentType] = useState<
-    "mods" | "resourcepacks" | "shaderpacks"
+    "mods" | "resourcepacks" | "shaderpacks" | "datapacks" | "norisk"
   >("mods");
   const [key, setKey] = useState<number>(0);
 
@@ -25,70 +26,54 @@ export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
     }
   };
 
-  const handleTabChange = (tab: "mods" | "resourcepacks" | "shaderpacks") => {
+  const handleTabChange = (
+    tab: "mods" | "resourcepacks" | "shaderpacks" | "datapacks" | "norisk",
+  ) => {
     setContentType(tab);
     setKey((prevKey) => prevKey + 1);
-  };
-
-  const handleBrowse = () => {
-    if (onBrowse) {
-      onBrowse(contentType);
-    }
   };
 
   const tabs = [
     {
       id: "mods",
       label: "mods",
-      icon: "pixel:puzzle-solid",
-      count: profile.mods?.length || 0,
     },
     {
       id: "resourcepacks",
       label: "resource packs",
-      icon: "pixel:image-solid",
-      count: 0,
     },
     {
       id: "shaderpacks",
-      label: "shader packs",
-      icon: "pixel:sun-solid",
-      count: 0,
+      label: "shaders",
+    },
+    {
+      id: "datapacks",
+      label: "data packs",
+    },
+    {
+      id: "norisk",
+      label: "norisk mods",
     },
   ];
 
   return (
     <div className="h-full flex flex-col select-none">
-      <div className="flex justify-between items-center mb-5">
-        <div className="content-type-tabs flex bg-black/20 backdrop-blur-md border-2 border-white/30">
+      <div className="mb-5">
+        <div className="project-type-tabs flex w-full bg-black/20 backdrop-blur-md border border-white/10">
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              className={`px-6 py-3.5 font-minecraft text-base lowercase flex items-center gap-3 transition-colors ${
+              className={`flex-1 px-4 py-2 font-minecraft text-3xl lowercase select-none tracking-wide ${
                 contentType === tab.id
-                  ? "bg-white/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/10"
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
               }`}
               onClick={() => handleTabChange(tab.id as any)}
             >
-              <Icon icon={tab.icon} className="w-5 h-5" />
-              <span>{tab.label}</span>
-              {tab.count > 0 && (
-                <span className="bg-white/20 text-white text-sm px-2.5 py-0.5 rounded-full">
-                  {tab.count}
-                </span>
-              )}
+              {tab.label}
             </button>
           ))}
         </div>
-
-        <button
-          onClick={handleBrowse}
-          className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-3 text-white font-minecraft text-base flex items-center gap-3 transition-colors"
-        >
-          <Icon icon="pixel:search-solid" className="w-5 h-5" />
-          <span>browse {contentType}</span>
-        </button>
       </div>
 
       <div className="h-[calc(100%-64px)]">
@@ -109,6 +94,20 @@ export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
         {contentType === "shaderpacks" && (
           <ShaderPacksTab
             key={`shaderpacks-${key}`}
+            profile={profile}
+            onRefresh={handleRefresh}
+          />
+        )}
+        {contentType === "datapacks" && (
+          <DataPacksTab
+            key={`datapacks-${key}`}
+            profile={profile}
+            onRefresh={handleRefresh}
+          />
+        )}
+        {contentType === "norisk" && (
+          <NoRiskModsTab
+            key={`norisk-${key}`}
             profile={profile}
             onRefresh={handleRefresh}
           />

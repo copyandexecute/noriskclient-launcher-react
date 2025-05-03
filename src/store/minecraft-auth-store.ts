@@ -1,7 +1,6 @@
 import { create } from "zustand";
-
+import { MinecraftAuthService } from "../services/minecraft-auth-service";
 import type { MinecraftAccount } from "../types/minecraft";
-import { invoke } from "@tauri-apps/api/core";
 
 interface MinecraftAuthState {
   accounts: MinecraftAccount[];
@@ -25,11 +24,10 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      const accounts = await invoke<MinecraftAccount[]>("get_accounts");
+      const accounts = await MinecraftAuthService.getAccounts();
 
-      const activeAccount = await invoke<MinecraftAccount | null>(
-        "get_active_account",
-      );
+      const activeAccount = await MinecraftAuthService.getActiveAccount();
+
       const updatedAccounts = accounts.map((account) => ({
         ...account,
         active: activeAccount ? account.id === activeAccount.id : false,
@@ -43,7 +41,7 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
     } catch (error) {
       console.error("Failed to initialize accounts:", error);
       set({
-        error: `Failed to load accounts: ${error}`,
+        error: `Failed to load accounts: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
       });
     }
@@ -53,17 +51,29 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      const newAccount = await invoke<MinecraftAccount | null>("begin_login");
+      const newAccount = await MinecraftAuthService.beginLogin();
 
       if (newAccount) {
-        await get().initializeAccounts();
-      }
+        const accounts = await MinecraftAuthService.getAccounts();
+        const activeAccount = await MinecraftAuthService.getActiveAccount();
 
-      set({ isLoading: false });
+        const updatedAccounts = accounts.map((account) => ({
+          ...account,
+          active: activeAccount ? account.id === activeAccount.id : false,
+        }));
+
+        set({
+          accounts: updatedAccounts,
+          activeAccount,
+          isLoading: false,
+        });
+      } else {
+        set({ isLoading: false });
+      }
     } catch (error) {
       console.error("Failed to add account:", error);
       set({
-        error: `Failed to add account: ${error}`,
+        error: `Failed to add account: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
       });
     }
@@ -73,15 +83,25 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      await invoke("remove_account", { accountId });
+      await MinecraftAuthService.removeAccount(accountId);
 
-      await get().initializeAccounts();
+      const accounts = await MinecraftAuthService.getAccounts();
+      const activeAccount = await MinecraftAuthService.getActiveAccount();
 
-      set({ isLoading: false });
+      const updatedAccounts = accounts.map((account) => ({
+        ...account,
+        active: activeAccount ? account.id === activeAccount.id : false,
+      }));
+
+      set({
+        accounts: updatedAccounts,
+        activeAccount,
+        isLoading: false,
+      });
     } catch (error) {
       console.error("Failed to remove account:", error);
       set({
-        error: `Failed to remove account: ${error}`,
+        error: `Failed to remove account: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
       });
     }
@@ -91,15 +111,24 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
     try {
       set({ isLoading: true, error: null });
 
-      await invoke("set_active_account", { accountId });
+      await MinecraftAuthService.setActiveAccount(accountId);
 
-      await get().initializeAccounts();
+      const activeAccount = await MinecraftAuthService.getActiveAccount();
 
-      set({ isLoading: false });
+      const updatedAccounts = get().accounts.map((account) => ({
+        ...account,
+        active: account.id === accountId,
+      }));
+
+      set({
+        accounts: updatedAccounts,
+        activeAccount,
+        isLoading: false,
+      });
     } catch (error) {
       console.error("Failed to set active account:", error);
       set({
-        error: `Failed to set active account: ${error}`,
+        error: `Failed to set active account: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
       });
     }

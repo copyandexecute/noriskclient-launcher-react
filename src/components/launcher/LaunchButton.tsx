@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { LaunchStatus } from "./LaunchStatus";
-import {
-  LaunchState,
-  useLaunchStateStore,
-} from "../../store/launch-state-store";
+import { useLaunchStateStore } from "../../store/launch-state-store";
 import { Button } from "../ui/Button";
 import { VersionSelector } from "./VersionSelector";
+import * as ProcessService from "../../services/process-service";
+import { processMonitor } from "../../services/process-monitor";
+import { listen } from "@tauri-apps/api/event";
 
 interface Version {
   id: string;
@@ -38,21 +38,93 @@ export function LaunchButton({
   const [hideStatusTimeoutId, setHideStatusTimeoutId] = useState<number | null>(
     null,
   );
+  const [isLaunching, setIsLaunching] = useState(false);
+  const eventListenersSetUp = useRef(false);
 
-  const {
-    initializeProfile,
-    getProfileState,
-    launchProfile,
-    abortProfileLaunch,
-  } = useLaunchStateStore();
+  const { initializeProfile, getProfileState } = useLaunchStateStore();
 
   const profileState = getProfileState(selectedVersion);
-  const { launchState, launchProgress, currentStep, error, logHistory } =
-    profileState;
+  const { launchProgress, currentStep, error, logHistory } = profileState;
+
+  useEffect(() => {
+    if (eventListenersSetUp.current) return;
+
+    const setupListeners = async () => {
+      const unlistenEvent = await listen("event", (event) => {
+        const payload = event.payload as any;
+        if (
+          payload.target_id === selectedVersion &&
+          payload.event_type?.toLowerCase() === "minecraft_output"
+        ) {
+          console.log("Game started event received, resetting button");
+          setIsLaunching(false);
+        }
+      });
+
+      const unlistenExit = await listen("minecraft_process_exited", (event) => {
+        const payload = event.payload as any;
+        if (payload.profile_id === selectedVersion) {
+          console.log("Process exited event received, resetting button");
+          setIsLaunching(false);
+        }
+      });
+
+      const unlistenState = await listen("state_event", (event) => {
+        const payload = event.payload as any;
+        if (payload.target_id === selectedVersion) {
+          if (payload.event_type?.toLowerCase() === "minecraft_output") {
+            console.log("State event: game started, resetting button");
+            setIsLaunching(false);
+          } else if (
+            payload.event_type?.toLowerCase() === "minecraft_process_exited"
+          ) {
+            console.log("State event: process exited, resetting button");
+            setIsLaunching(false);
+          }
+        }
+      });
+
+      return () => {
+        unlistenEvent();
+        unlistenExit();
+        unlistenState();
+      };
+    };
+
+    setupListeners();
+    eventListenersSetUp.current = true;
+
+    const intervalId = setInterval(() => {
+      if (selectedVersion) {
+        ProcessService.isMinecraftRunning(selectedVersion)
+          .then((isRunning) => {
+            if (isRunning && isLaunching) {
+              console.log("Game is running, resetting button state");
+              setIsLaunching(false);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [selectedVersion]);
 
   useEffect(() => {
     if (selectedVersion) {
       initializeProfile(selectedVersion);
+
+      ProcessService.isMinecraftRunning(selectedVersion)
+        .then((isRunning) => {
+          if (!isRunning && isLaunching) {
+            setIsLaunching(false);
+          }
+        })
+        .catch(() => {
+          setIsLaunching(false);
+        });
     }
   }, [selectedVersion, initializeProfile]);
 
@@ -63,7 +135,7 @@ export function LaunchButton({
   }, [defaultVersion, selectedVersion]);
 
   useEffect(() => {
-    if (launchState === LaunchState.LAUNCHING) {
+    if (isLaunching) {
       setShowLaunchStatus(true);
 
       if (hideStatusTimeoutId) {
@@ -82,7 +154,7 @@ export function LaunchButton({
 
       setHideStatusTimeoutId(timeoutId);
     }
-  }, [launchState]);
+  }, [isLaunching]);
 
   useEffect(() => {
     return () => {
@@ -95,16 +167,33 @@ export function LaunchButton({
   const handleLaunch = async () => {
     if (!selectedVersion) return;
 
-    if (launchState === LaunchState.LAUNCHING) {
-      await abortProfileLaunch(selectedVersion);
+    if (isLaunching) {
+      try {
+        await ProcessService.abort(selectedVersion);
+        processMonitor.stopMonitoring();
+      } catch (error) {
+        console.error("Failed to abort launch:", error);
+      } finally {
+        setIsLaunching(false);
+      }
       return;
     }
 
-    await launchProfile(selectedVersion);
+    setIsLaunching(true);
+    try {
+      await ProcessService.launch(selectedVersion);
+
+      setTimeout(() => {
+        setIsLaunching(false);
+      }, 10000);
+    } catch (error) {
+      console.error("Failed to launch profile:", error);
+      setIsLaunching(false);
+    }
   };
 
   const handleVersionChange = (version: string) => {
-    if (launchState === LaunchState.LAUNCHING) return;
+    if (isLaunching) return;
 
     setSelectedVersion(version);
     setShowVersions(false);
@@ -115,42 +204,35 @@ export function LaunchButton({
   };
 
   const toggleVersionSelect = () => {
-    if (launchState === LaunchState.LAUNCHING) return;
+    if (isLaunching) return;
 
     setShowVersions(!showVersions);
   };
 
   const getButtonText = () => {
-    switch (launchState) {
-      case LaunchState.LAUNCHING:
-        return "STARTING";
-      case LaunchState.ERROR:
-        return "ERROR";
-      default:
-        return "LAUNCH GAME";
+    if (isLaunching) {
+      return "STOP";
+    } else if (error) {
+      return "ERROR";
+    } else {
+      return "LAUNCH GAME";
     }
   };
 
   const getButtonVariant = () => {
-    switch (launchState) {
-      case LaunchState.LAUNCHING:
-        return "danger";
-      case LaunchState.ERROR:
-        return "danger";
-      default:
-        return "primary";
+    if (isLaunching) {
+      return "danger";
+    } else if (error) {
+      return "danger";
+    } else {
+      return "primary";
     }
   };
 
   const getButtonIcon = () => {
-    if (launchState === LaunchState.LAUNCHING) {
-      return (
-        <Icon
-          icon="pixel:spinner-solid"
-          className="w-9 h-9 animate-spin text-red-400"
-        />
-      );
-    } else if (launchState === LaunchState.ERROR) {
+    if (isLaunching) {
+      return <Icon icon="pixel:stop-solid" className="w-9 h-9 text-red-400" />;
+    } else if (error) {
       return (
         <Icon
           icon="pixel:exclamation-triangle-solid"
@@ -158,7 +240,7 @@ export function LaunchButton({
         />
       );
     } else {
-      return <Icon icon="pixel:startups" className="w-9 h-9" />;
+      return <Icon icon="pixel:play-solid" className="w-9 h-9" />;
     }
   };
 
@@ -187,7 +269,7 @@ export function LaunchButton({
 
           <Button
             onClick={toggleVersionSelect}
-            disabled={launchState === LaunchState.LAUNCHING}
+            disabled={isLaunching}
             variant="secondary"
             size="lg"
             className="h-full py-4 px-5"
@@ -199,11 +281,14 @@ export function LaunchButton({
           {showLaunchStatus && selectedVersion && (
             <LaunchStatus
               profileId={selectedVersion}
-              isLaunching={launchState === LaunchState.LAUNCHING}
+              isLaunching={isLaunching}
               currentStep={currentStep}
               progress={launchProgress}
               logHistory={logHistory}
-              onAbort={() => abortProfileLaunch(selectedVersion)}
+              onAbort={() => {
+                ProcessService.abort(selectedVersion);
+                setIsLaunching(false);
+              }}
               className="absolute top-0 left-0 right-0 w-full"
             />
           )}

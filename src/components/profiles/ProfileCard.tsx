@@ -230,7 +230,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   return (
     <div
       className={cn(
-        "bg-black/10 backdrop-blur-lg border-2 border-white/30 overflow-hidden transition-all duration-300 cursor-pointer h-[280px] flex flex-col select-none",
+        "bg-black/10 backdrop-blur-lg border-2 border-white/30 overflow-hidden transition-all duration-300 cursor-pointer h-full flex flex-col select-none",
         isHovered && "border-white/50 shadow-[0_0_15px_rgba(255,255,255,0.1)]",
         isLaunching && "border-red-400/50",
       )}
@@ -253,15 +253,14 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
             )}
           </div>
           <div className="overflow-hidden">
-            <h3 className="text-2xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px] lowercase font-normal">
+            <h3 className="text-2xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis lowercase font-normal">
               {profile.name}
             </h3>
-            <div className="flex items-center mt-1">
+            <div className="flex items-center ">
               <img
                 src={getModLoaderIcon() || "/placeholder.svg"}
                 alt={profile.loader || "vanilla"}
                 className="w-5 h-5 mr-2"
-                style={{ imageRendering: "pixelated" }}
               />
               <span className="text-base text-white/70 font-minecraft whitespace-nowrap lowercase">
                 {profile.game_version}
@@ -305,26 +304,6 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
             title="Settings"
           />
         </div>
-      </div>
-
-      <div className="flex-1 p-4 flex flex-col">
-        {profile.description && (
-          <p className="text-xl text-white/70 font-minecraft mb-3 line-clamp-3 select-none">
-            {profile.description}
-          </p>
-        )}
-
-        {profile.group && (
-          <div className="flex items-center mt-auto mb-3">
-            <Icon
-              icon="pixel:folder-solid"
-              className="w-5 h-5 mr-2 text-white/60"
-            />
-            <span className="text-base text-white/60 font-minecraft lowercase">
-              {profile.group}
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="p-4 border-t border-white/20 bg-black/20">

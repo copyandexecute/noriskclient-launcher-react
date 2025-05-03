@@ -6,59 +6,50 @@ import type { Profile } from "../../types/profile";
 interface ProfileItemProps {
   profile: Profile;
   isSelected: boolean;
-  onSelect: () => void;
+  isCompatible: boolean;
+  isInstalled: boolean;
+  onClick: () => void;
 }
 
 export function ProfileItem({
   profile,
   isSelected,
-  onSelect,
+  isCompatible,
+  isInstalled,
+  onClick,
 }: ProfileItemProps) {
   return (
-    <button
-      onClick={onSelect}
-      className={`flex items-center w-full p-3 text-left text-white font-minecraft text-sm border ${
+    <div
+      onClick={isCompatible ? onClick : undefined}
+      className={`p-3 border flex items-center gap-3 cursor-pointer transition-colors ${
         isSelected
-          ? "bg-white/20 border-white/30"
-          : "bg-black/30 border-white/10 hover:bg-black/40"
+          ? "bg-white/10 border-white/30"
+          : isCompatible
+            ? "bg-black/20 border-white/10 hover:bg-black/30"
+            : "bg-black/20 border-white/10 opacity-50 cursor-not-allowed"
       }`}
     >
-      <ProfileIcon profile={profile} />
       <div className="flex-1">
-        <div className="font-bold text-2xl">{profile.name}</div>
-        <div className="text-white/60 text-sm">
-          MC {profile.game_version} • {profile.loader}
+        <div className="flex items-center gap-2">
+          <span className="text-white font-minecraft text-sm tracking-wide lowercase select-none">
+            {profile.name}
+          </span>
+          {isInstalled && (
+            <span className="px-2 py-0.5 bg-green-600/30 border border-green-500/30 text-white text-xs font-minecraft tracking-wide lowercase select-none">
+              Installed
+            </span>
+          )}
+          {!isCompatible && (
+            <span className="px-2 py-0.5 bg-red-600/30 border border-red-500/30 text-white text-xs font-minecraft tracking-wide lowercase select-none">
+              Incompatible
+            </span>
+          )}
+        </div>
+        <div className="text-white/60 font-minecraft-ten text-xs tracking-wide lowercase select-none">
+          {profile.game_version} • {profile.loader}
         </div>
       </div>
-      <SelectionIndicator isSelected={isSelected} />
-    </button>
-  );
-}
-
-interface ProfileIconProps {
-  profile: Profile;
-}
-
-function ProfileIcon({}: ProfileIconProps) {
-  return <Icon icon="pixel:grid-solid" className="mr-3 w-12 h-12" />;
-}
-
-interface SelectionIndicatorProps {
-  isSelected: boolean;
-}
-
-function SelectionIndicator({ isSelected }: SelectionIndicatorProps) {
-  return (
-    <div className="ml-2">
-      <div
-        className={`w-6 h-6 rounded-full border-2 ${
-          isSelected
-            ? "border-white bg-white/30"
-            : "border-white/30 bg-transparent"
-        } flex items-center justify-center`}
-      >
-        {isSelected && <div className="w-3 h-3 bg-white rounded-full"></div>}
-      </div>
+      {isSelected && <Icon icon="pixel:check" className="w-5 h-5 text-white" />}
     </div>
   );
 }
