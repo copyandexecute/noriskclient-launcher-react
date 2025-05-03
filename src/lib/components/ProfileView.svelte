@@ -580,25 +580,28 @@
     // Behandeln des Launches und Abbruches
     async function handleLaunch() {
         if (isLaunching) {
-            // Wenn wir bereits starten, brechen wir den Prozess ab
+            // Abort logic remains the same
             try {
                 await invoke("abort_profile_launch", { profileId: profile.id });
                 isLaunching = false;
             } catch (error) {
                 console.error("Failed to abort launch process:", error);
+                // Optional: Notify user about failed abort?
             }
         } else {
-            // Starte den Prozess
+            // Launch logic - Revised
+            // 1. Set state
             isLaunching = true;
-            try {
-                dispatch("launch");
-                
-                // Starte den Polling-Prozess
-                pollLaunchingStatus();
-            } catch (error) {
-                console.error("Failed to launch profile:", error);
-                isLaunching = false;
-            }
+            console.log(`[ProfileView] Dispatching launch via handleLaunch for profile ${profile.id}`);
+            
+            // 2. Dispatch event to parent component
+            dispatch('launch', { profileId: profile.id, options: {} });
+            
+            // 3. Start polling after dispatching
+            pollLaunchingStatus();
+            
+            // Removed the try-catch around dispatch/poll. 
+            // Parent component should handle launch errors.
         }
     }
 
@@ -721,12 +724,14 @@
         <div class="profile-actions">
             <!-- Launch Button -->
             <button
-                class="launch-button"
-                disabled={isLaunching}
-                on:click={dispatchLaunch}
+                class="launch-button {isLaunching ? 'cancel-button' : ''}"
+                disabled={false} 
+                on:click={handleLaunch}
             >
                 {#if isLaunching}
-                    Launching...
+                    <!-- Add a spinner or just text -->
+                    <span class="loading-spinner" style="margin-right: 5px;"></span>
+                    Abbrechen
                 {:else}
                     <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M8 5v14l11-7z" />
@@ -1132,17 +1137,33 @@
 
     .profile-actions {
         display: grid; /* Use grid */
-        grid-template-columns: repeat(3, auto); /* Adjusted for button layout */
-        gap: 10px;
+        grid-template-columns: repeat(3, auto); /* Restore original column layout */
+        gap: 8px; /* Keep reduced gap */
     }
 
     .profile-actions button {
-        padding: 8px 12px; /* Slightly adjusted padding */
+        padding: 6px 10px; /* Reduce padding */
+        font-size: 0.9em; /* Slightly smaller font */
     }
 
     /* Styles für den Launch-Button */
     .launch-button {
+        padding-top: 4px;    /* Reduce top padding */
+        padding-bottom: 4px; /* Reduce bottom padding */
+        line-height: 1.2;    /* Reduce line height */
         background-color: #2ecc71 !important;
+        /* Ensure icon/text aligns well with reduced padding */
+        display: inline-flex; 
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Style for the SVG icon */
+    .launch-button .play-icon {
+        width: 1em; /* Adjust size relative to font */
+        height: 1em; /* Adjust size relative to font */
+        vertical-align: middle; /* Align icon vertically */
+        margin-right: 0.4em; /* Space between icon and text */
     }
 
     .launch-button:hover {
