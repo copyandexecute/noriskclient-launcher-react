@@ -259,7 +259,7 @@ async fn main() {
                         utils::updater_utils::check_for_updates(app_handle_for_updater, check_beta_channel).await;
                         info!("Update check process finished or running in background.");
 
-                        // Der Err-Arm wird entfernt, da get_config kein Result zurückgibt
+                        // Err-Arm wird entfernt, da get_config kein Result zurückgibt
                     }
                     Err(e) => {
                         error!("Failed to get global state after initialization: {}. Update check skipped.", e);
