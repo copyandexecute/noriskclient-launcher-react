@@ -58,6 +58,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          packageManager: npm # Explicitly tell the action to use npm
+          # buildCommand: 'npm run build' # Optional: Uncomment and adjust if your build script is different
           tagName: app-v__VERSION__ # The action automatically replaces __VERSION__ with the app version from tauri.conf.json
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
