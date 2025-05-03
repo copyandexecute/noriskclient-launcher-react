@@ -52,6 +52,8 @@ pub async fn install_minecraft_version(
     modloader_str: &str,
     profile: &Profile,
     credentials: Option<Credentials>,
+    quick_play_singleplayer: Option<String>,
+    quick_play_multiplayer: Option<String>,
 ) -> Result<()> {
     // Convert string modloader to ModLoader enum
     let modloader_enum = match modloader_str {
@@ -88,6 +90,12 @@ pub async fn install_minecraft_version(
         launcher_config.concurrent_downloads
     );
 
+    if let Some(world) = &quick_play_singleplayer {
+        info!("[Launch] Quick Play: Launching directly into singleplayer world: {}", world);
+    } else if let Some(server) = &quick_play_multiplayer {
+        info!("[Launch] Quick Play: Connecting directly to server: {}", server);
+    }
+
     let api_service = MinecraftApiService::new();
     let manifest = api_service.get_version_manifest().await?;
     let version = manifest
@@ -115,27 +123,101 @@ pub async fn install_minecraft_version(
     )
     .await?;
 
-    // Download and setup Java
-    let java_service = JavaDownloadService::new();
-    let java_path = java_service
-        .get_or_download_java(
-            java_version,
-            &JavaDistribution::Zulu,
-            Some(&piston_meta.java_version.component),
+    // Check if profile uses a custom Java path
+    let mut custom_java_valid = false;
+    let java_path = if profile.settings.use_custom_java_path && profile.settings.java_path.is_some() {
+        // Try to use the custom Java path
+        let custom_path = profile.settings.java_path.as_ref().unwrap();
+        info!("Using custom Java path from profile: {}", custom_path);
+        
+        // Verify that the custom Java path exists and is valid
+        let path = std::path::PathBuf::from(custom_path);
+        if path.exists() {
+            // Check if it's a valid Java installation
+            use crate::utils::java_detector;
+            match java_detector::get_java_info(&path).await {
+                Ok(java_info) => {
+                    info!(
+                        "Verified custom Java: Version {}, Major version {}, 64-bit: {}",
+                        java_info.version, java_info.major_version, java_info.is_64bit
+                    );
+                    
+                    // Check if the Java version is compatible with the required one
+                    if java_info.major_version >= java_version {
+                        info!("Custom Java version {} meets the required version {}", 
+                            java_info.major_version, java_version);
+                        custom_java_valid = true;
+                        path
+                    } else {
+                        info!(
+                            "Custom Java version {} is lower than required version {}. Downloading Java...",
+                            java_info.major_version, java_version
+                        );
+                        // The custom Java is too old, we need to download a newer version
+                        custom_java_valid = false;
+                        // Will be set by the download code below
+                        std::path::PathBuf::new()
+                    }
+                }
+                Err(e) => {
+                    info!("Custom Java path exists but is not valid: {}. Downloading Java...", e);
+                    // Will be set by the download code below
+                    std::path::PathBuf::new()
+                }
+            }
+        } else {
+            info!("Custom Java path does not exist: {}. Downloading Java...", custom_path);
+            // Will be set by the download code below
+            std::path::PathBuf::new()
+        }
+    } else {
+        // No custom path or not enabled, initialize with empty path
+        std::path::PathBuf::new()
+    };
+
+    // Download and setup Java if necessary
+    let java_path = if custom_java_valid {
+        info!("Using verified custom Java path: {:?}", java_path);
+        
+        // Update progress to 100% since we're using a custom path
+        emit_progress_event(
+            &state,
+            EventType::InstallingJava,
+            profile.id,
+            "Verwende benutzerdefinierte Java-Installation!",
+            1.0,
+            None,
         )
         .await?;
-    info!("Java installation path: {:?}", java_path);
-
-    // Update progress to 100%
-    emit_progress_event(
-        &state,
-        EventType::InstallingJava,
-        profile.id,
-        &format!("Java {} Installation abgeschlossen!", java_version),
-        1.0,
-        None,
-    )
-    .await?;
+        
+        java_path
+    } else {
+        // Download Java since custom path is not valid or not set
+        info!("Downloading Java {}...", java_version);
+        let java_service = JavaDownloadService::new();
+        let downloaded_path = java_service
+            .get_or_download_java(
+                java_version,
+                &JavaDistribution::Zulu,
+                Some(&piston_meta.java_version.component),
+            )
+            .await?;
+        
+        info!("Java installation path: {:?}", downloaded_path);
+        
+        // Update progress to 100%
+        emit_progress_event(
+            &state,
+            EventType::InstallingJava,
+            profile.id,
+            &format!("Java {} Installation abgeschlossen!", java_version),
+            1.0,
+            None,
+        )
+        .await?;
+        
+        downloaded_path
+    };
 
     // Create game directory
     let game_directory = state
@@ -257,7 +339,15 @@ pub async fn install_minecraft_version(
 
     let mut launch_params = MinecraftLaunchParameters::new(profile.id, profile.settings.memory.max)
         .with_old_minecraft_arguments(piston_meta.minecraft_arguments.clone())
+        .with_resolution(profile.settings.resolution.clone())
         .with_experimental_mode(is_experimental_mode);
+
+    // Add Quick Play parameters if provided
+    if let Some(world_name) = quick_play_singleplayer {
+        launch_params = launch_params.with_quick_play_singleplayer(world_name);
+    } else if let Some(server_address) = quick_play_multiplayer {
+        launch_params = launch_params.with_quick_play_multiplayer(server_address);
+    }
 
     // Install modloader using the factory
     if modloader_enum != ModLoader::Vanilla {
@@ -302,6 +392,22 @@ pub async fn install_minecraft_version(
         // Vanilla main class
         launch_params = launch_params.with_main_class(&piston_meta.main_class);
     }
+
+    // Add custom JVM arguments from profile settings string
+    if let Some(jvm_args_str) = &profile.settings.custom_jvm_args {
+        if !jvm_args_str.trim().is_empty() {
+            let mut current_jvm_args = launch_params.additional_jvm_args.clone();
+            let custom_args: Vec<String> = jvm_args_str.split_whitespace().map(String::from).collect();
+            info!("Adding custom JVM arguments from profile: {:?}", custom_args);
+            current_jvm_args.extend(custom_args);
+            launch_params = launch_params.with_additional_jvm_args(current_jvm_args);
+        }
+    }
+
+    // Combine Game arguments from modloader (if any) and profile settings (extra_game_args)
+    let mut final_game_args = launch_params.additional_game_args.clone();
+    final_game_args.extend(profile.settings.extra_game_args.clone());
+    launch_params = launch_params.with_additional_game_args(final_game_args);
 
     // --- Fetch Norisk Config Once if a pack is selected ---
     let loaded_norisk_config: Option<NoriskModpacksConfig> =

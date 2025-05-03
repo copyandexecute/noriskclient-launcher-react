@@ -58,11 +58,13 @@ export interface WindowSize {
 }
 
 export interface ProfileSettings {
-  java_path: string | null;
+  java_path: string | null;       // Option<String> -> string | null
+  use_custom_java_path: boolean; // Added boolean flag
   memory: MemorySettings;
   resolution: WindowSize | null;
   fullscreen: boolean;
-  extra_args: string[];
+  extra_game_args: string[];           // Vec<String> -> string[] (Renamed from extra_args)
+  custom_jvm_args: string | null;   // Option<String> -> string | null (New)
 }
 
 interface ModSourceBase {
@@ -198,6 +200,18 @@ export interface ExportProfileParams {
   open_folder: boolean;
 }
 
+// --- Types for Commands ---
+
+/**
+ * Parameters for the `copy_world` Tauri command.
+ */
+export interface CopyWorldParams {
+  source_profile_id: string; // Uuid
+  source_world_folder: string;
+  target_profile_id: string; // Uuid
+  target_world_name: string;
+}
+
 // --- Types for check_content_installed command ---
 
 /**
@@ -222,4 +236,11 @@ export interface ContentInstallStatus {
   is_included_in_norisk_pack: boolean;
   is_installed: boolean;
   is_specific_version_in_pack: boolean;
+}
+
+// Added: Type for Screenshot Information
+export interface ScreenshotInfo {
+  filename: string;
+  path: string;
+  modified: string | null; // DateTime<Utc> -> string (ISO 8601) | null
 }

@@ -15,6 +15,7 @@ use semver::Op;
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 use log::{debug, info, warn, error};
+use crate::utils::mc_utils;
 
 #[tauri::command]
 pub async fn get_minecraft_versions() -> Result<VersionManifest, CommandError> {
@@ -486,4 +487,19 @@ pub async fn update_skin_properties(
 
     debug!("Command completed: update_skin_properties");
     Ok(updated_skin)
+}
+
+/// Pings a Minecraft server to get its status information.
+#[tauri::command]
+pub async fn ping_minecraft_server(address: String) -> Result<mc_utils::ServerPingInfo, CommandError> {
+    info!("Command called: ping_minecraft_server for address: {}", address);
+
+    // Call the utility function
+    // ping_server_status itself returns ServerPingInfo directly, 
+    // including potential errors within the struct.
+    // It does not return a Result<> that needs mapping here.
+    let ping_result = mc_utils::ping_server_status(&address).await;
+
+    // No mapping needed as the function handles errors internally by returning them in the struct
+    Ok(ping_result)
 }

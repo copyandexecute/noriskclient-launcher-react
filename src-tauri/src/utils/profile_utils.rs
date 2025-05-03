@@ -5,7 +5,7 @@ use crate::state::profile_state::{Mod, ModSource, ModLoader};
 use crate::utils::{resourcepack_utils, shaderpack_utils, datapack_utils, hash_utils};
 use crate::state::state_manager::State;
 use crate::integrations::norisk_packs;
-use log::{debug, info, warn};
+use log::{debug, info, warn, error};
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -15,8 +15,11 @@ use tempfile;
 use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
-use futures::future::BoxFuture;
+use futures::future::{BoxFuture, FutureExt};
 use serde::{Serialize, Deserialize};
+use tauri::Manager;
+use tauri_plugin_opener::OpenerExt;
+use crate::utils::file_utils;
 
 /// Represents the type of content to be installed
 pub enum ContentType {
@@ -544,6 +547,146 @@ pub async fn check_content_installed(
     Ok(status)
 }
 
+/// Opens the `latest.log` file for a given profile using the system's default application.
+///
+/// # Arguments
+///
+/// * `app_handle` - The Tauri application handle to access plugins like the opener.
+/// * `profile_id` - The UUID of the profile whose log file should be opened.
+///
+/// # Returns
+///
+/// Returns `Ok(())` on success, or an `AppError` if the profile instance path cannot be determined,
+/// the log file doesn't exist, or the file cannot be opened.
+pub async fn open_latest_log_for_profile<R: tauri::Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    profile_id: Uuid,
+) -> Result<()> {
+    info!("Attempting to open latest.log for profile {}", profile_id);
+
+    // Get the profile instance path
+    let state = State::get().await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?; // This returns Result<PathBuf, AppError>
+
+    // Construct the path to the log file
+    let log_path = instance_path.join("logs").join("latest.log");
+    debug!("Constructed log path: {}", log_path.display());
+
+    // Check if the log file exists
+    if !log_path.exists() {
+        warn!("latest.log not found at {}", log_path.display());
+        return Err(AppError::FileNotFound(log_path));
+    }
+
+    // Open the log file using the system's default viewer
+    info!("Opening log file: {}", log_path.display());
+    match app_handle
+        .opener()
+        .open_path(log_path.to_string_lossy(), None::<&str>)
+    {
+        Ok(_) => {
+            info!("Successfully requested opening of log file: {}", log_path.display());
+            Ok(())
+        }
+        Err(e) => {
+            error!("Failed to open log file {}: {}", log_path.display(), e);
+            Err(AppError::Other(format!(
+                "Failed to open log file: {}",
+                e
+            )))
+        }
+    }
+}
+
+/// Gets the content of the `latest.log` file for a given profile.
+///
+/// # Arguments
+///
+/// * `profile_id` - The UUID of the profile whose log content is needed.
+///
+/// # Returns
+///
+/// Returns `Ok(String)` containing the log content on success.
+/// Returns an empty string in `Ok` if the log file is not found.
+/// Returns an `AppError` if the profile instance path cannot be determined or reading fails.
+pub async fn get_latest_log_content(profile_id: Uuid) -> Result<String> {
+    info!("Attempting to get latest.log content for profile {}", profile_id);
+
+    // Get the profile instance path
+    let state = State::get().await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
+
+    // Construct the path to the log file
+    let log_path = instance_path.join("logs").join("latest.log");
+
+    // Use the new utility function to read the log file content
+    file_utils::read_log_file_content(&log_path).await
+}
+
+/// Lists all log files (`.log` and `.log.gz`) for a given profile.
+///
+/// # Arguments
+///
+/// * `profile_id` - The UUID of the profile whose log files should be listed.
+///
+/// # Returns
+///
+/// Returns `Ok(Vec<PathBuf>)` containing the paths to the log files on success.
+/// Returns an empty vector in `Ok` if the logs directory does not exist.
+/// Returns an `AppError` if the profile instance path cannot be determined or reading the directory fails.
+pub async fn list_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>> {
+    info!("Listing log files for profile {}", profile_id);
+
+    // Get the profile instance path
+    let state = State::get().await?;
+    let instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
+
+    // Construct the path to the logs directory
+    let logs_dir = instance_path.join("logs");
+    debug!("Logs directory path: {}", logs_dir.display());
+
+    // Check if the logs directory exists
+    if !logs_dir.exists() {
+        warn!("Logs directory not found at {}. Returning empty list.", logs_dir.display());
+        return Ok(Vec::new());
+    }
+
+    let mut log_files = Vec::new();
+    let mut entries = match fs::read_dir(&logs_dir).await {
+        Ok(entries) => entries,
+        Err(e) => {
+            error!("Failed to read logs directory {}: {}", logs_dir.display(), e);
+            return Err(AppError::Io(e));
+        }
+    };
+
+    while let Some(entry_result) = entries.next_entry().await.map_err(|e| {
+        error!("Failed to read entry in logs directory {}: {}", logs_dir.display(), e);
+        AppError::Io(e)
+    })? {
+        let path = entry_result.path();
+        if path.is_file() {
+            if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
+                if filename_str.ends_with(".log") || filename_str.ends_with(".log.gz") {
+                    log_files.push(path);
+                }
+            }
+        }
+    }
+
+    info!("Found {} log file(s) for profile {}", log_files.len(), profile_id);
+    Ok(log_files)
+}
+
 /// Exports a profile to a `.noriskpack` file
 /// 
 /// This creates a zip archive with the .noriskpack extension that contains:
@@ -763,4 +906,88 @@ fn add_dir_to_zip<'a>(
         
         Ok(())
     })
+}
+
+// Added: ScreenshotInfo struct
+#[derive(Serialize, Clone, Debug)]
+pub struct ScreenshotInfo {
+    pub filename: String,
+    pub path: PathBuf,
+    pub modified: Option<chrono::DateTime<chrono::Utc>>, // Use chrono for timestamps
+}
+
+/// Recursively finds screenshot files in a directory and its subdirectories.
+pub fn find_screenshots_recursive<'a>(
+    dir_path: &'a Path,
+    screenshots: &'a mut Vec<ScreenshotInfo>
+) -> BoxFuture<'a, Result<()>> {
+    async move {
+        if !dir_path.exists() || !dir_path.is_dir() {
+            return Ok(()); // Nothing to do if the path doesn't exist or isn't a directory
+        }
+    
+        let mut dir_entries = match fs::read_dir(dir_path).await {
+            Ok(entries) => entries,
+            Err(e) => {
+                error!("Failed to read directory {:?}: {}", dir_path, e);
+                return Err(AppError::Io(e));
+            }
+        };
+    
+        while let Some(entry_result) = dir_entries.next_entry().await.map_err(|e| {
+            error!("Failed to read entry in directory {:?}: {}", dir_path, e);
+            AppError::Io(e)
+        })? {
+            let path = entry_result.path();
+            if path.is_dir() {
+                // If it's a directory, recurse into it
+                find_screenshots_recursive(&path, screenshots).await?; // Use .await here
+            } else if path.is_file() {
+                // If it's a file, check if it's a PNG
+                if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
+                    if filename_str.to_lowercase().ends_with(".png") {
+                        let modified_time = match fs::metadata(&path).await {
+                            Ok(metadata) => match metadata.modified() {
+                                Ok(sys_time) => Some(chrono::DateTime::<chrono::Utc>::from(sys_time)),
+                                Err(e) => {
+                                    warn!("Could not get modified time for {:?}: {}", path, e);
+                                    None
+                                }
+                            },
+                            Err(e) => {
+                                warn!("Could not get metadata for {:?}: {}", path, e);
+                                None
+                            }
+                        };
+
+                        screenshots.push(ScreenshotInfo {
+                            filename: filename_str.to_string(),
+                            path: path.clone(),
+                            modified: modified_time,
+                        });
+                    }
+                }
+            }
+            // Ignore other entry types (symlinks, etc.)
+        }
+        Ok(())
+    }.boxed() // Use .boxed() from FutureExt trait
+}
+
+/// Lists screenshot files found in the profile's `screenshots` directory and its subdirectories.
+/// Only includes files ending in `.png`.
+pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<ScreenshotInfo>> {
+    let state = State::get().await?;
+    let instance_path = state.profile_manager.get_profile_instance_path(profile_id).await?;
+    let screenshots_path = instance_path.join("screenshots");
+    let mut screenshots = Vec::new();
+
+    // Call the recursive helper function starting from the main screenshots directory
+    find_screenshots_recursive(&screenshots_path, &mut screenshots).await?;
+
+    // Sort the collected screenshots by modified time (newest first)
+    screenshots.sort_by(|a, b| b.modified.cmp(&a.modified));
+
+    info!("Found {} screenshot(s) in total within {:?} and its subdirectories", screenshots.len(), screenshots_path);
+    Ok(screenshots)
 }

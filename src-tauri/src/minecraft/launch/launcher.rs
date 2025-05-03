@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use log::info;
+use log::warn;
 use crate::error::Result;
 use crate::minecraft::dto::piston_meta::PistonMeta;
 use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
@@ -8,7 +9,7 @@ use crate::minecraft::minecraft_auth::Credentials;
 use crate::minecraft::ClasspathBuilder;
 use crate::minecraft::GameArguments;
 use crate::minecraft::JvmArguments;
-use crate::state::profile_state::Profile;
+use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
 use uuid::Uuid;
 
@@ -23,6 +24,9 @@ pub struct MinecraftLaunchParameters {
     pub profile_id: Uuid,
     pub memory_max_mb: u32,
     pub is_experimental_mode: bool,
+    pub resolution: Option<WindowSize>,
+    pub quick_play_singleplayer: Option<String>,
+    pub quick_play_multiplayer: Option<String>,
 }
 
 impl MinecraftLaunchParameters {
@@ -38,6 +42,9 @@ impl MinecraftLaunchParameters {
             profile_id,
             memory_max_mb,
             is_experimental_mode: false,
+            resolution: None,
+            quick_play_singleplayer: None,
+            quick_play_multiplayer: None,
         }
     }
 
@@ -83,6 +90,21 @@ impl MinecraftLaunchParameters {
 
     pub fn with_experimental_mode(mut self, is_experimental: bool) -> Self {
         self.is_experimental_mode = is_experimental;
+        self
+    }
+
+    pub fn with_resolution(mut self, res: Option<WindowSize>) -> Self {
+        self.resolution = res;
+        self
+    }
+
+    pub fn with_quick_play_singleplayer(mut self, world_name: String) -> Self {
+        self.quick_play_singleplayer = Some(world_name);
+        self
+    }
+
+    pub fn with_quick_play_multiplayer(mut self, server_address: String) -> Self {
+        self.quick_play_multiplayer = Some(server_address);
         self
     }
 }
@@ -266,7 +288,27 @@ impl MinecraftLauncher {
             }
         }
 
-        // Add additional game arguments
+        // Add resolution arguments if custom resolution is set
+        if let Some(res) = &params.resolution {
+            info!("Appending custom resolution arguments: --width {} --height {}", res.width, res.height);
+            command.arg("--width");
+            command.arg(res.width.to_string());
+            command.arg("--height");
+            command.arg(res.height.to_string());
+        }
+
+        // Add Quick Play arguments if specified
+        if let Some(world_name) = &params.quick_play_singleplayer {
+            info!("Adding quickPlaySingleplayer argument for world: {}", world_name);
+            command.arg("--quickPlaySingleplayer");
+            command.arg(world_name);
+        } else if let Some(server_address) = &params.quick_play_multiplayer {
+            info!("Adding quickPlayMultiplayer argument for server: {}", server_address);
+            command.arg("--quickPlayMultiplayer");
+            command.arg(server_address);
+        }
+
+        // Add additional game arguments (from profile's extra_game_args)
         for arg in params.additional_game_args {
             command.arg(arg);
         }

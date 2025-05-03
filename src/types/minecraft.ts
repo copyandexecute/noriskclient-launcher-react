@@ -81,3 +81,30 @@ export interface MinecraftVersion {
     time: string;
     releaseTime: string;
 }
+
+export interface WorldInfo {
+  folder_name: string;
+  display_name: string | null;
+  last_played: number | null; // Assuming Rust i64 maps to number (epoch milliseconds)
+  icon_path: string | null; // Changed type from object to string | null
+}
+
+export interface ServerInfo {
+    name: string | null;
+    address: string | null; // Matches Rust struct
+    icon_base64: string | null; // Base64 string for the icon
+    accepts_textures: number | null; // 0=prompt, 1=enabled, 2=disabled (Rust u8)
+    previews_chat: number | null; // Seems to be boolean 0/1 (Rust u8)
+}
+
+export interface ServerPingInfo {
+    description: string | null;
+    description_json: object | null; // Representing serde_json::Value
+    version_name: string | null;
+    version_protocol: number | null;
+    players_online: number | null;
+    players_max: number | null;
+    favicon_base64: string | null;
+    latency_ms: number | null;
+    error: string | null; // Optional error message
+}

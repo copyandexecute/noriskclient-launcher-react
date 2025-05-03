@@ -286,3 +286,73 @@ pub async fn get_icons_for_norisk_mods(
     info!("Finished fetching Norisk mod icons. Returning {} results.", results_map.len());
     Ok(results_map)
 }
+
+/// Opens a specified file using the system's default application.
+/// Requires appropriate scope permissions in capabilities.
+#[tauri::command]
+pub async fn open_file(
+    app_handle: tauri::AppHandle,
+    file_path: String
+) -> Result<(), CommandError> {
+    let path = PathBuf::from(&file_path);
+    info!("Attempting to open file: {}", path.display());
+
+    // Check if the path exists and is a file
+    if !path.exists() {
+        error!("File not found: {}", path.display());
+        return Err(CommandError::from(AppError::FileNotFound(path)));
+    }
+    if !path.is_file() {
+        error!("Path is not a file: {}", path.display());
+        return Err(CommandError::from(AppError::Other(format!(
+            "Path is not a file: {}",
+            path.display()
+        ))));
+    }
+
+    // Open the file using the opener plugin
+    match app_handle
+        .opener()
+        .open_path(path.to_string_lossy(), None::<&str>)
+    {
+        Ok(_) => {
+            info!("Successfully requested opening file: {}", path.display());
+            Ok(())
+        }
+        Err(e) => {
+            // Log the specific error from the opener plugin
+            error!("Failed to open file {} using opener: {}", path.display(), e);
+            // Check for permission denied error specifically if possible (depends on plugin error type)
+            // For now, return a generic error
+            Err(CommandError::from(AppError::Other(format!(
+                "Failed to open file: {}. Check permissions.",
+                 e // Include the original error message
+            ))))
+        }
+    }
+}
+
+/// Reads the content of a file as raw bytes.
+#[tauri::command]
+pub async fn read_file_bytes(file_path: String) -> Result<Vec<u8>, CommandError> {
+    let path = PathBuf::from(&file_path);
+    debug!("Reading bytes from file: {}", path.display());
+
+    if !path.exists() {
+        error!("File not found for reading bytes: {}", path.display());
+        return Err(CommandError::from(AppError::FileNotFound(path)));
+    }
+    if !path.is_file() {
+        error!("Path is not a file for reading bytes: {}", path.display());
+        return Err(CommandError::from(AppError::Other(format!(
+            "Path is not a file: {}",
+            path.display()
+        ))));
+    }
+
+    // Read the file content into a vector of bytes
+    fs::read(&path).await.map_err(|e| {
+        error!("Failed to read file bytes {}: {}", path.display(), e);
+        CommandError::from(AppError::Io(e))
+    })
+}

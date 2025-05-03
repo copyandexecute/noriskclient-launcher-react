@@ -13,7 +13,7 @@ use crate::state::profile_state::{
 use crate::state::state_manager::State;
 use crate::utils::datapack_utils::DataPackInfo;
 use crate::utils::path_utils::find_unique_profile_segment;
-use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus};
+use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo};
 use crate::utils::resourcepack_utils::ResourcePackInfo;
 use crate::utils::shaderpack_utils::ShaderPackInfo;
 use crate::utils::{
@@ -31,6 +31,8 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
 use uuid::Uuid;
+use crate::utils::mc_utils::{self, WorldInfo};
+use crate::utils::world_utils; // Import the new world_utils
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -69,6 +71,15 @@ pub struct ExportProfileParams {
     file_name: String,           // Base name without extension
     include_files: Option<Vec<PathBuf>>,
     open_folder: bool, // Whether to open the exports folder after export
+}
+
+// DTO for the new command
+#[derive(Deserialize)]
+pub struct CopyWorldParams {
+    source_profile_id: Uuid,
+    source_world_folder: String,
+    target_profile_id: Uuid,
+    target_world_name: String,
 }
 
 // CRUD Commands
@@ -133,7 +144,18 @@ pub async fn create_profile(params: CreateProfileParams) -> Result<Uuid, Command
 }
 
 #[tauri::command]
-pub async fn launch_profile(id: Uuid) -> Result<(), CommandError> {
+pub async fn launch_profile(
+    id: Uuid, 
+    quick_play_singleplayer: Option<String>,
+    quick_play_multiplayer: Option<String>
+) -> Result<(), CommandError> {
+    log::info!(
+        "[Command] launch_profile called for ID: {}. QuickPlay Single: {:?}, QuickPlay Multi: {:?}", 
+        id, 
+        quick_play_singleplayer,
+        quick_play_multiplayer
+    );
+
     let state = State::get().await?;
 
     // Try to get the regular profile
@@ -196,6 +218,17 @@ pub async fn launch_profile(id: Uuid) -> Result<(), CommandError> {
     let profile_id = profile.id; // Store profile ID for later use
     let profile_clone = profile.clone();
 
+    // Clone Quick Play parameters for the spawned task
+    let quick_play_sp_clone = quick_play_singleplayer.clone();
+    let quick_play_mp_clone = quick_play_multiplayer.clone();
+
+    // Log if Quick Play is being used
+    if quick_play_singleplayer.is_some() {
+        info!("Launching profile {} with Quick Play singleplayer: {}", id, quick_play_singleplayer.as_ref().unwrap());
+    } else if quick_play_multiplayer.is_some() {
+        info!("Launching profile {} with Quick Play multiplayer: {}", id, quick_play_multiplayer.as_ref().unwrap());
+    }
+
     // Spawn the installation task and get the JoinHandle
     let handle = tokio::spawn(async move {
         let install_result = installer::install_minecraft_version(
@@ -203,6 +236,8 @@ pub async fn launch_profile(id: Uuid) -> Result<(), CommandError> {
             &modloader.as_str(),
             &profile_clone,
             credentials,
+            quick_play_sp_clone,
+            quick_play_mp_clone,
         )
         .await;
 
@@ -1315,4 +1350,203 @@ pub async fn is_content_installed(
     );
     // Call the utility function and map the error
     Ok(profile_utils::check_content_installed(params).await?)
+}
+
+/// Opens the latest log file for the specified profile using the system default application.
+#[tauri::command]
+pub async fn open_profile_latest_log<R: tauri::Runtime>(
+    app_handle: tauri::AppHandle<R>,
+    profile_id: Uuid,
+) -> Result<(), CommandError> {
+    info!(
+        "Executing open_profile_latest_log command for profile {}",
+        profile_id
+    );
+
+    // Call the utility function
+    Ok(profile_utils::open_latest_log_for_profile(app_handle, profile_id).await?)
+}
+
+/// Gets the content of the latest log file for the specified profile.
+#[tauri::command]
+pub async fn get_profile_latest_log_content(profile_id: Uuid) -> Result<String, CommandError> {
+    info!(
+        "Executing get_profile_latest_log_content command for profile {}",
+        profile_id
+    );
+
+    // Call the utility function
+    Ok(profile_utils::get_latest_log_content(profile_id).await?)
+}
+
+/// Gets a list of all log file paths (.log and .log.gz) for the specified profile.
+#[tauri::command]
+pub async fn get_profile_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>, CommandError> {
+    info!(
+        "Executing get_profile_log_files command for profile {}",
+        profile_id
+    );
+
+    // Call the utility function
+    Ok(profile_utils::list_log_files(profile_id).await?)
+}
+
+/// Gets the content of a specific log file (.log or .log.gz).
+///
+/// # Arguments
+///
+/// * `log_file_path` - The full path to the log file.
+///
+/// # Returns
+///
+/// Returns `Ok(String)` containing the log content on success.
+/// Returns an empty string in `Ok` if the log file is not found or unsupported.
+/// Returns an `AppError` if reading or decompression fails.
+#[tauri::command]
+pub async fn get_log_file_content(log_file_path: PathBuf) -> Result<String, CommandError> {
+    info!(
+        "Executing get_log_file_content command for file: {}",
+        log_file_path.display()
+    );
+
+    // Call the utility function from file_utils
+    Ok(crate::utils::file_utils::read_log_file_content(&log_file_path).await?)
+}
+
+#[tauri::command]
+pub async fn get_worlds_for_profile(profile_id: Uuid) -> Result<Vec<WorldInfo>, CommandError> {
+    info!("Executing get_worlds_for_profile command for profile {}", profile_id);
+    // Rufe die Utility-Funktion auf und mappe den Fehler
+    Ok(mc_utils::get_profile_worlds(profile_id).await?)
+}
+
+#[tauri::command]
+pub async fn get_servers_for_profile(profile_id: Uuid) -> Result<Vec<mc_utils::ServerInfo>, CommandError> {
+    info!("Executing get_servers_for_profile command for profile {}", profile_id);
+    // Call the utility function and map the error
+    Ok(mc_utils::get_profile_servers(profile_id).await?)
+}
+
+/// Copies a singleplayer world to another profile (or the same one) with a new name.
+#[tauri::command]
+pub async fn copy_world(
+    params: CopyWorldParams
+) -> Result<String, CommandError> {
+    info!(
+        "Executing copy_world command: from profile {} ('{}') to profile {} (name: '{}')",
+        params.source_profile_id,
+        params.source_world_folder,
+        params.target_profile_id,
+        params.target_world_name
+    );
+    
+    // Call the utility function
+    let generated_folder_name = world_utils::copy_world_directory(
+        params.source_profile_id,
+        &params.source_world_folder,
+        params.target_profile_id,
+        &params.target_world_name,
+    ).await?;
+
+    // Optional: Trigger UI updates for the target profile if different from source
+    if params.source_profile_id != params.target_profile_id {
+        if let Ok(state) = State::get().await {
+            if let Err(e) = state.event_state.trigger_profile_update(params.target_profile_id).await {
+                warn!("Failed to emit profile update event for target profile {}: {}", params.target_profile_id, e);
+            }
+             // Optionally trigger for source profile too if needed, though less common for copy
+             // if let Err(e) = state.event_state.trigger_profile_update(params.source_profile_id).await {
+             //     warn!("Failed to emit profile update event for source profile {}: {}", params.source_profile_id, e);
+             // }
+        } else {
+             warn!("Could not get state to emit profile update event after world copy.");
+        }
+    } else {
+         // Source and target are the same, trigger update for that profile
+         if let Ok(state) = State::get().await {
+            if let Err(e) = state.event_state.trigger_profile_update(params.target_profile_id).await {
+                warn!("Failed to emit profile update event for profile {}: {}", params.target_profile_id, e);
+            }
+        } else {
+             warn!("Could not get state to emit profile update event after world copy.");
+        }
+    }
+
+    info!("Successfully executed copy_world command. New folder name: {}", generated_folder_name);
+    Ok(generated_folder_name) // Return the actual folder name created
+}
+
+/// Checks if a specific world's session.lock file can be locked, indicating if it's likely in use.
+#[tauri::command]
+pub async fn check_world_lock_status(profile_id: Uuid, world_folder: String) -> Result<bool, CommandError> {
+    info!("Executing check_world_lock_status for profile {}, world '{}'", profile_id, world_folder);
+
+    let state = State::get().await?;
+    let profile_manager = &state.profile_manager;
+
+    // Calculate the world path
+    let instance_path = profile_manager.get_profile_instance_path(profile_id).await?;
+    let world_path = instance_path.join("saves").join(&world_folder);
+
+    if !world_path.is_dir() {
+        return Err(AppError::WorldNotFound { profile_id, world_folder }.into());
+    }
+
+    // Call the utility function
+    match world_utils::check_world_session_lock(&world_path).await {
+        Ok(()) => {
+            // Lock could be acquired -> world is NOT locked
+            info!("World '{}' in profile {} is not locked.", world_folder, profile_id);
+            Ok(false) 
+        }
+        Err(AppError::WorldLocked { .. }) => {
+            // Lock could NOT be acquired -> world IS locked
+            info!("World '{}' in profile {} is locked.", world_folder, profile_id);
+            Ok(true)
+        }
+        Err(e) => {
+            // Other error during lock check
+            error!("Error checking lock status for world '{}' in profile {}: {}", world_folder, profile_id, e);
+            Err(e.into()) // Propagate other errors
+        }
+    }
+}
+
+/// Deletes a specific world directory from a profile after checking the session lock.
+#[tauri::command]
+pub async fn delete_world(profile_id: Uuid, world_folder: String) -> Result<(), CommandError> {
+    info!(
+        "Executing delete_world command for profile {}, world '{}'",
+        profile_id, world_folder
+    );
+
+    // Call the utility function to perform the deletion
+    world_utils::delete_world_directory(profile_id, &world_folder).await?;
+
+    // Trigger UI update for the affected profile
+    if let Ok(state) = State::get().await {
+        if let Err(e) = state.event_state.trigger_profile_update(profile_id).await {
+            warn!(
+                "Failed to emit profile update event after deleting world '{}' from profile {}: {}",
+                world_folder,
+                profile_id,
+                e
+            );
+        }
+    } else {
+        warn!(
+            "Could not get state to emit profile update event after world deletion."
+        );
+    }
+
+    info!("Successfully executed delete_world command.");
+    Ok(())
+}
+
+// Added: Command to list screenshots for a profile
+#[tauri::command]
+pub async fn list_profile_screenshots(profile_id: Uuid) -> Result<Vec<ScreenshotInfo>, CommandError> {
+    info!("Executing list_profile_screenshots command for profile {}", profile_id);
+    // Call the utility function from profile_utils, passing only the ID
+    Ok(profile_utils::get_screenshots_for_profile(profile_id).await?)
 }

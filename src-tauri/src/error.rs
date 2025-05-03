@@ -2,6 +2,8 @@ use thiserror::Error;
 use serde::Serialize;
 use std::io;
 use uuid::Uuid;
+use fastnbt::error::Error as FastNbtError;
+use fs_extra::error::Error as FsExtraError;
 
 #[derive(Error, Debug)]
 pub enum AppError {
@@ -143,14 +145,36 @@ pub enum AppError {
     #[error("File not found: {0:?}")]
     FileNotFound(std::path::PathBuf),
 
+    #[error("NBT parsing error: {0}")]
+    Nbt(#[from] FastNbtError),
+
     #[error("Archive read error: {0}")]
     ArchiveReadError(String),
 
     #[error("PNG not found in archive: {0:?}")]
     PngNotFoundInArchive(std::path::PathBuf),
+
+    // --- World Copy Errors ---
+    #[error("World '{world_folder}' not found in profile {profile_id}.")]
+    WorldNotFound {
+        profile_id: Uuid,
+        world_folder: String,
+    },
+    #[error("World '{world_folder}' already exists in profile {profile_id}.")]
+    WorldAlreadyExists {
+        profile_id: Uuid,
+        world_folder: String,
+    },
+    #[error("World '{world_folder}' in profile {profile_id} is currently locked (in use).")]
+    WorldLocked {
+        profile_id: Uuid,
+        world_folder: String,
+    },
+    #[error("Filesystem operation error (fs_extra): {0}")]
+    FsExtra(#[from] FsExtraError),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct CommandError {
     pub message: String,
     pub kind: String,

@@ -16,6 +16,7 @@ use crate::integrations::norisk_packs;
 use crate::integrations::norisk_versions;
 use log::{debug, error, info, warn};
 use rand::seq::SliceRandom;
+use utils::debug_utils;
 use std::sync::Arc;
 use tauri::Listener;
 
@@ -44,6 +45,7 @@ use commands::minecraft_command::{
     update_skin_properties,
     upload_log_to_mclogs_command,
     upload_skin,
+    ping_minecraft_server,
 };
 use commands::profile_command::{
     abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
@@ -55,10 +57,12 @@ use commands::profile_command::{
     refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
     set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
     update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
-    is_content_installed
+    is_content_installed, open_profile_latest_log, get_profile_latest_log_content,
+    get_worlds_for_profile, get_servers_for_profile, copy_world, check_world_lock_status,
+    delete_world, get_profile_log_files, get_log_file_content, list_profile_screenshots
 };
 
-// Use statements for registered commands only
+// Use statements for registered commands only  
 use commands::modrinth_commands::{
     check_modrinth_updates, download_and_install_modrinth_modpack,
     get_all_modrinth_versions_for_contexts, get_modrinth_mod_versions,
@@ -67,7 +71,7 @@ use commands::modrinth_commands::{
 
 use commands::file_command::{
     delete_file, get_icons_for_archives, get_icons_for_norisk_mods, open_file_directory,
-    set_file_enabled,
+    set_file_enabled, open_file, read_file_bytes,
 };
 
 // Import config commands
@@ -184,6 +188,27 @@ async fn main() {
         }
     }
 
+    match commands::java_command::detect_java_installations_command().await {
+        Ok(installations) => {
+            info!("Detected {} Java installation(s):", installations.len());
+            for (index, installation) in installations.iter().enumerate() {
+                info!(
+                    "  {}: Path='{}', Version='{}', Major={}, 64bit={}, Vendor='{}', Source='{}'",
+                    index + 1,
+                    installation.path.display(),
+                    installation.version,
+                    installation.major_version,
+                    installation.is_64bit,
+                    installation.vendor,
+                    installation.source
+                );
+            }
+        }
+        Err(e) => {
+            error!("Failed to get Java installations: {:?}", e); // Log the error detail
+        }
+    };
+
     info!("Starting NoRiskClient Launcher...");
 
     utils::file_utils::get_jar_icon_test().await;
@@ -204,6 +229,11 @@ async fn main() {
                     error!("Failed to initialize state: {}", e);
                     // Consider exiting or notifying the user if state init fails critically
                 }
+
+                debug_utils::debug_print_all_profile_worlds().await;
+                debug_utils::debug_print_all_profile_servers().await;
+                let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
+                info!("Ping info: {:?}", ping_info);
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 
@@ -321,7 +351,26 @@ async fn main() {
             unequip_cape,
             refresh_norisk_packs,
             refresh_standard_versions,
-            is_content_installed
+            is_content_installed,
+            open_profile_latest_log,
+            get_profile_latest_log_content,
+            // Java detection commands
+            commands::java_command::detect_java_installations_command,
+            commands::java_command::get_java_info_command,
+            commands::java_command::find_best_java_for_minecraft_command,
+            commands::java_command::invalidate_java_cache_command,
+            commands::java_command::validate_java_path_command,
+            get_worlds_for_profile,
+            get_servers_for_profile,
+            copy_world,
+            check_world_lock_status,
+            ping_minecraft_server,
+            delete_world,
+            get_profile_log_files,
+            get_log_file_content,
+            list_profile_screenshots,
+            open_file,
+            read_file_bytes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

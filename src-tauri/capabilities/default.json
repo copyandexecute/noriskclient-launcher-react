@@ -9,13 +9,15 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "clipboard-manager:allow-write-text",
     "core:window:default",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
     "dialog:default",
+    "opener:allow-open-path",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
     "dialog:allow-open"
   ]
 }

@@ -155,10 +155,15 @@ impl ModLoader {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProfileSettings {
     pub java_path: Option<String>,           // Java Pfad
+    #[serde(default)]
+    pub use_custom_java_path: bool,          // Ob der benutzerdefinierte Java-Pfad verwendet werden soll
     pub memory: MemorySettings,              // Speicher Einstellungen
     pub resolution: Option<WindowSize>,      // Auflösung
     pub fullscreen: bool,                    // Vollbild
-    pub extra_args: Vec<String>,             // Zusätzliche Argumente
+    #[serde(default)]
+    pub extra_game_args: Vec<String>,             // Zusätzliche Argumente für das Spiel
+    #[serde(default)] // Für Abwärtskompatibilität
+    pub custom_jvm_args: Option<String>,     // Zusätzliche JVM-Argumente als String
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1269,10 +1274,12 @@ impl Default for ProfileSettings {
     fn default() -> Self {
         Self {
             java_path: None,
+            use_custom_java_path: false,
             memory: MemorySettings::default(),
             resolution: None,
             fullscreen: false,
-            extra_args: Vec::new(),
+            extra_game_args: Vec::new(),
+            custom_jvm_args: None, // Standardmäßig keine benutzerdefinierten JVM-Args
         }
     }
 }
