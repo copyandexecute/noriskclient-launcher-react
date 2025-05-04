@@ -46,8 +46,8 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20 # Use Node.js LTS 20
-          cache: 'npm'
+          node-version: lts/*
+          cache: 'yarn'
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -63,18 +63,10 @@ jobs:
         run: git clean -fdx
 
       - name: install frontend dependencies
-        run: npm ci
+        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
+        run: yarn install --frozen-lockfile
 
-      # Explicitly install the native Rollup dependency for the *host* platform
-      - name: Install Host Rollup Dependency
-        run: |
-          npm install --no-save --no-optional @rollup/rollup-$(node -p "require('./node_modules/@rollup/platform-specific/package.json').systemSpecificPackageName")
-        shell: bash
-
-      - name: build frontend
-        run: npm run build
-
-      # Tauri Action nur zum Bauen und Signieren
+      # Tauri Action now handles build and sign
       - name: Build and Sign Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
@@ -84,7 +76,7 @@ jobs:
         with:
           args: --verbose ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }} # Füge --target hinzu, wenn es gesetzt ist
           # KEIN tagName, releaseName etc. hier!
-          packageManager: npm
+          packageManager: yarn
           
       # --- Umbenennen und Artefakte vorbereiten --- 
       - name: Rename Linux Artifacts
