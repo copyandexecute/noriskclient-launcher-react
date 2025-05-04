@@ -14,6 +14,7 @@ import { IconButton } from "../ui/IconButton";
 import * as ProcessService from "../../services/process-service";
 import { processMonitor } from "../../services/process-monitor";
 import { listen } from "@tauri-apps/api/event";
+import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -30,6 +31,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   const [isCloning, setIsCloning] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const eventListenersSetUp = useRef(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   useEffect(() => {
     initializeProfile(profile.id);
@@ -226,10 +228,21 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
     setLaunchError(null);
 
     try {
-      setIsCloning(true);
-      await useProfileStore
-        .getState()
-        .copyProfile(profile.id, `${profile.name} (Copy)`);
+      const newName = await confirm({
+        title: "clone profile",
+        inputLabel: "profile name",
+        inputPlaceholder: "Enter profile name",
+        inputInitialValue: `${profile.name} (Copy)`,
+        inputRequired: true,
+        confirmText: "CLONE",
+        type: "input",
+        fullscreen: true,
+      });
+
+      if (newName && typeof newName === "string") {
+        setIsCloning(true);
+        await useProfileStore.getState().copyProfile(profile.id, newName);
+      }
     } catch (error) {
       console.error("Failed to clone profile:", error);
       setLaunchError("Failed to clone profile");
@@ -377,6 +390,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
           )}
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 }

@@ -198,8 +198,11 @@ export function ProfileSelectionPopup({
       }
     }
   }, [compatibleProfiles, selectedProfileId, profiles]);
+  // @ts-ignore
+  const handleInstall = async (event) => {
+    // Prevent default action that might cause page reload
+    event?.preventDefault?.();
 
-  const handleInstall = async () => {
     if (!selectedProfileId) return;
 
     setIsInstalling(true);
@@ -212,10 +215,13 @@ export function ProfileSelectionPopup({
         ...prev,
         [selectedProfileId]: true,
       }));
+
+      // Don't close the popup automatically
+      // The parent component will handle closing after successful installation
     } catch (error) {
       console.error("Installation failed:", error);
-    } finally {
       setIsInstalling(false);
+      // Keep popup open on error so user can try again
     }
   };
 
@@ -229,7 +235,13 @@ export function ProfileSelectionPopup({
           <h3 className="text-white font-minecraft text-3xl tracking-wide lowercase select-none">
             {title}
           </h3>
-          <button onClick={onCancel} className="text-white/60 hover:text-white">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onCancel();
+            }}
+            className="text-white/60 hover:text-white"
+          >
             <Icon icon="pixel:close" className="w-6 h-6" />
           </button>
         </div>
@@ -307,10 +319,13 @@ export function ProfileSelectionPopup({
 
         <div className="p-4 border-t border-white/20 flex justify-end gap-3">
           <button
-            onClick={onCancel}
+            onClick={(e) => {
+              e.preventDefault();
+              onCancel();
+            }}
             className="px-4 py-2 bg-black/30 border border-white/10 text-white/70 font-minecraft text-sm tracking-wide lowercase select-none hover:bg-black/40 hover:text-white"
           >
-            Cancel
+            {isInstalled ? "Close" : "Cancel"}
           </button>
 
           {selectedProfileId && installedProfiles[selectedProfileId] ? (
@@ -322,7 +337,7 @@ export function ProfileSelectionPopup({
             </button>
           ) : (
             <button
-              onClick={handleInstall}
+              onClick={(e) => handleInstall(e)}
               disabled={
                 !selectedProfileId ||
                 (selectedProfileId && !compatibleProfiles[selectedProfileId]) ||

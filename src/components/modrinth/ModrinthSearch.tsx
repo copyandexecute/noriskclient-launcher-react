@@ -27,6 +27,21 @@ import { ErrorMessage } from "../ui/ErrorMessage";
 import { EmptyState } from "../ui/EmptyState";
 import { useModrinthInstaller } from "../../hooks/useModrinthInstaller";
 
+// Add this new component at the top of the file, before the ModrinthSearch component
+function CategoryTransitionLoader() {
+  return (
+    <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center z-10 animate-fadeIn">
+      <div className="relative w-16 h-16 mb-4">
+        <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
+        <div className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"></div>
+      </div>
+      <div className="font-minecraft text-2xl text-white/80 tracking-wide lowercase">
+        Loading content...
+      </div>
+    </div>
+  );
+}
+
 const PROJECT_TYPES: { type: ModrinthProjectType; label: string }[] = [
   { type: "mod", label: "Mods" },
   { type: "modpack", label: "Modpacks" },
@@ -52,6 +67,7 @@ interface ModrinthSearchProps {
   autoInstall?: boolean;
   selectedProfileId?: string;
   onProfileCreated?: (profileId: string) => void;
+  parentTransitionActive?: boolean;
 }
 
 export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
@@ -63,6 +79,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
   autoInstall = false,
   selectedProfileId = null,
   onProfileCreated,
+  parentTransitionActive = false,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -122,6 +139,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     Record<string, "idle" | "adding" | "success" | "error">
   >({});
 
+  // Add this state near the other state declarations in the ModrinthSearch component
+  const [categoryTransition, setCategoryTransition] = useState(false);
+  const categoryTransitionTimer = useRef<NodeJS.Timeout | null>(null);
+
   const {
     installState: addingModState,
     error: addError,
@@ -178,6 +199,9 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     version: ModrinthVersion,
     file: ModrinthFile,
   ) => {
+    // Prevent default behavior that might cause page refresh
+    event?.preventDefault?.();
+
     // Check if it's a modpack - always directly install modpacks without profile selection
     if (version.search_hit?.project_type === "modpack") {
       // Use the direct ModrinthService method for modpacks
@@ -864,9 +888,23 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     [selectedProjectId, selectedProfileId, validProfiles],
   );
 
+  // Update the changeProjectType function to include the transition state
   const changeProjectType = useCallback(
     (newType: ModrinthProjectType) => {
       if (selectedProjectType === newType) return;
+
+      // Start category transition animation
+      setCategoryTransition(true);
+
+      // Clear any existing timer
+      if (categoryTransitionTimer.current) {
+        clearTimeout(categoryTransitionTimer.current);
+      }
+
+      // Set a minimum display time for the transition
+      categoryTransitionTimer.current = setTimeout(() => {
+        setCategoryTransition(false);
+      }, 800); // Show for at least 800ms
 
       setSelectedProjectType(newType);
 
@@ -1038,6 +1076,30 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Add cleanup for the timer in a useEffect
+  useEffect(() => {
+    return () => {
+      if (categoryTransitionTimer.current) {
+        clearTimeout(categoryTransitionTimer.current);
+      }
+    };
+  }, []);
+
+  const handleProfileSelection = async (profileId: string) => {
+    if (!pendingInstall) return;
+
+    try {
+      // Don't close the popup until installation completes
+      await handleProfileSelect(profileId);
+
+      // The handleProfileSelect function in useModrinthInstaller will close the popup
+      // after successful installation
+    } catch (error) {
+      console.error("Error during installation:", error);
+      // Keep popup open on error so user can try again or cancel
+    }
+  };
+
   return (
     <div className={`modrinth-search-container ${className} flex flex-col`}>
       {!projectId && (
@@ -1051,7 +1113,22 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
                     ? "bg-white/10 text-white"
                     : "text-white/60 hover:text-white hover:bg-white/5"
                 }`}
-                onClick={() => changeProjectType(tab.type)}
+                onClick={() => {
+                  // Start category transition
+                  setCategoryTransition(true);
+
+                  // Clear any existing timer
+                  if (categoryTransitionTimer.current) {
+                    clearTimeout(categoryTransitionTimer.current);
+                  }
+
+                  // Set a timer to hide the transition after a short delay
+                  categoryTransitionTimer.current = setTimeout(() => {
+                    setCategoryTransition(false);
+                  }, 500);
+
+                  changeProjectType(tab.type);
+                }}
                 disabled={searchLoading}
               >
                 {tab.label.toLowerCase()}
@@ -1127,10 +1204,9 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
       <Card className="flex-1 flex flex-col overflow-hidden border border-white/10">
         <CardContent className="flex-1 overflow-hidden p-0 flex flex-col">
-          {searchLoading && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-10">
-              <LoadingIndicator message="Loading results..." />
-            </div>
+          {/* Only show the CategoryTransitionLoader if parentTransitionActive is false */}
+          {(searchLoading || categoryTransition) && !parentTransitionActive && (
+            <CategoryTransitionLoader />
           )}
 
           <div
@@ -1308,7 +1384,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       {showProfilePopup && pendingInstall && (
         <ProfileSelectionPopup
           profiles={validProfiles}
-          onSelect={handleProfileSelect}
+          onSelect={handleProfileSelection}
           onCancel={() => {
             setShowProfilePopup(false);
             setPendingInstall(null);

@@ -64,6 +64,10 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
   const [deleteLoading, setDeleteLoading] = useState<Record<string, boolean>>(
     {},
   );
+  const [activeTab, setActiveTab] = useState<"all" | "worlds" | "servers">(
+    "all",
+  );
+  const [sortOrder, setSortOrder] = useState<"recent" | "name">("recent");
 
   // --- Helper Functions ---
   const getWorldDisplayName = useCallback((world: WorldInfo): string => {
@@ -139,26 +143,44 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
         type: "server",
       }));
 
-      typedWorlds.sort((a, b) => {
-        // Add type guard for sorting worlds
-        if (a.type === "world" && b.type === "world") {
-          return (b.last_played ?? 0) - (a.last_played ?? 0);
+      let filteredItems: DisplayItem[] = [];
+
+      // Filter based on active tab
+      if (activeTab === "all") {
+        filteredItems = [...typedWorlds, ...typedServers];
+      } else if (activeTab === "worlds") {
+        filteredItems = [...typedWorlds];
+      } else if (activeTab === "servers") {
+        filteredItems = [...typedServers];
+      }
+
+      // Sort items
+      filteredItems.sort((a, b) => {
+        if (sortOrder === "recent") {
+          if (a.type === "world" && b.type === "world") {
+            return (b.last_played ?? 0) - (a.last_played ?? 0);
+          } else if (a.type === "world" && b.type === "server") {
+            return -1; // Worlds first
+          } else if (a.type === "server" && b.type === "world") {
+            return 1; // Worlds first
+          }
         }
-        return 0; // Should not happen if array contains only worlds
-      });
-      typedServers.sort((a, b) => {
-        // Add type guard for sorting servers
-        if (a.type === "server" && b.type === "server") {
-          return getServerDisplayName(a)
-            .toLowerCase()
-            .localeCompare(getServerDisplayName(b).toLowerCase());
-        }
-        return 0; // Should not happen if array contains only servers
+
+        // Default to name sorting
+        const nameA =
+          a.type === "world"
+            ? getWorldDisplayName(a).toLowerCase()
+            : getServerDisplayName(a).toLowerCase();
+        const nameB =
+          b.type === "world"
+            ? getWorldDisplayName(b).toLowerCase()
+            : getServerDisplayName(b).toLowerCase();
+        return nameA.localeCompare(nameB);
       });
 
-      setDisplayItems([...typedWorlds, ...typedServers]);
+      setDisplayItems(filteredItems);
     },
-    [getServerDisplayName],
+    [getServerDisplayName, getWorldDisplayName, activeTab, sortOrder],
   );
 
   const pingAllServers = useCallback(async (serversToPing: ServerInfo[]) => {
@@ -241,7 +263,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
       let currentWorlds: WorldInfo[] = [];
       let currentServers: ServerInfo[] = [];
       let loadError = false;
-      let errorMessages: string[] = [];
+      const errorMessages: string[] = [];
 
       if (worldsResult.status === "fulfilled") {
         currentWorlds = worldsResult.value;
@@ -280,6 +302,15 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Update display items when tab or sort order changes
+  useEffect(() => {
+    if (profile?.id) {
+      const currentWorlds: WorldInfo[] = [];
+      const currentServers: ServerInfo[] = [];
+      updateDisplayItems(currentWorlds, currentServers);
+    }
+  }, [activeTab, sortOrder, profile?.id, updateDisplayItems]);
 
   // --- Actions --- //
   const handleLaunch = useCallback(
@@ -342,281 +373,386 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
   // --- Render --- //
   return (
     <div className="h-full select-none flex flex-col text-white">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4 flex-shrink-0">
-        <h2 className="font-minecraft text-xl lowercase tracking-wide">
-          worlds & servers
-        </h2>
-        <button
-          className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-4 py-1.5 font-minecraft text-base flex items-center gap-2 transition-colors"
-          onClick={() => pingAllServers(servers)}
-          disabled={
-            pingingServers.size > 0 ||
-            servers.filter((s) => s.address).length === 0
-          }
-          title={
-            servers.filter((s) => s.address).length === 0
-              ? "No servers to ping"
-              : "Refresh server status"
-          }
-        >
-          {pingingServers.size > 0 ? (
-            <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
+      {/* Main container with border */}
+      <div className="border-2 border-white/30 h-full flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-black/30 border-b-2 border-white/30 py-3 px-4 flex items-center justify-between">
+          <div className="flex items-center">
+            {/* Tab filters */}
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-4 py-2 min-w-[100px] text-center font-minecraft text-2xl ${
+                activeTab === "all"
+                  ? "bg-black/20 text-white border-2 border-white/20"
+                  : "text-white/70 hover:text-white hover:bg-black/10"
+              }`}
+              style={{ transition: "none" }}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setActiveTab("worlds")}
+              className={`px-4 py-2 min-w-[100px] text-center font-minecraft text-2xl ${
+                activeTab === "worlds"
+                  ? "bg-black/20 text-white border-2 border-white/20"
+                  : "text-white/70 hover:text-white hover:bg-black/10"
+              }`}
+              style={{ transition: "none" }}
+            >
+              Worlds
+            </button>
+            <button
+              onClick={() => setActiveTab("servers")}
+              className={`px-4 py-2 min-w-[100px] text-center font-minecraft text-2xl ${
+                activeTab === "servers"
+                  ? "bg-black/20 text-white border-2 border-white/20"
+                  : "text-white/70 hover:text-white hover:bg-black/10"
+              }`}
+              style={{ transition: "none" }}
+            >
+              Servers
+            </button>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Sort dropdown */}
+            <div className="relative">
+              <select
+                value={sortOrder}
+                onChange={(e) =>
+                  setSortOrder(e.target.value as "recent" | "name")
+                }
+                className="bg-black/20 backdrop-blur-md border-2 border-white/10 px-4 py-2 text-white font-minecraft text-3xl shadow-sm appearance-none pr-12 tracking-wide"
+                aria-label="Sort by"
+              >
+                <option value="recent" className="text-3xl">
+                  Recent
+                </option>
+                <option value="name" className="text-3xl">
+                  Name
+                </option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-white">
+                <Icon icon="pixel:chevron-down" className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Refresh button */}
+            <button
+              className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-5 py-2 font-minecraft text-2xl flex items-center gap-3 transition-colors"
+              onClick={() => pingAllServers(servers)}
+              disabled={
+                pingingServers.size > 0 ||
+                servers.filter((s) => s.address).length === 0
+              }
+              title={
+                servers.filter((s) => s.address).length === 0
+                  ? "No servers to ping"
+                  : "Refresh server status"
+              }
+            >
+              {pingingServers.size > 0 ? (
+                <Icon
+                  icon="pixel:spinner-solid"
+                  className="w-6 h-6 animate-spin"
+                />
+              ) : (
+                <Icon icon="pixel:refresh-solid" className="w-6 h-6" />
+              )}
+              <span>refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Content Area - Only this part scrolls */}
+        <div className="flex-1 overflow-y-auto bg-black/60 custom-scrollbar min-h-0">
+          {loading ? (
+            <div className="flex items-center justify-center h-32 text-white/70 text-2xl">
+              <Icon
+                icon="pixel:spinner-solid"
+                className="w-8 h-8 animate-spin mr-3"
+              />{" "}
+              Loading...
+            </div>
+          ) : error ? (
+            <div className="p-6 bg-red-900/50 border-2 border-red-700 text-red-300 text-2xl">
+              Error: {error}
+            </div>
+          ) : displayItems.length === 0 ? (
+            <div className="text-center py-16 text-white/50 font-minecraft text-3xl lowercase">
+              No worlds or servers found
+            </div>
           ) : (
-            <Icon icon="pixel:refresh-solid" className="w-4 h-4" />
-          )}
-          <span>refresh</span>
-        </button>
-      </div>
+            <ul className="divide-y-2 divide-white/10">
+              {displayItems.map((item) => {
+                // Type guard is now essential
+                const isWorld = item.type === "world";
+                const key = isWorld
+                  ? item.folder_name
+                  : item.address || item.name || Math.random().toString();
+                const pingInfo =
+                  !isWorld && item.address ? serverPings[item.address] : null;
+                const isPinging =
+                  !isWorld && item.address
+                    ? pingingServers.has(item.address)
+                    : false;
+                const hasPingError = !!pingInfo?.error;
+                const worldIconSrc = isWorld ? getWorldIconSrc(item) : null;
+                // Pass item directly if needed, or specific props based on type guard
+                const serverIconSrc = !isWorld ? getServerIconSrc(item) : null;
+                const itemDisplayName = isWorld
+                  ? getWorldDisplayName(item)
+                  : getServerDisplayName(item);
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar -mr-3 pr-3 min-h-0">
-        {" "}
-        {/* Ensure parent has height and min-h-0 */}
-        {loading ? (
-          <div className="flex items-center justify-center h-32 text-white/70">
-            <Icon
-              icon="pixel:spinner-solid"
-              className="w-6 h-6 animate-spin mr-2"
-            />{" "}
-            Loading...
-          </div>
-        ) : error ? (
-          <div className="p-4 bg-red-900/50 border border-red-700 rounded text-red-300">
-            Error: {error}
-          </div>
-        ) : displayItems.length === 0 ? (
-          <div className="text-center py-10 text-white/50 font-minecraft text-lg lowercase">
-            No worlds or servers found
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {displayItems.map((item) => {
-              // Type guard is now essential
-              const isWorld = item.type === "world";
-              const key = isWorld
-                ? item.folder_name
-                : item.address || item.name || Math.random().toString();
-              const pingInfo =
-                !isWorld && item.address ? serverPings[item.address] : null;
-              const isPinging =
-                !isWorld && item.address
-                  ? pingingServers.has(item.address)
-                  : false;
-              const hasPingError = !!pingInfo?.error;
-              const worldIconSrc = isWorld ? getWorldIconSrc(item) : null;
-              // Pass item directly if needed, or specific props based on type guard
-              const serverIconSrc = !isWorld ? getServerIconSrc(item) : null;
-              const itemDisplayName = isWorld
-                ? getWorldDisplayName(item)
-                : getServerDisplayName(item);
-
-              return (
-                <li
-                  key={key}
-                  className="bg-black/20 border-2 border-white/20 p-3 flex items-start gap-3 hover:border-white/30 transition-colors"
-                >
-                  {/* Icon */}
-                  <div className="w-12 h-12 bg-black/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {isWorld ? (
-                      worldIconSrc ? (
+                return (
+                  <li
+                    key={key}
+                    className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors"
+                  >
+                    {/* Icon */}
+                    <div className="w-16 h-16 bg-black/30 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-white/10">
+                      {isWorld ? (
+                        worldIconSrc ? (
+                          <img
+                            src={worldIconSrc || "/placeholder.svg"}
+                            alt=""
+                            className="w-full h-full object-cover image-pixelated"
+                          />
+                        ) : (
+                          <Icon
+                            icon="pixel:globe"
+                            className="w-10 h-10 text-white/50"
+                          />
+                        )
+                      ) : serverIconSrc ? (
                         <img
-                          src={worldIconSrc}
+                          src={serverIconSrc || "/placeholder.svg"}
                           alt=""
                           className="w-full h-full object-cover image-pixelated"
                         />
                       ) : (
                         <Icon
-                          icon="pixel:globe"
-                          className="w-8 h-8 text-white/50"
+                          icon="pixel:server"
+                          className="w-10 h-10 text-white/50"
                         />
-                      )
-                    ) : serverIconSrc ? (
-                      <img
-                        src={serverIconSrc}
-                        alt=""
-                        className="w-full h-full object-cover image-pixelated"
-                      />
-                    ) : (
-                      <Icon
-                        icon="pixel:server"
-                        className="w-8 h-8 text-white/50"
-                      />
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  {/* Details */}
-                  <div className="flex-grow min-w-0">
-                    <h3
-                      className="font-minecraft text-lg lowercase tracking-wide truncate"
-                      title={itemDisplayName}
-                    >
-                      {itemDisplayName}
-                    </h3>
-                    {isWorld ? (
-                      // Access world-specific props safely
-                      <>
-                        <p className="text-white/60 text-base mt-1">
-                          {item.last_played
-                            ? `Last played: ${timeAgo(item.last_played)}`
-                            : "Never played"}
-                        </p>
-                        {/* Display Game Mode, Difficulty, Hardcore, Locked status */}
-                        <div className="text-white/50 text-xs mt-1 flex items-center gap-x-2 gap-y-1 flex-wrap">
-                          <span>Mode: {getGameModeString(item.game_mode)}</span>
-                          <span>
-                            Difficulty: {getDifficultyString(item.difficulty)}
-                          </span>
-                          {item.is_hardcore && (
-                            <span className="text-red-400 font-bold inline-flex items-center gap-1">
-                              <Icon icon="pixel:skull" className="w-3 h-3" />{" "}
-                              Hardcore
+                    {/* Details */}
+                    <div className="flex-grow min-w-0">
+                      <h3
+                        className="font-minecraft text-3xl lowercase tracking-wide truncate"
+                        title={itemDisplayName}
+                      >
+                        {itemDisplayName}
+                      </h3>
+                      {isWorld ? (
+                        // Access world-specific props safely
+                        <>
+                          <p className="text-white/60 text-xl mt-2">
+                            {item.last_played
+                              ? `Last played: ${timeAgo(item.last_played)}`
+                              : "Never played"}
+                          </p>
+                          {/* Display Game Mode, Difficulty, Hardcore, Locked status */}
+                          <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
+                            <span>
+                              Mode: {getGameModeString(item.game_mode)}
                             </span>
-                          )}
-                          {item.difficulty_locked && (
-                            <span
-                              title="Difficulty Locked"
-                              className="inline-flex items-center gap-1"
-                            >
-                              <Icon icon="pixel:lock" className="w-3 h-3" />{" "}
-                              Locked
+                            <span>
+                              Difficulty: {getDifficultyString(item.difficulty)}
                             </span>
-                          )}
-                          {item.version_name && (
-                            <span title={`Version: ${item.version_name}`}>
-                              v: {item.version_name}
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* Access server-specific props safely */}
-                        <div
-                          className="text-white/70 text-sm mt-1 motd-container h-8 overflow-hidden"
-                          title={pingInfo?.description || item.address || ""}
-                        >
-                          {isPinging ? (
-                            <span className="italic text-white/50">
-                              Pinging...
-                            </span>
-                          ) : hasPingError ? (
-                            <span className="text-red-400 italic">
-                              Error: {pingInfo?.error}
-                            </span>
-                          ) : pingInfo ? (
-                            <span
-                              dangerouslySetInnerHTML={{
-                                __html: parseMotdToHtml(
-                                  pingInfo?.description_json ||
-                                    pingInfo?.description,
-                                ),
-                              }}
-                            />
-                          ) : (
-                            <span className="italic text-white/50">
-                              {item.address || "Address missing"}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-white/50 text-xs mt-1 flex items-center gap-x-2 gap-y-1 flex-wrap">
-                          {isPinging ? (
-                            <span>Pinging...</span>
-                          ) : hasPingError ? (
-                            <span className="text-red-400">Error</span>
-                          ) : pingInfo ? (
-                            <>
+                            {item.is_hardcore && (
+                              <span className="text-red-400 font-bold inline-flex items-center gap-1">
+                                <Icon icon="pixel:skull" className="w-4 h-4" />{" "}
+                                Hardcore
+                              </span>
+                            )}
+                            {item.difficulty_locked && (
                               <span
-                                title="Players"
+                                title="Difficulty Locked"
                                 className="inline-flex items-center gap-1"
                               >
-                                <Icon icon="pixel:users" className="w-3 h-3" />
-                                {pingInfo.players_online ?? "-"}/
-                                {pingInfo.players_max ?? "-"}
+                                <Icon icon="pixel:lock" className="w-4 h-4" />{" "}
+                                Locked
                               </span>
+                            )}
+                            {item.version_name && (
+                              <span title={`Version: ${item.version_name}`}>
+                                v: {item.version_name}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Access server-specific props safely */}
+                          <div
+                            className="text-white/70 text-xl mt-2 motd-container h-10 overflow-hidden"
+                            title={pingInfo?.description || item.address || ""}
+                          >
+                            {isPinging ? (
+                              <span className="italic text-white/50">
+                                Pinging...
+                              </span>
+                            ) : hasPingError ? (
+                              <span className="text-red-400 italic">
+                                Error: {pingInfo?.error}
+                              </span>
+                            ) : pingInfo ? (
                               <span
-                                title="Latency"
-                                className="inline-flex items-center gap-1"
-                              >
-                                <Icon icon="pixel:signal" className="w-3 h-3" />
-                                {pingInfo.latency_ms ?? "-"} ms
+                                dangerouslySetInnerHTML={{
+                                  __html: parseMotdToHtml(
+                                    pingInfo?.description_json ||
+                                      pingInfo?.description,
+                                  ),
+                                }}
+                              />
+                            ) : (
+                              <span className="italic text-white/50">
+                                {item.address || "Address missing"}
                               </span>
-                              {pingInfo.version_name && (
+                            )}
+                          </div>
+                          <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
+                            {isPinging ? (
+                              <span>Pinging...</span>
+                            ) : hasPingError ? (
+                              <span className="text-red-400">Error</span>
+                            ) : pingInfo ? (
+                              <>
                                 <span
-                                  title="Version"
-                                  className="inline-flex items-center gap-1"
+                                  title="Players"
+                                  className="inline-flex items-center gap-2"
                                 >
-                                  <Icon icon="pixel:tag" className="w-3 h-3" />
-                                  {pingInfo.version_name}
+                                  <Icon
+                                    icon="pixel:users"
+                                    className="w-4 h-4"
+                                  />
+                                  {pingInfo.players_online ?? "-"}/
+                                  {pingInfo.players_max ?? "-"}
                                 </span>
-                              )}
-                            </>
-                          ) : (
-                            <span>Offline / Unknown</span>
-                          )}
+                                <span
+                                  title="Latency"
+                                  className="inline-flex items-center gap-2"
+                                >
+                                  <Icon
+                                    icon="pixel:signal"
+                                    className="w-4 h-4"
+                                  />
+                                  {pingInfo.latency_ms ?? "-"} ms
+                                </span>
+                                {pingInfo.version_name && (
+                                  <span
+                                    title="Version"
+                                    className="inline-flex items-center gap-2"
+                                  >
+                                    <Icon
+                                      icon="pixel:tag"
+                                      className="w-4 h-4"
+                                    />
+                                    {pingInfo.version_name}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span>Offline / Unknown</span>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                      <button
+                        onClick={() => handleLaunch(item)}
+                        // Check server address safely
+                        disabled={!isWorld && !item.address}
+                        title={
+                          isWorld
+                            ? "Play World"
+                            : item.address
+                              ? "Join Server"
+                              : "Address missing"
+                        }
+                        className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed text-white px-6 py-2 text-2xl font-minecraft transition-colors w-full text-center"
+                      >
+                        {isWorld ? "Play" : "Join"}
+                      </button>
+                      {isWorld && (
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleOpenCopyDialog(item)}
+                            title="Copy World"
+                            disabled={copyLoading} // Bind disabled state
+                            className="bg-black/20 hover:bg-black/30 border-2 border-white/30 px-3 py-1.5 text-white/80 hover:text-white text-lg font-minecraft transition-colors flex items-center justify-center"
+                          >
+                            <Icon icon="pixel:copy" className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            title="Delete World"
+                            // Access world-specific props safely
+                            disabled={deleteLoading[item.folder_name]}
+                            className="bg-red-900/40 hover:bg-red-800/60 border-2 border-red-500/30 px-3 py-1.5 text-red-300 hover:text-red-200 text-lg font-minecraft transition-colors flex items-center justify-center"
+                          >
+                            {deleteLoading[item.folder_name] ? (
+                              <Icon
+                                icon="pixel:spinner-solid"
+                                className="w-5 h-5 animate-spin"
+                              />
+                            ) : (
+                              <Icon icon="pixel:trash" className="w-5 h-5" />
+                            )}
+                          </button>
                         </div>
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => handleLaunch(item)}
-                      // Check server address safely
-                      disabled={!isWorld && !item.address}
-                      title={
-                        isWorld
-                          ? "Play World"
-                          : item.address
-                            ? "Join Server"
-                            : "Address missing"
-                      }
-                      className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed text-white px-4 py-1.5 text-base font-minecraft transition-colors w-full text-center"
-                    >
-                      {isWorld ? "Play" : "Join"}
-                    </button>
-                    {isWorld && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleOpenCopyDialog(item)}
-                          title="Copy World"
-                          disabled={copyLoading} // Bind disabled state
-                          className="bg-black/20 hover:bg-black/30 border-2 border-white/30 px-2 py-1 text-white/80 hover:text-white text-xs font-minecraft transition-colors flex items-center justify-center"
-                        >
-                          <Icon icon="pixel:copy" className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item)}
-                          title="Delete World"
-                          // Access world-specific props safely
-                          disabled={deleteLoading[item.folder_name]}
-                          className="bg-red-900/40 hover:bg-red-800/60 border-2 border-red-500/30 px-2 py-1 text-red-300 hover:text-red-200 text-xs font-minecraft transition-colors flex items-center justify-center"
-                        >
-                          {deleteLoading[item.folder_name] ? (
-                            <Icon
-                              icon="pixel:spinner-solid"
-                              className="w-3 h-3 animate-spin"
-                            />
-                          ) : (
-                            <Icon icon="pixel:trash" className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        {/* Footer */}
+        <div className="bg-black/30 border-t-2 border-white/30 py-3 px-4 flex justify-between items-center">
+          <div className="text-white/70 font-minecraft text-xl">
+            {displayItems.length > 0 ? (
+              <>
+                {displayItems.length}{" "}
+                {activeTab === "all" ? "items" : activeTab}
+                {displayItems.length !== 1 && !activeTab.endsWith("s")
+                  ? "s"
+                  : ""}
+              </>
+            ) : (
+              <span>No items</span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {activeTab === "servers" && (
+              <span className="text-white/70 font-minecraft text-xl">
+                {pingingServers.size > 0 ? (
+                  <span className="flex items-center">
+                    <Icon
+                      icon="pixel:spinner-solid"
+                      className="w-5 h-5 animate-spin mr-2"
+                    />
+                    Pinging servers...
+                  </span>
+                ) : (
+                  <span>{Object.keys(serverPings).length} servers pinged</span>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-
-      {/* TODO: Add CopyWorldDialog Component Render Here */}
     </div>
   );
 }
 
 // Add to global CSS or Tailwind config:
 // .image-pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }
-// .motd-container span { line-height: 1.2; } /* Basic MOTD line height */

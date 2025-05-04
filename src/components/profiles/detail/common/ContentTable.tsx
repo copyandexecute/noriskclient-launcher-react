@@ -45,7 +45,8 @@ export function ContentTable({
   };
 
   return (
-    <div className="flex-1 overflow-hidden border-2 border-white/30 flex flex-col">
+    <div className="border-2 border-white/30 h-full flex flex-col">
+      {/* Fixed header - will not scroll */}
       <div className="bg-black/30 border-b border-white/30 py-2 px-3 flex items-center">
         <div className="w-8 flex justify-center">
           <input
@@ -79,8 +80,12 @@ export function ContentTable({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">{children}</div>
+      {/* Scrollable content area - only this part will scroll */}
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+        {children}
+      </div>
 
+      {/* Fixed footer - will not scroll */}
       {showFooter && filteredCount > 0 && (
         <div className="bg-black/30 border-t border-white/30 py-2 px-4 text-white/70 font-minecraft text-sm flex justify-between items-center">
           <div>

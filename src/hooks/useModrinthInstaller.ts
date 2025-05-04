@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { useCallback, useState } from "react";
 import type { ModrinthFile, ModrinthVersion } from "../types/modrinth";
 import type { CheckContentParams, Profile } from "../types/profile";
@@ -325,7 +326,14 @@ export function useModrinthInstaller(
   );
 
   const handleContentInstall = useCallback(
-    (version: ModrinthVersion, file: ModrinthFile) => {
+    (
+      version: ModrinthVersion,
+      file: ModrinthFile,
+      event?: React.SyntheticEvent,
+    ) => {
+      // Prevent default behavior that might cause page refresh
+      event?.preventDefault?.();
+
       try {
         if (version.search_hit?.project_type === "modpack") {
           installModpack(version, file);
@@ -363,10 +371,17 @@ export function useModrinthInstaller(
       directInstallToProfile,
       installToProfile,
       installModpack,
+      setError,
     ],
   );
 
-  const handleProfileSelect = async (profileId: string) => {
+  const handleProfileSelect = async (
+    profileId: string,
+    event?: React.SyntheticEvent,
+  ) => {
+    // Prevent default behavior that might cause page refresh
+    event?.preventDefault?.();
+
     if (!pendingInstall) return;
 
     try {
@@ -375,8 +390,13 @@ export function useModrinthInstaller(
         pendingInstall.file,
         profileId,
       );
+
+      // Only close the popup after successful installation
+      setShowProfilePopup(false);
+      setPendingInstall(null);
     } catch (error) {
       console.error("Error during installation:", error);
+      // Keep popup open on error so user can try again or cancel
     }
   };
 
