@@ -34,4 +34,19 @@ export async function setLauncherConfig(config: LauncherConfig): Promise<Launche
     // Consider re-throwing or returning the original config depending on desired error handling
     throw error;
   }
+}
+
+/**
+ * Fetches the application version from the backend.
+ * @returns A promise that resolves with the application version string.
+ */
+export async function getAppVersion(): Promise<string> {
+  try {
+    const version = await invoke<string>("get_app_version");
+    console.log("[LauncherConfigService] Fetched app version:", version);
+    return version;
+  } catch (error) {
+    console.error("[LauncherConfigService] Failed to get app version:", error);
+    throw error;
+  }
 } 

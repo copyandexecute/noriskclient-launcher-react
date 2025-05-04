@@ -5,6 +5,8 @@ import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { Logo } from "../ui/Logo";
+import { invoke } from "@tauri-apps/api/core";
+import * as ConfigService from "../../services/launcher-config-service";
 
 interface NavItem {
   id: string;
@@ -32,12 +34,26 @@ export function VerticalNavbar({
   const navRef = useRef<HTMLDivElement>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeItem) {
       setActive(activeItem);
     }
   }, [activeItem]);
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const fetchedVersion = await ConfigService.getAppVersion();
+        setAppVersion(`v${fetchedVersion}`);
+      } catch (error) {
+        console.error("Failed to fetch app version:", error);
+        setAppVersion("v?.?.?");
+      }
+    };
+    fetchVersion();
+  }, []);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -124,7 +140,9 @@ export function VerticalNavbar({
         ))}
       </div>
 
-      <div className="mt-4 text-lg text-white/60 font-minecraft">{version}</div>
+      <div className="mt-4 text-lg text-white/60 font-minecraft">
+        {appVersion || version || "loading..."}
+      </div>
     </div>
   );
 }
