@@ -51,7 +51,6 @@ pub async fn create_updater_window(app_handle: &AppHandle) -> tauri::Result<Webv
     .resizable(false)
     .center()
     .decorations(false) // Optional: remove window chrome
-    .transparent(false) // Optional: make background transparent (requires frontend setup)
     .skip_taskbar(false) // Optional: hide from taskbar
     .always_on_top(true) // Keep updater visible
     .visible(false) // Start hidden, show when needed
