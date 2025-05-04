@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { SkinViewer } from "../launcher/SkinViewer";
 import { LaunchButton } from "../launcher/LaunchButton";
 import { VersionInfo } from "../launcher/VersionInfo";
-import { newsItems, userData } from "../../data/mock-data";
+import { userData } from "../../data/mock-data";
 import { NewsSection } from "../news/NewsSection";
 import * as ProfileService from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
