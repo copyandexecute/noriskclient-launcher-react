@@ -170,3 +170,45 @@ pub async fn debug_print_all_profile_servers() {
         }
     }
 }
+
+/// Debug function to fetch and print news/changelog posts.
+/// This should only be called temporarily during development.
+pub async fn debug_print_news_and_changelogs() {
+    use crate::minecraft::api::wordpress_api::WordPressApi;
+    info!("--- [DEBUG] Starting News/Changelog Check ---");
+
+    match WordPressApi::get_news_and_changelogs().await {
+        Ok(posts) => {
+            if posts.is_empty() {
+                info!("--- [DEBUG] No news or changelog posts found.");
+            } else {
+                info!(
+                    "--- [DEBUG] Fetched {} news/changelog post(s):",
+                    posts.len()
+                );
+                for post in posts {
+                    let date = &post.date;
+                    let og_image_url = post
+                        .yoast_head_json
+                        .as_ref()
+                        .and_then(|seo| seo.og_image.as_ref())
+                        .and_then(|images| images.first())
+                        .and_then(|img| img.url.as_ref())
+                        .map(|s| s.as_str())
+                        .unwrap_or("N/A");
+
+                    //info!("    - Title: {}", title);
+                    info!("      Date: {}", date);
+                    info!("      OG Image: {}", og_image_url);
+                    // Optionally print more details like excerpt or link
+                    // info!("      Excerpt: {}", post.excerpt.rendered);
+                    // info!("      Link: {}", post.link);
+                }
+                info!("--- [DEBUG] Finished News/Changelog Check ---");
+            }
+        }
+        Err(e) => {
+            error!("--- [DEBUG] Error fetching news/changelogs: {} ---", e);
+        }
+    }
+}
