@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 import { fetchNewsAndChangelogs } from "../../services/nrc-service";
+import { openExternalUrl } from "../../services/tauri-service";
 import type { BlogPost } from "../../types/wordPress";
 
 interface NewsSectionProps {
@@ -85,8 +86,10 @@ export function NewsSection({ className }: NewsSectionProps) {
           <div
             className="news-item-card relative overflow-hidden cursor-pointer border-2 border-white/40 backdrop-blur-md bg-black/30"
             onClick={() => {
-              if (postUrl !== "#") window.open(postUrl, '_blank');
-              gsap.to(`#news-item-card-${post.id}`, { scale: 0.98, duration: 0.1, yoyo: true, repeat: 1 });
+                if (postUrl !== "#") {
+                  openExternalUrl(postUrl).catch(err => console.error("Failed to open URL:", err));
+                }
+                gsap.to(`#news-item-card-${post.id}`, { scale: 0.98, duration: 0.1, yoyo: true, repeat: 1 });
             }}
             onMouseEnter={(e) => gsap.to(e.currentTarget, { y: -4, boxShadow: "0 8px 16px rgba(0,0,0,0.3)", duration: 0.3 })}
             onMouseLeave={(e) => gsap.to(e.currentTarget, { y: 0, boxShadow: "0 0 0 rgba(0,0,0,0)", duration: 0.3 })}
@@ -100,7 +103,12 @@ export function NewsSection({ className }: NewsSectionProps) {
                 loading="lazy"
               />
               <button
-                onClick={(e) => { e.stopPropagation(); window.open(postUrl, '_blank'); }}
+                onClick={(e) => { 
+                    e.stopPropagation();
+                    if (postUrl !== "#") {
+                      openExternalUrl(postUrl).catch(err => console.error("Failed to open URL:", err));
+                    }
+                }}
                 disabled={postUrl === "#"}
                 className="absolute bottom-3 right-3 text-xs text-white bg-white/20 backdrop-blur-sm px-3 py-1.5 border border-white/40 hover:bg-white/30 transition-colors uppercase disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
               >

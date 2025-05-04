@@ -107,9 +107,7 @@ export function PlayTab() {
       </div>
 
       <NewsSection
-        items={newsItems}
         className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col"
-        onRefresh={() => console.log("Refreshing news...")}
       />
     </div>
   );
