@@ -17,7 +17,6 @@ const MatrixRainEffect: React.FC = () => {
     const CHARACTERS = 'ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'; // Katakana + Alphanumeric
     const charactersArray = CHARACTERS.split('');
     const RAINDROP_SPAWN_RATE = 0.99; // Chance to NOT spawn a drop per column per tick
-    const FRAME_RATE = 1000 / 30; // ~30 FPS
 
     let columns: number;
     let drops: { y: number, trail: number, speed: number, ticksLeft: number }[];

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { TabHeader } from "../ui/TabHeader";
 import { TabContent } from "../ui/TabContent";
 import type { 
@@ -27,7 +26,7 @@ export function SkinsTab() {
         initializeAccounts // Assuming initializeAccounts might be needed if not called elsewhere
     } = useMinecraftAuthStore();
 
-    const [skinData, setSkinData] = useState<MinecraftProfile | null>(null);
+    const [_, setSkinData] = useState<MinecraftProfile | null>(null);
     const [skinUrl, setSkinUrl] = useState<string | null>(null);
     const [skinModel, setSkinModel] = useState<string | null>(null);
     const [skinVariant, setSkinVariant] = useState<SkinVariant>("classic");
