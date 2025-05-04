@@ -6,7 +6,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "../../../lib/utils";
 import { SearchInput } from "./common/SearchInput";
-import { ActionButton } from "./common/ActionButton";
 import { ContentTable } from "./common/ContentTable";
 import { LoadingState } from "./common/LoadingState";
 import { ErrorState } from "./common/ErrorState";
@@ -34,9 +33,10 @@ interface NoRiskMod {
 interface NoRiskModsTabProps {
   profile: Profile;
   onRefresh?: () => void;
+  isActive?: boolean;
 }
 
-export function NoRiskModsTab({ profile, onRefresh }: NoRiskModsTabProps) {
+export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
   const [noriskMods, setNoriskMods] = useState<NoRiskMod[]>([]);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -342,81 +342,6 @@ export function NoRiskModsTab({ profile, onRefresh }: NoRiskModsTabProps) {
       setSelectedMods(new Set(filteredMods.map((mod) => mod.id)));
     }
   };
-  //@ts-ignore
-  const handleEnableSelected = async () => {
-    if (selectedMods.size === 0 || !profile.selected_norisk_pack_id) return;
-
-    try {
-      const promises = Array.from(selectedMods).map((modId) =>
-        invoke("set_norisk_mod_status", {
-          profileId: profile.id,
-          packId: profile.selected_norisk_pack_id,
-          modId: modId,
-          gameVersion: profile.game_version,
-          loaderStr: profile.loader,
-          disabled: false,
-        }),
-      );
-      await Promise.all(promises);
-
-      setNoriskMods(
-        noriskMods.map((mod) =>
-          selectedMods.has(mod.id) ? { ...mod, enabled: true } : mod,
-        ),
-      );
-    } catch (error) {
-      setError(
-        `Failed to enable selected mods: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  };
-  //@ts-ignore
-  const handleDisableSelected = async () => {
-    if (selectedMods.size === 0 || !profile.selected_norisk_pack_id) return;
-
-    try {
-      const promises = Array.from(selectedMods).map((modId) =>
-        invoke("set_norisk_mod_status", {
-          profileId: profile.id,
-          packId: profile.selected_norisk_pack_id,
-          modId: modId,
-          gameVersion: profile.game_version,
-          loaderStr: profile.loader,
-          disabled: true,
-        }),
-      );
-      await Promise.all(promises);
-
-      setNoriskMods(
-        noriskMods.map((mod) =>
-          selectedMods.has(mod.id) ? { ...mod, enabled: false } : mod,
-        ),
-      );
-    } catch (error) {
-      setError(
-        `Failed to disable selected mods: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  };
-
-  const handleRefreshPacks = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      await refreshNoriskPacks();
-      await fetchNoriskPacks();
-      await fetchNoriskMods();
-
-      if (onRefresh) onRefresh();
-    } catch (error) {
-      setError(
-        `Failed to refresh data: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSort = (criteria: string) => {
     if (sortBy === criteria) {
@@ -462,8 +387,9 @@ export function NoRiskModsTab({ profile, onRefresh }: NoRiskModsTabProps) {
     : false;
 
   return (
-    <div className="h-full flex flex-col select-none">
-      <div className="flex items-center justify-between mb-5">
+    <div className="h-full flex flex-col">
+      {/* Fixed header section */}
+      <div className="flex items-center justify-between mb-5 flex-shrink-0">
         <div className="flex items-center gap-4">
           <SearchInput
             value={searchQuery}
@@ -480,85 +406,86 @@ export function NoRiskModsTab({ profile, onRefresh }: NoRiskModsTabProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <ActionButton
-            icon="pixel:sync-solid"
-            label="refresh"
-            onClick={handleRefreshPacks}
-            disabled={isLoading}
-          />
-        </div>
+        <div className="flex items-center gap-4"></div>
       </div>
 
-      {!profile.selected_norisk_pack_id ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Logo size="md" className="mx-auto mb-4" />
-            <p className="text-white/60 font-minecraft text-xl tracking-wide lowercase select-none">
-              no norisk pack selected
-            </p>
-            <p className="text-white/40 font-minecraft text-sm mt-2 tracking-wide lowercase select-none">
-              select a norisk pack in profile settings
-            </p>
+      {/* Flexible content area that takes remaining height */}
+      <div className="flex-1 min-h-0">
+        {!profile.selected_norisk_pack_id ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center">
+              <Logo size="md" className="mx-auto mb-4" />
+              <p className="text-white/60 font-minecraft text-xl tracking-wide lowercase select-none">
+                no norisk pack selected
+              </p>
+              <p className="text-white/40 font-minecraft text-sm mt-2 tracking-wide lowercase select-none">
+                select a norisk pack in profile settings
+              </p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <ContentTable
-          headers={[
-            {
-              key: "name",
-              label: "name",
-              sortable: true,
-              width: "flex-1",
-              className: "px-3",
-            },
-            { key: "version", label: "version", sortable: true, width: "w-28" },
-            {
-              key: "enabled",
-              label: "status",
-              sortable: true,
-              width: "w-28",
-              className: "text-center justify-center",
-            },
-          ]}
-          sortKey={sortBy}
-          sortDirection={sortDirection}
-          onSort={handleSort}
-          selectedCount={selectedMods.size}
-          totalCount={noriskMods.length}
-          filteredCount={filteredMods.length}
-          enabledCount={filteredMods.filter((m) => m.enabled).length}
-          onSelectAll={handleSelectAll}
-          contentType="norisk mod"
-          searchQuery={searchQuery}
-        >
-          {isLoading ? (
-            <LoadingState message="loading norisk mods..." />
-          ) : error ? (
-            <ErrorState message={error} onRetry={fetchNoriskMods} />
-          ) : sortedMods.length > 0 ? (
-            sortedMods.map((mod) => (
-              <NoRiskModRow
-                key={mod.id}
-                mod={mod}
-                isSelected={selectedMods.has(mod.id)}
-                onSelect={() => handleSelectMod(mod.id)}
-                onToggle={() => handleToggleMod(mod.id)}
-                localIcon={localIcons[mod.id]}
+        ) : (
+          <ContentTable
+            headers={[
+              {
+                key: "name",
+                label: "name",
+                sortable: true,
+                width: "flex-1",
+                className: "px-3",
+              },
+              {
+                key: "version",
+                label: "version",
+                sortable: true,
+                width: "w-28",
+              },
+              {
+                key: "enabled",
+                label: "status",
+                sortable: true,
+                width: "w-28",
+                className: "text-center justify-center",
+              },
+            ]}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            selectedCount={selectedMods.size}
+            totalCount={noriskMods.length}
+            filteredCount={filteredMods.length}
+            enabledCount={filteredMods.filter((m) => m.enabled).length}
+            onSelectAll={handleSelectAll}
+            contentType="norisk mod"
+            searchQuery={searchQuery}
+          >
+            {isLoading ? (
+              <LoadingState message="loading norisk mods..." />
+            ) : error ? (
+              <ErrorState message={error} onRetry={fetchNoriskMods} />
+            ) : sortedMods.length > 0 ? (
+              sortedMods.map((mod) => (
+                <NoRiskModRow
+                  key={mod.id}
+                  mod={mod}
+                  isSelected={selectedMods.has(mod.id)}
+                  onSelect={() => handleSelectMod(mod.id)}
+                  onToggle={() => handleToggleMod(mod.id)}
+                  localIcon={localIcons[mod.id]}
+                />
+              ))
+            ) : (
+              <EmptyState
+                icon="pixel:shield-solid"
+                message={
+                  searchQuery
+                    ? "no mods match your search"
+                    : "no norisk mods available"
+                }
               />
-            ))
-          ) : (
-            <EmptyState
-              icon="pixel:shield-solid"
-              message={
-                searchQuery
-                  ? "no mods match your search"
-                  : "no norisk mods available"
-              }
-            />
-          )}
-        </ContentTable>
-      )}
+            )}
+          </ContentTable>
+        )}
+      </div>
     </div>
   );
 }

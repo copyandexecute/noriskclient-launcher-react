@@ -128,7 +128,7 @@ export function VerticalNavbar({
             {showTooltip === item.id && (
               <div
                 ref={tooltipRef}
-                className="absolute left-full ml-3 px-4 py-2 bg-black/80 backdrop-blur-lg border-2 border-white/20 whitespace-nowrap z-50 text-shadow"
+                className="absolute left-full bottom-2 ml-3 px-4 py-2 bg-black/80 backdrop-blur-lg border-2 border-white/20 whitespace-nowrap z-auto text-shadow"
               >
                 <span className="text-xl font-minecraft text-white">
                   {item.label}

@@ -18,7 +18,6 @@ export function ContentTab({ profile, onRefresh }: ContentTabProps) {
   const [contentType, setContentType] = useState<
     "mods" | "resourcepacks" | "shaderpacks" | "datapacks" | "norisk"
   >("mods");
-  const [key, setKey] = useState<number>(0);
 
   const handleRefresh = () => {
     if (onRefresh) {
@@ -30,7 +29,6 @@ export function ContentTab({ profile, onRefresh }: ContentTabProps) {
     tab: "mods" | "resourcepacks" | "shaderpacks" | "datapacks" | "norisk",
   ) => {
     setContentType(tab);
-    setKey((prevKey) => prevKey + 1);
   };
 
   const tabs = [
@@ -57,8 +55,9 @@ export function ContentTab({ profile, onRefresh }: ContentTabProps) {
   ];
 
   return (
-    <div className="h-full flex flex-col select-none">
-      <div className="mb-5">
+    <div className="h-full flex flex-col">
+      {/* Fixed header section */}
+      <div className="flex-shrink-0 mb-5">
         <div className="project-type-tabs flex w-full bg-black/20 backdrop-blur-md border border-white/10">
           {tabs.map((tab) => (
             <button
@@ -76,42 +75,51 @@ export function ContentTab({ profile, onRefresh }: ContentTabProps) {
         </div>
       </div>
 
-      <div className="h-[calc(100%-64px)]">
-        {contentType === "mods" && (
+      {/* Flexible content area that takes remaining height */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className={contentType === "mods" ? "block h-full" : "hidden"}>
           <ModsTab
-            key={`mods-${key}`}
             profile={profile}
             onRefresh={handleRefresh}
+            isActive={contentType === "mods"}
           />
-        )}
-        {contentType === "resourcepacks" && (
+        </div>
+        <div
+          className={
+            contentType === "resourcepacks" ? "block h-full" : "hidden"
+          }
+        >
           <ResourcePacksTab
-            key={`resourcepacks-${key}`}
             profile={profile}
             onRefresh={handleRefresh}
+            isActive={contentType === "resourcepacks"}
           />
-        )}
-        {contentType === "shaderpacks" && (
+        </div>
+        <div
+          className={contentType === "shaderpacks" ? "block h-full" : "hidden"}
+        >
           <ShaderPacksTab
-            key={`shaderpacks-${key}`}
             profile={profile}
             onRefresh={handleRefresh}
+            isActive={contentType === "shaderpacks"}
           />
-        )}
-        {contentType === "datapacks" && (
+        </div>
+        <div
+          className={contentType === "datapacks" ? "block h-full" : "hidden"}
+        >
           <DataPacksTab
-            key={`datapacks-${key}`}
             profile={profile}
             onRefresh={handleRefresh}
+            isActive={contentType === "datapacks"}
           />
-        )}
-        {contentType === "norisk" && (
+        </div>
+        <div className={contentType === "norisk" ? "block h-full" : "hidden"}>
           <NoRiskModsTab
-            key={`norisk-${key}`}
             profile={profile}
             onRefresh={handleRefresh}
+            isActive={contentType === "norisk"}
           />
-        )}
+        </div>
       </div>
     </div>
   );

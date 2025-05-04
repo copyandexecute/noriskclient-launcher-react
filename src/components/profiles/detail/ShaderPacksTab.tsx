@@ -578,8 +578,9 @@ export function ShaderPacksTab({
   ).length;
 
   return (
-    <div className="h-full flex flex-col select-none">
-      <div className="flex items-center justify-between mb-5">
+    <div className="h-full flex flex-col">
+      {/* Fixed header section */}
+      <div className="flex-shrink-0 flex items-center justify-between mb-5">
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
@@ -650,7 +651,7 @@ export function ShaderPacksTab({
       </div>
 
       {updateError && (
-        <div className="bg-red-900/50 border border-red-700/50 text-white p-3 mb-4 rounded">
+        <div className="flex-shrink-0 bg-red-900/50 border border-red-700/50 text-white p-3 mb-4 rounded">
           <div className="flex items-center gap-2">
             <Icon
               icon="pixel:exclamation-triangle-solid"
@@ -661,95 +662,98 @@ export function ShaderPacksTab({
         </div>
       )}
 
-      <ContentTable
-        headers={[
-          {
-            key: "name",
-            label: "name",
-            sortable: true,
-            width: "flex-1",
-            className: "px-3",
-          },
-          {
-            key: "enabled",
-            label: "status",
-            sortable: true,
-            width: "w-28",
-            className: "text-center justify-center",
-          },
-          {
-            key: "actions",
-            label: "actions",
-            sortable: false,
-            width: "w-20",
-            className: "text-center",
-          },
-        ]}
-        sortKey={sortBy}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        selectedCount={selectedPacks.size}
-        totalCount={shaderPacks.length}
-        filteredCount={filteredPacks.length}
-        enabledCount={enabledPacks}
-        onSelectAll={handleSelectAll}
-        contentType="shaderpack"
-        searchQuery={searchQuery}
-      >
-        {loadingShaderPacks ? (
-          <LoadingState message="loading shader packs..." />
-        ) : shaderPacksError ? (
-          <ErrorState message={shaderPacksError} onRetry={fetchShaderPacks} />
-        ) : sortedPacks.length > 0 ? (
-          sortedPacks.map((pack) => {
-            const hasUpdate = hasShaderPackUpdate(pack);
-            const updateVersion = hasUpdate
-              ? getShaderPackUpdateVersion(pack)
-              : null;
-            const isUpdating = updatingPacks.has(pack.filename);
+      {/* Flexible content area that takes remaining height */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ContentTable
+          headers={[
+            {
+              key: "name",
+              label: "name",
+              sortable: true,
+              width: "flex-1",
+              className: "px-3",
+            },
+            {
+              key: "enabled",
+              label: "status",
+              sortable: true,
+              width: "w-28",
+              className: "text-center justify-center",
+            },
+            {
+              key: "actions",
+              label: "actions",
+              sortable: false,
+              width: "w-20",
+              className: "text-center",
+            },
+          ]}
+          sortKey={sortBy}
+          sortDirection={sortDirection}
+          onSort={handleSort}
+          selectedCount={selectedPacks.size}
+          totalCount={shaderPacks.length}
+          filteredCount={filteredPacks.length}
+          enabledCount={enabledPacks}
+          onSelectAll={handleSelectAll}
+          contentType="shaderpack"
+          searchQuery={searchQuery}
+        >
+          {loadingShaderPacks ? (
+            <LoadingState message="loading shader packs..." />
+          ) : shaderPacksError ? (
+            <ErrorState message={shaderPacksError} onRetry={fetchShaderPacks} />
+          ) : sortedPacks.length > 0 ? (
+            sortedPacks.map((pack) => {
+              const hasUpdate = hasShaderPackUpdate(pack);
+              const updateVersion = hasUpdate
+                ? getShaderPackUpdateVersion(pack)
+                : null;
+              const isUpdating = updatingPacks.has(pack.filename);
 
-            return (
-              <ContentPackRow
-                key={pack.filename}
-                contentPack={{
-                  id: pack.filename,
-                  file_name: pack.filename,
-                  filename: pack.filename, // Ensure filename is passed
-                  enabled: !pack.is_disabled,
-                  path: pack.path,
-                  file_size: pack.file_size,
-                  modrinth_info: pack.modrinth_info,
-                  sha1_hash: pack.sha1_hash || "",
-                  is_disabled: pack.is_disabled,
-                  version: pack.modrinth_info?.version_number,
-                }}
-                isSelected={selectedPacks.has(pack.filename)}
-                onSelect={() => handleSelectPack(pack.filename)}
-                onToggle={() => togglePackEnabled(pack.filename)}
-                onDelete={() => deletePack(pack.filename)}
-                onOpenDirectory={
-                  pack.path ? () => openPackDirectory(pack.path!) : undefined
-                }
-                onUpdate={hasUpdate ? updatePack : undefined}
-                updateVersion={updateVersion}
-                checkingUpdates={checkingUpdates || isUpdating}
-                iconType="pixel:sun-solid"
-                formatFileSize={formatFileSize}
-                onCheckForUpdates={checkForShaderPackUpdates}
-              />
-            );
-          })
-        ) : (
-          <EmptyState
-            icon="pixel:sun-solid"
-            message={
-              searchQuery
-                ? "no shader packs match your search"
-                : "no shader packs installed"
-            }
-          />
-        )}
-      </ContentTable>
+              return (
+                <ContentPackRow
+                  key={pack.filename}
+                  contentPack={{
+                    id: pack.filename,
+                    file_name: pack.filename,
+                    filename: pack.filename, // Ensure filename is passed
+                    enabled: !pack.is_disabled,
+                    path: pack.path,
+                    file_size: pack.file_size,
+                    modrinth_info: pack.modrinth_info,
+                    sha1_hash: pack.sha1_hash || "",
+                    is_disabled: pack.is_disabled,
+                    version: pack.modrinth_info?.version_number,
+                  }}
+                  isSelected={selectedPacks.has(pack.filename)}
+                  onSelect={() => handleSelectPack(pack.filename)}
+                  onToggle={() => togglePackEnabled(pack.filename)}
+                  onDelete={() => deletePack(pack.filename)}
+                  onOpenDirectory={
+                    pack.path ? () => openPackDirectory(pack.path!) : undefined
+                  }
+                  onUpdate={hasUpdate ? updatePack : undefined}
+                  updateVersion={updateVersion}
+                  checkingUpdates={checkingUpdates || isUpdating}
+                  iconType="pixel:sun-solid"
+                  formatFileSize={formatFileSize}
+                  onCheckForUpdates={checkForShaderPackUpdates}
+                />
+              );
+            })
+          ) : (
+            <EmptyState
+              icon="pixel:sun-solid"
+              message={
+                searchQuery
+                  ? "no shader packs match your search"
+                  : "no shader packs installed"
+              }
+            />
+          )}
+        </ContentTable>
+      </div>
     </div>
   );
 }

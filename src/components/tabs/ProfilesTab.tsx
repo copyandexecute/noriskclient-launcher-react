@@ -38,7 +38,6 @@ export function ProfilesTab() {
   const [standardProfiles, setStandardProfiles] = useState<Profile[]>([]);
   const [loadingStandard, setLoadingStandard] = useState(false);
   const [standardError, setStandardError] = useState<string | null>(null);
-  const [refreshingStandard, setRefreshingStandard] = useState(false);
 
   useEffect(() => {
     fetchProfiles();
@@ -66,19 +65,6 @@ export function ProfilesTab() {
       setStandardProfiles([]);
     } finally {
       setLoadingStandard(false);
-    }
-  };
-
-  const handleRefreshStandard = async () => {
-    try {
-      setRefreshingStandard(true);
-      await ProfileService.refreshStandardVersions();
-      await fetchStandardProfiles();
-    } catch (error) {
-      console.error("Failed to refresh standard versions:", error);
-      setStandardError("Failed to refresh NoRisk versions");
-    } finally {
-      setRefreshingStandard(false);
     }
   };
 
@@ -156,96 +142,105 @@ export function ProfilesTab() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <TabHeader title="Profiles" icon="pixel:grid-solid">
-        <div className="flex items-center space-x-3">
-          <SearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-            className="w-48"
-          />
-          {filter === "standard" && (
-            <ActionButton
-              label={refreshingStandard ? "refreshing..." : "refresh"}
-              icon={
-                refreshingStandard
-                  ? "pixel:spinner-solid"
-                  : "pixel:arrow-rotate-right-solid"
-              }
-              onClick={handleRefreshStandard}
-              className={refreshingStandard ? "animate-spin" : ""}
-            />
-          )}
-          <ActionButton
-            label="import"
-            icon="pixel:file-import-solid"
-            onClick={() => setShowImport(true)}
-          />
-          <ActionButton
-            label="new"
-            icon="pixel:plus-solid"
-            onClick={() => setShowWizard(true)}
-          />
-        </div>
-      </TabHeader>
-
-      <div className="flex items-center space-x-4 px-6 py-3 bg-black/20 border-b border-white/10">
-        <FilterButtonGroup
-          options={filterOptions}
-          activeId={filter}
-          onChange={(id) => setFilter(id as ProfileFilterType)}
+      {showDetailView && selectedProfile ? (
+        <ProfileDetailView
+          profile={selectedProfile}
+          onClose={() => {
+            setShowDetailView(false);
+            setSelectedProfile(null);
+          }}
+          onEdit={() => {
+            if (!selectedProfile.is_standard_version) {
+              setShowDetailView(false);
+              setShowSettings(true);
+            }
+          }}
         />
-        <FilterButtonGroup
-          options={groupOptions}
-          activeId={groupBy}
-          onChange={(id) => setGroupBy(id as "none" | "group")}
-        />
-      </div>
-
-      <TabContent className="p-6 pt-4">
-        {(loading || loadingStandard) &&
-        filter !== "standard" &&
-        filter !== "custom" ? (
-          <LoadingState message="loading profiles..." />
-        ) : error || standardError ? (
-          <EmptyState
-            icon="pixel:exclamation-triangle-solid"
-            message={error || standardError || ""}
-          />
-        ) : (
-          Object.entries(groupedProfiles).map(([group, groupProfiles]) => (
-            <div key={group} className="mb-8">
-              {groupBy === "group" && groupProfiles.length > 0 && (
-                <h3 className="text-xl font-minecraft text-white mb-4 lowercase font-normal">
-                  <div className="flex items-center gap-2">
-                    <Icon icon="pixel:folder-solid" className="w-5 h-5" />
-                    <span>{group.toLowerCase()}</span>
-                  </div>
-                </h3>
-              )}
-              {groupProfiles.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-                  {groupProfiles.map((profile) => (
-                    <ProfileCard
-                      key={profile.id}
-                      profile={profile}
-                      onEdit={() => handleEditProfile(profile)}
-                      onClick={() => handleViewProfile(profile)}
-                    />
-                  ))}
-                </div>
-              ) : null}
+      ) : (
+        <>
+          <TabHeader title="Profiles" icon="pixel:grid-solid">
+            <div className="flex items-center space-x-3">
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                className="w-48"
+              />
+              <ActionButton
+                label="import"
+                icon="pixel:file-import-solid"
+                onClick={() => setShowImport(true)}
+              />
+              <ActionButton
+                label="new"
+                icon="pixel:plus-solid"
+                onClick={() => setShowWizard(true)}
+              />
             </div>
-          ))
-        )}
+          </TabHeader>
 
-        {!loading &&
-          !loadingStandard &&
-          !error &&
-          !standardError &&
-          filteredProfiles.length === 0 && (
-            <EmptyState icon="pixel:grid-solid" message="no profiles found" />
-          )}
-      </TabContent>
+          <div className="flex items-center space-x-4 px-6 py-3 bg-black/20 border-b border-white/10">
+            <FilterButtonGroup
+              options={filterOptions}
+              activeId={filter}
+              onChange={(id) => setFilter(id as ProfileFilterType)}
+            />
+            <FilterButtonGroup
+              options={groupOptions}
+              activeId={groupBy}
+              onChange={(id) => setGroupBy(id as "none" | "group")}
+            />
+          </div>
+
+          <TabContent className="p-6 pt-4 overflow-y-auto scrollbar-hide">
+            {(loading || loadingStandard) &&
+            filter !== "standard" &&
+            filter !== "custom" ? (
+              <LoadingState message="loading profiles..." />
+            ) : error || standardError ? (
+              <EmptyState
+                icon="pixel:exclamation-triangle-solid"
+                message={error || standardError || ""}
+              />
+            ) : (
+              Object.entries(groupedProfiles).map(([group, groupProfiles]) => (
+                <div key={group} className="mb-8">
+                  {groupBy === "group" && groupProfiles.length > 0 && (
+                    <h3 className="text-xl font-minecraft text-white mb-4 lowercase font-normal">
+                      <div className="flex items-center gap-2">
+                        <Icon icon="pixel:folder-solid" className="w-5 h-5" />
+                        <span>{group.toLowerCase()}</span>
+                      </div>
+                    </h3>
+                  )}
+                  {groupProfiles.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+                      {groupProfiles.map((profile) => (
+                        <ProfileCard
+                          key={profile.id}
+                          profile={profile}
+                          onEdit={() => handleEditProfile(profile)}
+                          onClick={() => handleViewProfile(profile)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+
+            {!loading &&
+              !loadingStandard &&
+              !error &&
+              !standardError &&
+              filteredProfiles.length === 0 && (
+                <EmptyState
+                  icon="pixel:grid-solid"
+                  message="no profiles found"
+                />
+              )}
+          </TabContent>
+        </>
+      )}
 
       {showWizard && (
         <ProfileWizard
@@ -266,22 +261,6 @@ export function ProfilesTab() {
             }}
           />
         )}
-
-      {showDetailView && selectedProfile && (
-        <ProfileDetailView
-          profile={selectedProfile}
-          onClose={() => {
-            setShowDetailView(false);
-            setSelectedProfile(null);
-          }}
-          onEdit={() => {
-            if (!selectedProfile.is_standard_version) {
-              setShowDetailView(false);
-              setShowSettings(true);
-            }
-          }}
-        />
-      )}
 
       {showImport && (
         <ProfileImport

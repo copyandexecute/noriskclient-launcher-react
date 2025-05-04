@@ -21,6 +21,7 @@ import type {
 interface ModsTabProps {
   profile: Profile;
   onRefresh?: () => void;
+  isActive?: boolean;
 }
 
 interface ModSourceModrinth {
@@ -419,70 +420,71 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
           </div>
         </div>
       )}
-
-      <ContentTable
-        headers={[
-          {
-            key: "name",
-            label: "name",
-            sortable: true,
-            width: "flex-1",
-            className: "px-3",
-          },
-          { key: "version", label: "version", sortable: true, width: "w-28" },
-          {
-            key: "enabled",
-            label: "status",
-            sortable: true,
-            width: "w-28",
-            className: "text-center justify-center",
-          },
-          {
-            key: "actions",
-            label: "actions",
-            sortable: false,
-            width: "w-20",
-            className: "text-center",
-          },
-        ]}
-        sortKey={sortBy}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        selectedCount={selectedMods.size}
-        totalCount={mods.length}
-        filteredCount={filteredMods.length}
-        enabledCount={filteredMods.filter((m) => m.enabled).length}
-        onSelectAll={handleSelectAll}
-        contentType="mod"
-        searchQuery={searchQuery}
-      >
-        {isLoading ? (
-          <LoadingState message="loading mods..." />
-        ) : error ? (
-          <ErrorState message={error} onRetry={fetchMods} />
-        ) : sortedMods.length > 0 ? (
-          sortedMods.map((mod) => (
-            <ModRow
-              key={mod.id}
-              mod={mod}
-              isSelected={selectedMods.has(mod.id)}
-              onSelect={() => handleSelectMod(mod.id)}
-              onToggle={() => handleToggleMod(mod.id)}
-              onDelete={() => handleDeleteMod(mod.id)}
-              onUpdate={handleUpdateMod}
-              updateVersion={getModUpdateVersion(mod)}
-              checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <ContentTable
+          headers={[
+            {
+              key: "name",
+              label: "name",
+              sortable: true,
+              width: "flex-1",
+              className: "px-3",
+            },
+            { key: "version", label: "version", sortable: true, width: "w-28" },
+            {
+              key: "enabled",
+              label: "status",
+              sortable: true,
+              width: "w-28",
+              className: "text-center justify-center",
+            },
+            {
+              key: "actions",
+              label: "actions",
+              sortable: false,
+              width: "w-20",
+              className: "text-center",
+            },
+          ]}
+          sortKey={sortBy}
+          sortDirection={sortDirection}
+          onSort={handleSort}
+          selectedCount={selectedMods.size}
+          totalCount={mods.length}
+          filteredCount={filteredMods.length}
+          enabledCount={filteredMods.filter((m) => m.enabled).length}
+          onSelectAll={handleSelectAll}
+          contentType="mod"
+          searchQuery={searchQuery}
+        >
+          {isLoading ? (
+            <LoadingState message="loading mods..." />
+          ) : error ? (
+            <ErrorState message={error} onRetry={fetchMods} />
+          ) : sortedMods.length > 0 ? (
+            sortedMods.map((mod) => (
+              <ModRow
+                key={mod.id}
+                mod={mod}
+                isSelected={selectedMods.has(mod.id)}
+                onSelect={() => handleSelectMod(mod.id)}
+                onToggle={() => handleToggleMod(mod.id)}
+                onDelete={() => handleDeleteMod(mod.id)}
+                onUpdate={handleUpdateMod}
+                updateVersion={getModUpdateVersion(mod)}
+                checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
+              />
+            ))
+          ) : (
+            <EmptyState
+              icon="pixel:grid-solid"
+              message={
+                searchQuery ? "no mods match your search" : "no mods installed"
+              }
             />
-          ))
-        ) : (
-          <EmptyState
-            icon="pixel:grid-solid"
-            message={
-              searchQuery ? "no mods match your search" : "no mods installed"
-            }
-          />
-        )}
-      </ContentTable>
+          )}
+        </ContentTable>
+      </div>
     </div>
   );
 }

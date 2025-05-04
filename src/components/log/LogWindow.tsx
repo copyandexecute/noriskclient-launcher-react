@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { LogViewerDisplay } from "./LogViewerDisplay"; // Import the reusable display component
-import * as ProcessService from "../../services/process-service"; // Import process service
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LogViewerDisplay } from "./LogViewerDisplay";
+import * as ProcessService from "../../services/process-service";
 import {
   getProfileLogFiles,
   LOG_LEVELS,
@@ -11,24 +12,22 @@ import {
   type ParsedLogLine,
   parseLogLinesFromString,
   uploadLogToMclogs,
-} from "../../services/log-service"; // Import log service utilities
+} from "../../services/log-service";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener"; // Needed for opening mclo.gs link
+import { openUrl } from "@tauri-apps/plugin-opener";
 
-// Define the expected payload structure (based on Svelte code)
 interface MinecraftOutputPayload {
   event_type: "minecraft_output";
-  target_id: string; // Corresponds to processId (Uuid)
-  message: string; // The raw log line
+  target_id: string;
+  message: string;
 }
 
-// Define a general payload type if other events might come through
 type StateEventPayload =
   | MinecraftOutputPayload
   | { event_type: string; [key: string]: any };
 
-const MAX_LOG_LINES = 1000; // Keep more lines than Svelte example?
+const MAX_LOG_LINES = 1000;
 
 export function LogWindow() {
   const [processId, setProcessId] = useState<string | null>(null);
@@ -45,7 +44,7 @@ export function LogWindow() {
     WARN: true,
     INFO: true,
     DEBUG: true,
-    TRACE: false, // Default TRACE to off in live view?
+    TRACE: false,
   });
 
   const [displayLines, setDisplayLines] = useState<ParsedLogLine[]>([]);
@@ -55,16 +54,13 @@ export function LogWindow() {
   const [initialLoadComplete, setInitialLoadComplete] =
     useState<boolean>(false);
   const [isAutoscrollEnabled, setIsAutoscrollEnabled] = useState<boolean>(true);
-  const scrollableContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable div
-  // Ref to track the current state of initial load for the listener
+  const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadCompleteRef = useRef(initialLoadComplete);
 
-  // State for uploads specific to this window
   const [isUploading, setIsUploading] = useState(false);
   const [uploadUrl, setUploadUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // 1. Read processId from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("processId");
@@ -78,12 +74,10 @@ export function LogWindow() {
     }
   }, []);
 
-  // Keep the ref updated with the latest state value
   useEffect(() => {
     initialLoadCompleteRef.current = initialLoadComplete;
   }, [initialLoadComplete]);
 
-  // Helper function for scrolling
   const scrollToBottom = useCallback(() => {
     if (scrollableContainerRef.current) {
       const element = scrollableContainerRef.current;
@@ -91,7 +85,6 @@ export function LogWindow() {
     }
   }, []);
 
-  // 2. Fetch initial logs & Setup listener when processId is set
   useEffect(() => {
     if (!processId) return;
 
@@ -107,7 +100,7 @@ export function LogWindow() {
       try {
         const rawContent =
           await ProcessService.getLogContentForProcess(processId);
-        setRawLogContentForCopy(rawContent); // Store raw content for potential copy
+        setRawLogContentForCopy(rawContent);
         const lines = parseLogLinesFromString(rawContent);
         setParsedLogLines(lines);
         console.log(`[LogWindow] Loaded ${lines.length} initial log lines.`);
@@ -117,27 +110,23 @@ export function LogWindow() {
         setParsedLogLines([]);
       } finally {
         setIsLoading(false);
-        setInitialLoadComplete(true); // Mark initial load as done
+        setInitialLoadComplete(true);
         if (isAutoscrollEnabled) {
-          // Use timeout to ensure DOM is updated after fetch
           setTimeout(scrollToBottom, 0);
         }
       }
     };
 
-    // Only fetch initial logs if not already done for this processId
     if (!initialLoadComplete) {
       fetchInitialLogs();
     }
 
-    // Setup log listener
-    let isSubscribed = true; // Flag to prevent state updates after unmount
+    let isSubscribed = true;
     const setupListener = async () => {
       try {
         logListenerRef.current = await listen<StateEventPayload>(
           "state_event",
           (event) => {
-            // Use the ref here to get the latest value
             if (!isSubscribed || !initialLoadCompleteRef.current) return;
 
             const payload = event.payload;
@@ -146,11 +135,10 @@ export function LogWindow() {
               payload.target_id === processId
             ) {
               const rawLine = payload.message;
-              const newParsedLines = parseLogLinesFromString(rawLine); // Parse the single incoming line
+              const newParsedLines = parseLogLinesFromString(rawLine);
 
               setParsedLogLines((prevLines) => {
                 const updatedLines = [...prevLines, ...newParsedLines];
-                // Limit line count
                 if (updatedLines.length > MAX_LOG_LINES) {
                   return updatedLines.slice(
                     updatedLines.length - MAX_LOG_LINES,
@@ -163,9 +151,7 @@ export function LogWindow() {
                 prevRaw ? prevRaw + "\n" + rawLine : rawLine,
               );
 
-              // Autoscroll if enabled
               if (isAutoscrollEnabled) {
-                // Use timeout to ensure DOM is updated after state change
                 setTimeout(scrollToBottom, 0);
               }
             }
@@ -191,7 +177,6 @@ export function LogWindow() {
 
     setupListener();
 
-    // Cleanup function
     return () => {
       isSubscribed = false;
       if (logListenerRef.current) {
@@ -201,14 +186,12 @@ export function LogWindow() {
         logListenerRef.current();
         logListenerRef.current = null;
       }
-      setInitialLoadComplete(false); // Reset for potential future processId change (though unlikely in same window)
+      setInitialLoadComplete(false);
     };
-  }, [processId, isAutoscrollEnabled, scrollToBottom]); // Rerun effect if processId changes, or if autoscroll/scroll function changes (less likely)
+  }, [processId, isAutoscrollEnabled, scrollToBottom]);
 
-  // 3. Filter displayed logs based on search term and level filters
   useEffect(() => {
     const filteredLines = parsedLogLines.filter((line) => {
-      // Ensure level check handles undefined level correctly
       const levelMatch = !line.level || levelFilters[line.level];
       const searchMatch =
         !searchTerm ||
@@ -218,7 +201,6 @@ export function LogWindow() {
     setDisplayLines(filteredLines);
   }, [parsedLogLines, searchTerm, levelFilters]);
 
-  // Cleanup copy timeout
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
@@ -227,7 +209,6 @@ export function LogWindow() {
     };
   }, []);
 
-  // Handlers passed to LogViewerDisplay
   const handleSearchChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setSearchTerm(event.target.value);
@@ -235,15 +216,13 @@ export function LogWindow() {
     [],
   );
 
-  // Handler for LogWindow (will not be used as prop won't be passed)
   const handleOpenFolderForProcess = useCallback(async () => {
     if (!processId) return;
 
     console.log(`[LogWindow] Opening folder for process: ${processId}`);
-    setError(null); // Clear previous errors
+    setError(null);
 
     try {
-      // 1. Get all running processes to find the profileId
       const processes = await ProcessService.getRunningProcesses();
       const currentProcess = processes.find((p) => p.id === processId);
 
@@ -251,7 +230,6 @@ export function LogWindow() {
         throw new Error(`Process ${processId} not found.`);
       }
 
-      // 2. Get log file paths for the profile
       const profileId = currentProcess.profile_id;
       const logFiles = await getProfileLogFiles(profileId);
 
@@ -259,12 +237,10 @@ export function LogWindow() {
         throw new Error(`No log files found for profile ${profileId}.`);
       }
 
-      // 3. Select a file path (e.g., latest.log or first)
       const filePathToOpen =
         logFiles.find((p) => p.toLowerCase().endsWith("latest.log")) ||
         logFiles[0];
 
-      // 4. Call the service with the file path
       await openLogFileDirectory(filePathToOpen);
     } catch (err: any) {
       console.error("[LogWindow] Error opening logs folder:", err);
@@ -283,7 +259,6 @@ export function LogWindow() {
     (enabled: boolean) => {
       setIsAutoscrollEnabled(enabled);
       if (enabled) {
-        // Scroll immediately when enabled
         setTimeout(scrollToBottom, 0);
       }
     },
@@ -291,7 +266,6 @@ export function LogWindow() {
   );
 
   const handleCopyLog = useCallback(async () => {
-    // Copy currently displayed lines
     if (displayLines.length === 0) return;
     const filteredLogContent = displayLines.map((line) => line.raw).join("\n");
 
@@ -304,11 +278,9 @@ export function LogWindow() {
       }, 2000);
     } catch (err) {
       console.error("[LogWindow] Failed to copy log to clipboard:", err);
-      // TODO: Show user feedback on copy error?
     }
   }, [displayLines]);
 
-  // Handler to open the uploaded URL
   const handleOpenUploadUrl = useCallback(async (url: string | null) => {
     if (!url) return;
     try {
@@ -319,7 +291,6 @@ export function LogWindow() {
     }
   }, []);
 
-  // Handler for uploading logs from this window
   const handleUploadLogForProcess = useCallback(async () => {
     if (!rawLogContentForCopy) {
       setError("No log content available to upload.");
@@ -330,7 +301,7 @@ export function LogWindow() {
     setIsUploading(true);
     setUploadUrl(null);
     setUploadError(null);
-    setError(null); // Clear general errors
+    setError(null);
 
     try {
       const resultUrl = await uploadLogToMclogs(rawLogContentForCopy);
@@ -345,13 +316,12 @@ export function LogWindow() {
   }, [rawLogContentForCopy, processId]);
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 text-gray-200 p-4">
-      {/* Pass state and handlers to the reusable display component */}
+    <div className="flex flex-col h-full bg-black/20 backdrop-blur-md text-white p-4 font-minecraft">
       <LogViewerDisplay
         isLoading={isLoading}
-        error={error} // Display error within the component
+        error={error}
         displayLines={displayLines}
-        parsedLogLinesCount={parsedLogLines.length} // Pass total parsed count
+        parsedLogLinesCount={parsedLogLines.length}
         searchTerm={searchTerm}
         levelFilters={levelFilters}
         copied={copied}
@@ -360,16 +330,14 @@ export function LogWindow() {
         onCopyLog={handleCopyLog}
         logLevelsDefinition={LOG_LEVELS}
         onOpenFolder={handleOpenFolderForProcess}
-        // Pass upload props
         onUploadLog={handleUploadLogForProcess}
         isUploading={isUploading}
         uploadUrl={uploadUrl}
         uploadError={uploadError}
         onOpenUploadUrl={handleOpenUploadUrl}
-        // Autoscroll props
         isAutoscrollEnabled={isAutoscrollEnabled}
         onAutoscrollChange={handleAutoscrollChange}
-        scrollableContainerRef={scrollableContainerRef} // Pass the ref
+        scrollableContainerRef={scrollableContainerRef}
       />
     </div>
   );

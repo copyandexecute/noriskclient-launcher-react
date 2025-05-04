@@ -7,12 +7,14 @@ interface BrowseTabProps {
   profile: Profile;
   initialContentType?: string;
   onRefresh?: () => void;
+  parentTransitionActive?: boolean;
 }
 
 export function BrowseTab({
   profile,
   initialContentType = "mods",
   onRefresh,
+  parentTransitionActive,
 }: BrowseTabProps) {
   const getProjectType = () => {
     switch (initialContentType) {
@@ -49,6 +51,7 @@ export function BrowseTab({
           initialProjectType={getProjectType()}
           onInstallSuccess={onRefresh}
           className="h-full"
+          parentTransitionActive={parentTransitionActive}
         />
       </div>
     </div>
