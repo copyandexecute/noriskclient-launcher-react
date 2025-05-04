@@ -46,7 +46,7 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 20 # Use Node.js LTS 20
           cache: 'npm'
 
       - name: install Rust stable
@@ -58,6 +58,9 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+
+      - name: Clean node_modules
+        run: rm -rf node_modules
 
       - name: install frontend dependencies
         run: npm ci
