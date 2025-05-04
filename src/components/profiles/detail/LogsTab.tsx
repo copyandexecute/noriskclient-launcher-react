@@ -220,13 +220,15 @@ export function LogsTab({ profile }: LogsTabProps) {
   }, [rawLogContentForCopy, selectedLogPath]);
 
   const handleOpenLogsFolder = useCallback(async () => {
+    // Find a suitable path, preferably latest.log
     const path_to_open = logFiles.find(p => getFilename(p).toLowerCase() === 'latest.log') || logFiles[0];
     if (!path_to_open) {
       setErrorList('No log files found to determine folder path.');
       return;
     }
+    console.log(`[LogsTab] Requesting to open directory for file: ${path_to_open}`);
     try {
-      console.log(`[LogsTab] Requesting to open directory for file: ${path_to_open}`);
+      // Call with the determined filePath
       await openLogFileDirectory(path_to_open);
     } catch (err: any) {
       console.error('[LogsTab] Error opening logs folder:', err);
@@ -265,44 +267,7 @@ export function LogsTab({ profile }: LogsTabProps) {
         </div>
         
         <div className="flex items-center gap-2">
-            {logFiles.length > 0 && (
-                <button
-                    onClick={handleOpenLogsFolder}
-                    title="Open Logs Folder"
-                    disabled={isLoadingList}
-                    className="flex items-center gap-1.5 px-2 py-1 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Icon icon="pixelarticons:folder" className="w-4 h-4" />
-                    open folder
-                </button>
-            )}
-
-            <div className="flex items-center gap-2">
-                <button
-                    onClick={handleUploadLog}
-                    disabled={!rawLogContentForCopy || isLoadingContent || isUploading}
-                    title="Upload selected log to mclo.gs"
-                    className="flex items-center gap-1.5 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Icon icon="pixelarticons:upload" className="w-4 h-4" />
-                    {isUploading ? 'Uploading...' : 'upload log'}
-                </button>
-                {uploadUrl && (
-                    <a
-                        href={uploadUrl}
-                        onClick={(e) => { e.preventDefault(); handleOpenUrl(uploadUrl); }}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-400 hover:text-green-300 underline text-xs font-minecraft"
-                        title={`Open ${uploadUrl}`}
-                    >
-                        mclo.gs link
-                    </a>
-                )}
-                {uploadError && (
-                    <span className="text-red-400 text-xs font-minecraft" title={uploadError}>Upload Failed!</span>
-                )}
-            </div>
+            {/* Buttons moved to LogViewerDisplay */} 
         </div>
       </div>
 
@@ -334,6 +299,14 @@ export function LogsTab({ profile }: LogsTabProps) {
                      onLevelFilterChange={handleLevelFilterChange}
                      onCopyLog={handleCopyLog}
                      logLevelsDefinition={LOG_LEVELS}
+                     onOpenFolder={logFiles.length > 0 ? handleOpenLogsFolder : undefined}
+                     onUploadLog={rawLogContentForCopy ? handleUploadLog : undefined}
+                     isUploading={isUploading}
+                     uploadUrl={uploadUrl}
+                     uploadError={uploadError}
+                     onOpenUploadUrl={handleOpenUrl}
+                     isAutoscrollEnabled={false}
+                     onAutoscrollChange={() => {}}
                  />
              ) : (
                   // Show placeholder if no log file is selected 

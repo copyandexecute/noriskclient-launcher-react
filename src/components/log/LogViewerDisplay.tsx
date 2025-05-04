@@ -21,6 +21,17 @@ interface LogViewerDisplayProps {
   onCopyLog: () => void;
   // Pass LOG_LEVELS from service or define locally if preferred
   logLevelsDefinition: readonly LogLevel[];
+  isAutoscrollEnabled: boolean;
+  onAutoscrollChange: (enabled: boolean) => void;
+  // Ref for the scrollable element, forwarded from parent
+  scrollableContainerRef?: React.RefObject<HTMLDivElement>;
+  // Optional props for folder/upload actions
+  onOpenFolder?: () => void;
+  onUploadLog?: () => void;
+  isUploading?: boolean;
+  uploadUrl?: string | null;
+  uploadError?: string | null;
+  onOpenUploadUrl?: (url: string) => void;
 }
 
 // Helper functions moved or redefined here (could also be in a util file)
@@ -57,7 +68,17 @@ export function LogViewerDisplay({
   onSearchChange,
   onLevelFilterChange,
   onCopyLog,
-  logLevelsDefinition
+  logLevelsDefinition,
+  isAutoscrollEnabled,
+  onAutoscrollChange,
+  scrollableContainerRef,
+  // Receive optional props
+  onOpenFolder,
+  onUploadLog,
+  isUploading,
+  uploadUrl,
+  uploadError,
+  onOpenUploadUrl
 }: LogViewerDisplayProps) {
 
   return (
@@ -65,56 +86,104 @@ export function LogViewerDisplay({
       {/* Controls Area - Conditionally render if needed */} 
       {(parsedLogLinesCount > 0 || isLoading) && (
         <div className="flex items-center justify-between gap-4 mb-3 px-1 flex-shrink-0">
-          {/* Search Input */}
-          <div className="relative flex-grow max-w-xs">
-            <Icon icon="pixelarticons:search" className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"/>
-            <input
-              type="text"
-              placeholder="Filter lines..."
-              value={searchTerm}
-              onChange={onSearchChange}
-              disabled={isLoading}
-              className="w-full bg-black/30 border border-white/20 rounded pl-8 pr-2 py-1 text-white placeholder:text-white/40 text-2xl font-minecraft focus:outline-none focus:border-white/40"
-            />
-          </div>
-          
-          {/* Level Filters */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-white/60 font-minecraft text-xs mr-1">Levels:</span>
-            {logLevelsDefinition.map((level) => (
-              <label
-                key={level}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-sm border cursor-pointer transition-colors text-xl font-minecraft lowercase ${ 
-                  levelFilters[level]
-                  ? `${getLevelBgClass(level)} text-white/90`
-                  : 'bg-black/20 border-white/20 text-white/50 hover:bg-white/10 hover:border-white/30 hover:text-white/70'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={levelFilters[level]}
-                  onChange={(e) => onLevelFilterChange(level, e.target.checked)}
-                  className="hidden"
-                />
-                {level}
-              </label>
-            ))}
+          {/* Group Search and Filters */} 
+          <div className="flex items-center gap-4">
+            {/* Search Input */}
+            <div className="relative flex-grow max-w-xs">
+              <Icon icon="pixelarticons:search" className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"/>
+              <input
+                type="text"
+                placeholder="Filter lines..."
+                value={searchTerm}
+                onChange={onSearchChange}
+                disabled={isLoading}
+                className="w-full bg-black/30 border border-white/20 rounded pl-8 pr-2 py-1 text-white placeholder:text-white/40 text-2xl font-minecraft focus:outline-none focus:border-white/40"
+              />
+            </div>
+            
+            {/* Level Filters */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/60 font-minecraft text-xs mr-1">Levels:</span>
+              {logLevelsDefinition.map((level) => (
+                <label
+                  key={level}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-sm border cursor-pointer transition-colors text-xl font-minecraft lowercase ${ 
+                    levelFilters[level]
+                    ? `${getLevelBgClass(level)} text-white/90`
+                    : 'bg-black/20 border-white/20 text-white/50 hover:bg-white/10 hover:border-white/30 hover:text-white/70'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={levelFilters[level]}
+                    onChange={(e) => onLevelFilterChange(level, e.target.checked)}
+                    className="hidden"
+                  />
+                  {level}
+                </label>
+              ))}
+            </div>
           </div>
 
-          {/* Copy Button (Moved here from LogsTab header) */}
-          <button
-            onClick={onCopyLog}
-            disabled={displayLines.length === 0 || isLoading || copied}
-            title="Copy filtered log lines to clipboard"
-            className={`flex items-center gap-1.5 px-2 py-1 rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ 
-                copied 
-                ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-gray-600 hover:bg-gray-700 text-white/90 hover:text-white'
-            }`}
-          >
-            <Icon icon={copied ? "pixelarticons:check" : "pixelarticons:copy"} className="w-4 h-4" />
-            {copied ? 'copied!' : 'copy log'}
-          </button>
+          {/* Action Buttons Group */}
+          <div className="flex items-center gap-2">
+            {/* Open Folder Button (Conditional) */}
+            {onOpenFolder && (
+              <button
+                  onClick={onOpenFolder}
+                  title="Open Logs Folder"
+                  disabled={isLoading} // Disable while loading initial content?
+                  className="p-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                  <Icon icon="pixelarticons:folder" className="w-5 h-5" />
+              </button>
+            )}
+
+            {/* Copy Button */}
+            <button
+              onClick={onCopyLog}
+              disabled={displayLines.length === 0 || isLoading || copied}
+              title="Copy filtered log lines to clipboard"
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${ 
+                  copied 
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : 'bg-gray-600 hover:bg-gray-700 text-white/90 hover:text-white'
+              }`}
+            >
+              <Icon icon={copied ? "pixelarticons:check" : "pixelarticons:copy"} className="w-4 h-4" />
+              {copied ? 'copied!' : 'copy log'}
+            </button>
+
+            {/* Upload Button & Status (Conditional) */}
+            {onUploadLog && onOpenUploadUrl && (
+              <div className="flex items-center gap-2">
+                  <button
+                      onClick={onUploadLog}
+                      disabled={parsedLogLinesCount === 0 || isLoading || isUploading}
+                      title="Upload log to mclo.gs"
+                      className="flex items-center gap-1.5 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                      <Icon icon="pixelarticons:upload" className="w-4 h-4" />
+                      {isUploading ? 'Uploading...' : 'upload log'}
+                  </button>
+                  {uploadUrl && (
+                      <a
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); onOpenUploadUrl(uploadUrl); }}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-400 hover:text-green-300 underline text-xs font-minecraft"
+                          title={`Open ${uploadUrl}`}
+                      >
+                          mclo.gs link
+                      </a>
+                  )}
+                  {uploadError && (
+                      <span className="text-red-400 text-xs font-minecraft" title={uploadError}>Upload Failed!</span>
+                  )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -145,7 +214,10 @@ export function LogViewerDisplay({
           />
         )}
         {!isLoading && !error && displayLines.length > 0 && (
-          <div className="p-3 font-mono text-xs h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent whitespace-pre-wrap">
+          <div 
+            ref={scrollableContainerRef}
+            className="p-3 font-mono text-xs h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent whitespace-pre-wrap"
+          >
             {displayLines.map((line) => (
               <div key={line.id} className="flex flex-nowrap items-start">
                 {line.timestamp ? (
@@ -168,6 +240,21 @@ export function LogViewerDisplay({
           </div>
         )}
       </div>
+
+      {/* Footer for additional controls like autoscroll */} 
+      {(parsedLogLinesCount > 0 && !isLoading && !error) && (
+        <div className="flex-shrink-0 pt-2 px-1 flex justify-end items-center">
+          <label className="flex items-center gap-1.5 cursor-pointer text-white/70 hover:text-white text-2xl font-minecraft">
+            <input 
+              type="checkbox" 
+              checked={isAutoscrollEnabled}
+              onChange={(e) => onAutoscrollChange(e.target.checked)}
+              className="w-4 h-4 accent-blue-500"
+            />
+            Autoscroll
+          </label>
+        </div>
+      )}
     </div>
   );
 } 
