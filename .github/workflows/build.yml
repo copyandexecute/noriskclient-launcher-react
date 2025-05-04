@@ -46,8 +46,8 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
-          cache: 'npm'
+          node-version: 20 # Pin to Node LTS 20
+          cache: 'yarn' # Switch cache to yarn
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
 
       - name: install frontend dependencies
         # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: npm ci
+        run: yarn install --frozen-lockfile # Use yarn install
 
       # Tauri Action now handles build and sign
       - name: Build and Sign Tauri App
@@ -74,9 +74,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
+          # Revert to using packageManager and args
           args: --verbose ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }} # Füge --target hinzu, wenn es gesetzt ist
-          # KEIN tagName, releaseName etc. hier!
-          packageManager: npm
+          packageManager: yarn # Set packageManager to yarn
           
       # --- Umbenennen und Artefakte vorbereiten --- 
       - name: Rename Linux Artifacts
