@@ -34,7 +34,8 @@ export default defineConfig(async () => ({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        updater: resolve(__dirname, 'updater.html')
+        updater: resolve(__dirname, 'updater.html'),
+        logWindow: resolve(__dirname, 'log-window.html')
       }
     }
   }

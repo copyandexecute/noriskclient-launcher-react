@@ -103,6 +103,16 @@ export function RunningInstancesIndicator({
     }
   };
 
+  const handleViewLogs = async (pid: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent dropdown from closing
+    try {
+      await ProcessService.openLogWindow(pid);
+    } catch (err) {
+      console.error(`Failed to open log window for PID ${pid}:`, err);
+      // Optionally show a user-facing error message here
+    }
+  };
+
   const instanceCount = processes.length;
 
   return (
@@ -173,19 +183,32 @@ export function RunningInstancesIndicator({
                          <span className="text-yellow-500 ml-1">({process.state})</span>}
                      </p>
                   </div>
-                  <button
-                    onClick={(e) => handleStopProcess(process.id, e)}
-                    disabled={stoppingId === process.id}
-                    className="p-1.5 bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 rounded text-red-300 hover:text-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                    title="Stop Process"
-                    aria-label="Stop Process"
-                  >
-                     {stoppingId === process.id ? (
-                        <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
-                     ) : (
-                        <Icon icon="pixel:square" className="w-4 h-4" /> // Stop Icon
-                     )}
-                  </button>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {/* View Logs Button - Use process.pid */} 
+                    {process.pid && (
+                      <button
+                        onClick={(e) => handleViewLogs(process.pid!, e)} // Pass process.pid
+                        className="p-1.5 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/30 rounded text-blue-300 hover:text-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="View Logs"
+                        aria-label="View Logs"
+                      >
+                        <Icon icon="pixel:document-alt-stroke" className="w-4 h-4" /> 
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => handleStopProcess(process.id, e)}
+                      disabled={stoppingId === process.id}
+                      className="p-1.5 bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 rounded text-red-300 hover:text-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                      title="Stop Process"
+                      aria-label="Stop Process"
+                    >
+                       {stoppingId === process.id ? (
+                          <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
+                       ) : (
+                          <Icon icon="pixel:square" className="w-4 h-4" /> // Stop Icon
+                       )}
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

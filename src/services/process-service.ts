@@ -46,3 +46,18 @@ export async function stopProcess(processId: string): Promise<void> {
     throw error; 
   }
 }
+
+/**
+ * Opens a dedicated log viewer window for the specified process ID.
+ */
+export async function openLogWindow(pid: number): Promise<void> {
+  console.debug(`[ProcessService] Requesting log window for PID: ${pid}`);
+  try {
+    // Assuming the Rust command expects a number for pid, although the Rust type might be u32
+    await invoke<void>("open_log_window", { pid });
+  } catch (error) {
+    console.error(`[ProcessService] Failed to open log window for PID ${pid}:`, error);
+    // Handle or re-throw as appropriate
+    throw error; 
+  }
+}
