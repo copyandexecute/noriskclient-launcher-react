@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { SkinViewer } from "../launcher/SkinViewer";
 import { LaunchButton } from "../launcher/LaunchButton";
 import { VersionInfo } from "../launcher/VersionInfo";
-import { userData } from "../../data/mock-data";
 import { NewsSection } from "../news/NewsSection";
 import * as ProfileService from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
+import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 
 export function PlayTab() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -16,6 +16,8 @@ export function PlayTab() {
   const [selectedVersion, setSelectedVersion] = useState("");
   const [launchError, setLaunchError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  const { activeAccount } = useMinecraftAuthStore();
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -61,6 +63,10 @@ export function PlayTab() {
     profileId: profile.id,
   }));
 
+  const skinUrl = activeAccount?.id
+    ? `https://crafatar.com/skins/${activeAccount.id}`
+    : `https://crafatar.com/skins/606e2ff0-ed77-4842-9d6c-e1d3321c7838`;
+
   if (loading) {
     return <LoadingState message="Loading profiles..." />;
   }
@@ -79,12 +85,12 @@ export function PlayTab() {
 
         <div className="flex flex-col items-center z-10">
           <h2 className="font-minecraft text-5xl text-center text-white mb-2 lowercase font-normal">
-            {userData.username}
+            {activeAccount?.minecraft_username || activeAccount?.username || "no account"}
           </h2>
 
           <div className="relative">
             <SkinViewer
-              skinUrl={userData.skinUrl}
+              skinUrl={skinUrl}
               width={280}
               height={380}
               className="bg-transparent"
