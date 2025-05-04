@@ -50,14 +50,30 @@ export async function stopProcess(processId: string): Promise<void> {
 /**
  * Opens a dedicated log viewer window for the specified process ID.
  */
-export async function openLogWindow(pid: number): Promise<void> {
-  console.debug(`[ProcessService] Requesting log window for PID: ${pid}`);
+export async function openLogWindow(processId: string): Promise<void> {
+  console.debug(`[ProcessService] Requesting log window for process ID: ${processId}`);
   try {
-    // Assuming the Rust command expects a number for pid, although the Rust type might be u32
-    await invoke<void>("open_log_window", { pid });
+    // Pass processId (Uuid as string) to the Rust command
+    await invoke<void>("open_log_window", { processId });
   } catch (error) {
-    console.error(`[ProcessService] Failed to open log window for PID ${pid}:`, error);
+    console.error(`[ProcessService] Failed to open log window for process ID ${processId}:`, error);
     // Handle or re-throw as appropriate
     throw error; 
+  }
+}
+
+/**
+ * Fetches the full log content for a specific process ID (Uuid).
+ */
+export async function getLogContentForProcess(processId: string): Promise<string> {
+  console.debug(`[ProcessService] Fetching full log for process ID: ${processId}`);
+  try {
+    const logContent = await invoke<string>("get_full_log", { processId });
+    return logContent || ""; // Return empty string if null/undefined
+  } catch (error) {
+    console.error(`[ProcessService] Failed to get full log for process ID ${processId}:`, error);
+    // Return an empty string or re-throw based on how errors should be handled downstream
+    return ""; 
+    // throw error; 
   }
 }

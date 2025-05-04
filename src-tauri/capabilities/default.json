@@ -4,7 +4,7 @@
   "description": "Capability for the main window",
   "windows": [
     "main",
-    "log_window",
+    "log_window_*",
     "updater"
   ],
   "permissions": [

@@ -18,6 +18,8 @@ import {
     uploadLogToMclogs,
     openLogFileDirectory,
 } from "../../../services/log-service";
+// Import the new reusable component
+import { LogViewerDisplay } from "../../log/LogViewerDisplay";
 
 interface LogsTabProps {
   profile: Profile;
@@ -241,27 +243,6 @@ export function LogsTab({ profile }: LogsTabProps) {
     }
   }, []);
 
-  const getLevelColorClass = (level?: LogLevel): string => {
-    switch (level) {
-      case 'ERROR': return 'text-red-400 font-semibold';
-      case 'WARN': return 'text-yellow-400 font-semibold';
-      case 'INFO': return 'text-blue-400';
-      case 'DEBUG': return 'text-cyan-400';
-      case 'TRACE': return 'text-purple-400';
-      default: return 'text-gray-400';
-    }
-  };
-  const getLevelBgClass = (level: LogLevel): string => {
-     switch (level) {
-       case 'ERROR': return 'bg-red-900/50 border-red-700';
-       case 'WARN': return 'bg-yellow-900/50 border-yellow-700';
-       case 'INFO': return 'bg-blue-900/50 border-blue-700';
-       case 'DEBUG': return 'bg-cyan-900/50 border-cyan-700';
-       case 'TRACE': return 'bg-purple-900/50 border-purple-700';
-       default: return 'bg-gray-800/50 border-gray-700';
-     }
-   };
-
   return (
     <div className="h-full flex flex-col select-none text-sm">
 
@@ -295,21 +276,6 @@ export function LogsTab({ profile }: LogsTabProps) {
                     open folder
                 </button>
             )}
-
-            {/* Copy Button */}
-            <button
-                onClick={handleCopyLog}
-                disabled={displayLines.length === 0 || isLoadingContent || copied}
-                title="Copy filtered log lines to clipboard"
-                className={`flex items-center gap-1.5 px-2 py-1 rounded text-2xl font-minecraft transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    copied
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-gray-600 hover:bg-gray-700 text-white/90 hover:text-white'
-                }`}
-            >
-                <Icon icon={copied ? "pixelarticons:check" : "pixelarticons:copy"} className="w-4 h-4" />
-                {copied ? 'copied!' : 'copy log'}
-            </button>
 
             <div className="flex items-center gap-2">
                 <button
@@ -355,98 +321,29 @@ export function LogsTab({ profile }: LogsTabProps) {
 
       {!isLoadingList && !errorList && (
          <div className="flex flex-col flex-grow min-h-0">
-           {selectedLogPath && parsedLogLines.length > 0 && (
-             <div className="flex items-center gap-4 mb-3 px-1 flex-shrink-0">
-                <div className="relative flex-grow max-w-xs">
-                     <Icon icon="pixelarticons:search" className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"/>
-                     <input
-                        type="text"
-                        placeholder="Filter lines..."
-                        value={searchTerm}
-                        onChange={handleSearchChange}
-                        disabled={isLoadingContent}
-                        className="w-full bg-black/30 border border-white/20 rounded pl-8 pr-2 py-1 text-white placeholder:text-white/40 text-2xl font-minecraft focus:outline-none focus:border-white/40"
-                    />
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <span className="text-white/60 font-minecraft text-xs mr-1">Levels:</span>
-                    {LOG_LEVELS.map((level) => (
-                        <label
-                            key={level}
-                             className={`flex items-center gap-1 px-1.5 py-0.5 rounded-sm border cursor-pointer transition-colors text-xl font-minecraft lowercase ${
-                                levelFilters[level]
-                                ? `${getLevelBgClass(level)} text-white/90`
-                                : 'bg-black/20 border-white/20 text-white/50 hover:bg-white/10 hover:border-white/30 hover:text-white/70'
-                            }`}
-                        >
-                        <input
-                            type="checkbox"
-                            checked={levelFilters[level]}
-                            onChange={(e) => handleLevelFilterChange(level, e.target.checked)}
-                            className="hidden"
-                        />
-                        {level}
-                        </label>
-                    ))}
-                </div>
-             </div>
-           )}
-
-           <div className="flex-grow bg-black/50 rounded overflow-hidden relative border border-white/10">
-             {isLoadingContent && (
-               <div className="absolute inset-0 flex justify-center items-center bg-black/60 z-10">
-                 <LoadingSpinner />
-               </div>
+           {selectedLogPath ? (
+                 <LogViewerDisplay 
+                     isLoading={isLoadingContent}
+                     error={errorContent}
+                     displayLines={displayLines}
+                     parsedLogLinesCount={parsedLogLines.length}
+                     searchTerm={searchTerm}
+                     levelFilters={levelFilters}
+                     copied={copied}
+                     onSearchChange={handleSearchChange}
+                     onLevelFilterChange={handleLevelFilterChange}
+                     onCopyLog={handleCopyLog}
+                     logLevelsDefinition={LOG_LEVELS}
+                 />
+             ) : (
+                  // Show placeholder if no log file is selected 
+                  <div className="flex-grow bg-black/50 rounded overflow-hidden relative border border-white/10">
+                      <EmptyState
+                          icon="pixelarticons:folder-open"
+                          message="Select a log file above to view its content."
+                      />
+                  </div>
              )}
-             {!selectedLogPath && !isLoadingContent && (
-               <EmptyState
-                 icon="pixelarticons:folder-open"
-                 message="Select a log file above to view its content."
-               />
-             )}
-             {selectedLogPath && !isLoadingContent && errorContent && (
-                 <div className="flex justify-center items-center h-full p-4">
-                    <div className="p-4 text-red-400 font-minecraft text-base bg-red-900/30 rounded">
-                         Error loading content: {errorContent}
-                    </div>
-                 </div>
-             )}
-             {selectedLogPath && !isLoadingContent && !errorContent && parsedLogLines.length === 0 && (
-                <EmptyState
-                    icon="pixelarticons:file"
-                    message="Log file appears to be empty."
-                />
-             )}
-             {selectedLogPath && !isLoadingContent && !errorContent && parsedLogLines.length > 0 && displayLines.length === 0 && (
-                 <EmptyState
-                    icon="pixelarticons:filter"
-                    message="No log lines match the current filters."
-                />
-             )}
-             {selectedLogPath && !isLoadingContent && !errorContent && displayLines.length > 0 && (
-               <div className="p-3 font-mono text-xs h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent whitespace-pre-wrap">
-                 {displayLines.map((line) => (
-                   <div key={line.id} className="flex flex-nowrap items-start">
-                     {line.timestamp ? (
-                       <>
-                         <span className={`pr-2 select-none ${getLevelColorClass(line.level)}`}>
-                           <span className="opacity-80">[{line.timestamp}]</span>
-                           <span className="opacity-80 ml-1">[{line.thread}/{line.level ?? '-'}]</span>
-                         </span>
-                         <span className={`flex-1 ${(line.level === 'ERROR' || line.level === 'WARN') ? getLevelColorClass(line.level) : 'text-white/90'}`}>
-                            {line.text}
-                         </span>
-                       </>
-                     ) : (
-                       <span className={`flex-1 pl-1 ${(line.level === 'ERROR' || line.level === 'WARN') ? getLevelColorClass(line.level) : 'text-white/90'}`}>
-                         {line.text}
-                       </span>
-                     )}
-                   </div>
-                 ))}
-               </div>
-             )}
-           </div>
          </div>
       )}
     </div>

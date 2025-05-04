@@ -51,9 +51,9 @@ pub async fn get_full_log(process_id: Uuid) -> Result<String, CommandError> {
 #[tauri::command]
 pub async fn open_log_window<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    pid: u32,
+    process_id: Uuid,
 ) -> Result<(), CommandError> {
-    let window_label = format!("log_window_{}", pid);
+    let window_label = format!("log_window_{}", process_id);
 
     if let Some(window) = app.get_webview_window(&window_label) {
         window.set_focus().map_err(|e| {
@@ -68,9 +68,9 @@ pub async fn open_log_window<R: tauri::Runtime>(
     let window = tauri::WebviewWindowBuilder::new(
         &app,
         &window_label,
-        tauri::WebviewUrl::App(format!("log-window.html?pid={}", pid).into()),
+        tauri::WebviewUrl::App(format!("log-window.html?processId={}", process_id).into()),
     )
-    .title(format!("Minecraft Logs (PID: {})", pid))
+    .title(format!("Minecraft Logs ({})", process_id))
     .inner_size(1200.0, 800.0)
     .center()
     .build()

@@ -298,13 +298,13 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                 ) : (
                                     serverIconSrc ? <img src={serverIconSrc} alt="" className="w-full h-full object-cover image-pixelated" /> : <Icon icon="pixel:server" className="w-8 h-8 text-white/50" />
                                 )}
-                            </div>
+              </div>
 
                             {/* Details */}
                              <div className="flex-grow min-w-0">
                                  <h3 className="font-minecraft text-lg lowercase tracking-wide truncate" title={itemDisplayName}>
                                      {itemDisplayName}
-                                 </h3>
+                </h3>
                                  {isWorld ? (
                                       // Access world-specific props safely
                                       <>
@@ -338,7 +338,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                               : hasPingError ? (<span className="text-red-400 italic">Error: {pingInfo?.error}</span>)
                                               : pingInfo ? (<span dangerouslySetInnerHTML={{ __html: parseMotdToHtml(pingInfo?.description_json || pingInfo?.description) }} />)
                                               : (<span className="italic text-white/50">{item.address || 'Address missing'}</span>)}
-                                         </div>
+              </div>
                                           <div className="text-white/50 text-xs mt-1 flex items-center gap-x-2 gap-y-1 flex-wrap">
                                               {isPinging ? (<span>Pinging...</span>)
                                               : hasPingError ? (<span className="text-red-400">Error</span>)
@@ -349,10 +349,10 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                                         {pingInfo.version_name && (<span title="Version" className="inline-flex items-center gap-1"><Icon icon="pixel:tag" className="w-3 h-3" />{pingInfo.version_name}</span>)}
                                                   </>
                                               ) : (<span>Offline / Unknown</span>)}
-                                          </div>
+            </div>
                                      </>
                                  )}
-                            </div>
+            </div>
 
                              {/* Actions */}
                             <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -378,9 +378,9 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                              disabled={deleteLoading[item.folder_name]} 
                                              className="bg-red-900/40 hover:bg-red-800/60 border-2 border-red-500/30 px-2 py-1 text-red-300 hover:text-red-200 text-xs font-minecraft transition-colors flex items-center justify-center"
                                          >{deleteLoading[item.folder_name] ? <Icon icon="pixel:spinner-solid" className="w-3 h-3 animate-spin" /> : <Icon icon="pixel:trash" className="w-3 h-3"/>}</button>
-                                    </div>
+            </div>
                                 )}
-                             </div>
+          </div>
                         </li>
                     );
                  })}

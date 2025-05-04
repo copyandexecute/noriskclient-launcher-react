@@ -103,12 +103,12 @@ export function RunningInstancesIndicator({
     }
   };
 
-  const handleViewLogs = async (pid: number, e: React.MouseEvent) => {
+  const handleViewLogs = async (processId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent dropdown from closing
     try {
-      await ProcessService.openLogWindow(pid);
+      await ProcessService.openLogWindow(processId);
     } catch (err) {
-      console.error(`Failed to open log window for PID ${pid}:`, err);
+      console.error(`Failed to open log window for process ID ${processId}:`, err);
       // Optionally show a user-facing error message here
     }
   };
@@ -184,10 +184,10 @@ export function RunningInstancesIndicator({
                      </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {/* View Logs Button - Use process.pid */} 
-                    {process.pid && (
+                    {/* View Logs Button - Use process.id (Uuid string) */} 
+                    {process.id && (
                       <button
-                        onClick={(e) => handleViewLogs(process.pid!, e)} // Pass process.pid
+                        onClick={(e) => handleViewLogs(process.id, e)} // Pass process.id
                         className="p-1.5 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/30 rounded text-blue-300 hover:text-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="View Logs"
                         aria-label="View Logs"
