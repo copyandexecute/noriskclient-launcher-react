@@ -30,6 +30,10 @@ use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::proto::rr::RecordType;
 use trust_dns_resolver::TokioAsyncResolver;
 use uuid::Uuid;
+use url::Url; // Zusätzlicher Import für Url
+
+// Referenziere unsere server_ping-Modul, das sich im gleichen Verzeichnis befindet
+use crate::utils::server_ping;
 
 // --- Struct for World Info ---
 #[derive(Debug, Clone, Serialize)]
@@ -996,42 +1000,103 @@ impl ServerPingInfo {
             error: Some(error_msg),
         }
     }
+
+    // Konvertiere ServerStatus zu ServerPingInfo
+    fn from_server_status(status: super::server_ping::ServerStatus) -> Self {
+        // Extrahiere Text aus JSON-Beschreibung wenn vorhanden
+        let (simple_description, json_description) = if let Some(raw_value) = status.description {
+            match serde_json::from_str::<serde_json::Value>(raw_value.get()) {
+                Ok(json) => {
+                    let text = extract_text_from_json(&json);
+                    (text, Some(json))
+                },
+                Err(_) => (Some(raw_value.get().to_string()), None),
+            }
+        } else {
+            (None, None)
+        };
+
+        // Favicon URL zu Base64 konvertieren (ohne data:image/png;base64, Präfix)
+        let favicon_base64 = status.favicon.and_then(|url| {
+            if url.scheme() == "data" && url.path().starts_with("image/png;base64,") {
+                let base64_data = url.path().strip_prefix("image/png;base64,")?.to_string();
+                Some(base64_data)
+            } else {
+                None
+            }
+        });
+
+        ServerPingInfo {
+            description: simple_description,
+            description_json: json_description,
+            version_name: status.version.as_ref().map(|v| v.name.clone()),
+            version_protocol: status.version.as_ref().map(|v| v.protocol),
+            players_online: status.players.as_ref().map(|p| p.online as u32),
+            players_max: status.players.as_ref().map(|p| p.max as u32),
+            favicon_base64,
+            latency_ms: status.ping.map(|p| p as u64),
+            error: None,
+        }
+    }
+}
+
+// Hilfsfunktion zum Extrahieren von einfachem Text aus Minecraft Chat-JSON
+fn extract_text_from_json(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Object(obj) => {
+            let mut result = String::new();
+            
+            // "text"-Feld extrahieren
+            if let Some(serde_json::Value::String(text)) = obj.get("text") {
+                result.push_str(text);
+            }
+            
+            // "extra"-Array durchgehen und rekursiv Text extrahieren
+            if let Some(serde_json::Value::Array(extras)) = obj.get("extra") {
+                for extra in extras {
+                    if let Some(extra_text) = extract_text_from_json(extra) {
+                        result.push_str(&extra_text);
+                    }
+                }
+            }
+            
+            if result.is_empty() {
+                None
+            } else {
+                Some(result)
+            }
+        },
+        _ => None,
+    }
 }
 
 // Function to perform the server ping
 pub async fn ping_server_status(address: &str) -> ServerPingInfo {
     info!("[Server Ping] Pinging server address: {}", address);
-    let ping_timeout = Duration::from_secs(5);
-
-    // --- Parse Address ---
+    
+    // Parse the address
     let (host, port) = match parse_minecraft_address(address) {
         Ok((h, p)) => (h, p),
         Err(e) => {
             return ServerPingInfo::error(address, format!("Invalid address format: {}", e), None);
         }
     };
-    info!(
-        "[Server Ping] Parsed address: Host='{}', Port={}",
-        host, port
-    );
-
-    // --- DNS Resolver ---
+    
+    // Resolve the server (including SRV records)
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
-
-    // --- SRV Lookup ---
-    // Use the parsed host for SRV query
+    
+    // SRV Lookup
     let srv_query = format!("_minecraft._tcp.{}", host);
     info!("[Server Ping] Attempting SRV lookup for: {}", srv_query);
-    let srv_response = resolver.srv_lookup(srv_query.as_str()).await;
-
-    let (target_host, target_port): (String, u16) = match srv_response {
+    
+    let (target_host, target_port) = match resolver.srv_lookup(srv_query.as_str()).await {
         Ok(srv) => {
-            // Prioritize lower priority, then higher weight (standard SRV behavior)
             if let Some(record) = srv
                 .iter()
                 .min_by_key(|r| (r.priority(), std::cmp::Reverse(r.weight())))
             {
-                let srv_host = record.target().to_utf8(); // Convert Name to String
+                let srv_host = record.target().to_utf8();
                 let srv_port = record.port();
                 info!(
                     "[Server Ping] SRV lookup successful: Target = {}:{}",
@@ -1040,143 +1105,47 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
                 (srv_host, srv_port)
             } else {
                 info!("[Server Ping] SRV lookup for '{}' returned no records. Using parsed host/port.", srv_query);
-                (host.clone(), port) // Use the host parsed earlier
+                (host.to_string(), port)
             }
-        }
+        },
         Err(e) => {
             warn!(
                 "[Server Ping] SRV lookup for '{}' failed: {}. Falling back to parsed host/port.",
                 srv_query, e
             );
-            (host.clone(), port) // Use the host parsed earlier
+            (host.to_string(), port)
         }
     };
-
-    // --- Resolve Target Host to IP ---
-    info!("[Server Ping] Resolving target host: {}", target_host);
-    let ip_response = resolver.lookup_ip(target_host.as_str()).await;
-
-    let socket_addr = match ip_response {
-        Ok(lookup) => match lookup.iter().next() {
-            // Use the first IP address found
-            Some(ip) => SocketAddr::new(ip, target_port),
-            None => {
-                return ServerPingInfo::error(
-                    address,
-                    format!(
-                        "DNS lookup for target '{}' returned no IP addresses",
-                        target_host
-                    ),
-                    None,
-                )
+    
+    // Resolve IP address
+    let ip_lookup = resolver.lookup_ip(target_host.as_str()).await;
+    let socket_address = match ip_lookup {
+        Ok(lookup) => {
+            match lookup.iter().next() {
+                Some(ip) => SocketAddr::new(ip, target_port),
+                None => {
+                    return ServerPingInfo::error(
+                        address,
+                        format!("DNS lookup for '{}' returned no IP addresses", target_host),
+                        None
+                    );
+                }
             }
         },
         Err(e) => {
             return ServerPingInfo::error(
                 address,
-                format!("DNS lookup for target '{}' failed: {}", target_host, e),
-                None,
-            )
-        }
-    };
-
-    info!(
-        "[Server Ping] Resolved '{}:{}' to socket address: {}",
-        target_host, target_port, socket_addr
-    );
-
-    // --- TCP Connect ---
-    let connect_future = TcpStream::connect(socket_addr);
-    let stream_result = match timeout(ping_timeout, connect_future).await {
-        Ok(Ok(stream)) => Ok(stream),
-        Ok(Err(e)) => Err(AppError::Io(e)),
-        Err(_) => Err(AppError::Other("Connection timed out".to_string())),
-    };
-
-    let mut stream = match stream_result {
-        Ok(s) => s,
-        Err(e) => {
-            return ServerPingInfo::error(
-                address,
-                format!("Connection to {} failed: {}", socket_addr, e),
-                None,
-            )
-        }
-    };
-
-    // --- Ping ---
-    let start_time = std::time::Instant::now();
-    // Use the target_host (which might be from SRV) for the handshake, but connect to the resolved IP (socket_addr)
-    let ping_future = ping(&mut stream, &target_host, target_port);
-    let result: std::result::Result<Response, CraftPingError> =
-        match timeout(ping_timeout, ping_future).await {
-            Ok(res) => res,
-            Err(_) => {
-                return ServerPingInfo::error(
-                    address,
-                    "Ping timed out".to_string(),
-                    Some(ping_timeout.as_millis() as u64),
-                )
-            }
-        };
-
-    let latency = start_time.elapsed();
-    let latency_ms = latency.as_millis() as u64;
-
-    // --- Process Result ---
-    match result {
-        Ok(pong) => {
-            info!(
-                "[Server Ping] Success for {}: Version={}, Players={}/{}, Latency={}ms",
-                address, pong.version, pong.online_players, pong.max_players, latency_ms
+                format!("Failed to resolve hostname '{}': {}", target_host, e),
+                None
             );
-            // Extract favicon (remove potential prefix)
-            // Extract favicon and encode it as base64 string
-            let favicon_base64 = pong.favicon.map(|bytes| {
-                // Use the imported base64 crate
-                base64::engine::general_purpose::STANDARD.encode(&bytes)
-            });
-
-            // Helper function to extract plain text from serde_json::Value (Chat component format)
-            fn extract_text_from_value(value: &serde_json::Value) -> String {
-                if let Some(text) = value.get("text").and_then(|v| v.as_str()) {
-                    let mut result = text.to_string();
-                    if let Some(extras) = value.get("extra").and_then(|v| v.as_array()) {
-                        for extra_val in extras {
-                            result.push_str(&extract_text_from_value(extra_val));
-                        }
-                    }
-                    result
-                } else if let Some(s) = value.as_str() {
-                    // Fallback if it's just a plain string
-                    s.to_string()
-                } else {
-                    // Fallback for other types or missing text
-                    String::new()
-                }
-            }
-
-            // Extract JSON MOTD is simpler now
-            let json_motd = pong.description.clone(); // pong is Response struct
-
-            // Extract simple text MOTD from the JSON value
-            let simple_motd = match &json_motd {
-                Some(value) => extract_text_from_value(value),
-                None => String::new(), // Or maybe "MOTD not available"
-            };
-
-            ServerPingInfo {
-                description: Some(simple_motd),
-                description_json: json_motd,
-                version_name: Some(pong.version), // Access fields directly from Response
-                version_protocol: Some(pong.protocol),
-                players_online: Some(pong.online_players as u32), // Cast usize to u32
-                players_max: Some(pong.max_players as u32),       // Cast usize to u32
-                favicon_base64: favicon_base64,
-                latency_ms: Some(latency_ms),
-                error: None,
-            }
         }
-        Err(e) => ServerPingInfo::error(address, format!("Ping failed: {}", e), Some(latency_ms)),
+    };
+    
+    info!("[Server Ping] Resolved to: {}", socket_address);
+    
+    // Ping the server using our server_ping implementation
+    match super::server_ping::get_server_status(&socket_address, (&target_host, target_port), None).await {
+        Ok(status) => ServerPingInfo::from_server_status(status),
+        Err(e) => ServerPingInfo::error(address, format!("Server ping failed: {}", e), None),
     }
 }

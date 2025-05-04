@@ -3123,6 +3123,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "trust-dns-resolver",
+ "url",
  "uuid 1.16.0",
  "zip",
 ]
