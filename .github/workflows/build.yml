@@ -59,11 +59,17 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: Clean node_modules
-        run: rm -rf node_modules
+      - name: Clean workspace (including node_modules)
+        run: git clean -fdx
 
       - name: install frontend dependencies
         run: npm ci
+
+      # Explicitly install the native Rollup dependency for the *host* platform
+      - name: Install Host Rollup Dependency
+        run: |
+          npm install --no-save --no-optional @rollup/rollup-$(node -p "require('./node_modules/@rollup/platform-specific/package.json').systemSpecificPackageName")
+        shell: bash
 
       - name: build frontend
         run: npm run build
