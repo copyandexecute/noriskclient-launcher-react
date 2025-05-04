@@ -6,8 +6,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager; // Keep for app_handle.state()
 use tokio::sync::{Mutex, RwLock};
-use tokio::task;
-use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
 // Discord application ID for NoRiskClient

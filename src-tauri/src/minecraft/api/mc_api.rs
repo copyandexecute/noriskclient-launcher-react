@@ -2,7 +2,7 @@ use crate::error::{AppError, Result};
 use crate::minecraft::dto::minecraft_profile::MinecraftProfile;
 use crate::minecraft::dto::piston_meta::PistonMeta;
 use crate::minecraft::dto::version_manifest::VersionManifest;
-use log::{debug, error, info, warn};
+use log::debug;
 use reqwest;
 use std::fs;
 use std::path::Path;

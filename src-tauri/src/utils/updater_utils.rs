@@ -1,7 +1,6 @@
 use log::{error, info, warn};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Wry, Emitter};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Emitter};
 use tauri_plugin_updater::UpdaterExt;
-use std::error::Error as StdError;
 use serde::Serialize;
 use crate::error::{AppError, Result as AppResult};
 use tokio::time::{sleep, Duration};

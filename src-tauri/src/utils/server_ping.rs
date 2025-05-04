@@ -1,11 +1,8 @@
 use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
-use std::io;
-use std::mem::size_of;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::net::ToSocketAddrs;
 use tokio::select;
 use tokio::time;
 use url::Url;
@@ -64,7 +61,7 @@ pub async fn get_server_status(
 mod modern {
     use super::ServerStatus;
     use crate::error::{AppError, Result};
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpStream, ToSocketAddrs};
 

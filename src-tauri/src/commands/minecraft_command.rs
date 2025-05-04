@@ -12,8 +12,7 @@ use crate::minecraft::dto::VersionManifest;
 use crate::state::skin_state::MinecraftSkin;
 use crate::state::state_manager::State;
 use crate::utils::mc_utils;
-use log::{debug, error, info, warn};
-use semver::Op;
+use log::{debug, info};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 

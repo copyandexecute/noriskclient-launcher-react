@@ -1,13 +1,11 @@
 use crate::error::{AppError, CommandError};
 use crate::integrations::modrinth::ModrinthVersion;
 use crate::integrations::mrpack;
-use crate::integrations::norisk_packs::{
-    import_noriskpack_as_profile, NoriskModpacksConfig, NoriskPackDefinition,
-};
-use crate::integrations::norisk_versions::{self, NoriskVersionsConfig};
+use crate::integrations::norisk_packs::NoriskModpacksConfig;
+use crate::integrations::norisk_versions::{NoriskVersionsConfig};
 use crate::minecraft::installer;
 use crate::state::profile_state::{
-    default_profile_path, CustomModInfo, ModLoader, ModSource, Profile, ProfileSettings,
+    default_profile_path, CustomModInfo, ModLoader, Profile, ProfileSettings,
     ProfileState,
 };
 use crate::state::state_manager::State;

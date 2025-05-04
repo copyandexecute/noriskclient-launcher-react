@@ -989,8 +989,8 @@ impl NoriskClientAssetsDownloadService {
             return Ok(0);
         }
 
-        let mut entries_to_check = vec![base_dir.to_path_buf()];
-        let mut dirs_to_delete_later: Vec<PathBuf> = Vec::new();
+        let entries_to_check = vec![base_dir.to_path_buf()];
+        let dirs_to_delete_later: Vec<PathBuf> = Vec::new();
         let mut deleted_count = 0;
 
         // Perform a breadth-first traversal to collect all paths

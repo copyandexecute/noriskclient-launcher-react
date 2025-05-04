@@ -9,7 +9,6 @@ use crate::state::norisk_versions_state::{default_norisk_versions_path, NoriskVe
 use crate::state::process_state::{default_processes_path, ProcessManager};
 use crate::state::profile_state::ProfileManager;
 use crate::state::skin_state::{default_skins_path, SkinManager};
-use log::error;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 

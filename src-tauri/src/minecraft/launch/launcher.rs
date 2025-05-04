@@ -8,7 +8,6 @@ use crate::minecraft::JvmArguments;
 use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
 use log::info;
-use log::warn;
 use std::path::PathBuf;
 use std::process::Command;
 use uuid::Uuid;

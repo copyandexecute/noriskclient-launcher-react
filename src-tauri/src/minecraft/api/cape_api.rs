@@ -1,4 +1,3 @@
-use crate::minecraft::auth::minecraft_auth::NoRiskToken;
 use crate::{
     config::HTTP_CLIENT,
     error::{AppError, Result},

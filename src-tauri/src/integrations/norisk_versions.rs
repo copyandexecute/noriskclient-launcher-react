@@ -1,14 +1,11 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use crate::state::profile_state::{ModLoader, Profile, ProfileSettings, ProfileState};
-use chrono::Utc;
-use log::{self, debug, error, info, warn};
+use crate::state::profile_state::Profile;
+use log::{self, error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
 use tokio::fs;
-use uuid::Uuid;
 
 const NORISK_API_BASE_URL: &str = "https://api.noriskclient.com/v1";
 

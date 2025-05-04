@@ -1,7 +1,7 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result}; // Dein Result- und Fehlertyp
 use crate::integrations::norisk_packs::{
-    get_norisk_pack_mod_filename, NoriskModEntryDefinition, NoriskModSourceDefinition,
+    get_norisk_pack_mod_filename, NoriskModEntryDefinition,
 };
 use log::{error, info, warn};
 use std::path::{Path, PathBuf};

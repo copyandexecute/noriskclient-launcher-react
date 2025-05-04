@@ -1,5 +1,4 @@
 use crate::error::CommandError;
-use crate::state::discord_state::DiscordState;
 use crate::state::process_state::ProcessMetadata;
 use crate::state::state_manager::State;
 use tauri::Manager;

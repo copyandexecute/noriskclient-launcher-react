@@ -1,6 +1,6 @@
 use crate::error::{AppError, Result};
 use crate::state::State;
-use fastnbt::{error::Error as FastNbtError, from_bytes, to_bytes, Value};
+use fastnbt::{from_bytes, to_bytes, Value};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -8,8 +8,7 @@ use fs4::tokio::AsyncFileExt;
 use fs_extra::dir::{copy as copy_dir, CopyOptions};
 use log::{error, info, warn};
 use sanitize_filename;
-use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::fs;
 use uuid::Uuid;
 

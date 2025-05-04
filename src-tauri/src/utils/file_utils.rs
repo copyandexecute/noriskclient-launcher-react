@@ -2,9 +2,8 @@ use crate::error::{AppError, Result};
 use async_zip::tokio::read::seek::ZipFileReader;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use futures::AsyncReadExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
 
 /// Finds the first `.png` file within a zip or jar archive and returns its content as a Base64 encoded string.
 ///

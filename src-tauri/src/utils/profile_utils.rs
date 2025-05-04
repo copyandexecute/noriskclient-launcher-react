@@ -2,7 +2,7 @@ use crate::error::{AppError, Result};
 use crate::integrations::modrinth::{ModrinthProjectType, ModrinthVersion};
 use crate::integrations::norisk_packs;
 use crate::state::profile_state::Profile;
-use crate::state::profile_state::{Mod, ModLoader, ModSource};
+use crate::state::profile_state::ModSource;
 use crate::state::state_manager::State;
 use crate::utils::file_utils;
 use crate::utils::{datapack_utils, hash_utils, resourcepack_utils, shaderpack_utils};

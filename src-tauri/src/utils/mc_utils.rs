@@ -4,36 +4,29 @@ use crate::minecraft::dto::piston_meta::AssetIndex;
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::State;
 use async_compression::tokio::bufread::GzipDecoder;
-use base64;
-use base64::Engine as _; // Import the Engine trait for encode/decode methods
-use craftping::tokio::ping;
-use craftping::{Error as CraftPingError, Response}; // Corrected import
+ // Import the Engine trait for encode/decode methods
+ // Corrected import
 use fastnbt::from_bytes; // NBT deserialization
-use fastnbt::value::Value; // Access NBT values
-use flate2::read::GzDecoder; // GZip decompression
+ // Access NBT values
+ // GZip decompression
 use log::{debug, error, info, warn};
 use serde::Serialize; // Added Serialize directly
 use serde::Deserialize;
-use std::collections::HashMap; // To represent NBT Compound
+ // To represent NBT Compound
 use std::env;
 use std::io::{Cursor, Read}; // Needed for reading NBT from bytes and decompression
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::fs;
 use tokio::io::{AsyncReadExt as _, BufReader};
-use tokio::net::TcpStream;
-use tokio::time::timeout;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::proto::rr::RecordType;
 use trust_dns_resolver::TokioAsyncResolver;
 use uuid::Uuid;
-use url::Url; // Zusätzlicher Import für Url
+ // Zusätzlicher Import für Url
 
 // Referenziere unsere server_ping-Modul, das sich im gleichen Verzeichnis befindet
-use crate::utils::server_ping;
 
 // --- Struct for World Info ---
 #[derive(Debug, Clone, Serialize)]
@@ -904,7 +897,7 @@ pub async fn get_profile_servers(profile_id: Uuid) -> Result<Vec<ServerInfo>> {
                 profile.name,
                 e
             );
-            let mut reader = BufReader::new(Cursor::new(&servers_dat_bytes)); // Create async reader from bytes
+            let reader = BufReader::new(Cursor::new(&servers_dat_bytes)); // Create async reader from bytes
             let mut decoder = GzipDecoder::new(reader);
             let mut decompressed_bytes = Vec::new();
 

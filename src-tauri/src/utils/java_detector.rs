@@ -1,12 +1,11 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
-use crate::utils::system_info::{Architecture, OperatingSystem, ARCHITECTURE, OS};
+use crate::utils::system_info::{Architecture, OperatingSystem, OS};
 use lazy_static::lazy_static;
-use log::{error, info, warn};
+use log::{info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;

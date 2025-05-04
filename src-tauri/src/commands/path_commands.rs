@@ -1,6 +1,6 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, CommandError};
-use crate::state::profile_state::{ImageSource, ProfileManager};
+use crate::state::profile_state::ImageSource;
 use crate::state::state_manager::State;
 use log::{debug, error};
 use std::path::PathBuf;

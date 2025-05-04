@@ -1,7 +1,7 @@
 use crate::error::{AppError, CommandError};
 use crate::minecraft::api::cape_api::{CapeApi, CapesBrowseResponse};
 use crate::state::state_manager::State;
-use log::{debug, error};
+use log::debug;
 use std::path::PathBuf;
 use uuid::Uuid;
 

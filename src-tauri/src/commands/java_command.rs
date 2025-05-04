@@ -1,11 +1,10 @@
-use crate::error::{AppError, CommandError};
+use crate::error::CommandError;
 use crate::utils::java_detector::{
     detect_java_installations, find_best_java_for_minecraft, get_java_info, invalidate_java_cache,
     JavaInstallation,
 };
 use log::info;
 use std::path::PathBuf;
-use tauri::State;
 
 /// Detects all Java installations on the system
 #[tauri::command]

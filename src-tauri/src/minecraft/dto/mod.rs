@@ -13,5 +13,4 @@ pub mod quilt_meta;
 pub mod version_manifest;
 
 pub use java_distribution::*;
-pub use minecraft_profile::MinecraftProfile;
 pub use version_manifest::VersionManifest;
