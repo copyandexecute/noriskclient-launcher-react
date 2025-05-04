@@ -1,10 +1,12 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useRef, forwardRef } from "react";
+import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 import { MinecraftAccountManager } from "../account/MinecraftAccountManager";
+
+const DROPDOWN_WIDTH = 300; // Use the minWidth for calculation
 
 interface AccountDropdownProps {
   isOpen: boolean;
@@ -18,7 +20,7 @@ export const AccountDropdown = forwardRef<HTMLDivElement, AccountDropdownProps>(
     const dropdownRef = useRef<HTMLDivElement>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [dropdownTop, setDropdownTop] = useState<number>(0);
-    const [dropdownRight, setDropdownRight] = useState<number>(0);
+    const [dropdownLeft, setDropdownLeft] = useState<number>(0);
 
     // Track mount state
     useEffect(() => {
@@ -26,15 +28,41 @@ export const AccountDropdown = forwardRef<HTMLDivElement, AccountDropdownProps>(
       return () => setIsMounted(false);
     }, []);
 
-    // Calculate dropdown position when opened
-    useEffect(() => {
-      if (isOpen && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownTop(rect.bottom + 8); // Position below button + margin
-        setDropdownRight(window.innerWidth - rect.right); // Align to the right edge
-        // TODO: Add resize/scroll listener to update position if needed
-      }
+    // Function to calculate and update position
+    const calculatePosition = useCallback(() => {
+      if (!isOpen || !buttonRef.current) return;
+
+      const rect = buttonRef.current.getBoundingClientRect();
+      const buttonCenterX = rect.left + rect.width / 2;
+
+      // Calculate desired left position for centering
+      let desiredLeft = buttonCenterX - DROPDOWN_WIDTH / 2;
+
+      // Clamp position to viewport bounds (add some padding)
+      const padding = 8;
+      desiredLeft = Math.max(padding, desiredLeft); // Ensure not too far left
+      desiredLeft = Math.min(
+        desiredLeft,
+        window.innerWidth - DROPDOWN_WIDTH - padding, // Ensure not too far right
+      );
+
+      setDropdownTop(rect.bottom + 8);
+      setDropdownLeft(desiredLeft);
     }, [isOpen, buttonRef]);
+
+    // Calculate dropdown position when opened or window resized
+    useEffect(() => {
+      if (isOpen) {
+        calculatePosition(); // Initial calculation
+        window.addEventListener("resize", calculatePosition); // Recalculate on resize
+        // TODO: Potentially add scroll listener as well if needed
+      }
+
+      // Cleanup listener
+      return () => {
+        window.removeEventListener("resize", calculatePosition);
+      };
+    }, [isOpen, calculatePosition]);
 
     // Handle clicking outside the dropdown
     useEffect(() => {
@@ -74,8 +102,8 @@ export const AccountDropdown = forwardRef<HTMLDivElement, AccountDropdownProps>(
         )}
         style={{
           top: `${dropdownTop}px`,
-          right: `${dropdownRight}px`,
-          minWidth: '300px', // Set a minimum width
+          left: `${dropdownLeft}px`,
+          minWidth: `${DROPDOWN_WIDTH}px`, // Use constant
         }}
       >
         {/* Render MinecraftAccountManager inside */}

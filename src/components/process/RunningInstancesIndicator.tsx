@@ -8,6 +8,8 @@ import type { ProcessMetadata } from "../../types/processState"; // Use actual t
 import { timeAgo } from "../../utils/time-utils"; // For display
 import { createPortal } from 'react-dom'; // Import createPortal
 
+const DROPDOWN_WIDTH = 288; // Corresponds to w-72 class
+
 interface RunningInstancesIndicatorProps {
   className?: string;
 }
@@ -25,7 +27,7 @@ export function RunningInstancesIndicator({
   const [isMounted, setIsMounted] = useState(false); // State to track mount
   // State for dynamic positioning
   const [dropdownTop, setDropdownTop] = useState<number>(0);
-  const [dropdownRight, setDropdownRight] = useState<number>(0);
+  const [dropdownLeft, setDropdownLeft] = useState<number>(0);
 
   const fetchProcesses = useCallback(async () => {
     // Don't set loading true on background refresh
@@ -78,13 +80,46 @@ export function RunningInstancesIndicator({
     };
   }, [isDropdownOpen]);
 
+  // Function to calculate and update dropdown position
+  const calculatePosition = useCallback(() => {
+    if (!isDropdownOpen || !buttonRef.current) return;
+
+    const rect = buttonRef.current.getBoundingClientRect();
+    const buttonCenterX = rect.left + rect.width / 2;
+
+    // Calculate desired left position for centering
+    let desiredLeft = buttonCenterX - DROPDOWN_WIDTH / 2;
+
+    // Clamp position to viewport bounds (add some padding)
+    const padding = 8;
+    desiredLeft = Math.max(padding, desiredLeft);
+    desiredLeft = Math.min(
+      desiredLeft,
+      window.innerWidth - DROPDOWN_WIDTH - padding,
+    );
+
+    setDropdownTop(rect.bottom + 8);
+    setDropdownLeft(desiredLeft);
+  }, [isDropdownOpen, buttonRef]);
+
+  // Calculate position when opening and on resize
+  useEffect(() => {
+    if (isDropdownOpen) {
+      calculatePosition(); // Initial calculation
+      window.addEventListener("resize", calculatePosition);
+    }
+
+    return () => {
+      window.removeEventListener("resize", calculatePosition);
+    };
+  }, [isDropdownOpen, calculatePosition]);
+
   const handleIndicatorClick = () => {
-    if (!isDropdownOpen && buttonRef.current) {
-      // Calculate position only when opening
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownTop(rect.bottom + 8); // Position below button + margin
-      setDropdownRight(window.innerWidth - rect.right); // Align to the right edge
-      // TODO: Add resize/scroll listener to update position if needed
+    // Calculate position immediately before opening if not already open
+    if (!isDropdownOpen) {
+      // No need to recalculate here if the effect does it, 
+      // but doesn't hurt for immediate feedback
+      // calculatePosition(); // You could call it here too
     }
     setIsDropdownOpen((prev) => !prev);
   };
@@ -154,7 +189,8 @@ export function RunningInstancesIndicator({
           )}
           style={{
             top: `${dropdownTop}px`,
-            right: `${dropdownRight}px`,
+            left: `${dropdownLeft}px`,
+            width: `${DROPDOWN_WIDTH}px`, // Set fixed width to match constant
           }}
         >
           <div className="p-3 border-b border-white/10">
