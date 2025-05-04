@@ -17,7 +17,7 @@ export function UserProfileBar({ className }: UserProfileBarProps) {
   const profileButtonRef = useRef<HTMLDivElement>(null);
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   const { activeAccount, initializeAccounts } = useMinecraftAuthStore();
-  const [mounted, setMounted] = useState(false);
+  const [_, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);

@@ -246,7 +246,6 @@ function AccountItem({
           icon={<Icon icon="pixel:trash-solid" className={iconSize} />}
           className={`${buttonSize} px-2`}
           aria-label="Remove Account"
-          title="Remove Account"
         >
           <span className="sr-only">Remove</span>
         </Button>
