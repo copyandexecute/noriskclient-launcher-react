@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "noriskclient-launcher-v3",
-  "version": "0.0.2-beta.5",
+  "version": "0.0.2-beta.8",
   "identifier": "gg.norisk.NoRiskClientLauncherV3",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "yarn dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "yarn build",
     "frontendDist": "../dist"
   },
   "plugins": {
@@ -36,7 +36,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' https://api.iconify.design https://*.modrinth.com; img-src 'self' asset: http://asset.localhost https://*.modrinth.com https://cdn.modrinth.com data:;",
       "assetProtocol": {
         "enable": true,
         "scope": {

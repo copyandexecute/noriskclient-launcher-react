@@ -23,7 +23,7 @@ pub struct LauncherConfig {
     pub concurrent_downloads: usize,
     #[serde(default = "default_discord_presence")]
     pub enable_discord_presence: bool,
-    #[serde(default = "default_discord_presence")]
+    #[serde(default)]
     pub check_beta_channel: bool,
 }
 
@@ -47,7 +47,7 @@ impl Default for LauncherConfig {
             auto_check_updates: true,
             concurrent_downloads: default_concurrent_downloads(),
             enable_discord_presence: default_discord_presence(),
-            check_beta_channel: false,
+            check_beta_channel: true,
         }
     }
 }
