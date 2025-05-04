@@ -169,7 +169,7 @@ export function ProfileDetailView({
               onRefresh={handleRefresh}
             />
           )}
-          {activeTab === "worlds" && <WorldsTab />}
+          {activeTab === "worlds" && <WorldsTab profile={currentProfile} />}
           {activeTab === "logs" && <LogsTab profile={currentProfile} />}
         </div>
       </div>
