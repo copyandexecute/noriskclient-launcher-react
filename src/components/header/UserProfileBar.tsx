@@ -72,7 +72,7 @@ interface ProfileBarButtonProps {
 }
 
 const ProfileBarButton = forwardRef<HTMLDivElement, ProfileBarButtonProps>(
-  ({ activeAccount, onClick, className }, ref) => {
+  ({ activeAccount, onClick }, ref) => {
     return (
       <div
         ref={ref}

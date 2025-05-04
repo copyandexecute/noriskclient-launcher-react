@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, ChangeEvent } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { TabHeader } from "../ui/TabHeader";
 import { TabContent } from "../ui/TabContent";
 // Assuming the type definition exists here, adjust if necessary
@@ -22,7 +21,7 @@ export function SettingsTab() {
     setSaveSuccess(false); // Reset save success message on reload
     try {
       // Use the service function
-      const loadedConfig = await ConfigService.getLauncherConfig(); 
+      const loadedConfig = await ConfigService.getLauncherConfig();
       setConfig(loadedConfig);
       setTempConfig({ ...loadedConfig }); // Create a mutable copy for edits
       console.log("Loaded launcher config:", loadedConfig);
@@ -49,7 +48,7 @@ export function SettingsTab() {
 
     try {
       // Use the service function, passing the temporary config
-      const updatedConfig = await ConfigService.setLauncherConfig(tempConfig); 
+      const updatedConfig = await ConfigService.setLauncherConfig(tempConfig);
       setConfig(updatedConfig); // Update original config with saved version
       setTempConfig({ ...updatedConfig }); // Update temp copy as well
       console.log("Configuration saved successfully:", updatedConfig);
@@ -70,7 +69,9 @@ export function SettingsTab() {
     setTempConfig({ ...tempConfig, [id]: checked });
   };
 
-  const handleConcurrentDownloadsChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleConcurrentDownloadsChange = (
+    e: ChangeEvent<HTMLInputElement>,
+  ) => {
     if (!tempConfig) return;
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 1 && value <= 10) {
@@ -86,20 +87,23 @@ export function SettingsTab() {
     }
   };
 
-  const hasChanges = config && tempConfig && JSON.stringify(config) !== JSON.stringify(tempConfig);
+  const hasChanges =
+    config &&
+    tempConfig &&
+    JSON.stringify(config) !== JSON.stringify(tempConfig);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <TabHeader title="Settings" icon="pixel:cog-solid" />
       <TabContent>
         <div className="overflow-y-auto">
-          {loading && <p className="text-center text-white/70 p-4">Loading Settings...</p>}
-          
+          {loading && (
+            <p className="text-center text-white/70 p-4">Loading Settings...</p>
+          )}
+
           {error && (
             <div className="mb-4 p-4 rounded bg-red-900/50 border border-red-700">
-              <p className="text-red-300 mb-3">
-                Error: {error}
-              </p>
+              <p className="text-red-300 mb-3">Error: {error}</p>
               <button
                 onClick={loadConfig}
                 className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm cursor-pointer hover:enabled:bg-blue-700 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
@@ -112,12 +116,17 @@ export function SettingsTab() {
 
           {!loading && !error && config && tempConfig && (
             <div className="bg-black/10 rounded-lg p-6 shadow-md">
-              <h3 className="text-5xl font-semibold mb-6 text-white/90">Launcher Settings</h3>
+              <h3 className="text-5xl font-semibold mb-6 text-white/90">
+                Launcher Settings
+              </h3>
               <div className="flex flex-col gap-5 mb-6">
                 {/* Experimental Mode */}
                 <div className="flex items-start gap-4 pb-4 border-b border-white/10">
                   <div className="w-1/3 min-w-[200px]">
-                    <label htmlFor="is_experimental" className="font-minecraft text-3xl lowercase text-white/90 block">
+                    <label
+                      htmlFor="is_experimental"
+                      className="font-minecraft text-3xl lowercase text-white/90 block"
+                    >
                       Experimental Mode
                     </label>
                     <span className="font-minecraft-ten text-white/70 text-base block mt-1">
@@ -139,7 +148,10 @@ export function SettingsTab() {
                 {/* Auto Updates */}
                 <div className="flex items-start gap-4 pb-4 border-b border-white/10">
                   <div className="w-1/3 min-w-[200px]">
-                    <label htmlFor="auto_check_updates" className="font-minecraft text-3xl lowercase text-white/90 block">
+                    <label
+                      htmlFor="auto_check_updates"
+                      className="font-minecraft text-3xl lowercase text-white/90 block"
+                    >
                       Automatic Updates
                     </label>
                     <span className="font-minecraft-ten text-white/70 text-base block mt-1">
@@ -161,7 +173,10 @@ export function SettingsTab() {
                 {/* Discord Presence */}
                 <div className="flex items-start gap-4 pb-4 border-b border-white/10">
                   <div className="w-1/3 min-w-[200px]">
-                    <label htmlFor="enable_discord_presence" className="font-minecraft text-3xl lowercase text-white/90 block">
+                    <label
+                      htmlFor="enable_discord_presence"
+                      className="font-minecraft text-3xl lowercase text-white/90 block"
+                    >
                       Discord Rich Presence
                     </label>
                     <span className="font-minecraft-ten text-white/70 text-base block mt-1">
@@ -183,7 +198,10 @@ export function SettingsTab() {
                 {/* Beta Channel Check */}
                 <div className="flex items-start gap-4 pb-4 border-b border-white/10">
                   <div className="w-1/3 min-w-[200px]">
-                    <label htmlFor="check_beta_channel" className="font-minecraft text-3xl lowercase text-white/90 block">
+                    <label
+                      htmlFor="check_beta_channel"
+                      className="font-minecraft text-3xl lowercase text-white/90 block"
+                    >
                       Beta Updates
                     </label>
                     <span className="font-minecraft-ten text-white/70 text-base block mt-1">
@@ -205,7 +223,10 @@ export function SettingsTab() {
                 {/* Concurrent Downloads */}
                 <div className="flex items-start gap-4 pb-4 border-b border-white/10">
                   <div className="w-1/3 min-w-[200px]">
-                    <label htmlFor="concurrent_downloads" className="font-minecraft text-3xl lowercase text-white/90 block">
+                    <label
+                      htmlFor="concurrent_downloads"
+                      className="font-minecraft text-3xl lowercase text-white/90 block"
+                    >
                       Concurrent Downloads
                     </label>
                     <span className="font-minecraft-ten text-white/70 text-base block mt-1">
@@ -254,15 +275,17 @@ export function SettingsTab() {
                   Settings saved successfully!
                 </p>
               )}
-               <div className="mt-5 text-xs text-white/50 text-right">
+              <div className="mt-5 text-xs text-white/50 text-right">
                 Configuration Version: {config.version}
               </div>
             </div>
           )}
-          
-           {!loading && !error && !config && (
-             <p className="text-center text-white/70 p-4">Could not load configuration.</p>
-            )}
+
+          {!loading && !error && !config && (
+            <p className="text-center text-white/70 p-4">
+              Could not load configuration.
+            </p>
+          )}
         </div>
       </TabContent>
     </div>

@@ -27,7 +27,7 @@ export function JavaSettingsTab({
     !!editedProfile.settings?.java_path,
   );
   const [useCustomArgs, setUseCustomArgs] = useState(
-    (editedProfile.settings?.extra_args?.length || 0) > 0,
+    (editedProfile.settings?.custom_jvm_args?.length || 0) > 0,
   );
 
   const recommendedMaxRam = Math.min(Math.floor(systemRam / 2), 16384);
@@ -57,7 +57,7 @@ export function JavaSettingsTab({
 
   const handleJavaArgsChange = (args: string) => {
     const newSettings = { ...editedProfile.settings };
-    newSettings.extra_args = args.split(" ").filter((arg) => arg.trim() !== "");
+    newSettings.custom_jvm_args = args;
     updateProfile({ settings: newSettings });
   };
 
@@ -139,13 +139,13 @@ export function JavaSettingsTab({
               setUseCustomArgs(checked);
               const newSettings = { ...editedProfile.settings };
               if (checked) {
-                newSettings.extra_args = [
+                newSettings.custom_jvm_args = [
                   "-XX:+UseG1GC",
                   "-XX:+ParallelRefProcEnabled",
                   "-XX:MaxGCPauseMillis=200",
-                ];
+                ].join(" ");
               } else {
-                newSettings.extra_args = [];
+                newSettings.custom_jvm_args = null;
               }
               updateProfile({ settings: newSettings });
             }}
@@ -154,7 +154,7 @@ export function JavaSettingsTab({
 
           {useCustomArgs && (
             <TextInput
-              value={editedProfile.settings?.extra_args?.join(" ") || ""}
+              value={editedProfile.settings?.custom_jvm_args || ""}
               onChange={handleJavaArgsChange}
               placeholder="enter java arguments..."
               className="mt-4 text-base tracking-wide"

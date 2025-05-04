@@ -35,9 +35,8 @@ export function LaunchButton({
   const [selectedVersion, setSelectedVersion] = useState(defaultVersion || "");
   const [showVersions, setShowVersions] = useState(false);
   const [showLaunchStatus, setShowLaunchStatus] = useState(false);
-  const [hideStatusTimeoutId, setHideStatusTimeoutId] = useState<number | null>(
-    null,
-  );
+  const [hideStatusTimeoutId, setHideStatusTimeoutId] =
+    useState<NodeJS.Timeout | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const eventListenersSetUp = useRef(false);
 

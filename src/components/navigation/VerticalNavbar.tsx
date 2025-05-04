@@ -5,7 +5,6 @@ import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { Logo } from "../ui/Logo";
-import { invoke } from "@tauri-apps/api/core";
 import * as ConfigService from "../../services/launcher-config-service";
 
 interface NavItem {
