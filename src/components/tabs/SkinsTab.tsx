@@ -14,6 +14,9 @@ import type {
 } from "../../types/localSkin"; // Assuming types are here, use relative path
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store"; // Use relative path
 import { MinecraftSkinService } from "../../services/minecraft-skin-service"; // Import the new service
+import { Button } from "../ui/Button"; // Assuming Button component exists
+import { Icon } from "@iconify/react"; // For icons in buttons
+import { StatusMessage } from "../ui/StatusMessage"; // Assuming StatusMessage component exists for errors/success
 
 export function SkinsTab() {
     // Use the actual store state
@@ -260,54 +263,66 @@ export function SkinsTab() {
         <div className="h-full flex flex-col overflow-hidden">
             <TabHeader title="Skins" icon="pixel:user-solid" />
             <TabContent>
-                <div className="p-4 space-y-6 overflow-y-auto text-sm">
+                <div className="p-5 space-y-8 overflow-y-auto flex-grow scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                     {accountLoading ? (
-                        <p className="text-gray-500 italic">Loading account data...</p>
-                    ) : accountError ? (
-                        <p className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-                            Account Error: {accountError}
+                        <p className="text-white/70 italic font-minecraft text-xl text-center py-10">
+                            Loading account data...
                         </p>
+                    ) : accountError ? (
+                         <StatusMessage 
+                            type="error" 
+                            className="font-minecraft text-lg" 
+                            message={`Account Error: ${accountError}`}
+                         />
                     ) : !activeAccount ? (
-                        <p className="text-gray-500 italic">
+                        <p className="text-white/70 italic font-minecraft text-xl text-center py-10">
                             Please log in to a Minecraft account to manage skins.
                         </p>
                     ) : (
                         <>
-                            {/* Current Skin Section */}
-                            <div className="border border-gray-300 rounded p-4 bg-gray-50 space-y-4">
-                                <h3 className="text-base font-semibold mb-3">
+                            {/* Current Skin Section - Styled container */} 
+                            <div className="bg-black/20 backdrop-blur-md border-2 border-white/10 rounded-lg p-5 space-y-5">
+                                <h3 className="font-minecraft text-2xl text-white mb-1 lowercase">
                                     Current Skin: {activeAccount.minecraft_username || activeAccount.username}
                                 </h3>
-                                {loading && !skinUrl && <p className="text-gray-500 italic">Loading skin data...</p>}
-                                {error && <p className="p-3 mb-4 bg-red-100 border border-red-400 text-red-700 rounded">{error}</p>}
+                                {loading && !skinUrl && (
+                                    <p className="text-white/70 italic font-minecraft text-lg">Loading skin data...</p>
+                                )}
+                                {error && (
+                                    <StatusMessage 
+                                        type="error" 
+                                        className="font-minecraft text-lg" 
+                                        message={error}
+                                    />
+                                )}
                                 
-                                <div className="flex gap-4 items-start">
-                                    {/* Skin Preview */}
-                                    <div className="flex-shrink-0 border border-gray-200 p-2 rounded bg-white w-36 text-center">
+                                <div className="flex flex-col md:flex-row gap-6 items-start">
+                                    {/* Skin Preview - Styled */} 
+                                    <div className="flex-shrink-0 border-2 border-white/10 p-2 rounded bg-black/10 w-40 text-center mx-auto md:mx-0">
                                         {skinUrl ? (
                                             <>
                                                 <img 
                                                     src={skinUrl} 
                                                     alt="Minecraft Skin" 
-                                                    className="w-32 h-32 mx-auto image-pixelated bg-gray-200"
+                                                    className="w-36 h-36 mx-auto image-pixelated bg-black/20 rounded-sm"
                                                 />
-                                                <p className="text-xs text-gray-600 mt-2">
+                                                <p className="text-sm text-white/60 mt-2 font-minecraft lowercase">
                                                     Model: {skinModel === 'slim' ? 'Slim (Alex)' : 'Classic (Steve)'}
                                                 </p>
                                             </>
                                         ) : (
-                                            <div className="w-32 h-32 mx-auto flex items-center justify-center text-center bg-gray-200 text-gray-500 text-xs">
+                                            <div className="w-36 h-36 mx-auto flex items-center justify-center text-center bg-black/20 text-white/50 text-sm font-minecraft rounded-sm lowercase">
                                                 Default Steve/Alex skin
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Skin Controls */}
-                                    <div className="flex-grow space-y-4">
+                                    {/* Skin Controls - Styled */} 
+                                    <div className="flex-grow space-y-5 w-full">
                                         <div>
-                                            <h4 className="font-medium mb-2">Choose skin model:</h4>
-                                            <div className="space-y-1">
-                                                <label className="flex items-center gap-2 cursor-pointer">
+                                            <h4 className="font-minecraft text-xl text-white mb-3 lowercase">Choose skin model:</h4>
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-3 cursor-pointer font-minecraft text-lg text-white lowercase">
                                                     <input 
                                                         type="radio" 
                                                         name="skinVariant" 
@@ -315,11 +330,11 @@ export function SkinsTab() {
                                                         checked={skinVariant === 'classic'}
                                                         onChange={() => setSkinVariant('classic')}
                                                         disabled={loading}
-                                                        className="form-radio h-4 w-4 text-blue-600"
+                                                        className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
                                                     />
                                                     Classic (Steve)
                                                 </label>
-                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                <label className="flex items-center gap-3 cursor-pointer font-minecraft text-lg text-white lowercase">
                                                     <input 
                                                         type="radio" 
                                                         name="skinVariant" 
@@ -327,80 +342,104 @@ export function SkinsTab() {
                                                         checked={skinVariant === 'slim'}
                                                         onChange={() => setSkinVariant('slim')}
                                                         disabled={loading}
-                                                         className="form-radio h-4 w-4 text-blue-600"
+                                                        className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
                                                     />
                                                     Slim (Alex)
                                                 </label>
                                             </div>
                                         </div>
 
-                                        <div className="flex gap-2 flex-wrap">
-                                            {/* Basic HTML button, replace with Button component if available */}
-                                            <button 
+                                        <div className="flex gap-3 flex-wrap">
+                                            {/* Use Button component */} 
+                                            <Button 
+                                                variant="primary"
                                                 onClick={handleUploadSkin} 
                                                 disabled={loading} 
-                                                className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                                className="text-lg py-2 px-5 font-minecraft lowercase"
+                                                icon={<Icon icon="pixel:upload-solid" className="w-5 h-5" />}
                                             >
                                                 Upload New Skin
-                                            </button>
-                                            <button 
+                                            </Button>
+                                            <Button 
+                                                variant="danger"
                                                 onClick={handleResetSkin} 
                                                 disabled={loading} 
-                                                className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                                className="text-lg py-2 px-5 font-minecraft lowercase"
+                                                icon={<Icon icon="pixel:refresh-solid" className="w-5 h-5" />}
                                             >
                                                 Reset to Default
-                                            </button>
+                                            </Button>
                                         </div>
-                                        {successMessage && <p className="mt-3 p-3 bg-green-100 border border-green-400 text-green-700 rounded">{successMessage}</p>}
+                                         {successMessage && (
+                                            <StatusMessage 
+                                                type="success" 
+                                                className="font-minecraft text-lg" 
+                                                message={successMessage}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
-                             {/* Local Skins Section */}
-                             <div className="border-t border-gray-300 pt-6 space-y-4">
-                                <h3 className="text-base font-semibold">Local Skin Library</h3>
+                             {/* Local Skins Section - Styled */} 
+                             <div className="space-y-5">
+                                <h3 className="font-minecraft text-2xl text-white lowercase">Local Skin Library</h3>
 
-                                {localSkinsLoading && !editingSkin && <p className="text-gray-500 italic">Loading local skins...</p>}
-                                {localSkinsError && <p className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">{localSkinsError}</p>}
-                                {!localSkinsLoading && localSkins.length === 0 && !localSkinsError && (
-                                    <p className="text-gray-500 italic">
+                                {localSkinsLoading && !editingSkin && (
+                                     <p className="text-white/70 italic font-minecraft text-lg">Loading local skins...</p>
+                                )}
+                                {localSkinsError && !editingSkin && (
+                                     <StatusMessage 
+                                        type="error" 
+                                        className="font-minecraft text-lg" 
+                                        message={localSkinsError}
+                                     />
+                                )}
+                                {!localSkinsLoading && localSkins.length === 0 && !localSkinsError && !editingSkin && (
+                                    <p className="text-white/70 italic font-minecraft text-lg">
                                         No local skins found. Upload skins to add them to your library.
                                     </p>
                                 )}
 
                                 {editingSkin ? (
-                                    // Edit Form
-                                    <div className="p-4 border border-gray-300 rounded bg-gray-100 space-y-4">
-                                        <h4 className="font-medium">Edit Skin Properties</h4>
-                                         {localSkinsError && <p className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">{localSkinsError}</p>} {/* Show error within form */}
-                                        <div className="space-y-1">
-                                            <label htmlFor="editSkinName" className="block font-medium">Skin Name:</label>
+                                    // Edit Form - Styled 
+                                    <div className="bg-black/20 backdrop-blur-md border-2 border-white/10 rounded-lg p-5 space-y-5">
+                                        <h4 className="font-minecraft text-xl text-white lowercase">Edit Skin Properties</h4>
+                                         {localSkinsError && (
+                                             <StatusMessage 
+                                                type="error" 
+                                                className="font-minecraft text-lg" 
+                                                message={localSkinsError}
+                                             />
+                                         )} 
+                                        <div className="space-y-2">
+                                            <label htmlFor="editSkinName" className="block font-minecraft text-lg text-white/80 lowercase mb-1">Skin Name:</label>
                                             <input 
                                                 type="text" 
                                                 id="editSkinName" 
                                                 value={editSkinName} 
                                                 onChange={(e) => setEditSkinName(e.target.value)}
                                                 placeholder="Enter skin name"
-                                                className="w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
+                                                className="w-full bg-black/30 backdrop-blur-md border-2 border-white/20 px-4 py-2 text-white font-minecraft text-lg rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200"
                                                 disabled={localSkinsLoading}
                                             />
                                         </div>
                                          <div>
-                                            <h4 className="font-medium mb-2">Skin Variant:</h4>
-                                            <div className="space-y-1">
-                                                <label className="flex items-center gap-2 cursor-pointer">
-                                                    <input 
+                                            <h4 className="font-minecraft text-lg text-white/80 mb-2 lowercase">Skin Variant:</h4>
+                                            <div className="space-y-2">
+                                                <label className="flex items-center gap-3 cursor-pointer font-minecraft text-lg text-white lowercase">
+                                                     <input 
                                                         type="radio" 
                                                         name="editSkinVariant" 
                                                         value="classic" 
                                                         checked={editSkinVariant === 'classic'}
                                                         onChange={() => setEditSkinVariant('classic')}
                                                         disabled={localSkinsLoading}
-                                                        className="form-radio h-4 w-4 text-blue-600"
+                                                        className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
                                                     />
                                                     Classic (Steve)
                                                 </label>
-                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                <label className="flex items-center gap-3 cursor-pointer font-minecraft text-lg text-white lowercase">
                                                     <input 
                                                         type="radio" 
                                                         name="editSkinVariant" 
@@ -408,64 +447,82 @@ export function SkinsTab() {
                                                         checked={editSkinVariant === 'slim'}
                                                         onChange={() => setEditSkinVariant('slim')}
                                                         disabled={localSkinsLoading}
-                                                         className="form-radio h-4 w-4 text-blue-600"
+                                                        className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
                                                     />
                                                     Slim (Alex)
                                                 </label>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button 
+                                        <div className="flex gap-3 pt-2">
+                                            <Button 
+                                                variant="primary"
                                                 onClick={saveEditSkin} 
                                                 disabled={localSkinsLoading}
-                                                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400"
+                                                className="text-lg py-2 px-5 font-minecraft lowercase"
                                             >
                                                 {localSkinsLoading ? 'Saving...' : 'Save Changes'}
-                                            </button>
-                                             <button 
+                                            </Button>
+                                             <Button 
+                                                variant="secondary" // Use secondary variant for cancel
                                                 onClick={cancelEditSkin} 
                                                 disabled={localSkinsLoading}
-                                                className="px-3 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-400"
+                                                className="text-lg py-2 px-5 font-minecraft lowercase"
                                             >
                                                 Cancel
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 ) : (
-                                    // Skins Grid
+                                    // Skins Grid - Styled 
                                     localSkins.length > 0 && (
-                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-3">
+                                        <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-4">
                                             {localSkins.map((skin) => (
                                                 <div 
                                                     key={skin.id}
-                                                    className={`relative group border-2 rounded p-2 cursor-pointer transition-all bg-white hover:border-blue-500 hover:shadow-md ${selectedLocalSkin?.id === skin.id ? 'border-green-500 bg-green-50' : 'border-gray-200'}`}
-                                                    onClick={() => !loading && !localSkinsLoading && applyLocalSkin(skin)} // Prevent click during operations
+                                                    // Apply card styling, hover effects, and selection indicator
+                                                    className={`
+                                                        relative group bg-black/20 backdrop-blur-md border-2 
+                                                        rounded-lg p-3 transition-all duration-200 cursor-pointer 
+                                                        hover:border-white/40 hover:bg-black/30 
+                                                        ${selectedLocalSkin?.id === skin.id 
+                                                            ? 'border-green-500/60 bg-green-900/20' 
+                                                            : 'border-white/10'}
+                                                        ${(loading || localSkinsLoading) && selectedLocalSkin?.id === skin.id ? 'opacity-60 pointer-events-none' : ''}
+                                                    `}
+                                                    onClick={() => !loading && !localSkinsLoading && applyLocalSkin(skin)} 
                                                     title={`Apply ${skin.name}`}
                                                 >
+                                                     {/* Edit Button - Styled */}
                                                      <button 
-                                                        className="absolute top-1 right-1 z-10 p-1 bg-gray-600 bg-opacity-70 text-white rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-opacity-90"
+                                                        className="absolute top-1.5 right-1.5 z-10 p-1.5 bg-black/40 text-white/70 rounded 
+                                                                   opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 hover:text-white
+                                                                   disabled:opacity-50 disabled:pointer-events-none"
                                                         onClick={(e) => startEditSkin(skin, e)}
                                                         title="Edit skin properties"
                                                         disabled={loading || localSkinsLoading}
                                                     >
-                                                        Edit {/* Consider using an icon */}
+                                                         <Icon icon="pixel:edit-solid" className="w-4 h-4" />
                                                     </button>
-                                                    <div className="mb-1.5">
+                                                     {/* Image Preview - Styled */} 
+                                                    <div className="mb-2">
                                                         <img 
                                                             src={`data:image/png;base64,${skin.base64_data}`} 
                                                             alt={skin.name} 
-                                                            className="w-16 h-16 mx-auto image-pixelated bg-gray-200" 
+                                                            className="w-20 h-20 mx-auto image-pixelated bg-black/20 rounded-sm border border-white/10" 
                                                         />
                                                     </div>
-                                                    <div className="text-center text-xs">
-                                                        <p className="font-medium truncate" title={skin.name}>{skin.name}</p>
-                                                        <p className="text-gray-500">
+                                                     {/* Skin Info - Styled */}
+                                                    <div className="text-center text-sm">
+                                                        <p className="font-minecraft text-white lowercase truncate" title={skin.name}>{skin.name}</p>
+                                                        <p className="text-white/60 font-minecraft text-xs lowercase">
                                                             {skin.variant === 'slim' ? 'Slim' : 'Classic'}
                                                         </p>
                                                     </div>
+                                                     {/* Loading/Applying Overlay - Styled */}
                                                     {(loading || localSkinsLoading) && selectedLocalSkin?.id === skin.id && (
-                                                        <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center">
-                                                            <span className="text-xs text-gray-600">Applying...</span> {/* Add spinner? */}
+                                                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-lg">
+                                                            {/* Consider adding a spinner component here */}
+                                                            <span className="font-minecraft text-lg text-white lowercase animate-pulse">Applying...</span> 
                                                         </div>
                                                     )}
                                                 </div>
