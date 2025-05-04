@@ -8,6 +8,7 @@ import { Icon } from "@iconify/react";
 import { appConfig, navItems, userData } from "../../data/mock-data";
 import { VerticalNavbar } from "../navigation/VerticalNavbar";
 import { UserProfileBar } from "../header/UserProfileBar";
+import MatrixRainEffect from '../effects/MatrixRainEffect';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -105,16 +106,7 @@ export function AppLayout({
         />
 
         <div className="flex-1 relative overflow-hidden">
-          <div
-            ref={backgroundPatternRef}
-            className="absolute inset-0 opacity-90 pointer-events-none"
-            style={{
-              backgroundImage: "url('/4e9851eedd0e229bf4a9fb4c85207b93.gif')",
-              backgroundSize: "100% 100%",
-              backgroundPosition: "0% 0%",
-              filter: "blur(8px)",
-            }}
-          ></div>
+          <MatrixRainEffect />
 
           <div className="relative z-10 h-full overflow-hidden">{children}</div>
         </div>
