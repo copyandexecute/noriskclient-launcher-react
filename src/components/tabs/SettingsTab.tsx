@@ -180,6 +180,28 @@ export function SettingsTab() {
                   </div>
                 </div>
 
+                {/* Beta Channel Check */}
+                <div className="flex items-start gap-4 pb-4 border-b border-white/10">
+                  <div className="w-1/3 min-w-[200px]">
+                    <label htmlFor="check_beta_channel" className="font-minecraft text-3xl lowercase text-white/90 block">
+                      Beta Updates
+                    </label>
+                    <span className="font-minecraft-ten text-white/70 text-base block mt-1">
+                      Check for unstable beta updates
+                    </span>
+                  </div>
+                  <div className="flex-1 flex items-center pt-1">
+                    <input
+                      type="checkbox"
+                      id="check_beta_channel"
+                      checked={tempConfig.check_beta_channel}
+                      onChange={handleCheckboxChange}
+                      disabled={saving}
+                      className="w-5 h-5 cursor-pointer accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
+                    />
+                  </div>
+                </div>
+
                 {/* Concurrent Downloads */}
                 <div className="flex items-start gap-4 pb-4 border-b border-white/10">
                   <div className="w-1/3 min-w-[200px]">

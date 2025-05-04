@@ -7,4 +7,5 @@ export interface LauncherConfig {
   auto_check_updates: boolean;
   concurrent_downloads: number; // usize
   enable_discord_presence: boolean;
+  check_beta_channel: boolean; // Added from Rust struct
 } 
