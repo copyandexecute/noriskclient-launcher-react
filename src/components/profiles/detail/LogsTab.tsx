@@ -1,22 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import { EmptyState } from "./common/EmptyState";
 import { LoadingSpinner } from "../../ui/LoadingSpinner";
 // Import from the new service
 import {
-    type LogLevel,
-    type ParsedLogLine,
-    LOG_LEVELS,
-    parseLogLinesFromString,
-    getProfileLogFiles,
-    getLogFileContent,
-    uploadLogToMclogs,
-    openLogFileDirectory,
+  getLogFileContent,
+  getProfileLogFiles,
+  LOG_LEVELS,
+  type LogLevel,
+  openLogFileDirectory,
+  type ParsedLogLine,
+  parseLogLinesFromString,
+  uploadLogToMclogs,
 } from "../../../services/log-service";
 // Import the new reusable component
 import { LogViewerDisplay } from "../../log/LogViewerDisplay";
@@ -26,7 +25,7 @@ interface LogsTabProps {
 }
 
 function getFilename(path: string | null): string {
-  if (!path) return '';
+  if (!path) return "";
   return path.split(/[\\\/]/).pop() || path;
 }
 
@@ -37,11 +36,13 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   const [selectedLogPath, setSelectedLogPath] = useState<string | null>(null);
   const [parsedLogLines, setParsedLogLines] = useState<ParsedLogLine[]>([]);
-  const [rawLogContentForCopy, setRawLogContentForCopy] = useState<string | null>(null);
+  const [rawLogContentForCopy, setRawLogContentForCopy] = useState<
+    string | null
+  >(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [errorContent, setErrorContent] = useState<string | null>(null);
 
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [levelFilters, setLevelFilters] = useState<Record<LogLevel, boolean>>({
     ERROR: true,
     WARN: true,
@@ -71,7 +72,7 @@ export function LogsTab({ profile }: LogsTabProps) {
       setParsedLogLines([]);
       setRawLogContentForCopy(null);
       setErrorContent(null);
-      setSearchTerm('');
+      setSearchTerm("");
       setUploadUrl(null);
       setUploadError(null);
       setCopied(false);
@@ -82,9 +83,9 @@ export function LogsTab({ profile }: LogsTabProps) {
         paths.sort((a, b) => {
           const aName = getFilename(a).toLowerCase();
           const bName = getFilename(b).toLowerCase();
-          if (aName === 'latest.log') return -1;
-          if (bName === 'latest.log') return 1;
-          if (typeof aName === 'string' && typeof bName === 'string') {
+          if (aName === "latest.log") return -1;
+          if (bName === "latest.log") return 1;
+          if (typeof aName === "string" && typeof bName === "string") {
             return bName.localeCompare(aName);
           }
           return 0;
@@ -94,15 +95,14 @@ export function LogsTab({ profile }: LogsTabProps) {
 
         // Automatically select latest.log or the first log if available
         if (paths.length > 0) {
-          setSelectedLogPath(paths[0]); 
+          setSelectedLogPath(paths[0]);
           console.log(`[LogsTab] Automatically selected log: ${paths[0]}`);
         } else {
-            setSelectedLogPath(null); // Ensure it's null if no logs found
+          setSelectedLogPath(null); // Ensure it's null if no logs found
         }
-
       } catch (err: any) {
-        console.error('[LogsTab] Error fetching log files:', err);
-        setErrorList(err?.message ?? 'Failed to load log files');
+        console.error("[LogsTab] Error fetching log files:", err);
+        setErrorList(err?.message ?? "Failed to load log files");
       } finally {
         setIsLoadingList(false);
       }
@@ -113,52 +113,59 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   useEffect(() => {
     if (!selectedLogPath) {
-        setParsedLogLines([]);
-        setRawLogContentForCopy(null);
-        setErrorContent(null);
-        setUploadUrl(null);
-        setUploadError(null);
-        setCopied(false);
-        setSearchTerm('');
-        setIsLoadingContent(false);
-        return;
+      setParsedLogLines([]);
+      setRawLogContentForCopy(null);
+      setErrorContent(null);
+      setUploadUrl(null);
+      setUploadError(null);
+      setCopied(false);
+      setSearchTerm("");
+      setIsLoadingContent(false);
+      return;
     }
 
     const loadContent = async () => {
-        console.log(`[LogsTab] Fetching content for log: ${selectedLogPath}`);
-        setIsLoadingContent(true);
-        setErrorContent(null);
-        setParsedLogLines([]);
-        setRawLogContentForCopy(null);
-        setUploadUrl(null);
-        setUploadError(null);
-        setCopied(false);
+      console.log(`[LogsTab] Fetching content for log: ${selectedLogPath}`);
+      setIsLoadingContent(true);
+      setErrorContent(null);
+      setParsedLogLines([]);
+      setRawLogContentForCopy(null);
+      setUploadUrl(null);
+      setUploadError(null);
+      setCopied(false);
 
-        try {
-          const rawContent = await getLogFileContent(selectedLogPath);
-          setRawLogContentForCopy(rawContent);
+      try {
+        const rawContent = await getLogFileContent(selectedLogPath);
+        setRawLogContentForCopy(rawContent);
 
-          // Call the new parsing function
-          const processedLines = parseLogLinesFromString(rawContent);
+        // Call the new parsing function
+        const processedLines = parseLogLinesFromString(rawContent);
 
-          setParsedLogLines(processedLines);
-          console.log(`[LogsTab] Loaded and parsed ${processedLines.length} lines for ${selectedLogPath}`);
-        } catch (err: any) {
-          console.error(`[LogsTab] Error fetching/parsing log content for ${selectedLogPath}:`, err);
-          setErrorContent(err?.message ?? 'Failed to load log content');
-        } finally {
-          setIsLoadingContent(false);
-        }
+        setParsedLogLines(processedLines);
+        console.log(
+          `[LogsTab] Loaded and parsed ${processedLines.length} lines for ${selectedLogPath}`,
+        );
+      } catch (err: any) {
+        console.error(
+          `[LogsTab] Error fetching/parsing log content for ${selectedLogPath}:`,
+          err,
+        );
+        setErrorContent(err?.message ?? "Failed to load log content");
+      } finally {
+        setIsLoadingContent(false);
+      }
     };
 
     loadContent();
-
   }, [selectedLogPath]);
 
   useEffect(() => {
-    const filteredLines = parsedLogLines.filter(line => {
-      const levelMatch = !line.level || (levelFilters[line.level] && line.level !== 'TRACE');
-      const searchMatch = !searchTerm || line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
+    const filteredLines = parsedLogLines.filter((line) => {
+      const levelMatch =
+        !line.level || (levelFilters[line.level] && line.level !== "TRACE");
+      const searchMatch =
+        !searchTerm ||
+        line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
       return levelMatch && searchMatch;
     });
     setDisplayLines(filteredLines);
@@ -172,30 +179,41 @@ export function LogsTab({ profile }: LogsTabProps) {
     };
   }, []);
 
-  const handleLogSelect = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedLogPath(event.target.value || null);
-  }, []);
+  const handleLogSelect = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      setSelectedLogPath(event.target.value || null);
+    },
+    [],
+  );
 
-  const handleLevelFilterChange = useCallback((level: LogLevel, checked: boolean) => {
-    setLevelFilters(prev => ({ ...prev, [level]: checked }));
-  }, []);
+  const handleLevelFilterChange = useCallback(
+    (level: LogLevel, checked: boolean) => {
+      setLevelFilters((prev) => ({ ...prev, [level]: checked }));
+    },
+    [],
+  );
 
-  const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(event.target.value);
-  }, []);
+  const handleSearchChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      setSearchTerm(event.target.value);
+    },
+    [],
+  );
 
   const handleCopyLog = useCallback(async () => {
-    if (displayLines.length === 0) return; 
-    
-    const filteredLogContent = displayLines.map(line => line.raw).join('\n');
+    if (displayLines.length === 0) return;
+
+    const filteredLogContent = displayLines.map((line) => line.raw).join("\n");
 
     try {
       await writeText(filteredLogContent);
       setCopied(true);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => { setCopied(false); }, 2000);
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopied(false);
+      }, 2000);
     } catch (err) {
-      console.error('[LogsTab] Failed to copy log to clipboard:', err);
+      console.error("[LogsTab] Failed to copy log to clipboard:", err);
     }
   }, [displayLines]);
 
@@ -213,7 +231,7 @@ export function LogsTab({ profile }: LogsTabProps) {
       console.log(`[LogsTab] Upload successful: ${resultUrl}`);
     } catch (err: any) {
       console.error(`[LogsTab] Error uploading log:`, err);
-      setUploadError(err?.message ?? 'Failed to upload log');
+      setUploadError(err?.message ?? "Failed to upload log");
     } finally {
       setIsUploading(false);
     }
@@ -221,18 +239,22 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   const handleOpenLogsFolder = useCallback(async () => {
     // Find a suitable path, preferably latest.log
-    const path_to_open = logFiles.find(p => getFilename(p).toLowerCase() === 'latest.log') || logFiles[0];
+    const path_to_open =
+      logFiles.find((p) => getFilename(p).toLowerCase() === "latest.log") ||
+      logFiles[0];
     if (!path_to_open) {
-      setErrorList('No log files found to determine folder path.');
+      setErrorList("No log files found to determine folder path.");
       return;
     }
-    console.log(`[LogsTab] Requesting to open directory for file: ${path_to_open}`);
+    console.log(
+      `[LogsTab] Requesting to open directory for file: ${path_to_open}`,
+    );
     try {
       // Call with the determined filePath
       await openLogFileDirectory(path_to_open);
     } catch (err: any) {
-      console.error('[LogsTab] Error opening logs folder:', err);
-      setErrorList(err?.message ?? 'Failed to open logs folder');
+      console.error("[LogsTab] Error opening logs folder:", err);
+      setErrorList(err?.message ?? "Failed to open logs folder");
     }
   }, [logFiles]);
 
@@ -247,27 +269,30 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   return (
     <div className="h-full flex flex-col select-none text-sm">
-
       <div className="flex justify-between items-center mb-3 flex-shrink-0 px-1">
         <div className="flex items-center gap-3">
-            <h3 className="text-white font-minecraft text-lg lowercase tracking-wide">
-                Log Files
-            </h3>
-            <select
-                value={selectedLogPath ?? ''}
-                onChange={handleLogSelect}
-                disabled={isLoadingList || logFiles.length === 0}
-                className="bg-black/30 border border-white/20 rounded px-3 py-1.5 text-white font-minecraft text-2xl lowercase w-48 disabled:opacity-50"
-            >
-                <option value="" disabled={!!selectedLogPath}>-- Select Log --</option>
-                {logFiles.map((path) => (
-                    <option key={path} value={path}>{getFilename(path)}</option>
-                ))}
-            </select>
+          <h3 className="text-white font-minecraft text-lg lowercase tracking-wide">
+            Log Files
+          </h3>
+          <select
+            value={selectedLogPath ?? ""}
+            onChange={handleLogSelect}
+            disabled={isLoadingList || logFiles.length === 0}
+            className="bg-black/30 border border-white/20 rounded px-3 py-1.5 text-white font-minecraft text-2xl lowercase w-48 disabled:opacity-50"
+          >
+            <option value="" disabled={!!selectedLogPath}>
+              -- Select Log --
+            </option>
+            {logFiles.map((path) => (
+              <option key={path} value={path}>
+                {getFilename(path)}
+              </option>
+            ))}
+          </select>
         </div>
-        
+
         <div className="flex items-center gap-2">
-            {/* Buttons moved to LogViewerDisplay */} 
+          {/* Buttons moved to LogViewerDisplay */}
         </div>
       </div>
 
@@ -285,39 +310,41 @@ export function LogsTab({ profile }: LogsTabProps) {
       )}
 
       {!isLoadingList && !errorList && (
-         <div className="flex flex-col flex-grow min-h-0">
-           {selectedLogPath ? (
-                 <LogViewerDisplay 
-                     isLoading={isLoadingContent}
-                     error={errorContent}
-                     displayLines={displayLines}
-                     parsedLogLinesCount={parsedLogLines.length}
-                     searchTerm={searchTerm}
-                     levelFilters={levelFilters}
-                     copied={copied}
-                     onSearchChange={handleSearchChange}
-                     onLevelFilterChange={handleLevelFilterChange}
-                     onCopyLog={handleCopyLog}
-                     logLevelsDefinition={LOG_LEVELS}
-                     onOpenFolder={logFiles.length > 0 ? handleOpenLogsFolder : undefined}
-                     onUploadLog={rawLogContentForCopy ? handleUploadLog : undefined}
-                     isUploading={isUploading}
-                     uploadUrl={uploadUrl}
-                     uploadError={uploadError}
-                     onOpenUploadUrl={handleOpenUrl}
-                     isAutoscrollEnabled={false}
-                     onAutoscrollChange={() => {}}
-                 />
-             ) : (
-                  // Show placeholder if no log file is selected 
-                  <div className="flex-grow bg-black/50 rounded overflow-hidden relative border border-white/10">
-                      <EmptyState
-                          icon="pixelarticons:folder-open"
-                          message="Select a log file above to view its content."
-                      />
-                  </div>
-             )}
-         </div>
+        <div className="flex flex-col flex-grow min-h-0">
+          {selectedLogPath ? (
+            <LogViewerDisplay
+              isLoading={isLoadingContent}
+              error={errorContent}
+              displayLines={displayLines}
+              parsedLogLinesCount={parsedLogLines.length}
+              searchTerm={searchTerm}
+              levelFilters={levelFilters}
+              copied={copied}
+              onSearchChange={handleSearchChange}
+              onLevelFilterChange={handleLevelFilterChange}
+              onCopyLog={handleCopyLog}
+              logLevelsDefinition={LOG_LEVELS}
+              onOpenFolder={
+                logFiles.length > 0 ? handleOpenLogsFolder : undefined
+              }
+              onUploadLog={rawLogContentForCopy ? handleUploadLog : undefined}
+              isUploading={isUploading}
+              uploadUrl={uploadUrl}
+              uploadError={uploadError}
+              onOpenUploadUrl={handleOpenUrl}
+              isAutoscrollEnabled={false}
+              onAutoscrollChange={() => {}}
+            />
+          ) : (
+            // Show placeholder if no log file is selected
+            <div className="flex-grow bg-black/50 rounded overflow-hidden relative border border-white/10">
+              <EmptyState
+                icon="pixelarticons:folder-open"
+                message="Select a log file above to view its content."
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
