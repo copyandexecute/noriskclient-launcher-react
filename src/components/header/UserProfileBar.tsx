@@ -8,6 +8,7 @@ import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { Icon } from "@iconify/react";
 import { MinecraftAccountManager } from "../account/MinecraftAccountManager";
 import { createPortal } from "react-dom";
+import { RunningInstancesIndicator } from "../process/RunningInstancesIndicator";
 
 interface UserProfileBarProps {
   className?: string;
@@ -45,12 +46,13 @@ export function UserProfileBar({ className }: UserProfileBarProps) {
   };
 
   return (
-    <div className="relative">
+    <div className={cn("relative flex items-center gap-2", className)}>
+      <RunningInstancesIndicator />
+
       <ProfileBarButton
         ref={profileRef}
         activeAccount={activeAccount}
         onClick={toggleModal}
-        className={className}
       />
 
       {isModalOpen &&
@@ -77,7 +79,6 @@ const ProfileBarButton = forwardRef<HTMLDivElement, ProfileBarButtonProps>(
         className={cn(
           "flex items-center gap-3 bg-black/50 h-10 px-4 py-1 max-w-fit backdrop-blur-md cursor-pointer",
           "border-2 border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.3)] hover:border-white/50 transition-colors",
-          className,
         )}
         onClick={onClick}
       >
