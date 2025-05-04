@@ -36,7 +36,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' https://api.iconify.design https://*.modrinth.com; img-src 'self' asset: http://asset.localhost https://*.modrinth.com https://cdn.modrinth.com data:;",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' https://api.iconify.design https://*.modrinth.com https://sessionserver.mojang.com; img-src 'self' asset: http://asset.localhost https://*.modrinth.com https://cdn.modrinth.com https://blog.norisk.gg https://textures.minecraft.net data:;",
       "assetProtocol": {
         "enable": true,
         "scope": {
