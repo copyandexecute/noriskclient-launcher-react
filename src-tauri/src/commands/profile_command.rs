@@ -32,7 +32,7 @@ use sysinfo::System;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
-use uuid::Uuid; // Import the new world_utils
+use uuid::Uuid;
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -1427,7 +1427,7 @@ pub async fn get_worlds_for_profile(profile_id: Uuid) -> Result<Vec<WorldInfo>, 
         "Executing get_worlds_for_profile command for profile {}",
         profile_id
     );
-    // Rufe die Utility-Funktion auf und mappe den Fehler
+    // Revert to calling the utility function
     Ok(mc_utils::get_profile_worlds(profile_id).await?)
 }
 

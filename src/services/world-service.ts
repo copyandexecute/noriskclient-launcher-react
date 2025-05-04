@@ -48,4 +48,34 @@ export const copyWorld = (params: CopyWorldParams): Promise<string> => {
 export const deleteWorld = (profileId: string, worldFolder: string): Promise<void> => {
   console.debug(`[WorldService] Deleting world: ${worldFolder} from profile ${profileId}`);
   return invoke('delete_world', { profileId, worldFolder });
+};
+
+// --- Frontend Helper Functions ---
+
+/**
+ * Converts a numeric game mode ID to a display string.
+ */
+export const getGameModeString = (mode: number | null | undefined): string => {
+  if (mode === null || typeof mode === 'undefined') return 'Unknown';
+  switch (mode) {
+    case 0: return 'Survival';
+    case 1: return 'Creative';
+    case 2: return 'Adventure';
+    case 3: return 'Spectator';
+    default: return `Unknown (${mode})`;
+  }
+};
+
+/**
+ * Converts a numeric difficulty ID to a display string.
+ */
+export const getDifficultyString = (difficulty: number | null | undefined): string => {
+  if (difficulty === null || typeof difficulty === 'undefined') return 'Unknown';
+  switch (difficulty) {
+    case 0: return 'Peaceful';
+    case 1: return 'Easy';
+    case 2: return 'Normal';
+    case 3: return 'Hard';
+    default: return `Unknown (${difficulty})`;
+  }
 }; 

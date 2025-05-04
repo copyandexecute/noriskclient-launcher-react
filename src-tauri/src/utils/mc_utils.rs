@@ -13,6 +13,7 @@ use fastnbt::value::Value; // Access NBT values
 use flate2::read::GzDecoder; // GZip decompression
 use log::{debug, error, info, warn};
 use serde::Serialize; // Added Serialize directly
+use serde::Deserialize;
 use std::collections::HashMap; // To represent NBT Compound
 use std::env;
 use std::io::{Cursor, Read}; // Needed for reading NBT from bytes and decompression
@@ -37,22 +38,44 @@ pub struct WorldInfo {
     pub display_name: Option<String>,
     pub last_played: Option<i64>,
     pub icon_path: Option<PathBuf>,
+    pub game_mode: Option<i32>,
+    pub difficulty: Option<i8>,
+    pub difficulty_locked: Option<bool>,
+    pub is_hardcore: Option<bool>,
+    pub version_name: Option<String>,
 }
 
 // --- NBT Structures (simplified for what we need) ---
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct LevelDat {
     #[serde(rename = "Data")]
     data: LevelData,
 }
 
-#[derive(serde::Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct LevelData {
     #[serde(rename = "LevelName")]
     level_name: Option<String>,
     #[serde(rename = "LastPlayed")]
     last_played: Option<i64>,
-    // Add other fields if needed later
+    #[serde(rename = "GameType")] 
+    game_type: Option<i32>, 
+    #[serde(rename = "Difficulty")]
+    difficulty: Option<i8>,
+    #[serde(rename = "DifficultyLocked")]
+    difficulty_locked: Option<u8>,
+    #[serde(rename = "hardcore")]
+    hardcore: Option<u8>,
+    #[serde(rename = "Version")]
+    version: Option<VersionData>,
+}
+
+// Nested struct for version info
+#[derive(Deserialize, Debug)]
+struct VersionData {
+    #[serde(rename = "Name")]
+    name: Option<String>,
+    // Add Id and Snapshot if needed later
 }
 
 /// Returns the path to the default .minecraft directory based on OS
@@ -595,6 +618,11 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
                             display_name: None,
                             last_played: None,
                             icon_path: None,
+                            game_mode: None,
+                            difficulty: None,
+                            difficulty_locked: None,
+                            is_hardcore: None,
+                            version_name: None,
                         };
 
                         // Try to read and decompress level.dat asynchronously
@@ -610,13 +638,19 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
                                         match from_bytes::<LevelDat>(&decompressed_bytes) {
                                             Ok(level_dat) => {
                                                 info!(
-                                                    "[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}",
+                                                    "[Worlds] Parsed level.dat for '{}': Name={:?}, LastPlayed={:?}, GameType={:?}",
                                                     folder_name,
                                                     level_dat.data.level_name,
-                                                    level_dat.data.last_played
+                                                    level_dat.data.last_played,
+                                                    level_dat.data.game_type
                                                 );
                                                 world_info.display_name = level_dat.data.level_name;
                                                 world_info.last_played = level_dat.data.last_played;
+                                                world_info.game_mode = level_dat.data.game_type;
+                                                world_info.difficulty = level_dat.data.difficulty;
+                                                world_info.difficulty_locked = level_dat.data.difficulty_locked.map(|b| b == 1);
+                                                world_info.is_hardcore = level_dat.data.hardcore.map(|b| b == 1);
+                                                world_info.version_name = level_dat.data.version.as_ref().and_then(|v| v.name.clone());
                                             }
                                             Err(e) => {
                                                 warn!(

@@ -87,6 +87,11 @@ export interface WorldInfo {
   display_name: string | null;
   last_played: number | null; // Assuming Rust i64 maps to number (epoch milliseconds)
   icon_path: string | null; // Changed type from object to string | null
+  game_mode?: number | null; // Added GameType (0: Survival, 1: Creative, 2: Adventure, 3: Spectator)
+  difficulty?: number | null; // Rust i8 -> number (0: Peaceful, 1: Easy, 2: Normal, 3: Hard)
+  difficulty_locked?: boolean | null; // Rust bool -> boolean
+  is_hardcore?: boolean | null; // Rust bool -> boolean
+  version_name?: string | null; // Rust Option<String> -> string | null
 }
 
 export interface ServerInfo {

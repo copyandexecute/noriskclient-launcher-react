@@ -23,6 +23,8 @@ import { timeAgo } from "../../../utils/time-utils"; // Import from util file
 
 // --- Import World Service ---
 import * as WorldService from "../../../services/world-service";
+// Import the specific helper functions
+import { getGameModeString, getDifficultyString } from "../../../services/world-service";
 // --- End Service Import ---
 
 // Assume notificationStore exists globally or imported
@@ -305,7 +307,29 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                  </h3>
                                  {isWorld ? (
                                       // Access world-specific props safely
-                                      <p className="text-white/60 text-base mt-1"> {item.last_played ? `Last played: ${timeAgo(item.last_played)}` : 'Never played'}</p>
+                                      <>
+                                        <p className="text-white/60 text-base mt-1"> 
+                                          {item.last_played ? `Last played: ${timeAgo(item.last_played)}` : 'Never played'}
+                                        </p>
+                                        {/* Display Game Mode, Difficulty, Hardcore, Locked status */}
+                                        <div className="text-white/50 text-xs mt-1 flex items-center gap-x-2 gap-y-1 flex-wrap">
+                                            <span>Mode: {getGameModeString(item.game_mode)}</span>
+                                            <span>Difficulty: {getDifficultyString(item.difficulty)}</span>
+                                            {item.is_hardcore && (
+                                                <span className="text-red-400 font-bold inline-flex items-center gap-1">
+                                                    <Icon icon="pixel:skull" className="w-3 h-3" /> Hardcore
+                                                </span>
+                                            )}
+                                            {item.difficulty_locked && (
+                                                <span title="Difficulty Locked" className="inline-flex items-center gap-1">
+                                                    <Icon icon="pixel:lock" className="w-3 h-3" /> Locked
+                                                </span>
+                                            )}
+                                            {item.version_name && (
+                                                <span title={`Version: ${item.version_name}`}>v: {item.version_name}</span>
+                                            )}
+                                        </div>
+                                      </>
                                  ) : (
                                      <>
                                          {/* Access server-specific props safely */}
