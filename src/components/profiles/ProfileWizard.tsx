@@ -40,8 +40,10 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
       memory: { min: 1024, max: 4096 },
       resolution: { width: 1280, height: 720 },
       fullscreen: false,
-      extra_args: [],
+      custom_jvm_args: null,
       java_path: null,
+      use_custom_java_path: false,
+      extra_game_args: [],
     },
   });
   const [creating, setCreating] = useState(false);
