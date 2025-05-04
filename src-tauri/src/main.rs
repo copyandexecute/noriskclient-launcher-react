@@ -92,7 +92,7 @@ use tauri::Manager;
 #[tokio::main]
 async fn main() {
     if let Err(e) = logging::setup_logging().await {
-        eprintln!("FEHLER: Logging konnte nicht initialisiert werden: {}", e);
+        eprintln!("FEHLER: Logging konnte nicht initialisiert werden?: {}", e);
     }
 
     /*info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
