@@ -7,7 +7,7 @@ interface CustomToastProps {
   toastId: string | number;
   message: string;
   description?: string;
-  type?: 'success' | 'error' | 'info' | 'warning'; // Typ für Styling
+  type?: 'success' | 'error' | 'info' | 'warning' | 'loading'; // 'loading' hinzugefügt
 }
 
 // Mapping von Typ zu Icon-Daten (Name und Farbe)
@@ -16,6 +16,7 @@ const iconMap = {
   error: { icon: 'ph:x-circle-fill', color: 'text-red-400' },
   warning: { icon: 'ph:warning-fill', color: 'text-yellow-400' },
   info: { icon: 'ph:info-fill', color: 'text-blue-400' },
+  loading: { icon: 'svg-spinners:180-ring-with-bg', color: 'text-zinc-400' }, // Lade-Icon hinzugefügt
 };
 
 export const CustomToast: React.FC<CustomToastProps> = ({
@@ -29,17 +30,19 @@ export const CustomToast: React.FC<CustomToastProps> = ({
     success: "bg-green-900/50 border-green-700",
     error: "bg-red-900/50 border-red-700",
     warning: "bg-yellow-900/50 border-yellow-700",
-    info: "bg-zinc-900/50 border-zinc-700", // Angepasst mit /50 für Transparenz
+    info: "bg-zinc-900/50 border-zinc-700",
+    loading: "bg-zinc-900/50 border-zinc-700", // Gleicher Stil wie Info für Loading
   };
 
   // Klassen für den äußeren Container (Layout, Rand, Mindestbreite)
-  const outerBaseClasses = "shadow-lg rounded-none border overflow-hidden min-w-[350px]"; // Mindestbreite hinzugefügt
+  const outerBaseClasses = "shadow-lg rounded-none border overflow-hidden min-w-[350px]";
 
   // Klassen für den inneren Container (Padding, Flex, Textfarbe)
   const innerClasses = "text-white p-4 flex items-start";
 
   // Icon-Daten abrufen
   const { icon: iconName, color: iconColor } = iconMap[type];
+  const isSpinning = type === 'loading'; // Prüfen, ob es ein Lade-Toast ist
 
   return (
     // Äußerer Container (Hintergrund, Rand)
@@ -48,7 +51,8 @@ export const CustomToast: React.FC<CustomToastProps> = ({
       <div className={innerClasses}>
         {/* Icon basierend auf Typ */}
         <div className={`mr-3 mt-1 flex-shrink-0 ${iconColor}`}> {/* Icon-Container mit Farbe */} 
-          <Icon icon={iconName} className="h-5 w-5" /> {/* Icon-Komponente */} 
+          {/* Füge animate-spin-slow Klasse hinzu, wenn es ein Lade-Toast ist */}
+          <Icon icon={iconName} className={`h-5 w-5 ${isSpinning ? 'animate-spin-slow' : ''}`} />
         </div>
 
         <div className="flex-grow">
