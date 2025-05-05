@@ -16,10 +16,10 @@ import type {
 import type { MinecraftVersion, VersionManifest } from "../../types/minecraft";
 import { useProfileStore } from "../../store/profile-store";
 import { invoke } from "@tauri-apps/api/core";
-import { Modal } from ".././ui/Modal";
+import { Modal } from ".././ui/Modal.tsx";
 import { Button } from ".././ui/Button";
-import { LoadingSpinner } from ".././ui/LoadingSpinner";
-import { StatusMessage } from ".././ui/StatusMessage";
+import { LoadingSpinner } from ".././ui/LoadingSpinner.tsx";
+import { StatusMessage } from ".././ui/StatusMessage.tsx";
 
 interface ProfileWizardProps {
   onClose: () => void;

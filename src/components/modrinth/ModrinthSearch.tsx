@@ -22,8 +22,8 @@ import type {
 import { Card, CardContent } from "../ui/Card";
 import { ModrinthProjectCard } from "./ModrinthProjectCard";
 import { ModrinthVersionItem } from "./ModrinthVersionItem";
-import { LoadingIndicator } from "../ui/LoadingIndicator";
-import { ErrorMessage } from "../ui/ErrorMessage";
+import { LoadingIndicator } from "../ui/LoadingIndicator.tsx";
+import { ErrorMessage } from "../ui/ErrorMessage.tsx";
 import { EmptyState } from "../ui/EmptyState";
 import { useModrinthInstaller } from "../../hooks/useModrinthInstaller";
 

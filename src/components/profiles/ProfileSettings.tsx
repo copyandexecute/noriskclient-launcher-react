@@ -10,9 +10,9 @@ import { JavaSettingsTab } from "./settings/JavaSettingsTab";
 import { WindowSettingsTab } from "./settings/WindowSettingsTab";
 import { useProfileStore } from "../../store/profile-store";
 import * as ProfileService from "../../services/profile-service";
-import { Modal } from ".././ui/Modal";
+import { Modal } from ".././ui/Modal.tsx";
 import { Button } from ".././ui/Button";
-import { StatusMessage } from ".././ui/StatusMessage";
+import { StatusMessage } from ".././ui/StatusMessage.tsx";
 
 interface ProfileSettingsProps {
   profile: Profile;

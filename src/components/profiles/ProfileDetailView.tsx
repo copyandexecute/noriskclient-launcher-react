@@ -8,7 +8,7 @@ import { WorldsTab } from "./detail/WorldsTab";
 import { LogsTab } from "./detail/LogsTab";
 import { BrowseTab } from "./detail/BrowseTab";
 import * as ProfileService from "../../services/profile-service";
-import { TabContent } from "../ui/TabContent";
+import { TabContent } from "../ui/TabContent.tsx";
 
 // Add this new component at the top of the file
 function TabTransitionLoader() {

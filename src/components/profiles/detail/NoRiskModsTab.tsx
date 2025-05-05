@@ -431,19 +431,13 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
                 label: "name",
                 sortable: true,
                 width: "flex-1",
-                className: "px-3",
-              },
-              {
-                key: "version",
-                label: "version",
-                sortable: true,
-                width: "w-28",
+                className: "px-9",
               },
               {
                 key: "enabled",
                 label: "status",
                 sortable: true,
-                width: "w-28",
+                width: "w-24",
                 className: "text-center justify-center",
               },
             ]}
@@ -510,13 +504,13 @@ function NoRiskModRow({
   return (
     <div
       className={cn(
-        "flex items-center py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
+        "flex items-center bg-black/40 py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
         isSelected && "bg-white/10",
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="w-8 flex justify-center">
+      <div className="w-12 flex justify-center">
         <input
           type="checkbox"
           className="w-5 h-5 accent-white/70 cursor-pointer"
@@ -526,8 +520,8 @@ function NoRiskModRow({
         />
       </div>
 
-      <div className="flex items-center gap-4 flex-1 min-w-0 px-3">
-        <div className="w-12 h-12 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+      <div className="flex  items-center gap-4 flex-1 min-w-0 px-3">
+        <div className="w-16 h-16 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
           {localIcon ? (
             <img
               src={`data:image/png;base64,${localIcon}`}
@@ -553,20 +547,16 @@ function NoRiskModRow({
           )}
         </div>
         <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-lg lowercase tracking-wide truncate">
+          <div className="text-white font-minecraft text-3xl lowercase tracking-wide truncate">
             {mod.display_name || mod.id}
           </div>
-          <div className="text-white/60 text-base lowercase truncate">
+          <div className="text-white/60 text-2xl lowercase truncate">
             {mod.description || "norisk mod"}
           </div>
         </div>
       </div>
 
-      <div className="w-28 text-white/70 text-base font-minecraft tracking-wide">
-        {mod.version || "?"}
-      </div>
-
-      <div className="w-28 flex justify-center">
+      <div className="w-36 flex justify-center">
         <ToggleSwitch
           enabled={mod.enabled}
           onChange={onToggle}

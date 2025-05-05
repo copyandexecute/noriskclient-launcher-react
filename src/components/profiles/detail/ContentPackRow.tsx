@@ -156,7 +156,7 @@ export function ContentPackRow({
   return (
     <div
       className={cn(
-        "flex items-center py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
+        "flex items-center py-4 bg-black/40 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
         isSelected && "bg-white/10",
       )}
       onMouseEnter={() => setIsHovered(true)}
@@ -173,7 +173,7 @@ export function ContentPackRow({
       </div>
 
       <div className="flex items-center gap-4 flex-1 min-w-0 px-3">
-        <div className="w-12 h-12 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="w-16 h-16 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
           {contentPack.icon_url ? (
             <img
               src={contentPack.icon_url || "/placeholder.svg"}
@@ -195,7 +195,7 @@ export function ContentPackRow({
           )}
         </div>
         <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-lg lowercase tracking-wide truncate flex items-center gap-2">
+          <div className="text-white font-minecraft text-3xl lowercase tracking-wide truncate flex items-center gap-2">
             {packName}
             {hasUpdate && (
               <span
@@ -206,7 +206,7 @@ export function ContentPackRow({
               </span>
             )}
           </div>
-          <div className="text-white/60 text-base lowercase truncate">
+          <div className="text-white/60 text-2xl lowercase truncate">
             {contentPack.creator && (
               <span className="mr-2">by {contentPack.creator}</span>
             )}
