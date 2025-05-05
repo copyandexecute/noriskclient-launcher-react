@@ -94,125 +94,7 @@ async fn main() {
         eprintln!("FEHLER: Logging konnte nicht initialisiert werden: {}", e);
     }
 
-    /*info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
-    let query = "fabric".to_string();
-    let game_version_filter = Some("1.20.1".to_string());
-    let loader_filter = Some("fabric".to_string());
-    let limit = Some(25u32);
-
-    match integrations::modrinth::search_mods(
-        query.clone(),
-        game_version_filter.clone(),
-        loader_filter.clone(),
-        limit,
-    )
-    .await
-    {
-        Ok(results) => {
-            info!(
-                "Modrinth search successful! Found {} results.",
-                results.len()
-            );
-
-            if !results.is_empty() {
-                let mut rng = rand::thread_rng();
-                if let Some(random_hit) = results.choose(&mut rng) {
-                    info!(
-                        "--- Getting versions for randomly chosen hit: '{}' (ID: {}) ---",
-                        random_hit.title, random_hit.project_id
-                    );
-
-                    match integrations::modrinth::get_mod_versions(
-                        random_hit.project_id.clone(),
-                        loader_filter.clone().map(|l| vec![l]),
-                        game_version_filter.clone().map(|gv| vec![gv]),
-                    )
-                    .await
-                    {
-                        Ok(versions) => {
-                            info!(
-                                "Found {} versions for '{}' matching filters:",
-                                versions.len(),
-                                random_hit.title
-                            );
-                            for (i, version) in versions.iter().take(10).enumerate() {
-                                let primary_file = version
-                                    .files
-                                    .iter()
-                                    .find(|f| f.primary)
-                                    .map(|f| f.filename.as_str())
-                                    .unwrap_or("N/A");
-                                info!(
-                                    "  Version {}: Name='{}', Number='{}', Type={:?}, File='{}'",
-                                    i + 1,
-                                    version.name,
-                                    version.version_number,
-                                    version.version_type,
-                                    primary_file
-                                );
-                            }
-                            if versions.len() > 10 {
-                                info!("  ... and {} more versions not shown.", versions.len() - 10);
-                            }
-                        }
-                        Err(e) => {
-                            error!("Failed to get versions for '{}': {:?}", random_hit.title, e);
-                        }
-                    }
-                } else {
-                    error!("Could not choose a random element, although search hits were found.");
-                }
-            } else {
-                info!("No mods found matching the search criteria.");
-            }
-        }
-        Err(e) => {
-            error!("Modrinth search failed: {:?}", e);
-        }
-    }
-    info!("--- Finished Test Modrinth Search --- DONT FORGET TO REMOVE");*/
-
-    match integrations::modrinth::get_multiple_projects(vec![
-        "AANobbMI".to_string(),
-        "P7dR8mSH".to_string(),
-    ])
-    .await
-    {
-        Ok(projects) => {
-            info!("Found {} projects.", projects.len());
-            for project in projects {
-                info!("Project: {}", project.title);
-            }
-        }
-        Err(e) => {
-            error!("Failed to get projects: {:?}", e);
-        }
-    }
-
-    match commands::java_command::detect_java_installations_command().await {
-        Ok(installations) => {
-            info!("Detected {} Java installation(s):", installations.len());
-            for (index, installation) in installations.iter().enumerate() {
-                info!(
-                    "  {}: Path='{}', Version='{}', Major={}, 64bit={}, Vendor='{}', Source='{}'",
-                    index + 1,
-                    installation.path.display(),
-                    installation.version,
-                    installation.major_version,
-                    installation.is_64bit,
-                    installation.vendor,
-                    installation.source
-                );
-            }
-        }
-        Err(e) => {
-            error!("Failed to get Java installations: {:?}", e); // Log the error detail
-        }
-    };
-
     info!("Starting NoRiskClient Launcher...");
-
-    utils::file_utils::get_jar_icon_test().await;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -243,6 +125,7 @@ async fn main() {
                 // Lade Dummy-Versionen/Packs (Beispielhaft, existierendem Code nachempfunden)
                 let _ = norisk_versions::load_dummy_versions().await;
                 let _ = norisk_packs::load_dummy_modpacks().await;
+                crate::utils::debug_utils::debug_print_news_and_changelogs().await;
 
                 if let Err(e) = state::state_manager::State::init(Arc::new(app_handle.clone())).await {
                     error!("CRITICAL: Failed to initialize state: {}. Update check and main window might not proceed correctly.", e);
@@ -450,7 +333,9 @@ async fn main() {
             list_profile_screenshots,
             open_file,
             read_file_bytes,
-            get_app_version
+            get_app_version,
+            //
+            commands::nrc_commands::get_news_and_changelogs_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

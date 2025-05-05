@@ -16,16 +16,6 @@ export const versions = [
   { id: "1.19.4", label: "Minecraft 1.19.4", icon: "pixel:grid-solid" },
 ];
 
-export const newsItems = [
-  {
-    id: 1,
-    title: "CHINA NEW YEAR COSMETICS",
-    content: "TEST DESCRIPTION",
-    date: "Today",
-    image: "/china.png",
-  },
-];
-
 export const recentServers = [
   {
     name: "GommeHD",
