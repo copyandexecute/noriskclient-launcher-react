@@ -9,13 +9,6 @@ import * as ProfileService from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
-import { Button } from "../ui/Button";
-import {
-  showSuccessToast,
-  showErrorToast,
-  showInfoToast,
-  showWarningToast,
-} from "../../utils/toast-utils";
 
 export function PlayTab() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -59,38 +52,6 @@ export function PlayTab() {
     setSelectedVersion(version);
   };
 
-  const handleSuccessTestToast = () => {
-    showSuccessToast(
-      'Success Toast!',
-      'Dies ist ein Erfolgs-Toast.',
-      { duration: 5000 }
-    );
-  };
-
-  const handleErrorTestToast = () => {
-    showErrorToast(
-      'Error Toast!',
-      'Dies ist ein Fehler-Toast.',
-      { duration: 5000 }
-    );
-  };
-
-  const handleInfoTestToast = () => {
-    showInfoToast(
-      'Info Toast!',
-      'Dies ist ein Info-Toast.',
-      { duration: 5000 }
-    );
-  };
-
-  const handleWarningTestToast = () => {
-    showWarningToast(
-      'Warning Toast!',
-      'Dies ist ein Warnungs-Toast.',
-      { duration: 5000 }
-    );
-  };
-
   const selectedProfile =
     profiles.find((p) => p.id === selectedVersion) || profiles[0];
 
@@ -126,21 +87,6 @@ export function PlayTab() {
           <h2 className="font-minecraft text-5xl text-center text-white mb-2 lowercase font-normal">
             {activeAccount?.minecraft_username || activeAccount?.username || "no account"}
           </h2>
-
-          <div className="flex flex-wrap gap-2 mb-4 justify-center">
-            <Button onClick={handleSuccessTestToast} variant="success" size="sm">
-              Test Success Toast
-            </Button>
-            <Button onClick={handleErrorTestToast} variant="danger" size="sm">
-              Test Error Toast
-            </Button>
-            <Button onClick={handleInfoTestToast} variant="secondary" size="sm">
-              Test Info Toast
-            </Button>
-            <Button onClick={handleWarningTestToast} variant="secondary" size="sm">
-              Test Warning Toast
-            </Button>
-          </div>
 
           <div className="relative">
             <SkinViewer

@@ -5,8 +5,6 @@ import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../../lib/utils";
 import { MinecraftAccountManager } from "../account/MinecraftAccountManager";
-// Entferne Store-Import hier, falls nicht anderweitig benötigt
-// import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 
 const DROPDOWN_WIDTH = 300; // Use the minWidth for calculation
 
@@ -23,8 +21,6 @@ export const AccountDropdown = forwardRef<HTMLDivElement, AccountDropdownProps>(
     const [isMounted, setIsMounted] = useState(false);
     const [dropdownTop, setDropdownTop] = useState<number>(0);
     const [dropdownLeft, setDropdownLeft] = useState<number>(0);
-    // Entferne Error-State hier
-    // const { error } = useMinecraftAuthStore();
 
     // Track mount state
     useEffect(() => {
@@ -98,25 +94,28 @@ export const AccountDropdown = forwardRef<HTMLDivElement, AccountDropdownProps>(
 
     return createPortal(
       <div
-        ref={ref || dropdownRef}
+        ref={ref || dropdownRef} // Use forwarded ref if available, otherwise internal ref
         className={cn(
           "fixed bg-black/80 backdrop-blur-lg border-2 border-white/30 shadow-lg z-50",
-          "overflow-hidden",
+          "overflow-hidden", // Let content manage scroll if needed
           className,
         )}
         style={{
           top: `${dropdownTop}px`,
           left: `${dropdownLeft}px`,
-          minWidth: `${DROPDOWN_WIDTH}px`,
+          minWidth: `${DROPDOWN_WIDTH}px`, // Use constant
         }}
       >
-        {/* Die Fehleranzeige mittels StatusMessage wird hier nicht mehr gerendert. */}
-        {/* Toasts werden in MinecraftAccountManager behandelt. */}
-        <MinecraftAccountManager onClose={onClose} isInDropdown />
+        {/* Render MinecraftAccountManager inside */}
+        <MinecraftAccountManager onClose={onClose} isInDropdown /> 
       </div>,
-      document.body,
+      document.body, // Target the document body
     );
   },
 );
 
-AccountDropdown.displayName = "AccountDropdown"; 
+AccountDropdown.displayName = "AccountDropdown";
+
+// Add a prop to MinecraftAccountManager to indicate it's in a dropdown
+// This allows for potential style adjustments if needed
+// We'll modify MinecraftAccountManager next if necessary. 

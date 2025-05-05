@@ -6,13 +6,6 @@ import { Button } from "../ui/Button";
 import { StatusMessage } from "../ui/StatusMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import type { MinecraftAccount } from "../../types/minecraft";
-import {
-  emitLoadingToast,
-  emitSuccessToast,
-  emitErrorToast,
-  emitInfoToast,
-  emitPromiseToast
-} from "../../utils/toast-event";
 
 interface MinecraftAccountManagerProps {
   onClose: () => void;
@@ -34,89 +27,29 @@ export function MinecraftAccountManager({
 
   const handleAddAccount = async () => {
     try {
-      // Ersetze die separate Toast-Logik durch einen einzigen Promise-Toast
-      await emitPromiseToast(
-        addAccount(),
-        {
-          loading: "Starting Microsoft login...",
-          success: "Account added successfully!",
-          error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-            // Falls der Benutzer den Login-Prozess abgebrochen hat, zeigen wir eine Info statt eines Fehlers
-            if (errorMessage === "Login process cancelled by user.") {
-              // Beachte: Wir können nicht direkt eine Info zurückgeben, da emitPromiseToast entweder Success oder Error zeigt
-              // Daher geben wir eine freundlichere Fehlermeldung zurück
-              return "Login process cancelled";
-            }
-            return `Failed to add account: ${errorMessage}`;
-          }
-        },
-        {
-          // Optionale Beschreibungen
-          error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-            if (errorMessage === "Login process cancelled by user.") {
-              return "You can try adding your account again later.";
-            }
-            return "Please check your connection and try again.";
-          }
-        }
-      );
+      await addAccount();
     } catch (err) {
-      // Fehler wird bereits vom Promise-Toast behandelt
-      console.error("Error during addAccount process:", err);
+      console.error("Error adding account:", err);
     }
   };
 
   const handleSetActive = async (accountId: string) => {
-    const accountToActivate = accounts.find(acc => acc.id === accountId);
-    const accountName = accountToActivate?.minecraft_username || accountToActivate?.username || 'Account';
-    
-    try {
-      // Verwende Promise-Toast für den Aktivierungsprozess
-      await emitPromiseToast(
-        setActiveAccount(accountId),
-        {
-          loading: `Setting ${accountName} as active...`,
-          success: `${accountName} is now the active account.`,
-          error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-            return `Failed to set active account: ${errorMessage}`;
-          }
-        }
-      );
-    } catch (err) {
-      // Fehler wird bereits durch den Promise-Toast behandelt
-      console.error(`Error setting active account ${accountId}:`, err);
-    }
+    await setActiveAccount(accountId);
   };
 
   const handleRemoveAccount = async (accountId: string) => {
-    const accountToRemove = accounts.find(acc => acc.id === accountId);
-    const accountName = accountToRemove?.minecraft_username || accountToRemove?.username || 'Account';
-    
-    try {
-      // Verwende Promise-Toast für den Löschprozess
-      await emitPromiseToast(
-        removeAccount(accountId),
-        {
-          loading: `Removing ${accountName}...`,
-          success: `${accountName} removed successfully.`,
-          error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-            return `Failed to remove account: ${errorMessage}`;
-          }
-        }
-      );
-    } catch (err) {
-      // Fehler wird bereits durch den Promise-Toast behandelt
-      console.error(`Error removing account ${accountId}:`, err);
-    }
+    await removeAccount(accountId);
   };
 
   if (isInDropdown) {
     return (
       <div className="flex flex-col h-full">
+        {error && (
+          <div className="p-4">
+            <StatusMessage type="error" message={error} />
+          </div>
+        )}
+
         <div className="px-4 py-3 flex-shrink-0">
           <h3 className="text-lg font-minecraft text-white lowercase select-none">
             Manage Accounts
@@ -182,6 +115,8 @@ export function MinecraftAccountManager({
       width="lg"
     >
       <div className="p-6">
+        {error && <StatusMessage type="error" message={error} />}
+
         <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-minecraft text-white mb-5 lowercase select-none">
