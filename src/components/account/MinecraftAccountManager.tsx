@@ -7,11 +7,12 @@ import { StatusMessage } from "../ui/StatusMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import type { MinecraftAccount } from "../../types/minecraft";
 import {
-  showLoadingToast,
-  showSuccessToast,
-  showErrorToast,
-  showInfoToast,
-} from "../../utils/toast-utils";
+  emitLoadingToast,
+  emitSuccessToast,
+  emitErrorToast,
+  emitInfoToast,
+  emitPromiseToast
+} from "../../utils/toast-event";
 
 interface MinecraftAccountManagerProps {
   onClose: () => void;
@@ -32,62 +33,84 @@ export function MinecraftAccountManager({
   } = useMinecraftAuthStore();
 
   const handleAddAccount = async () => {
-    let toastId: string | number | undefined;
     try {
-      toastId = showLoadingToast("Starting Microsoft login...");
-      console.log(`[Toast Debug] Loading Toast ID generated: ${toastId}`);
-
-      await addAccount();
-      console.log(`[Toast Debug] addAccount successful. Replacing Toast ID: ${toastId}`);
-
-      showSuccessToast("Account added successfully!", undefined, { id: toastId });
+      // Ersetze die separate Toast-Logik durch einen einzigen Promise-Toast
+      await emitPromiseToast(
+        addAccount(),
+        {
+          loading: "Starting Microsoft login...",
+          success: "Account added successfully!",
+          error: (err) => {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+            // Falls der Benutzer den Login-Prozess abgebrochen hat, zeigen wir eine Info statt eines Fehlers
+            if (errorMessage === "Login process cancelled by user.") {
+              // Beachte: Wir können nicht direkt eine Info zurückgeben, da emitPromiseToast entweder Success oder Error zeigt
+              // Daher geben wir eine freundlichere Fehlermeldung zurück
+              return "Login process cancelled";
+            }
+            return `Failed to add account: ${errorMessage}`;
+          }
+        },
+        {
+          // Optionale Beschreibungen
+          error: (err) => {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+            if (errorMessage === "Login process cancelled by user.") {
+              return "You can try adding your account again later.";
+            }
+            return "Please check your connection and try again.";
+          }
+        }
+      );
     } catch (err) {
+      // Fehler wird bereits vom Promise-Toast behandelt
       console.error("Error during addAccount process:", err);
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      console.log(`[Toast Debug] addAccount caught error. Replacing Toast ID: ${toastId} with error: ${errorMessage}`);
-
-      if (errorMessage === "Login process cancelled by user.") {
-        showInfoToast(
-          "Login Cancelled",
-          "The login process was cancelled.",
-          { id: toastId }
-        );
-      } else {
-        showErrorToast(
-          "Failed to add account",
-          errorMessage,
-          { id: toastId }
-        );
-      }
     }
   };
 
   const handleSetActive = async (accountId: string) => {
     const accountToActivate = accounts.find(acc => acc.id === accountId);
     const accountName = accountToActivate?.minecraft_username || accountToActivate?.username || 'Account';
-    let toastId: string | number | undefined;
+    
     try {
-      toastId = showLoadingToast(`Setting ${accountName} as active...`);
-      await setActiveAccount(accountId);
-      showSuccessToast(`${accountName} is now the active account.`, undefined, { id: toastId });
+      // Verwende Promise-Toast für den Aktivierungsprozess
+      await emitPromiseToast(
+        setActiveAccount(accountId),
+        {
+          loading: `Setting ${accountName} as active...`,
+          success: `${accountName} is now the active account.`,
+          error: (err) => {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+            return `Failed to set active account: ${errorMessage}`;
+          }
+        }
+      );
     } catch (err) {
+      // Fehler wird bereits durch den Promise-Toast behandelt
       console.error(`Error setting active account ${accountId}:`, err);
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      showErrorToast("Failed to set active account", errorMessage, { id: toastId });
     }
   };
 
   const handleRemoveAccount = async (accountId: string) => {
     const accountToRemove = accounts.find(acc => acc.id === accountId);
     const accountName = accountToRemove?.minecraft_username || accountToRemove?.username || 'Account';
-    let toastId: string | number | undefined;
+    
     try {
-      await removeAccount(accountId);
-      showSuccessToast(`${accountName} removed successfully.`);
+      // Verwende Promise-Toast für den Löschprozess
+      await emitPromiseToast(
+        removeAccount(accountId),
+        {
+          loading: `Removing ${accountName}...`,
+          success: `${accountName} removed successfully.`,
+          error: (err) => {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+            return `Failed to remove account: ${errorMessage}`;
+          }
+        }
+      );
     } catch (err) {
+      // Fehler wird bereits durch den Promise-Toast behandelt
       console.error(`Error removing account ${accountId}:`, err);
-      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
-      showErrorToast("Failed to remove account", errorMessage);
     }
   };
 
