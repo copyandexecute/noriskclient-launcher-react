@@ -108,7 +108,7 @@ export function ModRow({
   return (
     <div
       className={cn(
-        "flex items-center py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
+        "flex items-center bg-black/40 py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
         isSelected && "bg-white/10",
       )}
       onMouseEnter={() => setIsHovered(true)}
@@ -125,7 +125,7 @@ export function ModRow({
       </div>
 
       <div className="flex items-center gap-4 flex-1 min-w-0 px-3">
-        <div className="w-12 h-12 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="w-16 h-16 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
           {iconUrl ? (
             <img
               src={iconUrl || "/placeholder.svg"}
@@ -147,7 +147,7 @@ export function ModRow({
           )}
         </div>
         <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-lg lowercase tracking-wide truncate flex items-center gap-2">
+          <div className="text-white font-minecraft text-3xl lowercase tracking-wide truncate flex items-center gap-2">
             {mod.display_name || "unknown mod"}
             {hasUpdate && (
               <span
@@ -158,7 +158,7 @@ export function ModRow({
               </span>
             )}
           </div>
-          <div className="text-white/60 text-base lowercase truncate">
+          <div className="text-white/60 text-2xl lowercase truncate">
             {mod.source?.type === "modrinth"
               ? mod.source.project_id
               : mod.source?.type === "local"
@@ -168,7 +168,7 @@ export function ModRow({
         </div>
       </div>
 
-      <div className="w-28 text-white/70 text-base font-minecraft tracking-wide flex items-center gap-1">
+      <div className="w-28 text-white/70 text-lg font-minecraft tracking-wide flex items-center gap-1">
         {mod.version || "?"}
       </div>
 

@@ -47,7 +47,7 @@ export function ContentTable({
   return (
     <div className="border-2 border-white/30 h-full flex flex-col">
       {/* Fixed header - will not scroll */}
-      <div className="bg-black/30 border-b border-white/30 py-2 px-3 flex items-center">
+      <div className="bg-black/80 border-b border-white/30 py-2 px-3 flex items-center">
         <div className="w-8 flex justify-center">
           <input
             type="checkbox"
@@ -87,7 +87,7 @@ export function ContentTable({
 
       {/* Fixed footer - will not scroll */}
       {showFooter && filteredCount > 0 && (
-        <div className="bg-black/30 border-t border-white/30 py-2 px-4 text-white/70 font-minecraft text-sm flex justify-between items-center">
+        <div className="bg-black/80 border-t border-white/30 py-2 px-4 text-white/70 font-minecraft text-sm flex justify-between items-center">
           <div>
             {filteredCount} {contentType}
             {filteredCount !== 1 && contentType.endsWith("s") ? "" : "s"}

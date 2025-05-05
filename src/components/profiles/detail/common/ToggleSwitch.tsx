@@ -11,7 +11,7 @@ export function ToggleSwitch({ enabled, onChange, title }: ToggleSwitchProps) {
     <button
       onClick={onChange}
       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-        enabled ? "bg-primary/70" : "bg-black/50"
+        enabled ? "bg-white/30" : "bg-black/30"
       } border border-white/30`}
       title={title}
     >

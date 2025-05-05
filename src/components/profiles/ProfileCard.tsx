@@ -10,7 +10,7 @@ import {
   LaunchState,
   useLaunchStateStore,
 } from "../../store/launch-state-store";
-import { IconButton } from "../ui/IconButton";
+import { IconButton } from "../ui/IconButton.tsx";
 import * as ProcessService from "../../services/process-service";
 import { processMonitor } from "../../services/process-monitor";
 import { listen } from "@tauri-apps/api/event";

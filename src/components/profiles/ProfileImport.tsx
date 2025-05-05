@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
-import { Modal } from ".././ui/Modal";
+import { Modal } from ".././ui/Modal.tsx";
 import { Button } from ".././ui/Button";
-import { StatusMessage } from ".././ui/StatusMessage";
+import { StatusMessage } from ".././ui/StatusMessage.tsx";
 
 interface ProfileImportProps {
   onClose: () => void;

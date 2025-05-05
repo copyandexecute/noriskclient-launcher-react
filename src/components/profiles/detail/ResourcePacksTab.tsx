@@ -681,20 +681,20 @@ export function ResourcePacksTab({
               label: "name",
               sortable: true,
               width: "flex-1",
-              className: "px-3",
+              className: "px-6",
             },
             {
               key: "enabled",
               label: "status",
               sortable: true,
-              width: "w-28",
+              width: "w-16",
               className: "text-center justify-center",
             },
             {
               key: "actions",
               label: "actions",
               sortable: false,
-              width: "w-20",
+              width: "w-24",
               className: "text-center",
             },
           ]}

@@ -279,13 +279,6 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   return (
     <div className="h-full select-none flex flex-col text-white">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-5 flex-shrink-0">
-        <h2 className="font-minecraft text-3xl lowercase tracking-wide">
-          log viewer
-        </h2>
-      </div>
-
       {/* Main container with border */}
       <div className="border-2 border-white/30 h-full flex flex-col overflow-hidden">
         {/* Header */}
