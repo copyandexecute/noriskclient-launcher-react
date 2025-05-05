@@ -1,5 +1,6 @@
 import React from 'react';
 import { toast } from 'sonner';
+import { Icon } from '@iconify/react';
 
 // Typen für die Props definieren
 interface CustomToastProps {
@@ -8,6 +9,14 @@ interface CustomToastProps {
   description?: string;
   type?: 'success' | 'error' | 'info' | 'warning'; // Typ für Styling
 }
+
+// Mapping von Typ zu Icon-Daten (Name und Farbe)
+const iconMap = {
+  success: { icon: 'ph:check-circle-fill', color: 'text-green-400' },
+  error: { icon: 'ph:x-circle-fill', color: 'text-red-400' },
+  warning: { icon: 'ph:warning-fill', color: 'text-yellow-400' },
+  info: { icon: 'ph:info-fill', color: 'text-blue-400' },
+};
 
 export const CustomToast: React.FC<CustomToastProps> = ({
   toastId,
@@ -29,13 +38,18 @@ export const CustomToast: React.FC<CustomToastProps> = ({
   // Klassen für den inneren Container (Padding, Flex, Textfarbe)
   const innerClasses = "text-white p-4 flex items-start";
 
+  // Icon-Daten abrufen
+  const { icon: iconName, color: iconColor } = iconMap[type];
+
   return (
-    // Äußerer Container (Hintergrund, Rand, Blur)
+    // Äußerer Container (Hintergrund, Rand)
     <div className={`${outerBaseClasses} ${outerTypeClasses[type]}`}>
       {/* Innerer Container (Inhalt, Padding, Flex) */}
       <div className={innerClasses}>
-        {/* Optional: Icon basierend auf Typ */}
-        {/* <div className="mr-3">{getIcon(type)}</div> */}
+        {/* Icon basierend auf Typ */}
+        <div className={`mr-3 mt-1 flex-shrink-0 ${iconColor}`}> {/* Icon-Container mit Farbe */} 
+          <Icon icon={iconName} className="h-5 w-5" /> {/* Icon-Komponente */} 
+        </div>
 
         <div className="flex-grow">
           <div className="font-semibold">{message}</div>
@@ -45,7 +59,7 @@ export const CustomToast: React.FC<CustomToastProps> = ({
         {/* Schließen-Button */}
         <button
           onClick={() => toast.dismiss(toastId)}
-          className="ml-4 p-1 text-zinc-500 hover:text-white focus:outline-none flex-shrink-0" // flex-shrink-0 hinzugefügt
+          className="ml-4 p-1 text-zinc-500 hover:text-white focus:outline-none flex-shrink-0"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
