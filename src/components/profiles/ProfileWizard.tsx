@@ -3,10 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { gsap } from "gsap";
-import { StepIndicator } from "./wizard/StepIndicator";
-import { GeneralStep } from "./wizard/GeneralStep";
-import { VersionStep } from "./wizard/VersionStep";
-import { ModLoaderStep } from "./wizard/ModLoaderStep";
 import type {
   CreateProfileParams,
   ModLoader,
@@ -16,10 +12,15 @@ import type {
 import type { MinecraftVersion, VersionManifest } from "../../types/minecraft";
 import { useProfileStore } from "../../store/profile-store";
 import { invoke } from "@tauri-apps/api/core";
-import { Modal } from ".././ui/Modal.tsx";
-import { Button } from ".././ui/Button";
-import { LoadingSpinner } from ".././ui/LoadingSpinner.tsx";
-import { StatusMessage } from ".././ui/StatusMessage.tsx";
+import { Modal } from "../ui/Modal";
+import { Button } from "../ui/buttons/Button";
+import { StatusMessage } from "../ui/StatusMessage";
+import { useThemeStore } from "../../store/useThemeStore";
+import { WizardSidebar } from "./wizard/WizardSidebar";
+import { GeneralStep } from "./wizard/GeneralStep";
+import { VersionStep } from "./wizard/VersionStep";
+import { ModLoaderStep } from "./wizard/ModLoaderStep";
+import { WizardSummary } from "./wizard/WizardSummary";
 
 interface ProfileWizardProps {
   onClose: () => void;
@@ -28,6 +29,7 @@ interface ProfileWizardProps {
 
 export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
   const { createProfile } = useProfileStore();
+  const accentColor = useThemeStore((state) => state.accentColor);
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState<Partial<Profile>>({
     name: "",
@@ -54,8 +56,14 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
   const [systemRamMb, setSystemRamMb] = useState<number>(8192);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const totalSteps = 3;
-  const stepTitles = ["general", "version", "modloader"];
+  const totalSteps = 4;
+  const stepTitles = ["details", "version", "mod loader", "summary"];
+  const stepIcons = [
+    "solar:user-bold",
+    "solar:widget-bold",
+    "solar:code-bold",
+    "solar:check-circle-bold",
+  ];
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -133,6 +141,25 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
     }
   };
 
+  const handleStepClick = (stepNumber: number) => {
+    if (stepNumber <= step || isStepValid(step)) {
+      setStep(stepNumber);
+    }
+  };
+
+  const isStepValid = (stepNumber: number) => {
+    switch (stepNumber) {
+      case 1:
+        return !!profile.name;
+      case 2:
+        return !!profile.game_version;
+      case 3:
+        return true;
+      default:
+        return true;
+    }
+  };
+
   const handleCreate = async () => {
     try {
       setCreating(true);
@@ -183,40 +210,65 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
     }
   };
 
-  const renderContent = () => {
+  const renderStepContent = () => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center h-full select-none">
-          <LoadingSpinner size="lg" text="Loading..." textClass="text-2xl" />
+        <div className="flex flex-col items-center justify-center h-full p-8">
+          <div className="w-16 h-16 mb-4 animate-spin">
+            <Icon icon="solar:refresh-bold" className="w-16 h-16 text-white" />
+          </div>
+          <p className="text-2xl font-minecraft text-white lowercase">
+            loading...
+          </p>
         </div>
       );
     }
 
-    if (error) {
+    if (error && step !== 4) {
       return <StatusMessage type="error" message={error} />;
     }
 
-    return (
-      <div ref={contentRef} className="h-full">
-        {step === 1 && (
+    switch (step) {
+      case 1:
+        return (
           <GeneralStep
             profile={profile}
             updateProfile={updateProfile}
             systemRamMb={systemRamMb}
           />
-        )}
-        {step === 2 && (
+        );
+      case 2:
+        return (
           <VersionStep
             profile={profile}
             updateProfile={updateProfile}
             minecraftVersions={minecraftVersions?.versions || []}
           />
-        )}
-        {step === 3 && (
+        );
+      case 3:
+        return (
           <ModLoaderStep profile={profile} updateProfile={updateProfile} />
-        )}
-      </div>
-    );
+        );
+      case 4:
+        return <WizardSummary profile={profile} error={error} />;
+      default:
+        return null;
+    }
+  };
+
+  const canProceed = () => {
+    switch (step) {
+      case 1:
+        return !!profile.name;
+      case 2:
+        return !!profile.game_version;
+      case 3:
+        return true;
+      case 4:
+        return !error;
+      default:
+        return false;
+    }
   };
 
   const renderFooter = () => (
@@ -227,8 +279,8 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
             variant="secondary"
             onClick={handleBack}
             disabled={creating || loading}
-            icon={<Icon icon="pixel:arrow-left-solid" className="w-5 h-5" />}
-            className="text-2xl py-3 px-6"
+            icon={<Icon icon="solar:arrow-left-bold" className="w-5 h-5" />}
+            size="md"
           >
             back
           </Button>
@@ -239,31 +291,35 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
           variant="secondary"
           onClick={onClose}
           disabled={creating || loading}
-          className="text-2xl py-3 px-6"
+          size="md"
         >
           cancel
         </Button>
         <Button
-          variant="primary"
+          variant="default"
           onClick={handleNext}
-          disabled={creating || loading || (step === 1 && !profile.name)}
-          className="text-2xl py-3 px-6"
+          disabled={creating || loading || !canProceed()}
+          size="md"
+          className="min-w-[180px]"
+          icon={
+            step < totalSteps ? (
+              <Icon icon="solar:arrow-right-bold" className="w-5 h-5" />
+            ) : undefined
+          }
+          iconPosition={step < totalSteps ? "right" : "left"}
         >
           {creating ? (
             <>
               <Icon
-                icon="pixel:spinner-solid"
+                icon="solar:refresh-bold"
                 className="w-5 h-5 animate-spin"
               />
               <span>creating...</span>
             </>
           ) : step < totalSteps ? (
-            <>
-              <span>next</span>
-              <Icon icon="pixel:arrow-right-solid" className="w-5 h-5" />
-            </>
+            "next"
           ) : (
-            <span>create</span>
+            "create profile"
           )}
         </Button>
       </div>
@@ -272,20 +328,28 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
 
   return (
     <Modal
-      title={`create new profile: ${stepTitles[step - 1]}`}
+      title="create new profile"
       onClose={onClose}
-      width="4xl"
-      height="650px"
+      width="xl"
       footer={renderFooter()}
     >
-      <div className="flex flex-col border-b border-white/20">
-        <div className="px-4 pb-4">
-          <StepIndicator currentStep={step} totalSteps={totalSteps} />
-        </div>
-      </div>
+      <div className="flex h-[600px] overflow-hidden">
+        <WizardSidebar
+          currentStep={step}
+          totalSteps={totalSteps}
+          stepTitles={stepTitles}
+          stepIcons={stepIcons}
+          onStepClick={handleStepClick}
+          isStepValid={isStepValid}
+        />
 
-      <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
-        {renderContent()}
+        <div
+          ref={contentRef}
+          className="flex-1 p-6 overflow-y-auto custom-scrollbar"
+          style={{ backgroundColor: `${accentColor.value}10` }}
+        >
+          {renderStepContent()}
+        </div>
       </div>
     </Modal>
   );

@@ -1,72 +1,89 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef } from "react";
-import { gsap } from "gsap";
+import type React from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
+import { cn } from "../../lib/utils";
+import { useThemeStore } from "../../store/useThemeStore";
+import { gsap } from "gsap";
+import { IconButton } from "./buttons/IconButton";
 
 interface ModalProps {
-  children: ReactNode;
   title: string;
   onClose: () => void;
-  className?: string;
-  width?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "full";
-  height?: string;
-  footer?: ReactNode;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  width?: "sm" | "md" | "lg" | "xl" | "full";
+  closeOnClickOutside?: boolean;
 }
 
 export function Modal({
   title,
-  children,
   onClose,
+  children,
   footer,
   width = "md",
-  height,
+  closeOnClickOutside = true,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  const widthClasses = {
-    sm: "max-w-sm",
-    md: "max-w-md",
-    lg: "max-w-lg",
-    xl: "max-w-xl",
-    "2xl": "max-w-2xl",
-    "3xl": "max-w-3xl",
-    "4xl": "max-w-4xl",
-    "5xl": "max-w-5xl",
-    full: "max-w-full",
-  };
+  const contentRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
-    if (modalRef.current) {
+    const backdrop = modalRef.current;
+    const content = contentRef.current;
+
+    if (backdrop && content) {
       gsap.fromTo(
-        modalRef.current,
-        { opacity: 0, scale: 0.95 },
-        { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out" },
+        backdrop,
+        { opacity: 0 },
+        {
+          opacity: 1,
+          duration: 0.3,
+          ease: "power2.out",
+        },
+      );
+
+      gsap.fromTo(
+        content,
+        { y: -50, opacity: 0 },
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.4,
+          ease: "back.out(1.2)",
+        },
       );
     }
 
-    // Add event listener to close modal when clicking outside
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-        handleCloseWithAnimation();
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
       }
     };
-
-    document.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
-  const handleCloseWithAnimation = () => {
-    if (modalRef.current) {
-      gsap.to(modalRef.current, {
+  const handleClose = () => {
+    const backdrop = modalRef.current;
+    const content = contentRef.current;
+
+    if (backdrop && content) {
+      gsap.to(backdrop, {
         opacity: 0,
-        scale: 0.95,
-        duration: 0.3,
+        duration: 0.2,
         ease: "power2.in",
+      });
+
+      gsap.to(content, {
+        y: -30,
+        opacity: 0,
+        duration: 0.3,
+        ease: "back.in(1.2)",
         onComplete: onClose,
       });
     } else {
@@ -74,34 +91,88 @@ export function Modal({
     }
   };
 
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (closeOnClickOutside && e.target === modalRef.current) {
+      e.stopPropagation();
+      handleClose();
+    }
+  };
+
+  const widthClasses = {
+    sm: "max-w-lg",
+    md: "max-w-2xl",
+    lg: "max-w-3xl",
+    xl: "max-w-5xl",
+    full: "max-w-[95vw] w-full",
+  };
+
   return (
     <div
-      ref={overlayRef}
-      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center"
+      ref={modalRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={handleBackdropClick}
+      onMouseDown={(e) => {
+        if (e.target === modalRef.current) {
+          e.stopPropagation();
+        }
+      }}
     >
       <div
-        ref={modalRef}
-        className={`bg-black/20 backdrop-blur-lg border-2 border-white/30 w-full ${
-          widthClasses[width]
-        } flex flex-col shadow-[0_0_30px_rgba(0,0,0,0.5)]`}
-        style={{ height: height || "auto", maxHeight: "90vh" }}
+        ref={contentRef}
+        className={cn(
+          "relative flex flex-col w-full rounded-lg overflow-hidden",
+          "border-2 border-b-4 shadow-2xl",
+          widthClasses[width],
+        )}
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}80`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+        }}
       >
-        <div className="flex items-center justify-between p-5 border-b border-white/20 bg-black/20">
-          <h2 className="text-2xl font-minecraft text-white lowercase tracking-wider select-none">
+        <span
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+          style={{ backgroundColor: `${accentColor.value}80` }}
+        />
+
+        <div
+          className="flex items-center justify-between px-6 py-4 border-b-2"
+          style={{
+            borderColor: `${accentColor.value}60`,
+            backgroundColor: `${accentColor.value}30`,
+          }}
+        >
+          <h2 className="text-3xl font-minecraft text-white lowercase">
             {title}
           </h2>
-          <button
-            className="text-white/70 hover:text-white transition-colors"
-            onClick={onClose}
-          >
-            <Icon icon="pixel:window-close-solid" className="w-6 h-6" />
-          </button>
+          <IconButton
+            icon={
+              <Icon
+                icon="solar:close-square-bold"
+                className="w-4 h-4 text-white"
+              />
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose();
+            }}
+            variant="secondary"
+            size="sm"
+            aria-label="Close"
+          />
         </div>
 
         <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
 
         {footer && (
-          <div className="p-5 border-t border-white/20 bg-black/20">
+          <div
+            className="px-6 py-4 border-t-2"
+            style={{
+              borderColor: `${accentColor.value}60`,
+              backgroundColor: `${accentColor.value}15`,
+            }}
+          >
             {footer}
           </div>
         )}

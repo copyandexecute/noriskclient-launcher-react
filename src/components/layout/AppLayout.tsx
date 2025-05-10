@@ -5,10 +5,35 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 
-import { appConfig, navItems, userData } from "../../data/mock-data";
-import { VerticalNavbar } from "../navigation/VerticalNavbar";
-import { UserProfileBar } from "../header/UserProfileBar";
-import MatrixRainEffect from '../effects/MatrixRainEffect';
+import { VerticalNavbar } from ".././navigation/VerticalNavbar";
+import { UserProfileBar } from ".././header/UserProfileBar";
+import { useThemeStore } from "../../store/useThemeStore";
+import {
+  BACKGROUND_EFFECTS,
+  useBackgroundEffectStore,
+} from "../../store/background-effect-store";
+import MatrixRainEffect from ".././effects/MatrixRainEffect";
+import EnchantmentParticlesEffect from ".././effects/EnchantmentParticlesEffect";
+import AccentWaves from ".././effects/AccentWaves";
+import AccentParticles from ".././effects/AccentParticles";
+import AccentGrid from ".././effects/AccentGrid";
+import AccentVoxels from ".././effects/AccentVoxels";
+import AccentLightning from ".././effects/AccentLightning";
+import AccentLiquidChrome from ".././effects/AccentLiquidChrome";
+
+const navItems = [
+  { id: "play", icon: "solar:play-bold", label: "Play" },
+  { id: "profiles", icon: "solar:user-id-bold", label: "Profiles" },
+  { id: "mods", icon: "solar:widget-bold", label: "Mods" },
+  { id: "skins", icon: "solar:emoji-funny-circle-bold", label: "Skins" },
+  { id: "store", icon: "solar:shop-bold", label: "Store" },
+  { id: "news", icon: "solar:bell-bold", label: "News" },
+  { id: "settings", icon: "solar:settings-bold", label: "Settings" },
+];
+
+const appConfig = {
+  version: "v0.5.22",
+};
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -26,6 +51,36 @@ export function AppLayout({
   const minimizeRef = useRef<HTMLDivElement>(null);
   const maximizeRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
+
+  const { currentEffect } = useBackgroundEffectStore();
+
+  const getComplementaryBackground = () => {
+    const hexToRgb = (hex: string) => {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result
+        ? {
+            r: Number.parseInt(result[1], 16),
+            g: Number.parseInt(result[2], 16),
+            b: Number.parseInt(result[3], 16),
+          }
+        : { r: 34, g: 34, b: 34 };
+    };
+
+    const rgb = hexToRgb(accentColor.value);
+
+    const darkR = Math.floor(rgb.r * 0.1);
+    const darkG = Math.floor(rgb.g * 0.1);
+    const darkB = Math.floor(rgb.b * 0.1);
+
+    const finalR = Math.min(darkR, 30);
+    const finalG = Math.min(darkG, 30);
+    const finalB = Math.min(darkB, 30);
+
+    return `rgb(${finalR}, ${finalG}, ${finalB})`;
+  };
+
+  const backgroundColor = getComplementaryBackground();
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -48,24 +103,34 @@ export function AppLayout({
 
     const setupWindowControls = async () => {
       try {
-        const { Window } = await import("@tauri-apps/api/window");
-        const currentWindow = Window.getCurrent();
+        const tauriModule = await import("@tauri-apps/api/window").catch(
+          () => null,
+        );
 
-        if (minimizeRef.current) {
-          minimizeRef.current.addEventListener("click", () =>
-            currentWindow.minimize(),
-          );
-        }
+        if (tauriModule) {
+          const { Window } = tauriModule;
+          const currentWindow = Window.getCurrent();
 
-        if (maximizeRef.current) {
-          maximizeRef.current.addEventListener("click", () =>
-            currentWindow.toggleMaximize(),
-          );
-        }
+          if (minimizeRef.current) {
+            minimizeRef.current.addEventListener("click", () =>
+              currentWindow.minimize(),
+            );
+          }
 
-        if (closeRef.current) {
-          closeRef.current.addEventListener("click", () =>
-            currentWindow.close(),
+          if (maximizeRef.current) {
+            maximizeRef.current.addEventListener("click", () =>
+              currentWindow.toggleMaximize(),
+            );
+          }
+
+          if (closeRef.current) {
+            closeRef.current.addEventListener("click", () =>
+              currentWindow.close(),
+            );
+          }
+        } else {
+          console.log(
+            "Tauri API not available, window controls will be decorative only",
           );
         }
       } catch (error) {
@@ -78,17 +143,56 @@ export function AppLayout({
     return () => ctx.revert();
   }, []);
 
+  const renderBackgroundEffect = () => {
+    switch (currentEffect) {
+      case BACKGROUND_EFFECTS.MATRIX_RAIN:
+        return <MatrixRainEffect />;
+      case BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES:
+        return <EnchantmentParticlesEffect opacity={0.3} />;
+      case BACKGROUND_EFFECTS.ACCENT_WAVES:
+        return <AccentWaves opacity={0.2} speed={1} />;
+      case BACKGROUND_EFFECTS.ACCENT_PARTICLES:
+        return <AccentParticles opacity={0.3} particleCount={50} speed={1} />;
+      case BACKGROUND_EFFECTS.ACCENT_GRID:
+        return <AccentGrid opacity={0.15} speed={1} gridSize={30} />;
+      case BACKGROUND_EFFECTS.ACCENT_VOXELS:
+        return <AccentVoxels opacity={0.2} cubeCount={30} speed={1} />;
+      case BACKGROUND_EFFECTS.ACCENT_LIGHTNING:
+        return (
+          <AccentLightning
+            opacity={0.7}
+            speed={0.8}
+            intensity={1.2}
+            size={1.5}
+          />
+        );
+      case BACKGROUND_EFFECTS.ACCENT_LIQUID_CHROME:
+        return (
+          <AccentLiquidChrome
+            opacity={0.7}
+            speed={0.2}
+            amplitude={0.5}
+            frequencyX={3}
+            frequencyY={2}
+          />
+        );
+      default:
+        return <MatrixRainEffect />;
+    }
+  };
+
   return (
     <div
       ref={launcherRef}
       className="h-screen w-full bg-black/50 backdrop-blur-lg border-2 border-white/20 overflow-hidden relative flex shadow-[0_0_25px_rgba(0,0,0,0.4)]"
       style={{
-        backgroundColor: "#222",
+        backgroundColor: backgroundColor,
         backgroundSize: "cover",
         backgroundPosition: "center",
+        backgroundImage: `linear-gradient(to bottom right, ${backgroundColor}, rgba(0,0,0,0.9))`,
       }}
     >
-      <BorderGlowEffects />
+      <BorderGlowEffects accentColor={accentColor.value} />
 
       <VerticalNavbar
         items={navItems}
@@ -106,22 +210,44 @@ export function AppLayout({
         />
 
         <div className="flex-1 relative overflow-hidden">
-          <MatrixRainEffect />
+          {renderBackgroundEffect()}
 
-          <div className="relative z-10 h-full overflow-hidden">{children}</div>
+          <div className="relative z-10 h-full overflow-hidden custom-scrollbar">
+            {children}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function BorderGlowEffects() {
+function BorderGlowEffects({ accentColor }: { accentColor: string }) {
   return (
     <>
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/40 to-transparent"></div>
-      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/40 to-transparent"></div>
-      <div className="absolute top-0 bottom-0 left-0 w-[2px] bg-gradient-to-b from-transparent via-white/40 to-transparent"></div>
-      <div className="absolute top-0 bottom-0 right-0 w-[2px] bg-gradient-to-b from-transparent via-white/40 to-transparent"></div>
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px]"
+        style={{
+          background: `linear-gradient(to right, transparent, ${accentColor}40, transparent)`,
+        }}
+      ></div>
+      <div
+        className="absolute bottom-0 left-0 right-0 h-[2px]"
+        style={{
+          background: `linear-gradient(to right, transparent, ${accentColor}40, transparent)`,
+        }}
+      ></div>
+      <div
+        className="absolute top-0 bottom-0 left-0 w-[2px]"
+        style={{
+          background: `linear-gradient(to bottom, transparent, ${accentColor}40, transparent)`,
+        }}
+      ></div>
+      <div
+        className="absolute top-0 bottom-0 right-0 w-[2px]"
+        style={{
+          background: `linear-gradient(to bottom, transparent, ${accentColor}40, transparent)`,
+        }}
+      ></div>
     </>
   );
 }
@@ -148,11 +274,7 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
       </div>
 
       <div className="flex items-center gap-4">
-        <UserProfileBar
-          //@ts-ignore
-          username={userData.username}
-          avatarUrl={userData.avatarUrl}
-        />
+        <UserProfileBar />
 
         <WindowControls
           minimizeRef={minimizeRef}

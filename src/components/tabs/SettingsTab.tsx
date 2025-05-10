@@ -1,11 +1,28 @@
 "use client";
 
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
-import { TabHeader } from "../ui/TabHeader";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { TabContent } from "../ui/TabContent";
-// Assuming the type definition exists here, adjust if necessary
+import { Icon } from "@iconify/react";
+import { Button } from "../ui/buttons/Button";
+import { Input } from "../ui/Input";
+import { Label } from "../ui/Label";
+import { ToggleSwitch } from "../ui/ToggleSwitch";
+import { ColorPicker } from "../ColorPicker";
 import type { LauncherConfig } from "../../types/launcherConfig";
-import * as ConfigService from "../../services/launcher-config-service"; // Import the new service
+import * as ConfigService from "../../services/launcher-config-service";
+import { useThemeStore } from "../../store/useThemeStore";
+import {
+  BACKGROUND_EFFECTS,
+  useBackgroundEffectStore,
+} from "../../store/background-effect-store";
+import { gsap } from "gsap";
+import { cn } from "../../lib/utils";
 
 export function SettingsTab() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -14,16 +31,66 @@ export function SettingsTab() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<"general" | "appearance">(
+    "general",
+  );
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const { accentColor } = useThemeStore();
+
+  const { currentEffect, setCurrentEffect } = useBackgroundEffectStore();
+
+  const backgroundOptions = [
+    {
+      id: BACKGROUND_EFFECTS.MATRIX_RAIN,
+      name: "Matrix Rain",
+      icon: "solar:cube-bold",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES,
+      name: "Enchantment Table",
+      icon: "solar:magic-stick-bold",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ACCENT_WAVES,
+      name: "Accent Waves",
+      icon: "solar:wave-linear",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ACCENT_PARTICLES,
+      name: "Accent Particles",
+      icon: "solar:star-bold",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ACCENT_GRID,
+      name: "Accent Grid",
+      icon: "solar:square-academic-cap-bold",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ACCENT_VOXELS,
+      name: "Accent Voxels",
+      icon: "solar:cube-3d-bold",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ACCENT_LIGHTNING,
+      name: "Accent Lightning",
+      icon: "solar:bolt-bold",
+    },
+    {
+      id: BACKGROUND_EFFECTS.ACCENT_LIQUID_CHROME,
+      name: "Liquid Chrome",
+      icon: "solar:liquid-bold",
+    },
+  ];
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setSaveSuccess(false); // Reset save success message on reload
+    setSaveSuccess(false);
     try {
-      // Use the service function
       const loadedConfig = await ConfigService.getLauncherConfig();
       setConfig(loadedConfig);
-      setTempConfig({ ...loadedConfig }); // Create a mutable copy for edits
+      setTempConfig({ ...loadedConfig });
       console.log("Loaded launcher config:", loadedConfig);
     } catch (err) {
       console.error("Failed to load launcher config:", err);
@@ -39,6 +106,16 @@ export function SettingsTab() {
     loadConfig();
   }, [loadConfig]);
 
+  useEffect(() => {
+    if (contentRef.current) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
+      );
+    }
+  }, [activeTab]);
+
   const saveConfig = useCallback(async () => {
     if (!tempConfig) return;
 
@@ -47,33 +124,25 @@ export function SettingsTab() {
     setError(null);
 
     try {
-      // Use the service function, passing the temporary config
       const updatedConfig = await ConfigService.setLauncherConfig(tempConfig);
-      setConfig(updatedConfig); // Update original config with saved version
-      setTempConfig({ ...updatedConfig }); // Update temp copy as well
+      setConfig(updatedConfig);
+      setTempConfig({ ...updatedConfig });
       console.log("Configuration saved successfully:", updatedConfig);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000); // Hide message after 3s
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error("Failed to save configuration:", err);
       setError(err instanceof Error ? err.message : String(err));
-      // Don't automatically revert changes on save failure, let the user decide
     } finally {
       setSaving(false);
     }
   }, [tempConfig]);
 
-  const handleCheckboxChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { id, checked } = e.target;
-    if (!tempConfig) return;
-    setTempConfig({ ...tempConfig, [id]: checked });
-  };
-
   const handleConcurrentDownloadsChange = (
     e: ChangeEvent<HTMLInputElement>,
   ) => {
     if (!tempConfig) return;
-    const value = parseInt(e.target.value, 10);
+    const value = Number.parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 1 && value <= 10) {
       setTempConfig({ ...tempConfig, concurrent_downloads: value });
     }
@@ -82,8 +151,8 @@ export function SettingsTab() {
   const resetChanges = () => {
     if (config) {
       setTempConfig({ ...config });
-      setError(null); // Clear potential save error on reset
-      setSaveSuccess(false); // Clear save success message
+      setError(null);
+      setSaveSuccess(false);
     }
   };
 
@@ -92,200 +161,469 @@ export function SettingsTab() {
     tempConfig &&
     JSON.stringify(config) !== JSON.stringify(tempConfig);
 
-  return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <TabHeader title="Settings" icon="pixel:cog-solid" />
-      <TabContent>
-        <div className="overflow-y-auto">
-          {loading && (
-            <p className="text-center text-white/70 p-4">Loading Settings...</p>
-          )}
+  const cardStyle = {
+    borderColor: `${accentColor.value}80`,
+    borderBottomColor: accentColor.value,
+    boxShadow:
+      "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
+    backgroundColor: `${accentColor.value}10`,
+  };
 
-          {error && (
-            <div className="mb-4 p-4 rounded bg-red-900/50 border border-red-700">
-              <p className="text-red-300 mb-3">Error: {error}</p>
-              <button
+  const settingItemStyle = {
+    borderColor: `${accentColor.value}40`,
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
+  };
+
+  const renderGeneralTab = () => (
+    <div className="space-y-6">
+      <div
+        className={cn(
+          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
+          "border-2 border-b-4",
+          "bg-black/20 backdrop-blur-md",
+        )}
+        style={cardStyle}
+      >
+        <div className="mb-4">
+          <Label
+            size="lg"
+            className="mb-2"
+            icon={<Icon icon="solar:settings-bold" />}
+          >
+            Launcher Settings
+          </Label>
+          <p className="text-xl text-white/70 font-minecraft mt-2">
+            Configure basic launcher settings
+          </p>
+        </div>
+
+        <div className="space-y-4 mt-6">
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Experimental Mode
+              </h5>
+            </div>
+            <ToggleSwitch
+              checked={tempConfig?.is_experimental || false}
+              onChange={(checked) =>
+                tempConfig &&
+                setTempConfig({ ...tempConfig, is_experimental: checked })
+              }
+              disabled={saving}
+              size="lg"
+            />
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Auto Updates
+              </h5>
+            </div>
+            <ToggleSwitch
+              checked={tempConfig?.auto_check_updates || false}
+              onChange={(checked) =>
+                tempConfig &&
+                setTempConfig({ ...tempConfig, auto_check_updates: checked })
+              }
+              disabled={saving}
+              size="lg"
+            />
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Discord Presence
+              </h5>
+            </div>
+            <ToggleSwitch
+              checked={tempConfig?.enable_discord_presence || false}
+              onChange={(checked) =>
+                tempConfig &&
+                setTempConfig({
+                  ...tempConfig,
+                  enable_discord_presence: checked,
+                })
+              }
+              disabled={saving}
+              size="lg"
+            />
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Beta Updates
+              </h5>
+            </div>
+            <ToggleSwitch
+              checked={tempConfig?.check_beta_channel || false}
+              onChange={(checked) =>
+                tempConfig &&
+                setTempConfig({ ...tempConfig, check_beta_channel: checked })
+              }
+              disabled={saving}
+              size="lg"
+            />
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Concurrent Downloads
+              </h5>
+            </div>
+            <Input
+              type="number"
+              id="concurrent_downloads"
+              min="1"
+              max="10"
+              value={tempConfig?.concurrent_downloads || 3}
+              onChange={handleConcurrentDownloadsChange}
+              disabled={saving}
+              className="w-24"
+              icon={<Icon icon="solar:sort-by-time-bold" />}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAppearanceTab = () => (
+    <div className="space-y-6">
+      <div
+        className={cn(
+          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
+          "border-2 border-b-4",
+          "bg-black/20 backdrop-blur-md",
+        )}
+        style={cardStyle}
+      >
+        <div className="mb-4">
+          <Label
+            size="lg"
+            className="mb-2"
+            icon={<Icon icon="solar:palette-bold" />}
+          >
+            Accent Color
+          </Label>
+          <p className="text-xl text-white/70 font-minecraft mt-2">
+            Choose your preferred accent color for the launcher
+          </p>
+        </div>
+
+        <div className="mt-6">
+          <ColorPicker shape="square" size="md" showCustomOption={true} />
+        </div>
+
+        <div className="mt-6 p-4 rounded-lg border" style={settingItemStyle}>
+          <Label
+            size="md"
+            className="mb-3"
+            icon={<Icon icon="solar:eye-bold" />}
+          >
+            Preview
+          </Label>
+          <div className="flex flex-wrap gap-4 mt-3">
+            <Button icon={<Icon icon="solar:play-bold" />} size="md">
+              Play Game
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<Icon icon="solar:settings-bold" />}
+              size="md"
+            >
+              Settings
+            </Button>
+            <Button
+              variant="ghost"
+              icon={<Icon icon="solar:download-bold" />}
+              size="md"
+            >
+              Download
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
+          "border-2 border-b-4",
+          "bg-black/20 backdrop-blur-md",
+        )}
+        style={cardStyle}
+      >
+        <div className="mb-4">
+          <Label
+            size="lg"
+            className="mb-2"
+            icon={<Icon icon="solar:stars-bold" />}
+          >
+            Background Effect
+          </Label>
+          <p className="text-xl text-white/70 font-minecraft mt-2">
+            Choose a background effect for the launcher
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          {backgroundOptions.map((option) => (
+            <button
+              key={option.id}
+              className={cn(
+                "relative overflow-hidden transition-all duration-300 p-3 rounded-md",
+                "border-2 border-b-4",
+                "bg-black/20 backdrop-blur-md",
+                currentEffect === option.id
+                  ? "ring-2 ring-white/30"
+                  : "hover:bg-black/40",
+              )}
+              style={{
+                borderColor:
+                  currentEffect === option.id
+                    ? accentColor.value
+                    : `${accentColor.value}40`,
+                borderBottomColor:
+                  currentEffect === option.id
+                    ? accentColor.value
+                    : `${accentColor.value}60`,
+                boxShadow:
+                  "0 4px 0 rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
+                backgroundColor:
+                  currentEffect === option.id
+                    ? `${accentColor.value}20`
+                    : "rgba(0, 0, 0, 0.2)",
+              }}
+              onClick={() => setCurrentEffect(option.id)}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <Icon icon={option.icon} className="w-8 h-8 text-white" />
+                <h5 className="font-minecraft text-xl lowercase text-white text-center">
+                  {option.name}
+                </h5>
+              </div>
+
+              {currentEffect === option.id && (
+                <div className="absolute top-2 right-2">
+                  <Icon
+                    icon="solar:check-circle-bold"
+                    className="w-5 h-5"
+                    style={{ color: accentColor.value }}
+                  />
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTabContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Icon
+              icon="solar:refresh-bold"
+              className="w-10 h-10 text-white/70 animate-spin mx-auto mb-4"
+            />
+            <p className="text-2xl text-white/70 font-minecraft">
+              Loading Settings...
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="bg-red-900/30 border-2 border-red-700/50 rounded-lg p-6 my-4">
+          <div className="flex items-start gap-3">
+            <Icon
+              icon="solar:danger-triangle-bold"
+              className="w-8 h-8 text-red-400 flex-shrink-0 mt-1"
+            />
+            <div>
+              <h3 className="text-2xl text-red-300 font-minecraft mb-2">
+                Error Loading Settings
+              </h3>
+              <p className="text-xl text-red-200/80 font-minecraft mb-4">
+                {error}
+              </p>
+              <Button
                 onClick={loadConfig}
-                className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm cursor-pointer hover:enabled:bg-blue-700 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed"
+                variant="secondary"
+                size="sm"
+                icon={<Icon icon="solar:refresh-bold" className="w-5 h-5" />}
                 disabled={loading}
               >
-                Retry
-              </button>
+                Try Again
+              </Button>
             </div>
-          )}
+          </div>
+        </div>
+      );
+    }
 
-          {!loading && !error && config && tempConfig && (
-            <div className="bg-black/10 rounded-lg p-6 shadow-md">
-              <h3 className="text-5xl font-semibold mb-6 text-white/90">
-                Launcher Settings
-              </h3>
-              <div className="flex flex-col gap-5 mb-6">
-                {/* Experimental Mode */}
-                <div className="flex items-start gap-4 pb-4 border-b border-white/10">
-                  <div className="w-1/3 min-w-[200px]">
-                    <label
-                      htmlFor="is_experimental"
-                      className="font-minecraft text-3xl lowercase text-white/90 block"
-                    >
-                      Experimental Mode
-                    </label>
-                    <span className="font-minecraft-ten text-white/70 text-base block mt-1">
-                      Enable experimental NoRisk Client features
-                    </span>
-                  </div>
-                  <div className="flex-1 flex items-center pt-1">
-                    <input
-                      type="checkbox"
-                      id="is_experimental"
-                      checked={tempConfig.is_experimental}
-                      onChange={handleCheckboxChange}
-                      disabled={saving}
-                      className="w-5 h-5 cursor-pointer accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                    />
-                  </div>
-                </div>
+    if (!config || !tempConfig) {
+      return (
+        <div className="text-center p-8">
+          <p className="text-2xl text-white/70 font-minecraft">
+            Could not load configuration.
+          </p>
+        </div>
+      );
+    }
 
-                {/* Auto Updates */}
-                <div className="flex items-start gap-4 pb-4 border-b border-white/10">
-                  <div className="w-1/3 min-w-[200px]">
-                    <label
-                      htmlFor="auto_check_updates"
-                      className="font-minecraft text-3xl lowercase text-white/90 block"
-                    >
-                      Automatic Updates
-                    </label>
-                    <span className="font-minecraft-ten text-white/70 text-base block mt-1">
-                      Automatically check for updates
-                    </span>
-                  </div>
-                  <div className="flex-1 flex items-center pt-1">
-                    <input
-                      type="checkbox"
-                      id="auto_check_updates"
-                      checked={tempConfig.auto_check_updates}
-                      onChange={handleCheckboxChange}
-                      disabled={saving}
-                      className="w-5 h-5 cursor-pointer accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                    />
-                  </div>
-                </div>
+    switch (activeTab) {
+      case "general":
+        return renderGeneralTab();
+      case "appearance":
+        return renderAppearanceTab();
+      default:
+        return null;
+    }
+  };
 
-                {/* Discord Presence */}
-                <div className="flex items-start gap-4 pb-4 border-b border-white/10">
-                  <div className="w-1/3 min-w-[200px]">
-                    <label
-                      htmlFor="enable_discord_presence"
-                      className="font-minecraft text-3xl lowercase text-white/90 block"
-                    >
-                      Discord Rich Presence
-                    </label>
-                    <span className="font-minecraft-ten text-white/70 text-base block mt-1">
-                      Show your NoRisk Client status on Discord
-                    </span>
-                  </div>
-                  <div className="flex-1 flex items-center pt-1">
-                    <input
-                      type="checkbox"
-                      id="enable_discord_presence"
-                      checked={tempConfig.enable_discord_presence}
-                      onChange={handleCheckboxChange}
-                      disabled={saving}
-                      className="w-5 h-5 cursor-pointer accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                    />
-                  </div>
-                </div>
-
-                {/* Beta Channel Check */}
-                <div className="flex items-start gap-4 pb-4 border-b border-white/10">
-                  <div className="w-1/3 min-w-[200px]">
-                    <label
-                      htmlFor="check_beta_channel"
-                      className="font-minecraft text-3xl lowercase text-white/90 block"
-                    >
-                      Beta Updates
-                    </label>
-                    <span className="font-minecraft-ten text-white/70 text-base block mt-1">
-                      Check for unstable beta updates
-                    </span>
-                  </div>
-                  <div className="flex-1 flex items-center pt-1">
-                    <input
-                      type="checkbox"
-                      id="check_beta_channel"
-                      checked={tempConfig.check_beta_channel}
-                      onChange={handleCheckboxChange}
-                      disabled={saving}
-                      className="w-5 h-5 cursor-pointer accent-blue-500 disabled:cursor-not-allowed disabled:opacity-50 mt-1"
-                    />
-                  </div>
-                </div>
-
-                {/* Concurrent Downloads */}
-                <div className="flex items-start gap-4 pb-4 border-b border-white/10">
-                  <div className="w-1/3 min-w-[200px]">
-                    <label
-                      htmlFor="concurrent_downloads"
-                      className="font-minecraft text-3xl lowercase text-white/90 block"
-                    >
-                      Concurrent Downloads
-                    </label>
-                    <span className="font-minecraft-ten text-white/70 text-base block mt-1">
-                      Number of concurrent downloads (1-10)
-                    </span>
-                  </div>
-                  <div className="flex-1 flex items-center pt-1">
-                    <input
-                      type="number"
-                      id="concurrent_downloads"
-                      min="1"
-                      max="10"
-                      value={tempConfig.concurrent_downloads}
-                      onChange={handleConcurrentDownloadsChange}
-                      disabled={saving}
-                      className="w-20 p-1.5 border border-white/20 rounded bg-black/20 text-white/90 disabled:cursor-not-allowed disabled:bg-black/10 disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1"
-                    />
-                  </div>
-                </div>
+  return (
+    <div className="h-full flex flex-col overflow-y-auto">
+      <TabContent>
+        <div className="overflow-y-auto px-2 py-4">
+          {/* Settings Content */}
+          <div
+            className={cn(
+              "relative overflow-hidden transition-all duration-300 mb-4 rounded-md",
+              "border-2 border-b-4",
+              "bg-black/20 backdrop-blur-md",
+            )}
+            style={cardStyle}
+          >
+            <div className="p-6">
+              <div className="mb-6">
+                <h2 className="text-4xl font-minecraft text-white mb-2 lowercase">
+                  Launcher Settings
+                </h2>
+                <p className="text-xl text-white/70 font-minecraft">
+                  Customize your NoRisk Launcher experience
+                </p>
               </div>
 
-              <div className="flex gap-3 mt-5">
+              <div className="flex mb-6 border-b border-white/10">
                 <button
-                  onClick={saveConfig}
-                  disabled={saving || !hasChanges}
-                  className="bg-emerald-600 text-white px-4 py-2 rounded text-sm font-medium cursor-pointer hover:enabled:bg-emerald-700 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setActiveTab("general")}
+                  className={`px-4 py-3 text-2xl font-minecraft lowercase transition-colors flex items-center gap-2 ${
+                    activeTab === "general"
+                      ? "text-white border-b-2 border-[var(--accent,#4f8eff)]"
+                      : "text-white/60 hover:text-white/80"
+                  }`}
+                  style={{
+                    borderColor:
+                      activeTab === "general" ? accentColor.value : undefined,
+                  }}
                 >
-                  {saving ? "Saving..." : "Save Settings"}
+                  <Icon icon="solar:settings-bold" className="w-5 h-5" />
+                  General
                 </button>
                 <button
-                  onClick={resetChanges}
-                  disabled={saving || !hasChanges}
-                  className="bg-gray-500 text-white px-4 py-2 rounded text-sm font-medium cursor-pointer hover:enabled:bg-gray-600 disabled:bg-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => setActiveTab("appearance")}
+                  className={`px-4 py-3 text-2xl font-minecraft lowercase transition-colors flex items-center gap-2 ${
+                    activeTab === "appearance"
+                      ? "text-white border-b-2 border-[var(--accent,#4f8eff)]"
+                      : "text-white/60 hover:text-white/80"
+                  }`}
+                  style={{
+                    borderColor:
+                      activeTab === "appearance"
+                        ? accentColor.value
+                        : undefined,
+                  }}
                 >
-                  Reset Changes
+                  <Icon icon="solar:brush-bold" className="w-5 h-5" />
+                  Appearance
                 </button>
               </div>
 
-              {saving && (
-                <p className="mt-4 p-2 rounded text-center bg-blue-900/50 text-blue-300 text-sm">
-                  Saving settings...
-                </p>
-              )}
-              {saveSuccess && (
-                <p className="mt-4 p-2 rounded text-center bg-green-900/50 text-green-300 text-sm">
-                  Settings saved successfully!
-                </p>
-              )}
-              <div className="mt-5 text-xs text-white/50 text-right">
-                Configuration Version: {config.version}
+              <div ref={contentRef} className="mb-8">
+                {renderTabContent()}
               </div>
-            </div>
-          )}
 
-          {!loading && !error && !config && (
-            <p className="text-center text-white/70 p-4">
-              Could not load configuration.
-            </p>
-          )}
+              {!loading && !error && config && tempConfig && (
+                <div
+                  className="sticky bottom-0 flex justify-between items-center gap-4 py-4 px-6 -mx-6 -mb-6 bg-black/50 backdrop-blur-md border-t border-white/10"
+                  style={{
+                    boxShadow: "0 -10px 15px -5px rgba(0,0,0,0.3)",
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    {saveSuccess && (
+                      <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1.5 rounded-md">
+                        <Icon
+                          icon="solar:check-circle-bold"
+                          className="w-5 h-5"
+                        />
+                        <span className="text-xl font-minecraft">
+                          Settings saved!
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={resetChanges}
+                      disabled={saving || !hasChanges}
+                      variant="secondary"
+                      icon={
+                        <Icon icon="solar:refresh-bold" className="w-6 h-6" />
+                      }
+                      size="md"
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      onClick={saveConfig}
+                      disabled={saving || !hasChanges}
+                      variant="default"
+                      icon={<Icon icon="solar:disk-bold" className="w-6 h-6" />}
+                      size="md"
+                    >
+                      {saving ? (
+                        <>
+                          <Icon
+                            icon="solar:refresh-bold"
+                            className="w-6 h-6 animate-spin"
+                          />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        "Save"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </TabContent>
     </div>

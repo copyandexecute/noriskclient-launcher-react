@@ -64,6 +64,9 @@ module.exports = {
       fontFamily: {
         minecraft: ["Minecraft", "monospace"],
       },
+      backgroundImage: {
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+      },
       animation: {
         float: "float 3s ease-in-out infinite",
         pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",

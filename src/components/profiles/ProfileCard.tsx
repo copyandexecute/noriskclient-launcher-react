@@ -10,11 +10,15 @@ import {
   LaunchState,
   useLaunchStateStore,
 } from "../../store/launch-state-store";
-import { IconButton } from "../ui/IconButton.tsx";
+import { IconButton } from "../ui/buttons/IconButton";
+import { Button } from "../ui/buttons/Button";
 import * as ProcessService from "../../services/process-service";
 import { processMonitor } from "../../services/process-monitor";
 import { listen } from "@tauri-apps/api/event";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
+import { Label } from "../ui/Label";
+import { useThemeStore } from "../../store/useThemeStore";
+import { gsap } from "gsap";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -25,6 +29,7 @@ interface ProfileCardProps {
 export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   const { initializeProfile, getProfileState, resetLaunchState } =
     useLaunchStateStore();
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -32,6 +37,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   const [launchError, setLaunchError] = useState<string | null>(null);
   const eventListenersSetUp = useRef(false);
   const { confirm, confirmDialog } = useConfirmDialog();
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     initializeProfile(profile.id);
@@ -52,7 +58,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
           payload.target_id === profile.id &&
           payload.event_type?.toLowerCase() === "minecraft_output"
         ) {
-          console.log("Game started event received, resetting button");
+          console.log("Game started event received, resetting buttons");
           setIsLaunching(false);
           resetLaunchState(profile.id);
         }
@@ -61,7 +67,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
       const unlistenExit = await listen("minecraft_process_exited", (event) => {
         const payload = event.payload as any;
         if (payload.profile_id === profile.id) {
-          console.log("Process exited event received, resetting button");
+          console.log("Process exited event received, resetting buttons");
           setIsLaunching(false);
           resetLaunchState(profile.id);
         }
@@ -71,13 +77,13 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
         const payload = event.payload as any;
         if (payload.target_id === profile.id) {
           if (payload.event_type?.toLowerCase() === "minecraft_output") {
-            console.log("State event: game started, resetting button");
+            console.log("State event: game started, resetting buttons");
             setIsLaunching(false);
             resetLaunchState(profile.id);
           } else if (
             payload.event_type?.toLowerCase() === "minecraft_process_exited"
           ) {
-            console.log("State event: process exited, resetting button");
+            console.log("State event: process exited, resetting buttons");
             setIsLaunching(false);
             resetLaunchState(profile.id);
           }
@@ -100,7 +106,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
           .then((isRunning) => {
             if (isRunning) {
               console.log(
-                "Game is running, resetting button state to allow multiple instances",
+                "Game is running, resetting buttons state to allow multiple instances",
               );
               setIsLaunching(false);
               resetLaunchState(profile.id);
@@ -162,7 +168,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   };
 
   const handlePlay = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent event from bubbling up to the card
     setLaunchError(null);
 
     if (isLaunching) {
@@ -189,7 +195,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
         ProcessService.isMinecraftRunning(profile.id)
           .then((isRunning) => {
             if (isRunning) {
-              console.log("Game is running after timeout, resetting button");
+              console.log("Game is running after timeout, resetting buttons");
               setIsLaunching(false);
               resetLaunchState(profile.id);
             }
@@ -251,38 +257,86 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
     }
   };
 
-  const getButtonContent = () => {
-    if (isLaunching) {
-      return (
-        <>
-          <Icon icon="pixel:stop-solid" className="w-4 h-4 text-red-400" />
-          <span>STOP</span>
-        </>
-      );
-    } else {
-      return (
-        <>
-          <Icon icon="pixel:play-solid" className="w-4 h-4" />
-          <span>LAUNCH GAME</span>
-        </>
-      );
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    if (cardRef.current) {
+      gsap.to(cardRef.current, {
+        y: -5,
+        boxShadow: "0 12px 0 rgba(0,0,0,0.25), 0 15px 20px rgba(0,0,0,0.4)",
+        duration: 0.2,
+        ease: "power2.out",
+      });
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    if (cardRef.current) {
+      gsap.to(cardRef.current, {
+        y: 0,
+        boxShadow: "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35)",
+        duration: 0.2,
+        ease: "power2.out",
+      });
+    }
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (
+      e.target === e.currentTarget ||
+      !(e.target as HTMLElement).closest("button")
+    ) {
+      onClick();
     }
   };
 
   return (
     <div
+      ref={cardRef}
       className={cn(
-        "bg-black/10 backdrop-blur-lg border-2 border-white/30 overflow-hidden transition-all duration-300 cursor-pointer h-full flex flex-col select-none",
-        isHovered && "border-white/50 shadow-[0_0_15px_rgba(255,255,255,0.1)]",
-        isLaunching && "border-red-400/50",
+        "relative overflow-hidden transition-all duration-300 cursor-pointer h-full flex flex-col select-none rounded-md",
+        "border-2 border-b-4",
+        "bg-black/20 backdrop-blur-md",
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={onClick}
+      style={{
+        borderColor: isLaunching
+          ? "rgba(239, 68, 68, 0.5)"
+          : `${accentColor.value}80`,
+        borderBottomColor: isLaunching ? "rgb(185, 28, 28)" : accentColor.value,
+        boxShadow:
+          "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
+        backgroundColor: `${accentColor.value}10`,
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={handleCardClick}
     >
-      <div className="flex items-center justify-between p-4 border-b border-white/20 bg-black/20">
+      <span
+        className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+        style={{ backgroundColor: `${accentColor.value}80` }}
+      />
+
+      <span
+        className={cn(
+          "absolute inset-0 bg-gradient-radial from-white/20 via-transparent to-transparent transition-opacity duration-300",
+          isHovered ? "opacity-30" : "opacity-0",
+        )}
+      />
+
+      <div
+        className="flex items-center justify-between p-4 border-b border-white/20"
+        style={{ backgroundColor: `${accentColor.value}05` }}
+      >
         <div className="flex items-center flex-1 min-w-0">
-          <div className="w-12 h-12 mr-3 relative flex-shrink-0 border-2 border-white/30 bg-black/30 flex items-center justify-center">
+          <div
+            className="w-12 h-12 mr-3 relative flex-shrink-0 flex items-center justify-center rounded-sm overflow-hidden"
+            style={{
+              borderWidth: "2px",
+              borderStyle: "solid",
+              borderColor: `${accentColor.value}60`,
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
+            }}
+          >
             {getProfileIcon() ? (
               <img
                 src={getProfileIcon() || "/placeholder.svg"}
@@ -291,18 +345,21 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
                 style={{ imageRendering: "pixelated" }}
               />
             ) : (
-              <Icon icon="pixel:grid-solid" className="w-6 h-6 text-white/70" />
+              <Icon icon="solar:widget-bold" className="w-6 h-6 text-white" />
             )}
           </div>
           <div className="overflow-hidden">
             <h3 className="text-2xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis lowercase font-normal">
               {profile.name}
             </h3>
-            <div className="flex items-center ">
+            <div className="flex items-center">
               <img
                 src={getModLoaderIcon() || "/placeholder.svg"}
                 alt={profile.loader || "vanilla"}
                 className="w-5 h-5 mr-2"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+                }}
               />
               <span className="text-base text-white/70 font-minecraft whitespace-nowrap lowercase">
                 {profile.game_version}
@@ -312,81 +369,91 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
         </div>
 
         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-          {profile.selected_norisk_pack_id && (
-            <div
-              className="w-8 h-8 flex items-center justify-center text-blue-300"
-              title="NoRisk Pack"
-            >
-              <Icon icon="pixel:shield-solid" className="w-5 h-5" />
-            </div>
-          )}
           <IconButton
             icon={
               isCloning ? (
                 <Icon
-                  icon="pixel:spinner-solid"
+                  icon="solar:refresh-bold"
                   className="w-4 h-4 animate-spin"
                 />
               ) : (
-                <Icon icon="pixel:copy-solid" className="w-4 h-4" />
+                <Icon icon="solar:copy-bold" className="w-4 h-4" />
               )
             }
-            // @ts-ignore
-            onClick={(e) => handleClone(e)}
+            onClick={handleClone}
             disabled={isCloning}
-            title="Clone Profile"
+            size="sm"
+            variant="default"
+            aria-label="Clone Profile"
           />
           {!profile.is_standard_version && (
             <IconButton
-              icon={<Icon icon="pixel:cog-solid" className="w-4 h-4" />}
-              // @ts-ignore
+              icon={<Icon icon="solar:settings-bold" className="w-4 h-4" />}
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit();
               }}
-              title="Settings"
+              size="sm"
+              variant="default"
+              aria-label="Edit Profile"
             />
           )}
         </div>
       </div>
 
-      <div className="p-4 border-t border-white/20 bg-black/20">
+      <div
+        className="p-4 flex-1 flex flex-col justify-end"
+        style={{ backgroundColor: `${accentColor.value}05` }}
+      >
         {launchError && (
-          <div className="mb-3 p-2 bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-minecraft">
+          <div
+            className="mb-3 p-2 bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-minecraft rounded-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
             {launchError}
           </div>
         )}
 
         <div className="flex flex-col gap-3">
           {isLaunching ? (
-            <div className="flex flex-col gap-2">
-              <button
-                className="backdrop-blur-sm border-2 border-red-400/50 bg-red-900/30 py-4 px-6 text-2xl text-white font-minecraft flex items-center justify-center gap-3 transition-all uppercase whitespace-nowrap hover:bg-red-900/40 select-none"
+            <div
+              className="flex flex-col gap-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button
                 onClick={handleAbort}
+                variant="destructive"
+                size="md"
+                icon={
+                  <Icon
+                    icon="solar:close-bold"
+                    className="w-5 h-5 text-white"
+                  />
+                }
               >
-                <Icon icon="pixel:x-solid" className="w-5 h-5" />
-                <span>ABORT</span>
-              </button>
-              <div className="w-full h-[3px] bg-black/40">
+                ABORT
+              </Button>
+              <div className="w-full h-[3px] bg-black/40 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-red-400 transition-all duration-300"
                   style={{ width: `${Math.max(1, launchProgress * 100)}%` }}
                 />
               </div>
-              <div className="text-base text-white/80 font-minecraft text-center">
+              <Label variant="secondary" size="sm" className="text-center">
                 {currentStep}
-              </div>
+              </Label>
             </div>
           ) : (
-            <button
-              className={cn(
-                "backdrop-blur-sm border-2 border-white/30 py-4 px-6 text-2xl text-white font-minecraft flex items-center justify-center gap-3 transition-all uppercase whitespace-nowrap select-none",
-                "bg-black/40 hover:bg-black/60 active:bg-black/70 active:scale-[0.99]",
-              )}
+            <Button
               onClick={handlePlay}
+              variant="default"
+              size="md"
+              icon={
+                <Icon icon="solar:play-bold" className="w-4 h-4 text-white" />
+              }
             >
-              {getButtonContent()}
-            </button>
+              LAUNCH GAME
+            </Button>
           )}
         </div>
       </div>

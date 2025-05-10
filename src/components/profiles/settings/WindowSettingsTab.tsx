@@ -1,11 +1,10 @@
 "use client";
 
 import type { Profile } from "../../../types/profile";
-import { FormSection } from "../../ui/FormSection";
-import { FormField } from "../../ui/FormField";
-import { TextInput } from "../../ui/TextInput";
-import { ToggleSwitch } from "../../ui/ToggleSwitch";
-import { SectionTitle } from "../../ui/SectionTitle";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { Checkbox } from "../../ui/Checkbox";
+import { Label } from "../../ui/Label";
+import { Input } from "../../ui/Input";
 
 interface WindowSettingsTabProps {
   editedProfile: Profile;
@@ -16,6 +15,7 @@ export function WindowSettingsTab({
   editedProfile,
   updateProfile,
 }: WindowSettingsTabProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
   const resolutionPresets = [
     { width: 1280, height: 720, label: "720p" },
     { width: 1920, height: 1080, label: "1080p" },
@@ -41,82 +41,102 @@ export function WindowSettingsTab({
   };
 
   return (
-    <div className="space-y-8 select-none">
-      <SectionTitle
-        title="window settings"
-        description="configure how minecraft's window appears on your screen."
-      />
+    <div className="space-y-6 select-none">
+      <div>
+        <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
+          window settings
+        </h3>
+        <p className="text-xl text-white/70 mb-4 font-minecraft tracking-wide select-none">
+          configure how minecraft's window appears on your screen.
+        </p>
+      </div>
 
-      <FormSection>
-        <FormField label="resolution">
-          <div className="grid grid-cols-2 gap-5 mb-5">
-            <div>
-              <label className="block text-2xl text-white/70 font-minecraft mb-3 text-sm lowercase tracking-wide select-none">
-                width
-              </label>
-              <TextInput
-                type="number"
-                value={String(
-                  editedProfile.settings?.resolution?.width || 1280,
-                )}
-                onChange={(value) => {
-                  const width = Number.parseInt(value) || 1280;
-                  handleResolutionChange(
-                    width,
-                    editedProfile.settings?.resolution?.height || 720,
-                  );
-                }}
-                className="text-base tracking-wide"
-              />
-            </div>
-            <div>
-              <label className="block text-2xl text-white/70 font-minecraft mb-3 text-sm lowercase tracking-wide select-none">
-                height
-              </label>
-              <TextInput
-                type="number"
-                value={String(
-                  editedProfile.settings?.resolution?.height || 720,
-                )}
-                onChange={(value) => {
-                  const height = Number.parseInt(value) || 720;
-                  handleResolutionChange(
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            resolution
+          </h3>
+          <div
+            className="p-4 rounded-lg border-2 border-b-4"
+            style={{
+              backgroundColor: `${accentColor.value}10`,
+              borderColor: `${accentColor.value}60`,
+              borderBottomColor: accentColor.value,
+              boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            }}
+          >
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xl text-white/70 font-minecraft mb-2 lowercase tracking-wide select-none">
+                  width
+                </label>
+                <Input
+                  type="number"
+                  value={String(
                     editedProfile.settings?.resolution?.width || 1280,
-                    height,
-                  );
-                }}
-                className="text-base tracking-wide"
-              />
+                  )}
+                  onChange={(e) => {
+                    const width = Number.parseInt(e.target.value) || 1280;
+                    handleResolutionChange(
+                      width,
+                      editedProfile.settings?.resolution?.height || 720,
+                    );
+                  }}
+                  className="text-2xl py-3"
+                />
+              </div>
+              <div>
+                <label className="block text-xl text-white/70 font-minecraft mb-2 lowercase tracking-wide select-none">
+                  height
+                </label>
+                <Input
+                  type="number"
+                  value={String(
+                    editedProfile.settings?.resolution?.height || 720,
+                  )}
+                  onChange={(e) => {
+                    const height = Number.parseInt(e.target.value) || 720;
+                    handleResolutionChange(
+                      editedProfile.settings?.resolution?.width || 1280,
+                      height,
+                    );
+                  }}
+                  className="text-2xl py-3"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-wrap gap-3 mb-5">
-            {resolutionPresets.map((preset) => (
-              <button
-                key={preset.label}
-                className={`px-5 py-3 text-2xl font-minecraft tracking-wide rounded-md transition-all duration-200 ${
-                  editedProfile.settings?.resolution?.width === preset.width &&
-                  editedProfile.settings?.resolution?.height === preset.height
-                    ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_8px_rgba(255,255,255,0.15)]"
-                    : "bg-black/30 text-white/70 border-2 border-white/20 hover:bg-black/40 hover:text-white"
-                }`}
-                onClick={() =>
-                  handleResolutionChange(preset.width, preset.height)
-                }
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {resolutionPresets.map((preset) => (
+                <Label
+                  key={preset.label}
+                  variant={
+                    editedProfile.settings?.resolution?.width ===
+                      preset.width &&
+                    editedProfile.settings?.resolution?.height === preset.height
+                      ? "default"
+                      : "ghost"
+                  }
+                  size="md"
+                  className="cursor-pointer text-xl"
+                  onClick={() =>
+                    handleResolutionChange(preset.width, preset.height)
+                  }
+                >
+                  {preset.label}
+                </Label>
+              ))}
+            </div>
 
-          <ToggleSwitch
-            id="fullscreen"
-            checked={editedProfile.settings?.fullscreen || false}
-            onChange={handleFullscreenChange}
-            label="fullscreen"
-          />
-        </FormField>
-      </FormSection>
+            <Checkbox
+              checked={editedProfile.settings?.fullscreen || false}
+              onChange={(e) => handleFullscreenChange(e.target.checked)}
+              label="fullscreen"
+              className="text-2xl"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -10,9 +10,12 @@ import { JavaSettingsTab } from "./settings/JavaSettingsTab";
 import { WindowSettingsTab } from "./settings/WindowSettingsTab";
 import { useProfileStore } from "../../store/profile-store";
 import * as ProfileService from "../../services/profile-service";
-import { Modal } from ".././ui/Modal.tsx";
-import { Button } from ".././ui/Button";
-import { StatusMessage } from ".././ui/StatusMessage.tsx";
+import { Modal } from "../ui/Modal";
+import { Button } from "../ui/buttons/Button";
+import { StatusMessage } from "../ui/StatusMessage";
+import { useThemeStore } from "../../store/useThemeStore";
+import { Input } from "../ui/Input";
+import { Checkbox } from "../ui/Checkbox";
 
 interface ProfileSettingsProps {
   profile: Profile;
@@ -35,6 +38,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const [systemRam, setSystemRam] = useState<number>(8192);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     ProfileService.getSystemRamMb()
@@ -168,91 +172,89 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   };
 
   const tabConfig = [
-    { id: "general", label: "General", icon: "pixel:cog-solid" },
-    { id: "installation", label: "Installation", icon: "pixel:download-solid" },
-    { id: "java", label: "Java", icon: "pixel:code-solid" },
-    { id: "window", label: "Window", icon: "pixel:grid-solid" },
-    { id: "export", label: "Export", icon: "pixel:file-import-solid" },
+    { id: "general", label: "General", icon: "solar:settings-bold" },
+    { id: "installation", label: "Installation", icon: "solar:download-bold" },
+    { id: "java", label: "Java", icon: "solar:code-bold" },
+    { id: "window", label: "Window", icon: "solar:widget-bold" },
+    { id: "export", label: "Export", icon: "solar:export-bold" },
   ];
 
   const renderExportTab = () => (
     <div className="space-y-6">
       <div>
-        <h3 className="text-2xl font-minecraft text-white mb-5 lowercase">
+        <h3 className="text-3xl font-minecraft text-white mb-5 lowercase">
           export profile
         </h3>
-        <p className="text-xl text-white/70 mb-6 font-minecraft tracking-wide">
+        <p className="text-2xl text-white/70 mb-6 font-minecraft tracking-wide">
           Export your profile to share with others or back it up. You can
           include all files or just the profile configuration.
         </p>
       </div>
 
-      <div className="space-y-4 bg-black/20 backdrop-blur-md border-2 border-white/20 p-5">
+      <div
+        className="space-y-4 p-5 rounded-lg border-2 border-b-4"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}60`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        }}
+      >
         <div className="space-y-2">
           <label
             htmlFor="exportFilename"
-            className="block text-2xl text-white font-minecraft mb-3 lowercase"
+            className="block text-3xl text-white font-minecraft mb-3 lowercase"
           >
             export filename
           </label>
-          <input
-            type="text"
+          <Input
             id="exportFilename"
             value={exportFilename}
             onChange={(e) => setExportFilename(e.target.value)}
-            className="w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-4 text-2xl text-white font-minecraft"
             placeholder="Enter filename without extension"
+            className="text-2xl py-3"
           />
-          <p className="mt-2 text-base text-white/50 font-minecraft tracking-wide">
+          <p className="mt-2 text-xl text-white/50 font-minecraft tracking-wide">
             The .noriskpack extension will be added automatically
           </p>
         </div>
 
-        <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={exportIncludeFiles}
-              onChange={(e) => setExportIncludeFiles(e.target.checked)}
-              className="w-5 h-5 rounded bg-black/20 border-white/30"
-            />
-            <span className="text-2xl text-white font-minecraft lowercase">
-              include profile files
-            </span>
-          </label>
-          <p className="mt-1 text-white/50 font-minecraft text-sm ml-6">
-            Include mods, resource packs, and other files in the export
-          </p>
+        <div className="space-y-2 mt-4">
+          <Checkbox
+            checked={exportIncludeFiles}
+            onChange={(e) => setExportIncludeFiles(e.target.checked)}
+            label="include profile files"
+            description="Include mods, resource packs, and other files in the export"
+            className="text-2xl"
+          />
         </div>
 
-        <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={exportOpenFolder}
-              onChange={(e) => setExportOpenFolder(e.target.checked)}
-              className="w-5 h-5 rounded bg-black/20 border-white/30"
-            />
-            <span className="text-white font-minecraft text-base lowercase">
-              open folder after export
-            </span>
-          </label>
+        <div className="space-y-2 mt-4">
+          <Checkbox
+            checked={exportOpenFolder}
+            onChange={(e) => setExportOpenFolder(e.target.checked)}
+            label="open folder after export"
+            className="text-2xl"
+          />
         </div>
       </div>
 
       <div className="flex flex-wrap gap-4 pt-4">
         <Button
-          variant="primary"
+          variant="default"
           onClick={handleExport}
           disabled={isExporting || !exportFilename}
-          icon={<Icon icon="pixel:file-export-solid" className="w-5 h-5" />}
-          className="text-2xl py-3 px-6"
+          icon={
+            <Icon icon="solar:export-bold" className="w-6 h-6 text-white" />
+          }
+          size="md"
+          className="text-2xl"
         >
           {isExporting ? (
             <>
               <Icon
-                icon="pixel:spinner-solid"
-                className="w-5 h-5 animate-spin"
+                icon="solar:refresh-bold"
+                className="w-6 h-6 animate-spin text-white"
               />
               <span>exporting...</span>
             </>
@@ -262,16 +264,18 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         </Button>
 
         <Button
-          variant="primary"
+          variant="secondary"
           onClick={handleCloneProfile}
           disabled={isCloning}
-          icon={<Icon icon="pixel:copy-solid" className="w-4 h-4" />}
+          icon={<Icon icon="solar:copy-bold" className="w-5 h-5 text-white" />}
+          size="md"
+          className="text-2xl"
         >
           {isCloning ? (
             <>
               <Icon
-                icon="pixel:spinner-solid"
-                className="w-4 h-4 animate-spin"
+                icon="solar:refresh-bold"
+                className="w-5 h-5 animate-spin text-white"
               />
               <span>cloning...</span>
             </>
@@ -337,19 +341,24 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       <Button
         variant="secondary"
         onClick={onClose}
-        className="text-2xl py-3 px-6"
+        size="md"
+        className="text-2xl"
       >
         cancel
       </Button>
       <Button
-        variant="primary"
+        variant="default"
         onClick={handleSave}
         disabled={isSaving}
-        className="text-2xl py-3 px-6"
+        size="md"
+        className="text-2xl"
       >
         {isSaving ? (
           <div className="flex items-center gap-3">
-            <Icon icon="pixel:spinner-solid" className="w-5 h-5 animate-spin" />
+            <Icon
+              icon="solar:refresh-bold"
+              className="w-6 h-6 animate-spin text-white"
+            />
             <span>saving...</span>
           </div>
         ) : (
@@ -363,35 +372,91 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     <Modal
       title={`profile settings: ${profile.name}`}
       onClose={onClose}
-      width="5xl"
-      height="650px"
+      width="xl"
       footer={renderFooter()}
     >
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-64 border-r border-white/20 bg-black/20 overflow-y-auto">
-          <div className="p-4 space-y-2">
-            {tabConfig.map((tab) => (
-              <button
-                key={tab.id}
-                className={`w-full text-left py-4 px-5 font-minecraft text-2xl lowercase transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? "bg-white/20 text-white border-l-4 border-l-white"
-                    : "text-white/70 hover:text-white hover:bg-white/10"
-                }`}
-                onClick={() => setActiveTab(tab.id as SettingsTab)}
-              >
-                <div className="flex items-center">
-                  <Icon icon={tab.icon} className="w-6 h-6 mr-4" />
-                  <span>{tab.label}</span>
-                </div>
-              </button>
-            ))}
+      <div className="flex flex-1 h-[500px] overflow-hidden">
+        <div
+          className="w-64 border-r-2 overflow-y-auto custom-scrollbar"
+          style={{
+            borderColor: `${accentColor.value}40`,
+            backgroundColor: `${accentColor.value}20`,
+            boxShadow: `inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          }}
+        >
+          <div className="p-4">
+            <div
+              className="text-xl font-minecraft text-white mb-6 lowercase p-3 rounded-md border-2 border-b-4"
+              style={{
+                backgroundColor: `${accentColor.value}30`,
+                borderColor: `${accentColor.value}60`,
+                borderBottomColor: accentColor.value,
+                boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Icon
+                  icon="solar:settings-bold"
+                  className="w-5 h-5 text-white"
+                />
+                <span>profile settings</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {tabConfig.map((tab) => {
+                const isActive = activeTab === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    className="w-full text-left p-3 rounded-md transition-all duration-200 flex items-center gap-3 border-2"
+                    style={{
+                      backgroundColor: isActive
+                        ? `${accentColor.value}30`
+                        : "rgba(0,0,0,0.2)",
+                      borderColor: isActive
+                        ? `${accentColor.value}60`
+                        : "rgba(255,255,255,0.2)",
+                      borderBottomColor: isActive
+                        ? accentColor.value
+                        : undefined,
+                      borderBottomWidth: isActive ? "4px" : "2px",
+                      boxShadow: isActive
+                        ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
+                        : "none",
+                    }}
+                    onClick={() => setActiveTab(tab.id as SettingsTab)}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 border-2"
+                      style={{
+                        backgroundColor: isActive
+                          ? `${accentColor.value}40`
+                          : "rgba(255,255,255,0.1)",
+                        borderColor: isActive
+                          ? `${accentColor.value}70`
+                          : "rgba(255,255,255,0.2)",
+                      }}
+                    >
+                      <Icon
+                        icon={tab.icon}
+                        className={`w-5 h-5 ${isActive ? "text-white" : "text-white/70"}`}
+                      />
+                    </div>
+                    <span className="font-minecraft text-3xl lowercase">
+                      {tab.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-hidden">
           <div
-            className="flex-1 p-6 overflow-y-auto custom-scrollbar"
+            className="flex-1 p-5 overflow-y-auto custom-scrollbar"
             ref={contentRef}
           >
             {error && <StatusMessage type="error" message={error} />}

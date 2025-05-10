@@ -19,23 +19,32 @@ import type {
   ContentInstallStatus,
   Profile,
 } from "../../types/profile";
-import { Card, CardContent } from "../ui/Card";
 import { ModrinthProjectCard } from "./ModrinthProjectCard";
 import { ModrinthVersionItem } from "./ModrinthVersionItem";
-import { LoadingIndicator } from "../ui/LoadingIndicator.tsx";
-import { ErrorMessage } from "../ui/ErrorMessage.tsx";
+import { LoadingIndicator } from "../ui/LoadingIndicator";
+import { ErrorMessage } from "../ui/ErrorMessage";
 import { EmptyState } from "../ui/EmptyState";
 import { useModrinthInstaller } from "../../hooks/useModrinthInstaller";
+import { Input } from "../ui/Input";
+import { Button } from "../ui/buttons/Button";
+import { IconButton } from "../ui/buttons/IconButton";
+import { Select } from "../ui/Select";
+import { Label } from "../ui/Label";
+import { useThemeStore } from "../../store/useThemeStore";
 
-// Add this new component at the top of the file, before the ModrinthSearch component
 function CategoryTransitionLoader() {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
   return (
     <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center z-10 animate-fadeIn">
       <div className="relative w-16 h-16 mb-4">
         <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
-        <div className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"></div>
+        <div
+          className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"
+          style={{ borderTopColor: accentColor.value }}
+        ></div>
       </div>
-      <div className="font-minecraft text-2xl text-white/80 tracking-wide lowercase">
+      <div className="font-minecraft text-3xl text-white/80 tracking-wide lowercase select-none">
         Loading content...
       </div>
     </div>
@@ -87,13 +96,13 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
   const [, setSearchResponse] = useState<ModrinthSearchResponse | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   const [selectedProjectType, setSelectedProjectType] =
     useState<ModrinthProjectType>(initialProjectType);
   const [selectedSortType, setSelectedSortType] =
     useState<ModrinthSortType>("relevance");
 
-  // Filter state for the detail view
   const [selectedGameVersion, setSelectedGameVersion] = useState<
     string | undefined
   >(undefined);
@@ -120,13 +129,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
   const [versionsError, setVersionsError] = useState<string | null>(null);
   const [, setCurrentlySelectedHit] = useState<ModrinthSearchHit | null>(null);
 
-  // Add a ref to track if a search is already in progress
   const searchInProgressRef = useRef(false);
 
-  // Make sure we have valid profiles before using the hook
   const validProfiles = Array.isArray(profiles) ? profiles : [];
 
-  // Add state for tracking installation status
   const [hitInstallStatus, setHitInstallStatus] = useState<
     Record<string, ContentInstallStatus | "loading" | "error" | null>
   >({});
@@ -134,12 +140,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     Record<string, ContentInstallStatus | "loading" | "error" | null>
   >({});
 
-  // State for modpack installation
   const [modpackInstallState, setModpackInstallState] = useState<
     Record<string, "idle" | "adding" | "success" | "error">
   >({});
 
-  // Add this state near the other state declarations in the ModrinthSearch component
   const [categoryTransition, setCategoryTransition] = useState(false);
   const categoryTransitionTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -156,7 +160,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     handleContentInstall,
   } = useModrinthInstaller(validProfiles, selectedProfileId, onInstallSuccess);
 
-  // Function to install a modpack directly using the ModrinthService
   const handleModpackInstall = async (
     version: ModrinthVersion,
     file: ModrinthFile,
@@ -169,12 +172,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
       setModpackInstallState((prev) => ({ ...prev, [versionId]: "success" }));
 
-      // Notify parent component about the new profile
       if (onProfileCreated) {
         onProfileCreated(newProfileId);
       }
 
-      // Reset after a delay
       setTimeout(() => {
         setModpackInstallState((prev) => ({ ...prev, [versionId]: "idle" }));
       }, 2000);
@@ -182,37 +183,29 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       console.error("Modpack installation failed:", error);
       setModpackInstallState((prev) => ({ ...prev, [versionId]: "error" }));
 
-      // Log error
       console.error(
         `Failed to install modpack: ${error instanceof Error ? error.message : String(error)}`,
       );
 
-      // Reset after a longer delay
       setTimeout(() => {
         setModpackInstallState((prev) => ({ ...prev, [versionId]: "idle" }));
       }, 5000);
     }
   };
 
-  // Handle content installation based on type
   const handleInstallButtonClick = (
     version: ModrinthVersion,
     file: ModrinthFile,
   ) => {
-    // Prevent default behavior that might cause page refresh
     event?.preventDefault?.();
 
-    // Check if it's a modpack - always directly install modpacks without profile selection
     if (version.search_hit?.project_type === "modpack") {
-      // Use the direct ModrinthService method for modpacks
       handleModpackInstall(version, file);
     } else {
-      // For regular content, use the existing handler
       handleContentInstall(version, file);
     }
   };
 
-  // Function to check if a project is installed
   const updateHitInstallStatus = useCallback(
     async (hit: ModrinthSearchHit) => {
       if (!selectedProfileId) {
@@ -262,7 +255,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     [selectedProfileId, validProfiles],
   );
 
-  // Function to check all visible projects
   const updateAllHitStatuses = useCallback(
     async (hits: ModrinthSearchHit[]) => {
       const promises = hits.map((hit) => updateHitInstallStatus(hit));
@@ -271,7 +263,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     [updateHitInstallStatus],
   );
 
-  // Function to check specific versions
   const updateVersionStatuses = useCallback(
     async (versions: ModrinthVersion[]) => {
       if (!selectedProfileId || versions.length === 0) {
@@ -336,7 +327,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     [selectedProfileId, validProfiles],
   );
 
-  // Check if the current project type requires loader compatibility
   const requiresLoader = useCallback(
     (projectType: ModrinthProjectType = selectedProjectType) => {
       return projectType === "mod" || projectType === "modpack";
@@ -344,7 +334,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     [selectedProjectType],
   );
 
-  // Extract unique game versions and loaders from profiles
   useEffect(() => {
     if (validProfiles.length > 0) {
       const gameVersions = [
@@ -357,7 +346,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       setAvailableGameVersions(gameVersions);
       setAvailableLoaders(loaders);
 
-      // Set default filters if a profile is selected
       if (selectedProfileId) {
         const selectedProfile = validProfiles.find(
           (p) => p.id === selectedProfileId,
@@ -367,7 +355,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           if (requiresLoader()) {
             setSelectedLoader(selectedProfile.loader);
           } else {
-            setSelectedLoader(undefined); // Clear loader filter for non-mod content
+            setSelectedLoader(undefined);
           }
         } else {
           console.warn(
@@ -381,13 +369,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     }
   }, [validProfiles, selectedProfileId, requiresLoader]);
 
-  // Update loader filter when project type changes
   useEffect(() => {
     if (!requiresLoader()) {
       setSelectedLoader(undefined);
     } else if (selectedProfileId) {
-      // If we have a selected profile and we're switching to a project type that requires a loader,
-      // set the loader filter to the profile's loader
       const selectedProfile = validProfiles.find(
         (p) => p.id === selectedProfileId,
       );
@@ -397,7 +382,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     }
   }, [selectedProjectType, requiresLoader, selectedProfileId, validProfiles]);
 
-  // Filter versions when filters change
   useEffect(() => {
     if (modVersions.length > 0) {
       let filtered = [...modVersions];
@@ -420,7 +404,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     }
   }, [modVersions, selectedGameVersion, selectedLoader, requiresLoader]);
 
-  // Debounce search term to prevent excessive API calls
   useEffect(() => {
     if (searchTerm.trim() === "") {
       setDebouncedSearchTerm("");
@@ -436,18 +419,15 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
   const loadFeaturedContent = useCallback(
     async (projectType = selectedProjectType) => {
-      // Check if a search is already in progress
       if (searchInProgressRef.current) return;
 
-      // Set the flag to indicate a search is in progress
       searchInProgressRef.current = true;
 
       setSearchLoading(true);
       setSearchError(null);
-      setHitInstallStatus({}); // Clear old statuses
+      setHitInstallStatus({});
 
       try {
-        // Only pass loader if the project type requires it
         const loaderParam =
           projectType === "mod" || projectType === "modpack"
             ? selectedLoader
@@ -471,7 +451,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             response.hits.length < response.total_hits,
         );
 
-        // Check installation status for all results
         updateAllHitStatuses(response.hits);
       } catch (err) {
         console.error("Failed to load featured content:", err);
@@ -482,7 +461,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
         setSearchResponse(null);
       } finally {
         setSearchLoading(false);
-        // Reset the flag to indicate search is complete
         searchInProgressRef.current = false;
       }
     },
@@ -527,7 +505,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
           await fetchVersions(projectId, searchHit);
 
-          // Check installation status
           if (selectedProfileId) {
             updateHitInstallStatus(searchHit);
           }
@@ -554,10 +531,9 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     setVersionsError(null);
     setModVersions([]);
     setFilteredVersions([]);
-    setVersionInstallStatus({}); // Clear specific version statuses when opening/closing
+    setVersionInstallStatus({});
 
     try {
-      // First fetch all versions without filters to get the complete list
       const allVersionsData = await ModrinthService.getModVersions(
         projectId,
         undefined,
@@ -569,26 +545,21 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
         search_hit: hit,
       }));
 
-      // Set all versions
       setModVersions(versionsWithHit);
 
-      // If we have a selected profile, automatically filter based on its game version and loader
       if (selectedProfileId) {
         const selectedProfile = validProfiles.find(
           (p) => p.id === selectedProfileId,
         );
         if (selectedProfile) {
-          // Apply filters based on the selected profile
           let filtered = [...versionsWithHit];
 
-          // Filter by game version
           if (selectedProfile.game_version) {
             filtered = filtered.filter((version) =>
               version.game_versions?.includes(selectedProfile.game_version),
             );
           }
 
-          // Filter by loader for mods and modpacks
           if (
             (hit.project_type === "mod" || hit.project_type === "modpack") &&
             selectedProfile.loader
@@ -600,7 +571,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
           setFilteredVersions(filtered);
 
-          // Check installation status for all versions
           updateVersionStatuses(versionsWithHit);
         } else {
           console.warn("Selected profile not found:", selectedProfileId);
@@ -621,7 +591,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     }
   };
 
-  // Update the autoInstallLatestVersion function to handle modpacks correctly
   const autoInstallLatestVersion = (
     hit: ModrinthSearchHit,
     profileId: string,
@@ -640,7 +609,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       return;
     }
 
-    // If it's a modpack, install it directly without profile selection
     if (hit.project_type === "modpack") {
       handleModpackInstall(latestVersion, primaryFile);
     } else {
@@ -650,15 +618,12 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
   const performSearch = useCallback(
     async (resetResults = true) => {
-      // Don't search if there's no search term and we're resetting results
       if (resetResults && debouncedSearchTerm.trim() === "") return;
 
-      // Check if a search is already in progress
       if (searchInProgressRef.current) {
         return;
       }
 
-      // Set the flag to indicate a search is in progress
       searchInProgressRef.current = true;
 
       if (resetResults) {
@@ -670,11 +635,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       }
 
       setSearchError(null);
-      setHitInstallStatus({}); // Clear old statuses
+      setHitInstallStatus({});
       const currentOffset = resetResults ? 0 : offset;
 
       try {
-        // Only pass loader if the project type requires it
         const loaderParam = requiresLoader() ? selectedLoader : undefined;
 
         const response = await ModrinthService.searchProjects(
@@ -708,7 +672,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setVersionsError(null);
         }
 
-        // Check installation status for all results
         updateAllHitStatuses(response.hits);
       } catch (err) {
         console.error("Modrinth search failed:", err);
@@ -726,7 +689,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setLoadingMore(false);
         }
 
-        // Reset the flag to indicate search is complete
         searchInProgressRef.current = false;
       }
     },
@@ -743,25 +705,21 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     ],
   );
 
-  // Only perform search when debounced search term changes and is not empty
   useEffect(() => {
     if (debouncedSearchTerm.trim() !== "") {
       const doSearch = async () => {
-        // Don't search if there's already a search in progress
         if (searchInProgressRef.current) {
           return;
         }
 
-        // Set the flag to indicate a search is in progress
         searchInProgressRef.current = true;
         setSearchLoading(true);
         setSearchError(null);
         setOffset(0);
         setHasMore(true);
-        setHitInstallStatus({}); // Clear old statuses
+        setHitInstallStatus({});
 
         try {
-          // Only pass loader if the project type requires it
           const loaderParam = requiresLoader() ? selectedLoader : undefined;
 
           const response = await ModrinthService.searchProjects(
@@ -787,7 +745,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setFilteredVersions([]);
           setVersionsError(null);
 
-          // Check installation status for all results
           updateAllHitStatuses(response.hits);
         } catch (err) {
           const searchError = err as Error;
@@ -799,7 +756,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setSearchResponse(null);
         } finally {
           setSearchLoading(false);
-          // Reset the flag to indicate search is complete
           searchInProgressRef.current = false;
         }
       };
@@ -817,7 +773,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     updateAllHitStatuses,
   ]);
 
-  // Set up scroll event listener for infinite scrolling
   useEffect(() => {
     const handleScroll = () => {
       if (
@@ -853,28 +808,24 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
         setFilteredVersions([]);
         setVersionsError(null);
         setCurrentlySelectedHit(null);
-        setVersionInstallStatus({}); // Clear specific version statuses when closing
+        setVersionInstallStatus({});
         return;
       }
 
       setSelectedProjectId(projectId);
       setCurrentlySelectedHit(hit);
 
-      // Set project type based on the selected hit
       if (hit.project_type) {
         setSelectedProjectType(hit.project_type as ModrinthProjectType);
       }
 
-      // Auto-select profile filters if a profile is selected
       if (selectedProfileId) {
         const selectedProfile = validProfiles.find(
           (p) => p.id === selectedProfileId,
         );
         if (selectedProfile) {
-          // Always set game version filter
           setSelectedGameVersion(selectedProfile.game_version);
 
-          // Only set loader filter for mods and modpacks
           if (hit.project_type === "mod" || hit.project_type === "modpack") {
             setSelectedLoader(selectedProfile.loader);
           } else {
@@ -888,47 +839,39 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     [selectedProjectId, selectedProfileId, validProfiles],
   );
 
-  // Update the changeProjectType function to include the transition state
   const changeProjectType = useCallback(
     (newType: ModrinthProjectType) => {
       if (selectedProjectType === newType) return;
 
-      // Start category transition animation
       setCategoryTransition(true);
 
-      // Clear any existing timer
       if (categoryTransitionTimer.current) {
         clearTimeout(categoryTransitionTimer.current);
       }
 
-      // Set a minimum display time for the transition
       categoryTransitionTimer.current = setTimeout(() => {
         setCategoryTransition(false);
-      }, 800); // Show for at least 800ms
+      }, 800);
 
       setSelectedProjectType(newType);
 
-      // Clear loader filter if switching to a project type that doesn't need it
       if (newType !== "mod" && newType !== "modpack") {
         setSelectedLoader(undefined);
       }
 
       if (debouncedSearchTerm.trim() !== "") {
         const searchWithNewType = async () => {
-          // Check if a search is already in progress
           if (searchInProgressRef.current) return;
 
-          // Set the flag to indicate a search is in progress
           searchInProgressRef.current = true;
 
           setSearchLoading(true);
           setSearchError(null);
           setOffset(0);
           setHasMore(true);
-          setHitInstallStatus({}); // Clear old statuses
+          setHitInstallStatus({});
 
           try {
-            // Only pass loader if the project type requires it
             const loaderParam =
               newType === "mod" || newType === "modpack"
                 ? selectedLoader
@@ -957,7 +900,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             setFilteredVersions([]);
             setVersionsError(null);
 
-            // Check installation status for all results
             updateAllHitStatuses(response.hits);
           } catch (err) {
             console.error("Modrinth search failed:", err);
@@ -968,7 +910,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             setSearchResponse(null);
           } finally {
             setSearchLoading(false);
-            // Reset the flag to indicate search is complete
             searchInProgressRef.current = false;
           }
         };
@@ -996,22 +937,18 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
 
       setSelectedSortType(newSort);
 
-      // Always perform a search when sort type changes, regardless of search term
       const searchWithNewSort = async () => {
-        // Check if a search is already in progress
         if (searchInProgressRef.current) return;
 
-        // Set the flag to indicate a search is in progress
         searchInProgressRef.current = true;
 
         setSearchLoading(true);
         setSearchError(null);
         setOffset(0);
         setHasMore(true);
-        setHitInstallStatus({}); // Clear old statuses
+        setHitInstallStatus({});
 
         try {
-          // Only pass loader if the project type requires it
           const loaderParam = requiresLoader() ? selectedLoader : undefined;
 
           const response = await ModrinthService.searchProjects(
@@ -1037,7 +974,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setFilteredVersions([]);
           setVersionsError(null);
 
-          // Check installation status for all results
           updateAllHitStatuses(response.hits);
         } catch (err) {
           console.error("Modrinth search failed:", err);
@@ -1048,7 +984,6 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setSearchResponse(null);
         } finally {
           setSearchLoading(false);
-          // Reset the flag to indicate search is complete
           searchInProgressRef.current = false;
         }
       };
@@ -1067,16 +1002,12 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     ],
   );
 
-  // Initial load - show featured content instead of empty search
   useEffect(() => {
     if (!projectId) {
       loadFeaturedContent();
     }
-    // Only run this once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Add cleanup for the timer in a useEffect
   useEffect(() => {
     return () => {
       if (categoryTransitionTimer.current) {
@@ -1089,111 +1020,100 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     if (!pendingInstall) return;
 
     try {
-      // Don't close the popup until installation completes
       await handleProfileSelect(profileId);
-
-      // The handleProfileSelect function in useModrinthInstaller will close the popup
-      // after successful installation
     } catch (error) {
       console.error("Error during installation:", error);
-      // Keep popup open on error so user can try again or cancel
     }
   };
+
+  const sortOptions = SORT_OPTIONS.map((option) => ({
+    value: option.type,
+    label: option.label,
+  }));
 
   return (
     <div className={`modrinth-search-container ${className} flex flex-col`}>
       {!projectId && (
         <>
-          <div className="project-type-tabs flex mb-2 bg-black/20 backdrop-blur-md border border-white/10 w-full">
-            {PROJECT_TYPES.map((tab) => (
-              <button
-                key={tab.type}
-                className={`flex-1 px-4 py-2 font-minecraft text-3xl lowercase select-none tracking-wide ${
-                  selectedProjectType === tab.type
-                    ? "bg-white/10 text-white"
-                    : "text-white/60 hover:text-white hover:bg-white/5"
-                }`}
-                onClick={() => {
-                  // Start category transition
-                  setCategoryTransition(true);
+          <div
+            className="flex-shrink-0 mb-5 p-2 rounded-lg border-2 border-b-4 shadow-md overflow-x-auto scrollbar-hide"
+            style={{
+              backgroundColor: `${accentColor.value}20`,
+              borderColor: `${accentColor.value}40`,
+              borderBottomColor: `${accentColor.value}60`,
+            }}
+          >
+            <div className="flex gap-2">
+              {PROJECT_TYPES.map((tab) => (
+                <Button
+                  key={tab.type}
+                  onClick={() => {
+                    setCategoryTransition(true);
 
-                  // Clear any existing timer
-                  if (categoryTransitionTimer.current) {
-                    clearTimeout(categoryTransitionTimer.current);
+                    if (categoryTransitionTimer.current) {
+                      clearTimeout(categoryTransitionTimer.current);
+                    }
+
+                    categoryTransitionTimer.current = setTimeout(() => {
+                      setCategoryTransition(false);
+                    }, 500);
+
+                    changeProjectType(tab.type);
+                  }}
+                  variant={
+                    selectedProjectType === tab.type ? "default" : "ghost"
                   }
-
-                  // Set a timer to hide the transition after a short delay
-                  categoryTransitionTimer.current = setTimeout(() => {
-                    setCategoryTransition(false);
-                  }, 500);
-
-                  changeProjectType(tab.type);
-                }}
-                disabled={searchLoading}
-              >
-                {tab.label.toLowerCase()}
-              </button>
-            ))}
+                  size="md"
+                  className={
+                    selectedProjectType === tab.type
+                      ? "text-white"
+                      : "text-white/70"
+                  }
+                  disabled={searchLoading}
+                >
+                  {tab.label.toLowerCase()}
+                </Button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-3 mb-4">
             <div className="relative flex-grow">
-              <input
-                type="text"
+              <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search mods, modpacks, resource packs..."
-                className="w-full bg-black/20 backdrop-blur-md border border-white/10 px-3 py-2 text-white font-minecraft text-3xl shadow-sm tracking-wide"
+                clearable={searchTerm.length > 0}
+                onClear={() => setSearchTerm("")}
+                icon={<Icon icon="pixel:search" className="w-6 h-6" />}
+                className="w-full"
               />
-              {searchTerm && (
-                <button
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
-                  onClick={() => setSearchTerm("")}
-                >
-                  <Icon icon="pixel:window-close-solid" className="w-6 h-6" />
-                </button>
-              )}
             </div>
 
-            <div className="relative">
-              <select
+            <div className="w-64">
+              <Select
                 value={selectedSortType}
-                onChange={(e) => {
-                  changeSortType(e.target.value as ModrinthSortType);
-                }}
-                className="bg-black/20 backdrop-blur-md border border-white/10 px-2 py-2 text-white font-minecraft text-3xl shadow-sm appearance-none pr-8 tracking-wide"
+                onChange={(value) => changeSortType(value as ModrinthSortType)}
+                options={sortOptions}
                 disabled={searchLoading}
-                aria-label="Sort by"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option
-                    key={option.type}
-                    value={option.type}
-                    className="text-3xl"
-                  >
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white">
-                <Icon icon="pixel:chevron-down" className="w-6 h-6" />
-              </div>
+              />
             </div>
 
-            <button
+            <IconButton
+              icon={
+                searchLoading ? (
+                  <Icon
+                    icon="pixel:circle-notch-solid"
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Icon icon="pixel:search" />
+                )
+              }
               onClick={() => performSearch(true)}
               disabled={searchLoading || searchInProgressRef.current}
-              className="bg-black/20 hover:bg-black/30 backdrop-blur-md border border-white/10 px-4 py-2 text-white font-minecraft text-3xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed minecraft-button-hover tracking-wide"
-            >
-              {searchLoading ? (
-                <Icon
-                  icon="pixel:circle-notch-solid"
-                  className="animate-spin w-6 h-6"
-                />
-              ) : (
-                <Icon icon="pixel:search" className="w-6 h-6" />
-              )}
-            </button>
+              size="lg"
+            />
           </div>
 
           {searchError && (
@@ -1202,184 +1122,200 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
         </>
       )}
 
-      <Card className="flex-1 flex flex-col overflow-hidden border border-white/10">
-        <CardContent className="flex-1 overflow-hidden p-0 flex flex-col">
-          {/* Only show the CategoryTransitionLoader if parentTransitionActive is false */}
-          {(searchLoading || categoryTransition) && !parentTransitionActive && (
-            <CategoryTransitionLoader />
-          )}
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border-2 border-b-4 shadow-lg relative"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+        }}
+      >
+        {(searchLoading || categoryTransition) && !parentTransitionActive && (
+          <CategoryTransitionLoader />
+        )}
 
-          <div
-            ref={resultsContainerRef}
-            className="flex-1 overflow-y-auto custom-scrollbar"
-          >
-            <div className="results-list space-y-4 p-4">
-              {searchResults.length > 0 ? (
-                <>
-                  {searchResults.map((hit) => (
-                    <div key={hit.project_id} className="relative">
-                      <ModrinthProjectCard
-                        key={hit.project_id}
-                        project={hit}
-                        isExpanded={selectedProjectId === hit.project_id}
-                        isLoading={
-                          versionsLoading &&
-                          selectedProjectId === hit.project_id
-                        }
-                        onToggleExpand={() => fetchAndShowVersions(hit)}
-                        installStatus={hitInstallStatus[hit.project_id]}
-                      >
-                        {selectedProjectId === hit.project_id && (
-                          <div className="versions-container mt-4 pt-4 border-t border-white/10">
-                            {versionsLoading ? (
-                              <LoadingIndicator message="Loading versions..." />
-                            ) : versionsError ? (
-                              <ErrorMessage message={versionsError} />
-                            ) : filteredVersions.length > 0 ? (
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="text-white font-minecraft text-2xl tracking-wide lowercase select-none">
-                                    Available Versions:
-                                  </h4>
+        <div
+          ref={resultsContainerRef}
+          className="h-full overflow-y-auto custom-scrollbar"
+        >
+          <div className="results-list space-y-4 p-4">
+            {searchResults.length > 0 ? (
+              <>
+                {searchResults.map((hit) => (
+                  <div key={hit.project_id} className="relative">
+                    <ModrinthProjectCard
+                      key={hit.project_id}
+                      project={hit}
+                      isExpanded={selectedProjectId === hit.project_id}
+                      isLoading={
+                        versionsLoading && selectedProjectId === hit.project_id
+                      }
+                      onToggleExpand={() => fetchAndShowVersions(hit)}
+                      installStatus={hitInstallStatus[hit.project_id]}
+                    >
+                      {selectedProjectId === hit.project_id && (
+                        <div
+                          className="versions-container mt-4 pt-4 border-t"
+                          style={{ borderColor: `${accentColor.value}30` }}
+                        >
+                          {versionsLoading ? (
+                            <LoadingIndicator message="Loading versions..." />
+                          ) : versionsError ? (
+                            <ErrorMessage message={versionsError} />
+                          ) : filteredVersions.length > 0 ? (
+                            <div>
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-white font-minecraft text-3xl tracking-wide lowercase select-none">
+                                  Available Versions:
+                                </h4>
 
-                                  {/* Version filters */}
-                                  {modVersions.length !==
-                                    filteredVersions.length && (
-                                    <button
-                                      onClick={() => {
-                                        setFilteredVersions(modVersions);
-                                        setSelectedGameVersion(undefined);
-                                        setSelectedLoader(undefined);
-                                      }}
-                                      className="text-white/70 hover:text-white text-xs font-minecraft flex items-center gap-1"
-                                    >
+                                {modVersions.length !==
+                                  filteredVersions.length && (
+                                  <Button
+                                    onClick={() => {
+                                      setFilteredVersions(modVersions);
+                                      setSelectedGameVersion(undefined);
+                                      setSelectedLoader(undefined);
+                                    }}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="min-w-0"
+                                    icon={
                                       <Icon
                                         icon="pixel:filter-solid"
-                                        className="w-3 h-3"
+                                        className="w-5 h-5"
                                       />
-                                      <span>
-                                        Show All ({modVersions.length})
-                                      </span>
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="versions-list space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                                  {filteredVersions.map((version) => {
-                                    const primaryFile =
-                                      version.files.find((f) => f.primary) ??
-                                      version.files[0];
-                                    const versionStatus =
-                                      versionInstallStatus[version.id];
-                                    const isVersionInstalled =
-                                      typeof versionStatus === "object" &&
-                                      versionStatus !== null &&
-                                      versionStatus.is_installed;
+                                    }
+                                  >
+                                    Show All ({modVersions.length})
+                                  </Button>
+                                )}
+                              </div>
+                              <div
+                                className="versions-list space-y-3 max-h-96 overflow-y-auto custom-scrollbar pr-2"
+                                style={{
+                                  scrollbarColor: `${accentColor.value}50 transparent`,
+                                }}
+                              >
+                                {filteredVersions.map((version) => {
+                                  const primaryFile =
+                                    version.files.find((f) => f.primary) ??
+                                    version.files[0];
+                                  const versionStatus =
+                                    versionInstallStatus[version.id];
+                                  const isVersionInstalled =
+                                    typeof versionStatus === "object" &&
+                                    versionStatus !== null &&
+                                    versionStatus.is_installed;
 
-                                    // Determine if this is a modpack
-                                    const isModpack =
-                                      version.search_hit?.project_type ===
-                                      "modpack";
+                                  const isModpack =
+                                    version.search_hit?.project_type ===
+                                    "modpack";
 
-                                    // Get the appropriate install state
-                                    const installState = isModpack
-                                      ? modpackInstallState[version.id] ||
-                                        "idle"
-                                      : isVersionInstalled
-                                        ? "success"
-                                        : addingModState[version.id] || "idle";
+                                  const installState = isModpack
+                                    ? modpackInstallState[version.id] || "idle"
+                                    : isVersionInstalled
+                                      ? "success"
+                                      : addingModState[version.id] || "idle";
 
-                                    return primaryFile ? (
-                                      <div
+                                  return primaryFile ? (
+                                    <div key={version.id} className="relative">
+                                      <ModrinthVersionItem
                                         key={version.id}
-                                        className="relative"
-                                      >
-                                        <ModrinthVersionItem
-                                          key={version.id}
-                                          version={version}
-                                          file={primaryFile}
-                                          installState={installState}
-                                          onInstall={() =>
-                                            handleInstallButtonClick(
-                                              version,
-                                              primaryFile,
-                                            )
-                                          }
-                                          isModpack={isModpack}
-                                        />
+                                        version={version}
+                                        file={primaryFile}
+                                        installState={installState}
+                                        onInstall={() =>
+                                          handleInstallButtonClick(
+                                            version,
+                                            primaryFile,
+                                          )
+                                        }
+                                        isModpack={isModpack}
+                                      />
 
-                                        {/* Version Status Indicators */}
-                                        <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center">
-                                          {versionStatus === "loading" ? (
-                                            <span className="bg-black/40 p-1 ml-1">
+                                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center">
+                                        {versionStatus === "loading" ? (
+                                          <Label
+                                            variant="info"
+                                            size="xs"
+                                            icon={
                                               <Icon
                                                 icon="pixel:circle-notch-solid"
-                                                className="w-3 h-3 text-white/70 animate-spin"
+                                                className="w-4 h-4 animate-spin"
                                               />
-                                            </span>
-                                          ) : versionStatus === "error" ? (
-                                            <span
-                                              className="bg-red-900/40 p-1 ml-1"
-                                              title="Error checking installation status"
-                                            >
+                                            }
+                                          />
+                                        ) : versionStatus === "error" ? (
+                                          <Label
+                                            variant="destructive"
+                                            size="xs"
+                                            icon={
                                               <Icon
                                                 icon="pixel:exclamation-triangle-solid"
-                                                className="w-3 h-3 text-red-400"
+                                                className="w-4 h-4"
                                               />
-                                            </span>
-                                          ) : typeof versionStatus ===
-                                              "object" &&
-                                            versionStatus !== null ? (
-                                            <></>
-                                          ) : null}
-                                        </div>
+                                            }
+                                            title="Error checking installation status"
+                                          />
+                                        ) : typeof versionStatus === "object" &&
+                                          versionStatus !== null ? (
+                                          <></>
+                                        ) : null}
                                       </div>
-                                    ) : null;
-                                  })}
-                                </div>
+                                    </div>
+                                  ) : null;
+                                })}
                               </div>
-                            ) : (
-                              <EmptyState
-                                message={
-                                  modVersions.length > 0
-                                    ? "No versions match the selected filters."
-                                    : "No versions found matching the criteria."
-                                }
-                              />
-                            )}
-                          </div>
-                        )}
-                      </ModrinthProjectCard>
-                    </div>
-                  ))}
+                            </div>
+                          ) : (
+                            <EmptyState
+                              message={
+                                modVersions.length > 0
+                                  ? "No versions match the selected filters."
+                                  : "No versions found matching the criteria."
+                              }
+                            />
+                          )}
+                        </div>
+                      )}
+                    </ModrinthProjectCard>
+                  </div>
+                ))}
 
-                  {loadingMore && (
-                    <LoadingIndicator message="Loading more results..." />
-                  )}
+                {loadingMore && (
+                  <LoadingIndicator message="Loading more results..." />
+                )}
 
-                  {!hasMore && searchResults.length > 0 && !loadingMore && (
-                    <div className="text-center py-4 border-t border-white/10 mt-2">
-                      <p className="text-white/50 font-minecraft-ten text-xl tracking-wide lowercase select-none">
-                        End of results
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : !searchLoading && !searchError ? (
-                <EmptyState
-                  icon="pixel:grid-solid"
-                  message={
-                    searchTerm.trim()
-                      ? `No results found for "${searchTerm}"`
-                      : searchResults.length === 0
-                        ? "No content found. Try a different search."
-                        : "Browse popular content"
-                  }
-                />
-              ) : null}
-            </div>
+                {!hasMore && searchResults.length > 0 && !loadingMore && (
+                  <div
+                    className="text-center py-4 mt-2"
+                    style={{
+                      borderTopColor: `${accentColor.value}30`,
+                      borderTopWidth: "1px",
+                    }}
+                  >
+                    <p className="text-white/50 font-minecraft-ten text-2xl tracking-wide lowercase select-none">
+                      End of results
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : !searchLoading && !searchError ? (
+              <EmptyState
+                icon="pixel:grid-solid"
+                message={
+                  searchTerm.trim()
+                    ? `No results found for "${searchTerm}"`
+                    : searchResults.length === 0
+                      ? "No content found. Try a different search."
+                      : "Browse popular content"
+                }
+              />
+            ) : null}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {showProfilePopup && pendingInstall && (
         <ProfileSelectionPopup
@@ -1398,7 +1334,15 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       )}
 
       {addError && (
-        <div className="fixed bottom-4 right-4 bg-black/70 backdrop-blur-md border border-red-500/30 text-white px-4 py-3 font-minecraft-ten text-2xl shadow-md z-50 tracking-wide lowercase select-none">
+        <div
+          className="fixed bottom-4 right-4 backdrop-blur-md px-4 py-3 font-minecraft-ten text-2xl shadow-md z-50 tracking-wide lowercase select-none"
+          style={{
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            borderColor: "rgba(239, 68, 68, 0.3)",
+            borderWidth: "1px",
+            color: "white",
+          }}
+        >
           <Icon
             icon="pixel:exclamation-triangle-solid"
             className="inline-block mr-2 w-5 h-5 text-red-400"

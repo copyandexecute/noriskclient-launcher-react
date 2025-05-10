@@ -1,15 +1,19 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { LaunchStatus } from "./LaunchStatus";
 import { useLaunchStateStore } from "../../store/launch-state-store";
-import { Button } from "../ui/Button";
-import { VersionSelector } from "./VersionSelector";
+import { Button } from "../ui/buttons/Button";
+import { IconButton } from "../ui/buttons/IconButton";
+import { ProfileSelectionModal } from "./ProfileSelectionModal";
 import * as ProcessService from "../../services/process-service";
 import { processMonitor } from "../../services/process-monitor";
 import { listen } from "@tauri-apps/api/event";
+import { useThemeStore } from "../../store/useThemeStore";
+import { useVersionSelectionStore } from "../../store/version-selection-store";
 
 interface Version {
   id: string;
@@ -24,6 +28,7 @@ interface LaunchButtonProps {
   defaultVersion?: string;
   className?: string;
   onVersionChange?: (version: string) => void;
+  maxWidth?: string;
 }
 
 export function LaunchButton({
@@ -31,19 +36,28 @@ export function LaunchButton({
   className,
   onVersionChange,
   versions,
+  maxWidth = "300px",
 }: LaunchButtonProps) {
-  const [selectedVersion, setSelectedVersion] = useState(defaultVersion || "");
-  const [showVersions, setShowVersions] = useState(false);
   const [showLaunchStatus, setShowLaunchStatus] = useState(false);
   const [hideStatusTimeoutId, setHideStatusTimeoutId] =
     useState<NodeJS.Timeout | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const eventListenersSetUp = useRef(false);
+  const { accentColor } = useThemeStore();
+
+  const { selectedVersion, setSelectedVersion, openModal } =
+    useVersionSelectionStore();
 
   const { initializeProfile, getProfileState } = useLaunchStateStore();
 
   const profileState = getProfileState(selectedVersion);
   const { launchProgress, currentStep, error, logHistory } = profileState;
+
+  useEffect(() => {
+    if (defaultVersion && !selectedVersion) {
+      setSelectedVersion(defaultVersion);
+    }
+  }, [defaultVersion, selectedVersion, setSelectedVersion]);
 
   useEffect(() => {
     if (eventListenersSetUp.current) return;
@@ -55,7 +69,7 @@ export function LaunchButton({
           payload.target_id === selectedVersion &&
           payload.event_type?.toLowerCase() === "minecraft_output"
         ) {
-          console.log("Game started event received, resetting button");
+          console.log("Game started event received, resetting buttons");
           setIsLaunching(false);
         }
       });
@@ -63,7 +77,7 @@ export function LaunchButton({
       const unlistenExit = await listen("minecraft_process_exited", (event) => {
         const payload = event.payload as any;
         if (payload.profile_id === selectedVersion) {
-          console.log("Process exited event received, resetting button");
+          console.log("Process exited event received, resetting buttons");
           setIsLaunching(false);
         }
       });
@@ -72,12 +86,12 @@ export function LaunchButton({
         const payload = event.payload as any;
         if (payload.target_id === selectedVersion) {
           if (payload.event_type?.toLowerCase() === "minecraft_output") {
-            console.log("State event: game started, resetting button");
+            console.log("State event: game started, resetting buttons");
             setIsLaunching(false);
           } else if (
             payload.event_type?.toLowerCase() === "minecraft_process_exited"
           ) {
-            console.log("State event: process exited, resetting button");
+            console.log("State event: process exited, resetting buttons");
             setIsLaunching(false);
           }
         }
@@ -98,7 +112,7 @@ export function LaunchButton({
         ProcessService.isMinecraftRunning(selectedVersion)
           .then((isRunning) => {
             if (isRunning && isLaunching) {
-              console.log("Game is running, resetting button state");
+              console.log("Game is running, resetting buttons state");
               setIsLaunching(false);
             }
           })
@@ -126,12 +140,6 @@ export function LaunchButton({
         });
     }
   }, [selectedVersion, initializeProfile]);
-
-  useEffect(() => {
-    if (defaultVersion && defaultVersion !== selectedVersion) {
-      setSelectedVersion(defaultVersion);
-    }
-  }, [defaultVersion, selectedVersion]);
 
   useEffect(() => {
     if (isLaunching) {
@@ -194,18 +202,15 @@ export function LaunchButton({
   const handleVersionChange = (version: string) => {
     if (isLaunching) return;
 
-    setSelectedVersion(version);
-    setShowVersions(false);
-
     if (onVersionChange) {
       onVersionChange(version);
     }
   };
 
-  const toggleVersionSelect = () => {
+  const handleOpenModal = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (isLaunching) return;
-
-    setShowVersions(!showVersions);
+    openModal();
   };
 
   const getButtonText = () => {
@@ -214,38 +219,34 @@ export function LaunchButton({
     } else if (error) {
       return "ERROR";
     } else {
-      return "LAUNCH GAME";
+      return "LAUNCH";
     }
   };
 
   const getButtonVariant = () => {
     if (isLaunching) {
-      return "danger";
+      return "destructive";
     } else if (error) {
-      return "danger";
+      return "destructive";
     } else {
-      return "primary";
+      return "default";
     }
   };
 
   const getButtonIcon = () => {
     if (isLaunching) {
-      return <Icon icon="pixel:stop-solid" className="w-9 h-9 text-red-400" />;
+      return <Icon icon="solar:stop-bold" width="24" height="24" />;
     } else if (error) {
-      return (
-        <Icon
-          icon="pixel:exclamation-triangle-solid"
-          className="w-9 h-9 text-red-400"
-        />
-      );
+      return <Icon icon="solar:danger-triangle-bold" width="24" height="24" />;
     } else {
-      return <Icon icon="pixel:play-solid" className="w-9 h-9" />;
+      return <Icon icon="solar:play-bold" width="24" height="24" />;
     }
   };
 
   return (
     <div
-      className={cn("relative flex flex-col justify-center w-full", className)}
+      className={cn("relative flex flex-col justify-center", className)}
+      style={{ maxWidth }}
     >
       {error && (
         <div className="absolute -top-12 left-0 right-0 bg-red-500/80 text-white p-2 rounded text-center">
@@ -253,27 +254,36 @@ export function LaunchButton({
         </div>
       )}
 
-      <div className="flex flex-col gap-3 max-w-md w-full">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
           <Button
             onClick={handleLaunch}
             disabled={!selectedVersion}
             variant={getButtonVariant()}
             size="lg"
-            className="flex-1 py-4 px-12 text-2xl font-bold whitespace-nowrap"
             icon={getButtonIcon()}
+            className="flex-1"
           >
             {getButtonText()}
           </Button>
 
-          <Button
-            onClick={toggleVersionSelect}
-            disabled={isLaunching}
+          <IconButton
+            onClick={handleOpenModal}
+            disabled={isLaunching || !versions || versions.length === 0}
             variant="secondary"
             size="lg"
-            className="h-full py-4 px-5"
-            icon={<Icon icon="pixel:chevron-down-solid" className="w-8 h-8" />}
-          >{``}</Button>
+            className="relative overflow-hidden transition-all duration-300"
+            style={{
+              borderColor: `${accentColor.value}80`,
+              borderBottomColor: accentColor.value,
+              boxShadow:
+                "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
+              backgroundColor: `${accentColor.value}10`,
+            }}
+            icon={
+              <Icon icon="solar:alt-arrow-down-bold" width="24" height="24" />
+            }
+          ></IconButton>
         </div>
 
         <div className="h-[60px] relative">
@@ -294,11 +304,11 @@ export function LaunchButton({
         </div>
       </div>
 
-      {showVersions && versions && (
-        <VersionSelector
+      {versions && (
+        <ProfileSelectionModal
           versions={versions}
-          selectedVersion={selectedVersion}
           onVersionChange={handleVersionChange}
+          title="Select Version"
         />
       )}
     </div>

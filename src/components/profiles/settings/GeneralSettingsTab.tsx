@@ -3,14 +3,12 @@
 import { useEffect, useState } from "react";
 import type { Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
-import { FormSection } from "../../ui/FormSection";
-import { FormField } from "../../ui/FormField";
-import { TextInput } from "../../ui/TextInput";
-import { SelectInput } from "../../ui/SelectInput";
-import { Button } from "../../ui/Button";
-import { StatusMessage } from "../../ui/StatusMessage";
-import { LoadingIndicator } from "../../ui/LoadingIndicator";
 import { Icon } from "@iconify/react";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { StatusMessage } from "../../ui/StatusMessage";
+import { Button } from "../../ui/buttons/Button";
+import { Input } from "../../ui/Input";
+import { Select } from "../../ui/Select";
 
 interface GeneralSettingsTabProps {
   profile: Profile;
@@ -38,6 +36,7 @@ export function GeneralSettingsTab({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cloneSuccess, setCloneSuccess] = useState<string | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const loadNoriskPacks = async () => {
@@ -104,25 +103,40 @@ export function GeneralSettingsTab({
   );
 
   return (
-    <div className="space-y-8 select-none">
+    <div className="space-y-6 select-none">
       {error && <StatusMessage type="error" message={error} />}
       {cloneSuccess && <StatusMessage type="success" message={cloneSuccess} />}
 
-      <FormSection>
-        <FormField label="profile name">
-          <TextInput
+      <div className="space-y-6">
+        <div>
+          <label className="block text-3xl font-minecraft text-white mb-2 lowercase">
+            profile name
+          </label>
+          <Input
             value={editedProfile.name}
-            onChange={(value) => updateProfile({ name: value })}
-            className="text-2xl tracking-wide"
+            onChange={(e) => updateProfile({ name: e.target.value })}
+            placeholder="Enter profile name"
+            className="text-2xl py-3"
           />
-        </FormField>
+        </div>
 
-        <FormField label="norisk client pack">
+        <div>
+          <label className="block text-3xl font-minecraft text-white mb-2 lowercase">
+            norisk client pack
+          </label>
           {loading ? (
-            <LoadingIndicator message="loading norisk packs..." />
+            <div className="flex items-center justify-center p-4 text-white">
+              <Icon
+                icon="solar:refresh-bold"
+                className="w-6 h-6 mr-2 animate-spin"
+              />
+              <span className="font-minecraft text-2xl">
+                loading norisk packs...
+              </span>
+            </div>
           ) : (
             <>
-              <SelectInput
+              <Select
                 value={editedProfile.selected_norisk_pack_id || ""}
                 onChange={(value) =>
                   updateProfile({
@@ -130,11 +144,11 @@ export function GeneralSettingsTab({
                   })
                 }
                 options={[{ value: "", label: "none" }, ...noriskPackOptions]}
-                className="text-2xl tracking-wide"
+                className="text-2xl py-3"
               />
               {editedProfile.selected_norisk_pack_id &&
                 noriskPacks[editedProfile.selected_norisk_pack_id] && (
-                  <p className="text-xl text-white/70 mt-4 font-minecraft tracking-wide select-none">
+                  <p className="text-xl text-white/70 mt-2 font-minecraft tracking-wide select-none">
                     {
                       noriskPacks[editedProfile.selected_norisk_pack_id]
                         .description
@@ -143,42 +157,75 @@ export function GeneralSettingsTab({
                 )}
             </>
           )}
-        </FormField>
-      </FormSection>
+        </div>
+      </div>
 
-      <div className="flex flex-wrap gap-6">
-        <FormSection className="flex-1 min-w-[300px]">
-          <FormField
-            label="duplicate instance"
-            description="creates a copy of this instance, including worlds, configs, mods, etc."
-          >
+      <div
+        className="mt-6 p-4 rounded-lg border-2 border-b-4"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}60`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        }}
+      >
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-[250px]">
+            <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
+              duplicate instance
+            </h3>
+            <p className="text-xl text-white/70 mb-3 font-minecraft tracking-wide select-none">
+              creates a copy of this instance, including worlds, configs, mods,
+              etc.
+            </p>
             <Button
               onClick={handleDuplicate}
               disabled={loading}
               variant="secondary"
-              className="text-2xl py-3 px-6 tracking-wide"
+              icon={
+                <Icon icon="solar:copy-bold" className="w-5 h-5 text-white" />
+              }
+              size="md"
+              className="text-2xl"
             >
-              <Icon icon={"pixel:copy-solid"} />
-              duplicate
+              {loading ? (
+                <>
+                  <Icon
+                    icon="solar:refresh-bold"
+                    className="w-5 h-5 animate-spin text-white"
+                  />
+                  <span>duplicating...</span>
+                </>
+              ) : (
+                "duplicate"
+              )}
             </Button>
-          </FormField>
-        </FormSection>
+          </div>
 
-        <FormSection className="flex-1 min-w-[300px]">
-          <FormField
-            label="delete instance"
-            description="permanently deletes this instance from your device, including your worlds, configs, and all installed content."
-          >
+          <div className="flex-1 min-w-[250px]">
+            <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
+              delete instance
+            </h3>
+            <p className="text-xl text-white/70 mb-3 font-minecraft tracking-wide select-none">
+              permanently deletes this instance from your device, including your
+              worlds, configs, and all installed content.
+            </p>
             <Button
               onClick={handleDelete}
-              variant="danger"
-              className="text-2xl py-3 px-6 tracking-wide"
+              variant="destructive"
+              icon={
+                <Icon
+                  icon="solar:trash-bin-trash-bold"
+                  className="w-5 h-5 text-white"
+                />
+              }
+              size="md"
+              className="text-2xl"
             >
-              <Icon icon={"pixel:trash-alt-solid"} />
               {confirmDelete ? "confirm delete" : "delete instance"}
             </Button>
-          </FormField>
-        </FormSection>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../../lib/utils";
 import type { Mod } from "../../../types/profile";
-import { ToggleSwitch } from "./common/ToggleSwitch";
+import { ToggleSwitch } from "../../ui/ToggleSwitch";
 import { invoke } from "@tauri-apps/api/core";
 import type { ModrinthVersion } from "../../../types/modrinth";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { IconButton } from "../../ui/buttons/IconButton";
+import { Checkbox } from "../../ui/Checkbox";
+import { Button } from "../../ui/buttons/Button.tsx";
 
 interface ModRowProps {
   mod: Mod;
@@ -27,12 +31,14 @@ export function ModRow({
   onDelete,
   onUpdate,
   updateVersion,
+  checkingUpdates = false,
 }: ModRowProps) {
-  const [, setIsHovered] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [iconUrl, setIconUrl] = useState<string | null>(null);
   const [localIcon, setLocalIcon] = useState<string | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [, setIsUpdating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const fetchModIcon = async () => {
@@ -108,57 +114,90 @@ export function ModRow({
   return (
     <div
       className={cn(
-        "flex items-center bg-black/40 py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
-        isSelected && "bg-white/10",
+        "flex items-center py-4 px-4 border-b transition-colors",
+        isSelected
+          ? "bg-white/10"
+          : isHovered
+            ? "bg-white/5"
+            : "bg-transparent",
       )}
+      style={{
+        borderColor: `${accentColor.value}15`,
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="w-8 flex justify-center">
-        <input
-          type="checkbox"
-          className="w-5 h-5 accent-white/70 cursor-pointer"
+        <Checkbox
           checked={isSelected}
           onChange={onSelect}
           aria-label={`Select ${mod.display_name || "mod"}`}
         />
       </div>
 
-      <div className="flex items-center gap-4 flex-1 min-w-0 px-3">
-        <div className="w-16 h-16 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-          {iconUrl ? (
-            <img
-              src={iconUrl || "/placeholder.svg"}
-              alt={mod.display_name || "Mod icon"}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => setIconUrl(null)}
-            />
-          ) : localIcon ? (
-            <img
-              src={`data:image/png;base64,${localIcon}`}
-              alt={mod.display_name || "Mod icon"}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => setLocalIcon(null)}
-            />
-          ) : (
-            <Icon icon="pixel:cube" className="w-7 h-7 text-white/60" />
-          )}
-        </div>
-        <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-3xl lowercase tracking-wide truncate flex items-center gap-2">
-            {mod.display_name || "unknown mod"}
-            {hasUpdate && (
-              <span
-                onClick={handleUpdate}
-                className=" cursor-pointer tbg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm "
-              >
-                update
-              </span>
+      <div className="flex items-center gap-3 flex-1 min-w-0 px-3">
+        <div className="relative w-14 h-14 flex-shrink-0">
+          <div
+            className="absolute inset-0 rounded border-2 border-b-4 overflow-hidden"
+            style={{
+              backgroundColor: `${accentColor.value}15`,
+              borderColor: `${accentColor.value}30`,
+              borderBottomColor: `${accentColor.value}50`,
+              boxShadow: `0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20`,
+            }}
+          >
+            {iconUrl ? (
+              <img
+                src={iconUrl || "/placeholder.svg"}
+                alt={mod.display_name || "Mod icon"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={() => setIconUrl(null)}
+              />
+            ) : localIcon ? (
+              <img
+                src={`data:image/png;base64,${localIcon}`}
+                alt={mod.display_name || "Mod icon"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={() => setLocalIcon(null)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Icon
+                  icon="solar:cube-bold"
+                  className="w-7 h-7 text-white/60"
+                />
+              </div>
             )}
           </div>
-          <div className="text-white/60 text-2xl lowercase truncate">
+        </div>
+
+        <div className="flex flex-col min-w-0">
+          <div className="text-white font-minecraft text-2xl py-1 lowercase tracking-wide truncate flex items-center gap-2">
+            {mod.display_name || "unknown mod"}
+            {hasUpdate && (
+              <Button
+                size="xs"
+                variant="success"
+                className="flex items-center gap-1 cursor-pointer"
+                onClick={handleUpdate}
+                icon={
+                  isUpdating ? (
+                    <Icon
+                      icon="solar:refresh-circle-bold-duotone"
+                      className="w-3.5 h-3.5 animate-spin"
+                    />
+                  ) : (
+                    <Icon icon="solar:refresh-bold" className="w-3.5 h-3.5" />
+                  )
+                }
+              >
+                update
+              </Button>
+            )}
+          </div>
+          <div className="text-white/50 text-lg lowercase truncate">
             {mod.source?.type === "modrinth"
               ? mod.source.project_id
               : mod.source?.type === "local"
@@ -168,33 +207,35 @@ export function ModRow({
         </div>
       </div>
 
-      <div className="w-28 text-white/70 text-lg font-minecraft tracking-wide flex items-center gap-1">
+      <div className="w-32 text-white/70 text-lg font-minecraft tracking-wide flex items-center gap-1">
         {mod.version || "?"}
       </div>
 
-      <div className="w-28 flex justify-center">
-        <ToggleSwitch
-          enabled={mod.enabled}
-          onChange={onToggle}
-          title={mod.enabled ? "Disable mod" : "Enable mod"}
-        />
+      <div className="w-16 flex justify-center">
+        <ToggleSwitch checked={mod.enabled} onChange={onToggle} size="sm" />
       </div>
 
-      <div className="w-20 flex items-center justify-center gap-1">
-        <button
-          className={cn(
-            "w-10 h-10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/20 active:scale-95 transition-all",
-            isConfirmingDelete && "bg-red-500/50 text-white",
-          )}
+      <div className="w-24 flex items-center justify-center">
+        <IconButton
           onClick={handleDelete}
+          variant={isConfirmingDelete ? "destructive" : "secondary"}
+          size="sm"
+          icon={
+            <Icon
+              icon={
+                isConfirmingDelete
+                  ? "solar:danger-bold"
+                  : "solar:trash-bin-trash-bold"
+              }
+              className="w-5 h-5"
+            />
+          }
           title={
             isConfirmingDelete
               ? "Click again to confirm deletion"
               : "Delete mod"
           }
-        >
-          <Icon icon="pixel:trash-solid" className="w-5 h-5" />
-        </button>
+        />
       </div>
     </div>
   );

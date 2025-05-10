@@ -1,14 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import * as ProcessService from "../../services/process-service";
-import type { ProcessMetadata } from "../../types/processState"; // Use actual type
-import { timeAgo } from "../../utils/time-utils"; // For display
-import { createPortal } from 'react-dom'; // Import createPortal
-
-const DROPDOWN_WIDTH = 288; // Corresponds to w-72 class
+import type { ProcessMetadata } from "../../types/processState";
+import { timeAgo } from "../../utils/time-utils";
+import { Button } from "../ui/buttons/Button";
+import { IconButton } from "../ui/./buttons/IconButton";
+import { Label } from "../ui/./Label";
+import { Dropdown } from "../ui/./dropdown/Dropdown";
+import { DropdownHeader } from "../ui/./dropdown/DropdownHeader";
+import { DropdownDivider } from "../ui/./dropdown/DropdownDivider";
+import { DropdownFooter } from "../ui/./dropdown/DropdownFooter";
+import { useThemeStore } from "../../store/useThemeStore";
+import { gsap } from "gsap";
 
 interface RunningInstancesIndicatorProps {
   className?: string;
@@ -21,239 +28,371 @@ export function RunningInstancesIndicator({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
-  const [stoppingId, setStoppingId] = useState<string | null>(null); // Track which process is being stopped
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+  const [viewingLogsId, setViewingLogsId] = useState<string | null>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
-  const [isMounted, setIsMounted] = useState(false); // State to track mount
-  // State for dynamic positioning
-  const [dropdownTop, setDropdownTop] = useState<number>(0);
-  const [dropdownLeft, setDropdownLeft] = useState<number>(0);
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const pulseRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const prevInstanceCount = useRef<number>(0);
 
   const fetchProcesses = useCallback(async () => {
-    // Don't set loading true on background refresh
-    // setIsLoading(true); 
     setError(null);
     try {
       const fetchedProcesses = await ProcessService.getRunningProcesses();
+
+      if (
+        fetchedProcesses.length > prevInstanceCount.current &&
+        prevInstanceCount.current > 0
+      ) {
+        if (notificationRef.current) {
+          gsap.fromTo(
+            notificationRef.current,
+            { scale: 0, opacity: 0 },
+            {
+              scale: 1,
+              opacity: 1,
+              duration: 0.3,
+              ease: "back.out(1.7)",
+            },
+          );
+
+          setTimeout(() => {
+            if (notificationRef.current) {
+              gsap.to(notificationRef.current, {
+                scale: 0,
+                opacity: 0,
+                duration: 0.2,
+                ease: "power2.in",
+              });
+            }
+          }, 3000);
+        }
+      }
+
+      prevInstanceCount.current = fetchedProcesses.length;
       setProcesses(fetchedProcesses);
-    } catch (err) { 
+    } catch (err) {
       setError("Failed to fetch processes");
       console.error(err);
-      setProcesses([]); 
+      setProcesses([]);
     } finally {
-        // Only set loading false on initial load
-        if (isLoading) setIsLoading(false);
+      if (isLoading) setIsLoading(false);
     }
-  }, [isLoading]); // Depend on isLoading to only set false once
+  }, [isLoading]);
 
-  // Fetch on mount and set up polling
   useEffect(() => {
-    setIsMounted(true); // Set mounted state
-    fetchProcesses(); // Initial fetch
-    
-    const intervalId = setInterval(fetchProcesses, 5000); // Poll every 5 seconds
+    fetchProcesses();
 
-    return () => clearInterval(intervalId); // Cleanup interval on unmount
+    const intervalId = setInterval(fetchProcesses, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [fetchProcesses]);
 
-  // Handle clicking outside the dropdown
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
-      ) {
-        setIsDropdownOpen(false);
-      }
-    };
+    if (processes.length > 0 && pulseRef.current) {
+      const pulseAnimation = gsap.to(pulseRef.current, {
+        scale: 1.5,
+        opacity: 0,
+        duration: 1.5,
+        repeat: -1,
+        ease: "sine.out",
+      });
 
-    if (isDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    } else {
-      document.removeEventListener("mousedown", handleClickOutside);
+      return () => {
+        pulseAnimation.kill();
+      };
     }
+  }, [processes.length]);
 
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isDropdownOpen]);
+  const handleToggleDropdown = () => {
+    setIsDropdownOpen(!isDropdownOpen);
+  };
 
-  // Function to calculate and update dropdown position
-  const calculatePosition = useCallback(() => {
-    if (!isDropdownOpen || !buttonRef.current) return;
-
-    const rect = buttonRef.current.getBoundingClientRect();
-    const buttonCenterX = rect.left + rect.width / 2;
-
-    // Calculate desired left position for centering
-    let desiredLeft = buttonCenterX - DROPDOWN_WIDTH / 2;
-
-    // Clamp position to viewport bounds (add some padding)
-    const padding = 8;
-    desiredLeft = Math.max(padding, desiredLeft);
-    desiredLeft = Math.min(
-      desiredLeft,
-      window.innerWidth - DROPDOWN_WIDTH - padding,
-    );
-
-    setDropdownTop(rect.bottom + 8);
-    setDropdownLeft(desiredLeft);
-  }, [isDropdownOpen, buttonRef]);
-
-  // Calculate position when opening and on resize
-  useEffect(() => {
-    if (isDropdownOpen) {
-      calculatePosition(); // Initial calculation
-      window.addEventListener("resize", calculatePosition);
-    }
-
-    return () => {
-      window.removeEventListener("resize", calculatePosition);
-    };
-  }, [isDropdownOpen, calculatePosition]);
-
-  const handleIndicatorClick = () => {
-    // Calculate position immediately before opening if not already open
-    if (!isDropdownOpen) {
-      // No need to recalculate here if the effect does it, 
-      // but doesn't hurt for immediate feedback
-      // calculatePosition(); // You could call it here too
-    }
-    setIsDropdownOpen((prev) => !prev);
+  const handleCloseDropdown = () => {
+    setIsDropdownOpen(false);
   };
 
   const handleStopProcess = async (processId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent dropdown from closing
+    e.stopPropagation();
     setStoppingId(processId);
     try {
       await ProcessService.stopProcess(processId);
-      console.log("Process stopped successfully."); // Added console log as replacement
-      await fetchProcesses(); // Refresh the list after stopping
+      console.log("Process stopped successfully.");
+      await fetchProcesses();
     } catch (err) {
-      console.error(`Failed to stop process: ${err}`); // Added console log as replacement
+      console.error(`Failed to stop process: ${err}`);
     } finally {
       setStoppingId(null);
     }
   };
 
   const handleViewLogs = async (processId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent dropdown from closing
+    e.stopPropagation();
+    setViewingLogsId(processId);
     try {
       await ProcessService.openLogWindow(processId);
     } catch (err) {
-      console.error(`Failed to open log window for process ID ${processId}:`, err);
-      // Optionally show a user-facing error message here
+      console.error(
+        `Failed to open log window for process ID ${processId}:`,
+        err,
+      );
+    } finally {
+      setTimeout(() => setViewingLogsId(null), 1000);
+    }
+  };
+
+  const handleStopAll = async () => {
+    try {
+      for (const process of processes) {
+        await ProcessService.stopProcess(process.id);
+      }
+      await fetchProcesses();
+      handleCloseDropdown();
+    } catch (err) {
+      console.error(`Failed to stop all processes: ${err}`);
     }
   };
 
   const instanceCount = processes.length;
+  const hasInstances = instanceCount > 0;
 
   return (
     <div className={cn("relative", className)}>
-      {/* Indicator Button */}
-      <div
-        ref={buttonRef}
-        className={cn(
-          "flex items-center gap-2 bg-black/50 h-10 px-3 py-1 backdrop-blur-md cursor-pointer",
-          "border-2 border-white/30 shadow-[0_0_10px_rgba(0,0,0,0.3)] hover:border-white/50 transition-colors",
-          instanceCount > 0 ? "border-emerald-500/50 hover:border-emerald-500/80" : "",
+      <div ref={buttonRef} className="relative">
+        {hasInstances && (
+          <div
+            ref={pulseRef}
+            className="absolute inset-0 rounded-md pointer-events-none"
+            style={{ backgroundColor: "#10b981", opacity: 0.3 }}
+          />
         )}
-        onClick={handleIndicatorClick}
-        title={`${instanceCount} instance${instanceCount !== 1 ? 's' : ''} running`}
-      >
-        <Icon icon="pixel:monitor" className={cn("w-5 h-5", instanceCount > 0 ? "text-emerald-400" : "text-white/50")} />
-        <span className={cn(
-             "text-sm font-minecraft", 
-             instanceCount > 0 ? "text-white" : "text-white/60",
-             "whitespace-nowrap" // Prevent wrapping
-        )}>
-           {isLoading && instanceCount === 0 
+
+        <Button
+          variant={hasInstances ? "success" : "default"}
+          size="md"
+          onClick={handleToggleDropdown}
+          icon={<Icon icon="solar:monitor-bold" className="w-4 h-4" />}
+          className="h-10 relative"
+        >
+          {isLoading && instanceCount === 0
             ? "Loading..."
             : instanceCount === 0
-            ? "No instances running"
-            : `${instanceCount} Instance${instanceCount !== 1 ? 's' : ''} Running`
-           }
-        </span>
-      </div>
+              ? "No instances"
+              : `${instanceCount} Instance${instanceCount !== 1 ? "s" : ""}`}
 
-      {/* Dropdown List - Rendered via Portal */}
-      {isMounted && isDropdownOpen && createPortal(
-        <div
-          ref={dropdownRef}
-          className={cn(
-             // Change to fixed positioning, remove relative positioning classes
-             "fixed w-72 bg-black/80 backdrop-blur-lg border-2 border-white/30 shadow-lg z-50 max-h-80 overflow-y-auto custom-scrollbar",
-             // Remove top-full, right-0, mt-2 as style is now dynamic
+          {hasInstances && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold bg-green-500 text-white border-2 border-black">
+              {instanceCount}
+            </span>
           )}
+        </Button>
+
+        <div
+          ref={notificationRef}
+          className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded-md shadow-lg opacity-0 scale-0 pointer-events-none"
           style={{
-            top: `${dropdownTop}px`,
-            left: `${dropdownLeft}px`,
-            width: `${DROPDOWN_WIDTH}px`, // Set fixed width to match constant
+            boxShadow:
+              "0 4px 6px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2)",
+            zIndex: 100,
           }}
         >
-          <div className="p-3 border-b border-white/10">
-            <h4 className="font-minecraft text-white text-lg">Running Instances</h4>
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:bell-bold" className="w-4 h-4" />
+            <span className="text-sm font-minecraft">
+              New instance started!
+            </span>
           </div>
+          <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-green-500"></div>
+        </div>
+      </div>
+
+      <Dropdown
+        isOpen={isDropdownOpen}
+        onClose={handleCloseDropdown}
+        triggerRef={buttonRef}
+        width={350}
+      >
+        <DropdownHeader title="Running Instances">
+          <button
+            onClick={handleCloseDropdown}
+            className="text-white/70 hover:text-white transition-colors"
+          >
+            <Icon icon="solar:close-circle-bold" className="w-5 h-5" />
+          </button>
+        </DropdownHeader>
+
+        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
           {isLoading && processes.length === 0 ? (
-             <div className="p-4 text-center text-white/70">Loading...</div>
+            <div className="p-6 text-center">
+              <Icon
+                icon="solar:spinner-bold"
+                className="w-6 h-6 animate-spin mx-auto text-white/70 mb-2"
+              />
+              <p className="text-white/70 font-minecraft text-xl">
+                Loading instances...
+              </p>
+            </div>
           ) : error ? (
-             <div className="p-4 text-red-400">Error: {error}</div>
+            <div className="p-6 text-center">
+              <Icon
+                icon="solar:danger-triangle-bold"
+                className="w-6 h-6 mx-auto text-red-400 mb-2"
+              />
+              <p className="text-red-400 font-minecraft text-xl">
+                Error: {error}
+              </p>
+            </div>
           ) : processes.length === 0 ? (
-            <div className="p-4 text-center text-white/60">No instances running.</div>
+            <div className="p-6 text-center">
+              <Icon
+                icon="solar:monitor-slash-bold"
+                className="w-8 h-8 mx-auto text-white/50 mb-3"
+              />
+              <p className="text-white/60 font-minecraft text-xl">
+                No instances running
+              </p>
+              <p className="text-white/40 font-minecraft text-lg mt-2">
+                Launch a profile to start playing
+              </p>
+            </div>
           ) : (
-            <ul className="divide-y divide-white/10">
+            <div className="py-2">
               {processes.map((process) => (
-                <li key={process.id} className="p-3 flex items-center justify-between gap-2 hover:bg-white/5">
-                  <div className="min-w-0">
-                     <p className="text-sm font-minecraft text-white truncate" title={process.profile_name || process.profile_id}>
-                       {process.profile_name || `Profile ${process.profile_id.substring(0, 6)}...`}
-                     </p>
-                     <p className="text-xs text-white/60 mt-0.5">
-                       Started: {timeAgo(new Date(process.start_time).getTime())} 
-                       {/* Display state if not Running? */}
-                       {typeof process.state === 'object' && 'Crashed' in process.state && 
-                         <span className="text-red-500 ml-1">(Crashed)</span>}
-                       {typeof process.state === 'string' && process.state !== 'Running' && 
-                         <span className="text-yellow-500 ml-1">({process.state})</span>}
-                     </p>
+                <div
+                  key={process.id}
+                  className="px-4 py-3 hover:bg-white/10 transition-colors duration-200"
+                  style={{
+                    borderLeft:
+                      typeof process.state === "object" &&
+                      "Crashed" in process.state
+                        ? "4px solid #ef4444"
+                        : typeof process.state === "string" &&
+                            process.state !== "Running"
+                          ? "4px solid #f59e0b"
+                          : "4px solid #10b981",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                          style={{
+                            backgroundColor: `${accentColor.value}30`,
+                            borderWidth: "2px",
+                            borderStyle: "solid",
+                            borderColor: `${accentColor.value}60`,
+                          }}
+                        >
+                          <Icon
+                            icon="solar:widget-bold"
+                            className="w-4 h-4 text-white"
+                          />
+                        </div>
+                        <div>
+                          <p
+                            className="text-xl font-minecraft text-white truncate"
+                            title={process.profile_name || process.profile_id}
+                          >
+                            {process.profile_name ||
+                              `Profile ${process.profile_id.substring(0, 6)}...`}
+                          </p>
+                          <div className="flex items-center text-lg text-white/60 mt-0.5 font-minecraft">
+                            <Icon
+                              icon="solar:clock-circle-bold"
+                              className="w-3.5 h-3.5 mr-1.5"
+                            />
+                            {timeAgo(new Date(process.start_time).getTime())}
+                            {typeof process.state === "object" &&
+                              "Crashed" in process.state && (
+                                <span className="ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-sm">
+                                  Crashed
+                                </span>
+                              )}
+                            {typeof process.state === "string" &&
+                              process.state !== "Running" && (
+                                <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-sm">
+                                  {process.state}
+                                </span>
+                              )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {process.id && (
+                        <IconButton
+                          onClick={(e) => handleViewLogs(process.id, e)}
+                          variant="info"
+                          size="sm"
+                          icon={
+                            viewingLogsId === process.id ? (
+                              <Icon
+                                icon="solar:spinner-bold"
+                                className="w-4 h-4 animate-spin"
+                              />
+                            ) : (
+                              <Icon
+                                icon="solar:document-bold"
+                                className="w-4 h-4"
+                              />
+                            )
+                          }
+                          aria-label="View Logs"
+                        />
+                      )}
+                      <IconButton
+                        onClick={(e) => handleStopProcess(process.id, e)}
+                        disabled={stoppingId === process.id}
+                        variant="destructive"
+                        size="sm"
+                        icon={
+                          stoppingId === process.id ? (
+                            <Icon
+                              icon="solar:spinner-bold"
+                              className="w-4 h-4 animate-spin"
+                            />
+                          ) : (
+                            <Icon icon="solar:stop-bold" className="w-4 h-4" />
+                          )
+                        }
+                        aria-label="Stop Process"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {/* View Logs Button - Use process.id (Uuid string) */} 
-                    {process.id && (
-                      <button
-                        onClick={(e) => handleViewLogs(process.id, e)} // Pass process.id
-                        className="p-1.5 bg-blue-900/40 hover:bg-blue-800/60 border border-blue-500/30 rounded text-blue-300 hover:text-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="View Logs"
-                        aria-label="View Logs"
-                      >
-                        <Icon icon="pixel:document-alt-stroke" className="w-4 h-4" /> 
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => handleStopProcess(process.id, e)}
-                      disabled={stoppingId === process.id}
-                      className="p-1.5 bg-red-900/40 hover:bg-red-800/60 border border-red-500/30 rounded text-red-300 hover:text-red-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                      title="Stop Process"
-                      aria-label="Stop Process"
-                    >
-                       {stoppingId === process.id ? (
-                          <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
-                       ) : (
-                          <Icon icon="pixel:square" className="w-4 h-4" /> // Stop Icon
-                       )}
-                    </button>
-                  </div>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </div>,
-        document.body // Target the document body
-      )}
+        </div>
+
+        {processes.length > 0 && (
+          <>
+            <DropdownDivider />
+            <DropdownFooter>
+              <div className="flex items-center justify-between w-full">
+                <Label variant="success" size="md">
+                  {processes.length} instance{processes.length !== 1 ? "s" : ""}{" "}
+                  running
+                </Label>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleStopAll}
+                  icon={
+                    <Icon icon="solar:stop-circle-bold" className="w-4 h-4" />
+                  }
+                >
+                  Stop All
+                </Button>
+              </div>
+            </DropdownFooter>
+          </>
+        )}
+      </Dropdown>
     </div>
   );
 }
-
-// Removed placeholder positioning function 

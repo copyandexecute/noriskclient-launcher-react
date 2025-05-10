@@ -5,12 +5,13 @@ import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "../../../lib/utils";
-import { SearchInput } from "./common/SearchInput";
-import { ContentTable } from "./common/ContentTable";
-import { LoadingState } from "./common/LoadingState";
-import { ErrorState } from "./common/ErrorState";
-import { EmptyState } from "./common/EmptyState";
-import { ToggleSwitch } from "./common/ToggleSwitch";
+import { SearchInput } from "../../ui/SearchInput";
+import { ContentTable } from "../../ui/ContentTable";
+import { LoadingState } from "../../ui/LoadingState";
+import { EmptyState } from "../../ui/EmptyState";
+import { ToggleSwitch } from "../../ui/ToggleSwitch";
+import { Checkbox } from "../../ui/Checkbox";
+import { Button } from "../../ui/buttons/Button";
 import {
   getNoriskPacks,
   getNoriskPacksResolved,
@@ -18,7 +19,9 @@ import {
 } from "../../../services/profile-service";
 import type { Profile } from "../../../types/profile";
 import type { NoriskModpacksConfig } from "../../../types/noriskPacks";
+import { useThemeStore } from "../../../store/useThemeStore";
 import { Logo } from "../../ui/Logo";
+import { Label } from "../../ui/Label";
 
 interface NoRiskMod {
   id: string;
@@ -36,7 +39,11 @@ interface NoRiskModsTabProps {
   isActive?: boolean;
 }
 
-export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
+export function NoRiskModsTab({
+  profile,
+  onRefresh,
+  isActive = false,
+}: NoRiskModsTabProps) {
   const [noriskMods, setNoriskMods] = useState<NoRiskMod[]>([]);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
@@ -50,6 +57,8 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
     {},
   );
   const [unlistenFn, setUnlistenFn] = useState<(() => void) | undefined>();
+  const [refreshing, setRefreshing] = useState(false);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const setupEventListeners = async () => {
@@ -352,6 +361,22 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshNoriskPacks();
+      await fetchNoriskPacks();
+      await fetchNoriskMods();
+      if (onRefresh) onRefresh();
+    } catch (error) {
+      setError(
+        `Failed to refresh NoRisk packs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const filteredMods = noriskMods.filter(
     (mod) =>
       mod.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -387,30 +412,75 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
     : false;
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Fixed header section */}
-      <div className="flex items-center justify-between mb-5 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <SearchInput
-            value={searchQuery}
-            onChange={setSearchQuery}
-            placeholder="search norisk mods..."
-          />
-          <div className="text-white/70 font-minecraft text-lg">
-            pack: <span className="text-white">{currentPackName}</span>
-            {isExperimental && (
-              <span className="ml-2 text-yellow-400 text-sm">
-                (experimental)
-              </span>
-            )}
+    <div className="h-full flex flex-col select-none gap-6">
+      <div
+        className="rounded-lg border-2 border-b-4 p-4"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 12px 20px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30`,
+        }}
+      >
+        <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+          <div className="w-full md:w-1/3">
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="search norisk mods..."
+            />
+          </div>
+
+          <div className="flex items-center gap-4 justify-between md:justify-between w-full md:w-auto">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={
+                  refreshing ? (
+                    <Icon icon="solar:refresh-bold" className="animate-spin" />
+                  ) : (
+                    <Icon icon="solar:refresh-bold" />
+                  )
+                }
+                onClick={handleRefresh}
+                disabled={refreshing}
+              >
+                refresh
+              </Button>
+
+              <Label size="sm" className="ml-2">
+                pack: <span className="text-white">{currentPackName}</span>
+                {isExperimental && (
+                  <span className="ml-2 text-yellow-400 text-sm">
+                    (experimental)
+                  </span>
+                )}
+              </Label>
+            </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-4"></div>
       </div>
 
-      {/* Flexible content area that takes remaining height */}
-      <div className="flex-1 min-h-0">
+      {error && (
+        <div
+          className="rounded-lg border-2 border-b-4 p-3 flex items-center gap-2"
+          style={{
+            backgroundColor: `rgba(220, 38, 38, 0.1)`,
+            borderColor: `rgba(220, 38, 38, 0.3)`,
+            borderBottomColor: `rgba(220, 38, 38, 0.5)`,
+            boxShadow: `0 4px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(220, 38, 38, 0.1)`,
+          }}
+        >
+          <Icon
+            icon="solar:danger-triangle-bold"
+            className="w-5 h-5 text-red-400"
+          />
+          <span className="text-white font-minecraft text-lg">{error}</span>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-hidden">
         {!profile.selected_norisk_pack_id ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -423,22 +493,24 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
               </p>
             </div>
           </div>
+        ) : isLoading ? (
+          <LoadingState message="loading norisk mods..." />
         ) : (
           <ContentTable
             headers={[
               {
                 key: "name",
-                label: "name",
+                label: "norisk mod name",
                 sortable: true,
                 width: "flex-1",
-                className: "px-9",
+                className: "px-3",
               },
               {
                 key: "enabled",
                 label: "status",
                 sortable: true,
-                width: "w-24",
-                className: "text-center justify-center",
+                width: "w-16",
+                className: "text-center",
               },
             ]}
             sortKey={sortBy}
@@ -452,11 +524,7 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
             contentType="norisk mod"
             searchQuery={searchQuery}
           >
-            {isLoading ? (
-              <LoadingState message="loading norisk mods..." />
-            ) : error ? (
-              <ErrorState message={error} onRetry={fetchNoriskMods} />
-            ) : sortedMods.length > 0 ? (
+            {sortedMods.length > 0 ? (
               sortedMods.map((mod) => (
                 <NoRiskModRow
                   key={mod.id}
@@ -469,7 +537,7 @@ export function NoRiskModsTab({ profile }: NoRiskModsTabProps) {
               ))
             ) : (
               <EmptyState
-                icon="pixel:shield-solid"
+                icon="solar:shield-bold"
                 message={
                   searchQuery
                     ? "no mods match your search"
@@ -499,69 +567,90 @@ function NoRiskModRow({
   onToggle,
   localIcon,
 }: NoRiskModRowProps) {
-  const [, setIsHovered] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   return (
     <div
       className={cn(
-        "flex items-center bg-black/40 py-4 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
-        isSelected && "bg-white/10",
+        "flex items-center py-3 px-4 border-b transition-colors",
+        isSelected ? "bg-white/10" : "hover:bg-white/5",
       )}
+      style={{
+        borderColor: `${accentColor.value}15`,
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="w-12 flex justify-center">
-        <input
-          type="checkbox"
-          className="w-5 h-5 accent-white/70 cursor-pointer"
+      <div className="w-8 flex justify-center">
+        <Checkbox
           checked={isSelected}
           onChange={onSelect}
-          aria-label={`Select ${mod.display_name || "mod"}`}
+          aria-label={`Select ${mod.display_name}`}
         />
       </div>
 
-      <div className="flex  items-center gap-4 flex-1 min-w-0 px-3">
-        <div className="w-16 h-16 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-          {localIcon ? (
-            <img
-              src={`data:image/png;base64,${localIcon}`}
-              alt={mod.display_name || "Mod icon"}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
-          ) : mod.icon_url ? (
-            <img
-              src={mod.icon_url || "/placeholder.svg"}
-              alt={mod.display_name || "Mod icon"}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
-          ) : (
-            <Icon icon="pixel:shield-solid" className="w-7 h-7 text-white/60" />
-          )}
+      <div className="flex items-center gap-3 flex-1 min-w-0 px-3">
+        {/* 3D Image Frame */}
+        <div className="relative w-12 h-12 flex-shrink-0">
+          <div
+            className="absolute inset-0 border-2 border-b-4 overflow-hidden"
+            style={{
+              backgroundColor: `${accentColor.value}15`,
+              borderColor: `${accentColor.value}30`,
+              borderBottomColor: `${accentColor.value}50`,
+              boxShadow: `0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20`,
+            }}
+          >
+            {localIcon ? (
+              <img
+                src={`data:image/png;base64,${localIcon}`}
+                alt={mod.display_name || "Mod icon"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : mod.icon_url ? (
+              <img
+                src={mod.icon_url || "/placeholder.svg"}
+                alt={mod.display_name || "Mod icon"}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Icon
+                  icon="solar:shield-bold"
+                  className="w-6 h-6 text-white/60"
+                />
+              </div>
+            )}
+          </div>
         </div>
+
         <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-3xl lowercase tracking-wide truncate">
+          <div className="text-white font-minecraft text-2xl lowercase tracking-wide truncate">
             {mod.display_name || mod.id}
           </div>
-          <div className="text-white/60 text-2xl lowercase truncate">
-            {mod.description || "norisk mod"}
+          <div className="text-white/50 text-lg lowercase truncate">
+            {mod.description && <span className="mr-2">{mod.description}</span>}
+            {mod.version && (
+              <>
+                {mod.description && <span className="opacity-50 mx-1">•</span>}
+                <span>v{mod.version}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="w-36 flex justify-center">
-        <ToggleSwitch
-          enabled={mod.enabled}
-          onChange={onToggle}
-          title={mod.enabled ? "Disable mod" : "Enable mod"}
-        />
+      <div className="w-16 flex justify-center">
+        <ToggleSwitch checked={mod.enabled} onChange={onToggle} size="sm" />
       </div>
     </div>
   );

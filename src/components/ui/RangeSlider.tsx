@@ -1,12 +1,13 @@
 "use client";
 
+import { useThemeStore } from "../../store/useThemeStore";
+
 interface RangeSliderProps {
   value: number;
   onChange: (value: number) => void;
   min: number;
   max: number;
   step?: number;
-  className?: string;
   valueLabel?: string;
   minLabel?: string;
   maxLabel?: string;
@@ -19,32 +20,45 @@ export function RangeSlider({
   min,
   max,
   step = 1,
-  className = "",
-  disabled = false,
   valueLabel,
   minLabel,
   maxLabel,
+  disabled = false,
 }: RangeSliderProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
   return (
-    <div className={`space-y-3 ${className}`}>
-      <div className="flex justify-between items-center">
-        {minLabel && (
-          <span className="text-base text-white/60 font-minecraft select-none">
-            {minLabel}
-          </span>
-        )}
-        {valueLabel && (
-          <span className="text-xl text-white font-minecraft select-none">
+    <div className={`${disabled ? "opacity-50 cursor-not-allowed" : ""}`}>
+      {valueLabel && (
+        <div className="text-center mb-2">
+          <span className="text-lg text-white font-minecraft">
             {valueLabel}
           </span>
-        )}
-        {maxLabel && (
-          <span className="text-base text-white/60 font-minecraft select-none">
-            {maxLabel}
-          </span>
-        )}
+        </div>
+      )}
+      <div className="mb-2">
+        <div className="flex justify-between mb-1">
+          {minLabel && (
+            <span className="text-sm text-white/70 font-minecraft">
+              {minLabel}
+            </span>
+          )}
+          {maxLabel && (
+            <span className="text-sm text-white/70 font-minecraft">
+              {maxLabel}
+            </span>
+          )}
+        </div>
+        <div className="relative h-3 bg-black/30 rounded-full overflow-hidden">
+          <div
+            className="absolute h-full rounded-full transition-all duration-200"
+            style={{
+              width: `${((value - min) / (max - min)) * 100}%`,
+              backgroundColor: accentColor.value,
+            }}
+          ></div>
+        </div>
       </div>
-
       <input
         type="range"
         min={min}
@@ -52,9 +66,8 @@ export function RangeSlider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full"
         disabled={disabled}
-        className="w-full h-3 bg-black/40 rounded-lg appearance-none cursor-pointer
-                   accent-white/70 focus:outline-none focus:ring-2 focus:ring-white/30"
       />
     </div>
   );

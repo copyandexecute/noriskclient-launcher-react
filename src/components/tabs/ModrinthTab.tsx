@@ -6,6 +6,8 @@ import type { Profile } from "../../types/profile";
 import { listProfiles } from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
+import { Card } from "../ui/Card";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface ModrinthTabProps {
   profiles?: Profile[];
@@ -18,6 +20,7 @@ export function ModrinthTab({
   const [refreshKey, setRefreshKey] = useState(0);
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -46,13 +49,13 @@ export function ModrinthTab({
   }, []);
 
   return (
-    <div className="h-full flex flex-col overflow-hidden p-4">
+    <Card className="h-full flex flex-col overflow-hidden p-4">
       {error && <ErrorMessage message={error} />}
 
       {!profilesLoaded ? (
         <LoadingState message="Loading profiles..." />
       ) : (
-        <div className="flex-1 min-h-screen overflow-y-auto">
+        <div className="flex-1 overflow-hidden">
           <ModrinthSearch
             key={`search-${refreshKey}`}
             profiles={profiles}
@@ -61,7 +64,7 @@ export function ModrinthTab({
           />
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 

@@ -4,6 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Icon } from "@iconify/react";
 import motdParser from "@sfirew/minecraft-motd-parser";
+import { Button } from "../../ui/buttons/Button";
+import { IconButton } from "../../ui/buttons/IconButton";
+import { Select } from "../../ui/Select";
+import { useThemeStore } from "../../../store/useThemeStore";
 
 // --- Import Real Types ---
 import type {
@@ -68,6 +72,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     "all",
   );
   const [sortOrder, setSortOrder] = useState<"recent" | "name">("recent");
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   // --- Helper Functions ---
   const getWorldDisplayName = useCallback((world: WorldInfo): string => {
@@ -372,110 +377,102 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
 
   // --- Render --- //
   return (
-    <div className="h-full select-none flex flex-col text-white">
-      {/* Main container with border */}
-      <div className="border-2 border-white/30 h-full flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-black/30 border-b-2 border-white/30 py-3 px-4 flex items-center justify-between">
-          <div className="flex items-center">
-            {/* Tab filters */}
-            <button
+    <div className="h-full select-none p-4 flex flex-col text-white">
+      <div
+        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
+        style={{
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
+        <div
+          className="border-b-2 py-3 px-4 flex items-center justify-between"
+          style={{
+            backgroundColor: `${accentColor.value}20`,
+            borderColor: `${accentColor.value}40`,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Button
               onClick={() => setActiveTab("all")}
-              className={`px-4 py-2 min-w-[100px] text-center font-minecraft text-2xl ${
-                activeTab === "all"
-                  ? "bg-black/20 text-white border-2 border-white/20"
-                  : "text-white/70 hover:text-white hover:bg-black/10"
-              }`}
-              style={{ transition: "none" }}
+              variant={activeTab === "all" ? "default" : "ghost"}
+              size="md"
             >
               All
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setActiveTab("worlds")}
-              className={`px-4 py-2 min-w-[100px] text-center font-minecraft text-2xl ${
-                activeTab === "worlds"
-                  ? "bg-black/20 text-white border-2 border-white/20"
-                  : "text-white/70 hover:text-white hover:bg-black/10"
-              }`}
-              style={{ transition: "none" }}
+              variant={activeTab === "worlds" ? "default" : "ghost"}
+              size="md"
+              icon={<Icon icon="solar:planet-bold" />}
+              iconPosition="left"
             >
               Worlds
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setActiveTab("servers")}
-              className={`px-4 py-2 min-w-[100px] text-center font-minecraft text-2xl ${
-                activeTab === "servers"
-                  ? "bg-black/20 text-white border-2 border-white/20"
-                  : "text-white/70 hover:text-white hover:bg-black/10"
-              }`}
-              style={{ transition: "none" }}
+              variant={activeTab === "servers" ? "default" : "ghost"}
+              size="md"
+              icon={<Icon icon="solar:server-bold" />}
+              iconPosition="left"
             >
               Servers
-            </button>
+            </Button>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Sort dropdown */}
-            <div className="relative">
-              <select
-                value={sortOrder}
-                onChange={(e) =>
-                  setSortOrder(e.target.value as "recent" | "name")
-                }
-                className="bg-black/20 backdrop-blur-md border-2 border-white/10 px-4 py-2 text-white font-minecraft text-3xl shadow-sm appearance-none pr-12 tracking-wide"
-                aria-label="Sort by"
-              >
-                <option value="recent" className="text-3xl">
-                  Recent
-                </option>
-                <option value="name" className="text-3xl">
-                  Name
-                </option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-white">
-                <Icon icon="pixel:chevron-down" className="w-6 h-6" />
-              </div>
-            </div>
+          <div className="flex items-center gap-3">
+            <Select
+              value={sortOrder}
+              onChange={(value) => setSortOrder(value as "recent" | "name")}
+              options={[
+                { value: "recent", label: "Recent" },
+                { value: "name", label: "Name" },
+              ]}
+              className="w-40"
+            />
 
-            {/* Refresh button */}
-            <button
-              className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-5 py-2 font-minecraft text-2xl flex items-center gap-3 transition-colors"
+            <Button
               onClick={() => pingAllServers(servers)}
               disabled={
                 pingingServers.size > 0 ||
                 servers.filter((s) => s.address).length === 0
               }
+              variant="secondary"
+              size="md"
+              icon={
+                pingingServers.size > 0 ? (
+                  <Icon
+                    icon="solar:refresh-circle-bold-duotone"
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Icon icon="solar:refresh-bold" />
+                )
+              }
+              iconPosition="left"
               title={
                 servers.filter((s) => s.address).length === 0
                   ? "No servers to ping"
                   : "Refresh server status"
               }
             >
-              {pingingServers.size > 0 ? (
-                <Icon
-                  icon="pixel:spinner-solid"
-                  className="w-6 h-6 animate-spin"
-                />
-              ) : (
-                <Icon icon="pixel:refresh-solid" className="w-6 h-6" />
-              )}
-              <span>refresh</span>
-            </button>
+              Refresh
+            </Button>
           </div>
         </div>
 
-        {/* Content Area - Only this part scrolls */}
-        <div className="flex-1 overflow-y-auto bg-black/60 custom-scrollbar min-h-0">
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
           {loading ? (
             <div className="flex items-center justify-center h-32 text-white/70 text-2xl">
               <Icon
-                icon="pixel:spinner-solid"
+                icon="solar:refresh-circle-bold-duotone"
                 className="w-8 h-8 animate-spin mr-3"
               />{" "}
               Loading...
             </div>
           ) : error ? (
-            <div className="p-6 bg-red-900/50 border-2 border-red-700 text-red-300 text-2xl">
+            <div className="p-6 bg-red-900/50 border-2 border-red-700 text-red-300 text-2xl rounded-lg m-4">
               Error: {error}
             </div>
           ) : displayItems.length === 0 ? (
@@ -483,9 +480,8 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
               No worlds or servers found
             </div>
           ) : (
-            <ul className="divide-y-2 divide-white/10">
+            <ul className="divide-y divide-white/10">
               {displayItems.map((item) => {
-                // Type guard is now essential
                 const isWorld = item.type === "world";
                 const key = isWorld
                   ? item.folder_name
@@ -509,8 +505,10 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                     key={key}
                     className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors"
                   >
-                    {/* Icon */}
-                    <div className="w-16 h-16 bg-black/30 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-white/10">
+                    <div
+                      className="w-16 h-16 flex items-center justify-center flex-shrink-0 overflow-hidden rounded-md border-2"
+                      style={{ borderColor: `${accentColor.value}40` }}
+                    >
                       {isWorld ? (
                         worldIconSrc ? (
                           <img
@@ -520,7 +518,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                           />
                         ) : (
                           <Icon
-                            icon="pixel:globe"
+                            icon="solar:planet-bold"
                             className="w-10 h-10 text-white/50"
                           />
                         )
@@ -532,29 +530,26 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                         />
                       ) : (
                         <Icon
-                          icon="pixel:server"
+                          icon="solar:server-bold"
                           className="w-10 h-10 text-white/50"
                         />
                       )}
                     </div>
 
-                    {/* Details */}
                     <div className="flex-grow min-w-0">
                       <h3
-                        className="font-minecraft text-3xl lowercase tracking-wide truncate"
+                        className="font-minecraft text-2xl lowercase tracking-wide truncate"
                         title={itemDisplayName}
                       >
                         {itemDisplayName}
                       </h3>
                       {isWorld ? (
-                        // Access world-specific props safely
                         <>
                           <p className="text-white/60 text-xl mt-2">
                             {item.last_played
                               ? `Last played: ${timeAgo(item.last_played)}`
                               : "Never played"}
                           </p>
-                          {/* Display Game Mode, Difficulty, Hardcore, Locked status */}
                           <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
                             <span>
                               Mode: {getGameModeString(item.game_mode)}
@@ -564,7 +559,10 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                             </span>
                             {item.is_hardcore && (
                               <span className="text-red-400 font-bold inline-flex items-center gap-1">
-                                <Icon icon="pixel:skull" className="w-4 h-4" />{" "}
+                                <Icon
+                                  icon="solar:skull-bold"
+                                  className="w-4 h-4"
+                                />{" "}
                                 Hardcore
                               </span>
                             )}
@@ -573,7 +571,10 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                 title="Difficulty Locked"
                                 className="inline-flex items-center gap-1"
                               >
-                                <Icon icon="pixel:lock" className="w-4 h-4" />{" "}
+                                <Icon
+                                  icon="solar:lock-bold"
+                                  className="w-4 h-4"
+                                />{" "}
                                 Locked
                               </span>
                             )}
@@ -586,7 +587,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                         </>
                       ) : (
                         <>
-                          {/* Access server-specific props safely */}
                           <div
                             className="text-white/70 text-xl mt-2 motd-container h-10 overflow-hidden"
                             title={pingInfo?.description || item.address || ""}
@@ -626,7 +626,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                   className="inline-flex items-center gap-2"
                                 >
                                   <Icon
-                                    icon="pixel:users"
+                                    icon="solar:users-group-rounded-bold"
                                     className="w-4 h-4"
                                   />
                                   {pingInfo.players_online ?? "-"}/
@@ -637,7 +637,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                   className="inline-flex items-center gap-2"
                                 >
                                   <Icon
-                                    icon="pixel:signal"
+                                    icon="solar:wifi-bold"
                                     className="w-4 h-4"
                                   />
                                   {pingInfo.latency_ms ?? "-"} ms
@@ -648,7 +648,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                                     className="inline-flex items-center gap-2"
                                   >
                                     <Icon
-                                      icon="pixel:tag"
+                                      icon="solar:tag-bold"
                                       className="w-4 h-4"
                                     />
                                     {pingInfo.version_name}
@@ -663,12 +663,12 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                       )}
                     </div>
 
-                    {/* Actions */}
                     <div className="flex flex-col items-end gap-3 flex-shrink-0">
-                      <button
+                      <Button
                         onClick={() => handleLaunch(item)}
-                        // Check server address safely
                         disabled={!isWorld && !item.address}
+                        variant="default"
+                        size="md"
                         title={
                           isWorld
                             ? "Play World"
@@ -676,36 +676,36 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                               ? "Join Server"
                               : "Address missing"
                         }
-                        className="bg-black/20 hover:bg-black/30 backdrop-blur-md border-2 border-white/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed text-white px-6 py-2 text-2xl font-minecraft transition-colors w-full text-center"
                       >
                         {isWorld ? "Play" : "Join"}
-                      </button>
+                      </Button>
                       {isWorld && (
-                        <div className="flex gap-3">
-                          <button
+                        <div className="flex gap-2">
+                          <IconButton
                             onClick={() => handleOpenCopyDialog(item)}
                             title="Copy World"
-                            disabled={copyLoading} // Bind disabled state
-                            className="bg-black/20 hover:bg-black/30 border-2 border-white/30 px-3 py-1.5 text-white/80 hover:text-white text-lg font-minecraft transition-colors flex items-center justify-center"
-                          >
-                            <Icon icon="pixel:copy" className="w-5 h-5" />
-                          </button>
-                          <button
+                            disabled={copyLoading}
+                            icon={<Icon icon="solar:copy-bold" />}
+                            variant="secondary"
+                            size="sm"
+                          />
+                          <IconButton
                             onClick={() => handleDelete(item)}
                             title="Delete World"
-                            // Access world-specific props safely
                             disabled={deleteLoading[item.folder_name]}
-                            className="bg-red-900/40 hover:bg-red-800/60 border-2 border-red-500/30 px-3 py-1.5 text-red-300 hover:text-red-200 text-lg font-minecraft transition-colors flex items-center justify-center"
-                          >
-                            {deleteLoading[item.folder_name] ? (
-                              <Icon
-                                icon="pixel:spinner-solid"
-                                className="w-5 h-5 animate-spin"
-                              />
-                            ) : (
-                              <Icon icon="pixel:trash" className="w-5 h-5" />
-                            )}
-                          </button>
+                            icon={
+                              deleteLoading[item.folder_name] ? (
+                                <Icon
+                                  icon="solar:refresh-circle-bold-duotone"
+                                  className="animate-spin"
+                                />
+                              ) : (
+                                <Icon icon="solar:trash-bin-trash-bold" />
+                              )
+                            }
+                            variant="destructive"
+                            size="sm"
+                          />
                         </div>
                       )}
                     </div>
@@ -716,8 +716,13 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="bg-black/30 border-t-2 border-white/30 py-3 px-4 flex justify-between items-center">
+        <div
+          className="border-t-2 py-3 px-4 flex justify-between items-center"
+          style={{
+            backgroundColor: `${accentColor.value}20`,
+            borderColor: `${accentColor.value}40`,
+          }}
+        >
           <div className="text-white/70 font-minecraft text-xl">
             {displayItems.length > 0 ? (
               <>
@@ -737,7 +742,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                 {pingingServers.size > 0 ? (
                   <span className="flex items-center">
                     <Icon
-                      icon="pixel:spinner-solid"
+                      icon="solar:refresh-circle-bold-duotone"
                       className="w-5 h-5 animate-spin mr-2"
                     />
                     Pinging servers...
@@ -753,6 +758,3 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     </div>
   );
 }
-
-// Add to global CSS or Tailwind config:
-// .image-pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }

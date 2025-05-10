@@ -1,45 +1,116 @@
 "use client";
 
+import { useThemeStore } from "../../store/useThemeStore";
+import { cn } from "../../lib/utils";
+
 interface ToggleSwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
-  label: string;
-  description?: string;
-  id: string;
+  label?: string;
+  disabled?: boolean;
+  size?: "sm" | "md" | "lg";
+  className?: string;
 }
 
 export function ToggleSwitch({
   checked,
   onChange,
   label,
-  description,
-  id,
+  disabled = false,
+  size = "md",
+  className,
 }: ToggleSwitchProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
+  const getSizeConfig = () => {
+    switch (size) {
+      case "sm":
+        return {
+          track: "w-8 h-4",
+          knob: "w-3 h-3",
+          knobTranslate: "translate-x-4",
+          label: "text-base",
+        };
+      case "lg":
+        return {
+          track: "w-14 h-7",
+          knob: "w-5 h-5",
+          knobTranslate: "translate-x-7",
+          label: "text-2xl",
+        };
+      default:
+        return {
+          track: "w-10 h-5",
+          knob: "w-4 h-4",
+          knobTranslate: "translate-x-5",
+          label: "text-lg",
+        };
+    }
+  };
+
+  const sizeConfig = getSizeConfig();
+
   return (
-    <div className="flex items-center mb-5 select-none">
-      <div
-        className="relative inline-flex h-8 w-14 items-center rounded-full mr-4
-                     bg-black/50 border border-white/30 transition-colors focus:outline-none cursor-pointer"
-        onClick={() => onChange(!checked)}
-      >
-        <span
-          className={`${checked ? "translate-x-7 bg-white" : "translate-x-1 bg-white/70"} 
-                         inline-block h-6 w-6 transform rounded-full transition-transform`}
-        />
+    <label
+      className={cn(
+        "flex items-center gap-3",
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
+        className,
+      )}
+    >
+      <div className="relative">
+        <div
+          className={cn(
+            "rounded-full transition-colors duration-200",
+            sizeConfig.track,
+          )}
+          style={{
+            backgroundColor: checked
+              ? `${accentColor.value}80`
+              : `${accentColor.value}30`,
+            borderWidth: "2px",
+            borderStyle: "solid",
+            borderColor: checked
+              ? `${accentColor.value}CC`
+              : `${accentColor.value}50`,
+            borderBottomWidth: "3px",
+            borderBottomColor: checked
+              ? accentColor.dark
+              : `${accentColor.value}70`,
+            boxShadow: `inset 0 1px 0 ${accentColor.value}20`,
+          }}
+        >
+          <div
+            className={cn(
+              "absolute top-1/2 left-0.5 -translate-y-1/2 bg-white rounded-full shadow-md transform transition-transform duration-200",
+              checked && sizeConfig.knobTranslate,
+              sizeConfig.knob,
+            )}
+            style={{
+              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+            }}
+          />
+        </div>
       </div>
-      <div>
-        <label
-          htmlFor={id}
-          className="text-2xl text-white font-minecraft lowercase tracking-wide cursor-pointer"
+
+      {label && (
+        <span
+          className={cn(
+            "font-minecraft lowercase text-white",
+            sizeConfig.label,
+          )}
         >
           {label}
-        </label>
-        {description && (
-          <div className="text-base text-white/50 font-minecraft tracking-wide">
-            {description}
-          </div>
-        )}
-      </div>
-    </div>
+        </span>
+      )}
+
+      <input
+        type="checkbox"
+        className="hidden"
+        checked={checked}
+        onChange={() => !disabled && onChange(!checked)}
+        disabled={disabled}
+      />
+    </label>
   );
 }

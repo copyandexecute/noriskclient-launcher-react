@@ -1,11 +1,16 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 import { fetchNewsAndChangelogs } from "../../services/nrc-service";
 import { openExternalUrl } from "../../services/tauri-service";
 import type { BlogPost } from "../../types/wordPress";
+import { cn } from "../../lib/utils";
+import { NewsCard } from "../ui/NewsCard";
+import { useThemeStore } from "../../store/useThemeStore";
+import { Label } from "../ui/Label";
 
 interface NewsSectionProps {
   className?: string;
@@ -16,6 +21,7 @@ export function NewsSection({ className }: NewsSectionProps) {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   const loadNews = async () => {
     setIsLoading(true);
@@ -27,7 +33,9 @@ export function NewsSection({ className }: NewsSectionProps) {
       setPosts(fetchedPosts);
     } catch (err) {
       console.error("[NewsSection] Error fetching news:", err);
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -40,97 +48,158 @@ export function NewsSection({ className }: NewsSectionProps) {
   useEffect(() => {
     if (posts.length > 0 && !isLoading) {
       const ctx = gsap.context(() => {
-        gsap.from(".news-item-card", {
-          opacity: 0,
-          y: 20,
-          stagger: 0.1,
-          duration: 0.5,
-          delay: 0.2,
-          ease: "power3.out",
-        });
+        gsap.fromTo(
+          ".news-item-card",
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            stagger: 0.1,
+            duration: 0.5,
+            delay: 0.2,
+            ease: "power3.out",
+            clearProps: "opacity,y",
+          },
+        );
       }, newsRef);
       return () => ctx.revert();
     }
   }, [posts, isLoading]);
 
+  const handleOpenPost = (url: string, e: React.MouseEvent) => {
+    if (url !== "#") {
+      openExternalUrl(url).catch((err) =>
+        console.error("Failed to open URL:", err),
+      );
+      const cardId = (e.currentTarget as HTMLElement).closest(
+        ".news-item-card",
+      )?.id;
+      if (cardId) {
+        gsap.to(`#${cardId}`, {
+          scale: 0.98,
+          duration: 0.1,
+          yoyo: true,
+          repeat: 1,
+        });
+      }
+    }
+  };
+
   const renderContent = () => {
     if (isLoading) {
-      return <p className="text-center p-4 text-white/70">Loading news...</p>;
+      return (
+        <div className="flex items-center justify-center p-2">
+          <Icon
+            icon="pixel:spinner-solid"
+            className="w-8 h-8 animate-spin text-white/70"
+          />
+          <span className="ml-3 text-white/70">Loading news...</span>
+        </div>
+      );
     }
 
     if (error) {
-      return <p className="text-center p-4 text-red-400">Error: {error}</p>;
+      return (
+        <div className="text-center p-2">
+          <Icon
+            icon="pixel:exclamation-triangle-solid"
+            className="w-8 h-8 text-red-400 mx-auto mb-2"
+          />
+          <p className="text-red-400">Error: {error}</p>
+        </div>
+      );
     }
 
     if (posts.length === 0) {
-      return <p className="text-center p-4 text-white/70">No news available at the moment.</p>;
-    }
-
-    return posts.map((post) => {
-      let rawTitle = post.yoast_head_json?.title || "News Item";
-      const suffixToRemove = " - NoRisk Client Blog";
-      if (rawTitle.endsWith(suffixToRemove)) {
-          rawTitle = rawTitle.substring(0, rawTitle.length - suffixToRemove.length);
-      }
-      const title = rawTitle.toLowerCase();
-
-      const imageUrl = post.yoast_head_json?.og_image?.[0]?.url || "/placeholder.svg";
-      const postUrl = post.yoast_head_json?.og_url || "#";
-
       return (
-        <div key={post.id} className="news-item mb-6">
-          <h4 className="font-minecraft text-white text-3xl text-shadow line-clamp-2 ml-1 mb-1">
-            {title}
-          </h4>
-
-          <div
-            className="news-item-card relative overflow-hidden cursor-pointer border-2 border-white/40 backdrop-blur-md bg-black/30"
-            onClick={() => {
-                if (postUrl !== "#") {
-                  openExternalUrl(postUrl).catch(err => console.error("Failed to open URL:", err));
-                }
-                gsap.to(`#news-item-card-${post.id}`, { scale: 0.98, duration: 0.1, yoyo: true, repeat: 1 });
-            }}
-            onMouseEnter={(e) => gsap.to(e.currentTarget, { y: -4, boxShadow: "0 8px 16px rgba(0,0,0,0.3)", duration: 0.3 })}
-            onMouseLeave={(e) => gsap.to(e.currentTarget, { y: 0, boxShadow: "0 0 0 rgba(0,0,0,0)", duration: 0.3 })}
-            id={`news-item-card-${post.id}`}
-          >
-            <div className="w-full h-full relative" style={{ height: "250px" }}>
-              <img
-                src={imageUrl}
-                alt={title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-              <button
-                onClick={(e) => { 
-                    e.stopPropagation();
-                    if (postUrl !== "#") {
-                      openExternalUrl(postUrl).catch(err => console.error("Failed to open URL:", err));
-                    }
-                }}
-                disabled={postUrl === "#"}
-                className="absolute bottom-3 right-3 text-xs text-white bg-white/20 backdrop-blur-sm px-3 py-1.5 border border-white/40 hover:bg-white/30 transition-colors uppercase disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-              >
-                READ MORE
-              </button>
-            </div>
-          </div>
+        <div className="text-center p-2">
+          <Icon
+            icon="pixel:newspaper-solid"
+            className="w-8 h-8 text-white/50 mx-auto mb-2"
+          />
+          <p className="text-white/70">No news available at the moment.</p>
         </div>
       );
-    });
+    }
+
+    return (
+      <div className="flex flex-col space-y-4 w-full">
+        {posts.map((post) => {
+          let rawTitle = post.yoast_head_json?.title || "News Item";
+          const suffixToRemove = " - NoRisk Client Blog";
+          if (rawTitle.endsWith(suffixToRemove)) {
+            rawTitle = rawTitle.substring(
+              0,
+              rawTitle.length - suffixToRemove.length,
+            );
+          }
+          const title = rawTitle.toLowerCase();
+
+          const imageUrl =
+            post.yoast_head_json?.og_image?.[0]?.url || "/placeholder.svg";
+          const postUrl = post.yoast_head_json?.og_url || "#";
+
+          return (
+            <div key={post.id} className="news-item w-full">
+              <Label
+                variant="default"
+                size="lg"
+                className="w-full mb-1 px-2 py-1 font-minecraft lowercase line-clamp-2"
+                style={{
+                  backgroundColor: `${accentColor.value}20`,
+                  borderColor: `${accentColor.value}60`,
+                  color: "white",
+                }}
+              >
+                {title}
+              </Label>
+
+              <NewsCard
+                id={`news-item-card-${post.id}`}
+                className="news-item-card w-full"
+                title={title}
+                imageUrl={imageUrl}
+                postUrl={postUrl}
+                onClick={() => {
+                  if (postUrl !== "#") {
+                    openExternalUrl(postUrl).catch((err) =>
+                      console.error("Failed to open URL:", err),
+                    );
+                  }
+                  gsap.to(`#news-item-card-${post.id}`, {
+                    scale: 0.98,
+                    duration: 0.1,
+                    yoyo: true,
+                    repeat: 1,
+                  });
+                }}
+                onReadMore={handleOpenPost}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
-    <div ref={newsRef} className={`${className} h-full flex flex-col`}>
-      <div className="flex justify-between items-center p-5 border-b border-white/10">
-        <h3 className="text-2xl flex items-center gap-3 uppercase text-shadow">
-          <Icon icon="pixel:newspaper-solid" className="w-7 h-7" />
+    <div ref={newsRef} className={cn("h-full flex flex-col", className)}>
+      <div
+        className="flex justify-between items-center p-3 border-b-2 border-white/10"
+        style={{ borderColor: `${accentColor.value}30` }}
+      >
+        <Label
+          variant="default"
+          size="lg"
+          icon={<Icon icon="pixel:newspaper-solid" className="w-6 h-6" />}
+          className="uppercase"
+        >
           NEUIGKEITEN
-        </h3>
+        </Label>
+
         <div className="flex items-center">
           <button
-            className={`text-white/70 hover:text-white transition-colors p-1 ${isLoading ? 'animate-spin' : ''}`}
+            className={`text-white/70 hover:text-white transition-colors p-1 ${isLoading ? "animate-spin" : ""}`}
             onClick={loadNews}
             disabled={isLoading}
             aria-label="Refresh News"
@@ -140,7 +209,7 @@ export function NewsSection({ className }: NewsSectionProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
         {renderContent()}
       </div>
     </div>

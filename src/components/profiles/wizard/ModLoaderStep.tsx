@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "@iconify/react";
 import type { ModLoader, Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
-import { SectionTitle } from "../../ui/SectionTitle";
-import { FormField } from "../../ui/FormField";
-import { ModLoaderButton } from "../../ui/ModLoaderButton";
-import { SelectInput } from "../../ui/SelectInput";
-import { LoadingIndicator } from "../../ui/LoadingIndicator";
-import { StatusMessage } from "../../ui/StatusMessage";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { Select } from "../../ui/Select";
 
 interface ModLoaderStepProps {
   profile: Partial<Profile>;
@@ -35,6 +32,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
     quilt: false,
     neoforge: false,
   });
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   const checkCompatibility = async () => {
     if (!profile.game_version) return;
@@ -190,84 +188,207 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
   };
 
   return (
-    <div className="space-y-10 select-none">
-      <SectionTitle
-        title="select mod loader"
-        description="choose a mod loader for your minecraft profile. some loaders may not be compatible with the selected version."
-      />
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
+          mod loader
+        </h2>
+        <p className="text-xl text-white/70 font-minecraft tracking-wide">
+          Choose a mod loader for your Minecraft profile. Some loaders may not
+          be compatible with Minecraft {profile.game_version}.
+        </p>
+      </div>
 
-      {error && <StatusMessage type="error" message={error} />}
+      <div
+        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
+        style={{
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}60`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        }}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <ModLoaderCard
+            name="vanilla"
+            icon="/icons/minecraft.png"
+            isSelected={profile.loader === "vanilla"}
+            isCompatible={true}
+            onClick={() => handleSelectModLoader("vanilla")}
+            description="Pure Minecraft without mods"
+          />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-        <ModLoaderButton
-          name="vanilla"
-          icon="/icons/minecraft.png"
-          isSelected={profile.loader === "vanilla"}
-          isCompatible={true}
-          onClick={() => handleSelectModLoader("vanilla")}
-        />
+          <ModLoaderCard
+            name="fabric"
+            icon="/icons/fabric.png"
+            isSelected={profile.loader === "fabric"}
+            isCompatible={compatibility.fabric}
+            onClick={() => handleSelectModLoader("fabric")}
+            description="Lightweight mod loader"
+          />
 
-        <ModLoaderButton
-          name="fabric"
-          icon="/icons/fabric.png"
-          isSelected={profile.loader === "fabric"}
-          isCompatible={compatibility.fabric}
-          onClick={() => handleSelectModLoader("fabric")}
-        />
+          <ModLoaderCard
+            name="forge"
+            icon="/icons/forge.png"
+            isSelected={profile.loader === "forge"}
+            isCompatible={compatibility.forge}
+            onClick={() => handleSelectModLoader("forge")}
+            description="Classic mod loader"
+          />
 
-        <ModLoaderButton
-          name="forge"
-          icon="/icons/forge.png"
-          isSelected={profile.loader === "forge"}
-          isCompatible={compatibility.forge}
-          onClick={() => handleSelectModLoader("forge")}
-        />
+          <ModLoaderCard
+            name="quilt"
+            icon="/icons/quilt.png"
+            isSelected={profile.loader === "quilt"}
+            isCompatible={compatibility.quilt}
+            onClick={() => handleSelectModLoader("quilt")}
+            description="Fork of Fabric with more features"
+          />
 
-        <ModLoaderButton
-          name="quilt"
-          icon="/icons/quilt.png"
-          isSelected={profile.loader === "quilt"}
-          isCompatible={compatibility.quilt}
-          onClick={() => handleSelectModLoader("quilt")}
-        />
-
-        <ModLoaderButton
-          name="neoforge"
-          icon="/icons/neoforge.png"
-          isSelected={profile.loader === "neoforge"}
-          isCompatible={compatibility.neoforge}
-          onClick={() => handleSelectModLoader("neoforge")}
-        />
+          <ModLoaderCard
+            name="neoforge"
+            icon="/icons/neoforge.png"
+            isSelected={profile.loader === "neoforge"}
+            isCompatible={compatibility.neoforge}
+            onClick={() => handleSelectModLoader("neoforge")}
+            description="Modern fork of Forge"
+          />
+        </div>
       </div>
 
       {profile.loader !== "vanilla" && (
-        <FormField label={`${profile.loader} version`} className="mt-6">
-          {loading ? (
-            <LoadingIndicator
-              message={`loading ${profile.loader} versions...`}
+        <div
+          className="p-6 rounded-lg border-2 border-b-4 space-y-6"
+          style={{
+            backgroundColor: `${accentColor.value}15`,
+            borderColor: `${accentColor.value}60`,
+            borderBottomColor: accentColor.value,
+            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          }}
+        >
+          <div>
+            <label className="block text-2xl font-minecraft text-white mb-4 lowercase">{`${profile.loader} version`}</label>
+            {loading ? (
+              <div className="flex items-center gap-2 text-white/70">
+                <Icon
+                  icon="solar:refresh-bold"
+                  className="w-5 h-5 animate-spin"
+                />
+                <span className="font-minecraft text-xl">
+                  Loading {profile.loader} versions...
+                </span>
+              </div>
+            ) : error ? (
+              <div className="text-red-400 font-minecraft text-xl">{error}</div>
+            ) : (
+              <Select
+                value={profile.loader_version || ""}
+                onChange={(value) => updateProfile({ loader_version: value })}
+                options={
+                  loaderVersions.length === 0
+                    ? [{ value: "", label: "No versions available" }]
+                    : loaderVersions.map((version) => ({
+                        value: version,
+                        label: version,
+                      }))
+                }
+                disabled={loaderVersions.length === 0}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {profile.loader !== "vanilla" && profile.loader_version && (
+        <div
+          className="p-6 rounded-lg border-2 border-b-4 flex items-center gap-4"
+          style={{
+            backgroundColor: `${accentColor.value}15`,
+            borderColor: `${accentColor.value}60`,
+            borderBottomColor: accentColor.value,
+            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          }}
+        >
+          <div
+            className="w-12 h-12 flex items-center justify-center rounded-md overflow-hidden"
+            style={{
+              backgroundColor: `${accentColor.value}30`,
+              borderWidth: "2px",
+              borderStyle: "solid",
+              borderColor: `${accentColor.value}60`,
+            }}
+          >
+            <img
+              src={`/icons/${profile.loader}.png`}
+              alt={profile.loader}
+              className="w-8 h-8 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+              }}
             />
-          ) : error ? (
-            <StatusMessage type="error" message={error} />
-          ) : (
-            <SelectInput
-              value={profile.loader_version || ""}
-              onChange={(value) => updateProfile({ loader_version: value })}
-              options={
-                loaderVersions.length === 0
-                  ? [{ value: "", label: "no versions available" }]
-                  : loaderVersions.map((version) => ({
-                      value: version,
-                      label: version,
-                    }))
-              }
-              disabled={loaderVersions.length === 0}
-              className="text-base tracking-wide"
-            />
-          )}
-        </FormField>
+          </div>
+          <div>
+            <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
+              {profile.loader} {profile.loader_version}
+            </div>
+            <div className="text-lg text-white/70 tracking-wide lowercase">
+              for minecraft {profile.game_version}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-export default ModLoaderStep;
+interface ModLoaderCardProps {
+  name: ModLoader;
+  icon: string;
+  isSelected: boolean;
+  isCompatible: boolean;
+  onClick: () => void;
+  description: string;
+}
+
+function ModLoaderCard({
+  name,
+  icon,
+  isSelected,
+  isCompatible,
+  onClick,
+  description,
+}: ModLoaderCardProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
+  return (
+    <button
+      className={`p-4 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200 ${
+        isSelected
+          ? "bg-white/20 text-white border-white/50"
+          : isCompatible
+            ? "bg-black/20 text-white/70 border-white/20 hover:bg-black/30 hover:text-white"
+            : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed"
+      }`}
+      style={{
+        borderBottomColor: isSelected ? accentColor.value : "transparent",
+      }}
+      onClick={isCompatible ? onClick : undefined}
+      disabled={!isCompatible}
+    >
+      <img
+        src={icon || "/placeholder.svg"}
+        alt={name}
+        className="w-12 h-12 mb-3 object-contain"
+        style={{ opacity: isCompatible ? 1 : 0.5 }}
+        onError={(e) => {
+          (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+        }}
+      />
+      <span className="font-minecraft text-xl lowercase mb-1">{name}</span>
+      <span className="text-sm text-white/60 text-center">{description}</span>
+      {!isCompatible && (
+        <span className="text-sm text-red-400 mt-1">not compatible</span>
+      )}
+    </button>
+  );
+}

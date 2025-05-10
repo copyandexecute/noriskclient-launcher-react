@@ -5,14 +5,11 @@ import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import type { MinecraftVersion } from "../../../types/minecraft";
 import { invoke } from "@tauri-apps/api/core";
-import { FormSection } from "../../ui/FormSection";
-import { FormField } from "../../ui/FormField";
-import { TextInput } from "../../ui/TextInput";
 import { StatusMessage } from "../../ui/StatusMessage";
-import { TabButton } from "../../ui/TabButton";
-import { ModLoaderButton } from "../../ui/ModLoaderButton";
-import { SelectInput } from "../../ui/SelectInput";
-import { LoadingIndicator } from "../../ui/LoadingIndicator";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { SearchInput } from "../../ui/SearchInput";
+import { Label } from "../../ui/Label";
+import { Select } from "../../ui/Select";
 
 interface InstallationSettingsTabProps {
   profile: Profile;
@@ -37,6 +34,7 @@ export function InstallationSettingsTab({
   const [isLoadingLoaderVersions, setIsLoadingLoaderVersions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     async function fetchMinecraftVersions() {
@@ -173,18 +171,34 @@ export function InstallationSettingsTab({
   }
 
   return (
-    <div className="space-y-10 select-none">
+    <div className="space-y-6 select-none">
       {error && <StatusMessage type="error" message={error} />}
 
-      <FormSection>
-        <FormField label="currently installed">
-          <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 rounded-lg flex items-center justify-between">
-            <div className="flex items-center gap-5">
-              <div className="w-12 h-12 bg-black/40 flex items-center justify-center rounded-md">
-                <Icon
-                  icon="pixel:grid-solid"
-                  className="w-7 h-7 text-white/70"
-                />
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            currently installed
+          </h3>
+          <div
+            className="p-4 rounded-lg border-2 border-b-4 flex items-center justify-between"
+            style={{
+              backgroundColor: `${accentColor.value}10`,
+              borderColor: `${accentColor.value}60`,
+              borderBottomColor: accentColor.value,
+              boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            }}
+          >
+            <div className="flex items-center gap-4">
+              <div
+                className="w-12 h-12 flex items-center justify-center rounded-md"
+                style={{
+                  backgroundColor: `${accentColor.value}30`,
+                  borderWidth: "2px",
+                  borderStyle: "solid",
+                  borderColor: `${accentColor.value}60`,
+                }}
+              >
+                <Icon icon="solar:widget-bold" className="w-7 h-7 text-white" />
               </div>
               <div>
                 <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
@@ -198,85 +212,91 @@ export function InstallationSettingsTab({
               </div>
             </div>
           </div>
-        </FormField>
-      </FormSection>
+        </div>
+      </div>
 
-      <FormSection>
-        <FormField label="version type">
-          <div className="flex flex-wrap bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg overflow-hidden">
-            <TabButton
-              label="release"
-              isActive={selectedVersionType === "release"}
-              onClick={() => setSelectedVersionType("release")}
-            />
-            <TabButton
-              label="snapshot"
-              isActive={selectedVersionType === "snapshot"}
-              onClick={() => setSelectedVersionType("snapshot")}
-            />
-            <TabButton
-              label="old-beta"
-              isActive={selectedVersionType === "old-beta"}
-              onClick={() => setSelectedVersionType("old-beta")}
-            />
-            <TabButton
-              label="old-alpha"
-              isActive={selectedVersionType === "old-alpha"}
-              onClick={() => setSelectedVersionType("old-alpha")}
-            />
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            version type
+          </h3>
+          <div className="flex flex-wrap">
+            {["release", "snapshot", "old-beta", "old-alpha"].map((type) => (
+              <Label
+                key={type}
+                variant={selectedVersionType === type ? "default" : "ghost"}
+                size="md"
+                className="cursor-pointer mr-2 mb-2 text-xl"
+                onClick={() => setSelectedVersionType(type as VersionType)}
+              >
+                {type}
+              </Label>
+            ))}
           </div>
-        </FormField>
+        </div>
 
-        <FormField label="game version" className="mt-6">
-          <div className="mb-4">
-            <div className="relative">
-              <TextInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="search versions..."
-                className="pl-10 text-base tracking-wide"
-              />
-              <Icon
-                icon="pixel:search"
-                className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/60"
-              />
-              {searchQuery && (
-                <button
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white transition-colors"
-                  onClick={() => setSearchQuery("")}
-                >
-                  <Icon icon="pixel:window-close-solid" className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            game version
+          </h3>
+          <div className="mb-3">
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="search versions..."
+              className="w-full text-2xl py-3"
+            />
           </div>
 
           <div className="flex-1 relative">
             {isLoadingVersions ? (
-              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 text-white/70 text-center rounded-lg">
-                <LoadingIndicator message="loading versions..." />
+              <div
+                className="p-4 text-white/70 text-center rounded-lg border-2 border-b-4"
+                style={{
+                  backgroundColor: `${accentColor.value}10`,
+                  borderColor: `${accentColor.value}60`,
+                  borderBottomColor: accentColor.value,
+                }}
+              >
+                <div className="flex items-center justify-center">
+                  <Icon
+                    icon="solar:refresh-bold"
+                    className="w-6 h-6 mr-2 animate-spin"
+                  />
+                  <span className="font-minecraft text-2xl">
+                    loading versions...
+                  </span>
+                </div>
               </div>
             ) : (
-              <div className="max-h-64 overflow-y-auto custom-scrollbar bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg">
+              <div
+                className="max-h-48 overflow-y-auto custom-scrollbar rounded-lg border-2 border-b-4"
+                style={{
+                  backgroundColor: `${accentColor.value}10`,
+                  borderColor: `${accentColor.value}60`,
+                  borderBottomColor: accentColor.value,
+                }}
+              >
                 {filteredVersions.length === 0 ? (
-                  <div className="p-5 text-2xl text-white/70 text-center select-none">
+                  <div className="p-4 text-2xl text-white/70 text-center select-none">
                     no versions found matching your search
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3">
                     {filteredVersions.map((version) => (
-                      <button
+                      <Label
                         key={version}
-                        className={`py-3 px-4 font-minecraft text-center text-2xl lowercase tracking-wide rounded-md transition-all duration-200 ${
+                        variant={
                           editedProfile.game_version === version
-                            ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-                            : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white"
-                        }`}
+                            ? "default"
+                            : "ghost"
+                        }
+                        size="md"
+                        className="cursor-pointer text-center text-xl"
                         onClick={() => {
                           const newVersion = version;
                           const currentLoader = editedProfile.loader;
 
-                          // Check if the current loader is compatible with the new version
                           const isCompatible = isModLoaderCompatible(
                             currentLoader,
                             newVersion,
@@ -292,119 +312,103 @@ export function InstallationSettingsTab({
                         }}
                       >
                         {version}
-                      </button>
+                      </Label>
                     ))}
                   </div>
                 )}
               </div>
             )}
           </div>
-        </FormField>
-      </FormSection>
+        </div>
+      </div>
 
-      <FormSection>
-        <FormField label="platform">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5">
-            <ModLoaderButton
-              name="vanilla"
-              icon="/icons/minecraft.png"
-              isSelected={editedProfile.loader === "vanilla"}
-              isCompatible={true}
-              onClick={() =>
-                updateProfile({ loader: "vanilla", loader_version: null })
-              }
-            />
-
-            <ModLoaderButton
-              name="fabric"
-              icon="/icons/fabric.png"
-              isSelected={editedProfile.loader === "fabric"}
-              isCompatible={isModLoaderCompatible(
-                "fabric",
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            platform
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {[
+              { name: "vanilla", icon: "/icons/minecraft.png" },
+              { name: "fabric", icon: "/icons/fabric.png" },
+              { name: "forge", icon: "/icons/forge.png" },
+              { name: "quilt", icon: "/icons/quilt.png" },
+              { name: "neoforge", icon: "/icons/neoforge.png" },
+            ].map((loader) => {
+              const isCompatible = isModLoaderCompatible(
+                loader.name,
                 editedProfile.game_version,
-              )}
-              onClick={() => {
-                if (
-                  isModLoaderCompatible("fabric", editedProfile.game_version)
-                ) {
-                  updateProfile({
-                    loader: "fabric",
-                    loader_version: null,
-                  });
-                }
-              }}
-            />
-
-            <ModLoaderButton
-              name="forge"
-              icon="/icons/forge.png"
-              isSelected={editedProfile.loader === "forge"}
-              isCompatible={isModLoaderCompatible(
-                "forge",
-                editedProfile.game_version,
-              )}
-              onClick={() => {
-                if (
-                  isModLoaderCompatible("forge", editedProfile.game_version)
-                ) {
-                  updateProfile({
-                    loader: "forge",
-                    loader_version: null,
-                  });
-                }
-              }}
-            />
-
-            <ModLoaderButton
-              name="quilt"
-              icon="/icons/quilt.png"
-              isSelected={editedProfile.loader === "quilt"}
-              isCompatible={isModLoaderCompatible(
-                "quilt",
-                editedProfile.game_version,
-              )}
-              onClick={() => {
-                if (
-                  isModLoaderCompatible("quilt", editedProfile.game_version)
-                ) {
-                  updateProfile({
-                    loader: "quilt",
-                    loader_version: null,
-                  });
-                }
-              }}
-            />
-
-            <ModLoaderButton
-              name="neoforge"
-              icon="/icons/neoforge.png"
-              isSelected={editedProfile.loader === "neoforge"}
-              isCompatible={isModLoaderCompatible(
-                "neoforge",
-                editedProfile.game_version,
-              )}
-              onClick={() => {
-                if (
-                  isModLoaderCompatible("neoforge", editedProfile.game_version)
-                ) {
-                  updateProfile({
-                    loader: "neoforge",
-                    loader_version: null,
-                  });
-                }
-              }}
-            />
+              );
+              return (
+                <button
+                  key={loader.name}
+                  className={`p-3 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200 ${
+                    editedProfile.loader === loader.name
+                      ? "bg-white/20 text-white border-white/50"
+                      : isCompatible
+                        ? "bg-black/20 text-white/70 border-white/20 hover:bg-black/30 hover:text-white"
+                        : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed"
+                  }`}
+                  style={{
+                    borderBottomColor:
+                      editedProfile.loader === loader.name
+                        ? accentColor.value
+                        : "transparent",
+                  }}
+                  onClick={() => {
+                    if (isCompatible) {
+                      updateProfile({
+                        loader: loader.name as Profile["loader"],
+                        loader_version: null,
+                      });
+                    }
+                  }}
+                  disabled={!isCompatible}
+                >
+                  <img
+                    src={loader.icon || "/placeholder.svg"}
+                    alt={loader.name}
+                    className="w-10 h-10 mb-2 object-contain"
+                    style={{ opacity: isCompatible ? 1 : 0.5 }}
+                  />
+                  <span className="font-minecraft text-xl lowercase">
+                    {loader.name}
+                  </span>
+                  {!isCompatible && (
+                    <span className="text-lg text-white/50 mt-1">
+                      not compatible
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-        </FormField>
+        </div>
 
         {editedProfile.loader !== "vanilla" && (
-          <FormField label={`${editedProfile.loader} version`} className="mt-6">
+          <div>
+            <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">{`${editedProfile.loader} version`}</h3>
             {isLoadingLoaderVersions ? (
-              <LoadingIndicator
-                message={`loading ${editedProfile.loader} versions...`}
-              />
+              <div
+                className="p-4 text-white/70 text-center rounded-lg border-2 border-b-4"
+                style={{
+                  backgroundColor: `${accentColor.value}10`,
+                  borderColor: `${accentColor.value}60`,
+                  borderBottomColor: accentColor.value,
+                }}
+              >
+                <div className="flex items-center justify-center">
+                  <Icon
+                    icon="solar:refresh-bold"
+                    className="w-6 h-6 mr-2 animate-spin"
+                  />
+                  <span className="font-minecraft text-2xl">
+                    loading {editedProfile.loader} versions...
+                  </span>
+                </div>
+              </div>
             ) : loaderVersions.length > 0 ? (
-              <SelectInput
+              <Select
                 value={editedProfile.loader_version || ""}
                 onChange={(value) => updateProfile({ loader_version: value })}
                 options={[
@@ -414,17 +418,24 @@ export function InstallationSettingsTab({
                     label: version,
                   })),
                 ]}
-                className="text-base tracking-wide"
+                className="text-2xl py-3"
               />
             ) : (
-              <div className="bg-black/30 backdrop-blur-md border-2 border-white/30 p-5 text-2xl text-white/70 text-center rounded-lg select-none">
+              <div
+                className="p-4 text-2xl text-white/70 text-center rounded-lg border-2 border-b-4 select-none"
+                style={{
+                  backgroundColor: `${accentColor.value}10`,
+                  borderColor: `${accentColor.value}60`,
+                  borderBottomColor: accentColor.value,
+                }}
+              >
                 no {editedProfile.loader} versions available for minecraft{" "}
                 {editedProfile.game_version}
               </div>
             )}
-          </FormField>
+          </div>
         )}
-      </FormSection>
+      </div>
     </div>
   );
 }

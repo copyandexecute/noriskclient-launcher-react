@@ -1,19 +1,72 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
+import { cn } from "../../lib/utils";
+import { useThemeStore } from "../../store/useThemeStore";
+import { gsap } from "gsap";
 
 interface EmptyStateProps {
-  message: string;
   icon?: string;
-  action?: React.ReactNode;
+  message: string;
+  className?: string;
 }
 
-export function EmptyState({ message, icon, action }: EmptyStateProps) {
+export function EmptyState({
+  icon = "solar:info-circle-bold",
+  message,
+  className,
+}: EmptyStateProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.5,
+          ease: "power2.out",
+        },
+      );
+
+      const iconElement = containerRef.current.querySelector(".icon");
+      if (iconElement) {
+        gsap.to(iconElement, {
+          scale: 1.1,
+          repeat: -1,
+          yoyo: true,
+          duration: 1.5,
+          ease: "sine.inOut",
+        });
+      }
+    }
+  }, []);
+
   return (
-    <div className="flex flex-col items-center justify-center p-10 text-center select-none">
-      {icon && <Icon icon={icon} className="w-16 h-16 text-white/30 mb-6" />}
-      <p className="text-2xl text-white/70 font-minecraft mb-6 tracking-wide lowercase">
+    <div
+      ref={containerRef}
+      className={cn(
+        "flex flex-col items-center justify-center p-8 rounded-lg",
+        "border-2 border-b-4 shadow-md",
+        className,
+      )}
+      style={{
+        backgroundColor: `${accentColor.value}10`,
+        borderColor: `${accentColor.value}60`,
+        borderBottomColor: accentColor.value,
+        boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+      }}
+    >
+      <div className="icon w-16 h-16 mb-4 flex items-center justify-center text-white">
+        <Icon icon={icon} className="w-16 h-16" />
+      </div>
+      <p className="text-xl font-minecraft text-white lowercase text-center">
         {message}
       </p>
-      {action}
     </div>
   );
 }

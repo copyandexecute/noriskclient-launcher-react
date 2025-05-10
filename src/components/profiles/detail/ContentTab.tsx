@@ -1,12 +1,16 @@
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import { ModsTab } from "./ModsTab";
-import { ResourcePacksTab } from "./ResourcePacksTab";
-import { ShaderPacksTab } from "./ShaderPacksTab";
-import { DataPacksTab } from "./DataPacksTab";
-import { NoRiskModsTab } from "./NoRiskModsTab";
 import type { Profile } from "../../../types/profile";
+import { Button } from "../../ui/buttons/Button";
+import { Icon } from "@iconify/react";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { ShaderPacksTab } from "./ShaderPacksTab";
+import { ResourcePacksTab } from "./ResourcePacksTab.tsx";
+import { DataPacksTab } from "./DataPacksTab.tsx";
+import { NoRiskModsTab } from "./NoRiskModsTab.tsx";
 
 interface ContentTabProps {
   profile: Profile;
@@ -14,10 +18,16 @@ interface ContentTabProps {
   onBrowse?: (contentType: string) => void;
 }
 
-export function ContentTab({ profile, onRefresh }: ContentTabProps) {
-  const [contentType, setContentType] = useState<
-    "mods" | "resourcepacks" | "shaderpacks" | "datapacks" | "norisk"
-  >("mods");
+type ContentType =
+  | "mods"
+  | "resourcepacks"
+  | "shaderpacks"
+  | "datapacks"
+  | "norisk";
+
+export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
+  const [contentType, setContentType] = useState<ContentType>("mods");
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   const handleRefresh = () => {
     if (onRefresh) {
@@ -25,58 +35,82 @@ export function ContentTab({ profile, onRefresh }: ContentTabProps) {
     }
   };
 
-  const handleTabChange = (
-    tab: "mods" | "resourcepacks" | "shaderpacks" | "datapacks" | "norisk",
-  ) => {
+  const handleTabChange = (tab: ContentType, e: React.MouseEvent) => {
+    e.stopPropagation();
     setContentType(tab);
+  };
+
+  const handleBrowse = (tab: ContentType) => {
+    if (onBrowse) {
+      onBrowse(tab);
+    }
   };
 
   const tabs = [
     {
-      id: "mods",
-      label: "mods",
+      id: "mods" as ContentType,
+      label: "Mods",
+      icon: "solar:cube-bold",
     },
     {
-      id: "resourcepacks",
-      label: "resource packs",
+      id: "resourcepacks" as ContentType,
+      label: "Resource Packs",
+      icon: "solar:gallery-bold",
     },
     {
-      id: "shaderpacks",
-      label: "shaders",
+      id: "shaderpacks" as ContentType,
+      label: "Shaders",
+      icon: "solar:sun-bold",
     },
     {
-      id: "datapacks",
-      label: "data packs",
+      id: "datapacks" as ContentType,
+      label: "Data Packs",
+      icon: "solar:database-bold",
     },
     {
-      id: "norisk",
-      label: "norisk mods",
+      id: "norisk" as ContentType,
+      label: "NoRisk Mods",
+      icon: "solar:shield-check-bold",
     },
   ];
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Fixed header section */}
-      <div className="flex-shrink-0 mb-5">
-        <div className="project-type-tabs flex w-full bg-black/20 backdrop-blur-md border border-white/10">
+    <div className="h-full p-2 flex flex-col">
+      <div
+        className="flex-shrink-0 mb-5 p-2 rounded-lg border-2 border-b-4 shadow-md overflow-x-auto scrollbar-hide"
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+        }}
+      >
+        <div className="flex gap-2">
           {tabs.map((tab) => (
-            <button
+            <Button
               key={tab.id}
-              className={`flex-1 px-4 py-2 font-minecraft text-3xl lowercase select-none tracking-wide ${
-                contentType === tab.id
-                  ? "bg-white/10 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/5"
-              }`}
-              onClick={() => handleTabChange(tab.id as any)}
+              onClick={(e) => handleTabChange(tab.id, e)}
+              variant={contentType === tab.id ? "default" : "ghost"}
+              size="md"
+              icon={<Icon icon={tab.icon} />}
+              iconPosition="left"
+              className={
+                contentType === tab.id ? "text-white" : "text-white/70"
+              }
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
-      {/* Flexible content area that takes remaining height */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg shadow-lg"
+        style={{
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
         <div className={contentType === "mods" ? "block h-full" : "hidden"}>
           <ModsTab
             profile={profile}

@@ -1,11 +1,16 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import { ToggleSwitch } from "./common/ToggleSwitch";
+import { ToggleSwitch } from "../../ui/ToggleSwitch";
 import type { ModrinthVersion } from "../../../types/modrinth";
 import { cn } from "../../../lib/utils";
 import { invoke } from "@tauri-apps/api/core";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { IconButton } from "../../ui/buttons/IconButton";
+import { Checkbox } from "../../ui/Checkbox";
+import { Button } from "../../ui/buttons/Button";
 
 interface ContentPack {
   id?: string;
@@ -43,6 +48,7 @@ interface ContentPackRowProps {
   iconType?: string;
   formatFileSize?: (size: number) => string;
   onCheckForUpdates?: () => void;
+  children?: React.ReactNode;
 }
 
 export function ContentPackRow({
@@ -54,14 +60,17 @@ export function ContentPackRow({
   onOpenDirectory,
   onUpdate,
   updateVersion,
-  iconType = "pixel:image-solid",
+  checkingUpdates,
+  iconType = "solar:image-gallery-bold",
   formatFileSize,
   onCheckForUpdates,
+  children,
 }: ContentPackRowProps) {
-  const [, setIsHovered] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [localIcon, setLocalIcon] = useState<string | null>(null);
-  const [, setIsUpdating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   const extractFileName = (path?: string): string => {
     if (!path) return "Unknown file";
@@ -156,57 +165,84 @@ export function ContentPackRow({
   return (
     <div
       className={cn(
-        "flex items-center py-4 bg-black/40 px-5 border-b border-white/10 hover:bg-white/5 transition-colors",
-        isSelected && "bg-white/10",
+        "flex items-center py-3 px-4 border-b transition-colors",
+        isSelected ? "bg-white/10" : "hover:bg-white/5",
       )}
+      style={{
+        borderColor: `${accentColor.value}15`,
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="w-8 flex justify-center">
-        <input
-          type="checkbox"
-          className="w-5 h-5 accent-white/70 cursor-pointer"
+        <Checkbox
           checked={isSelected}
           onChange={onSelect}
           aria-label={`Select ${packName}`}
         />
       </div>
 
-      <div className="flex items-center gap-4 flex-1 min-w-0 px-3">
-        <div className="w-16 h-16 bg-black/20 border border-white/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-          {contentPack.icon_url ? (
-            <img
-              src={contentPack.icon_url || "/placeholder.svg"}
-              alt={packName}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => setLocalIcon(null)}
-            />
-          ) : localIcon ? (
-            <img
-              src={`data:image/png;base64,${localIcon}`}
-              alt={packName}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => setLocalIcon(null)}
-            />
-          ) : (
-            <Icon icon={iconType} className="w-7 h-7 text-white/60" />
-          )}
-        </div>
-        <div className="flex flex-col min-w-0">
-          <div className="text-white font-minecraft text-3xl lowercase tracking-wide truncate flex items-center gap-2">
-            {packName}
-            {hasUpdate && (
-              <span
-                onClick={handleUpdate}
-                className=" cursor-pointer tbg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm "
-              >
-                update
-              </span>
+      <div className="flex items-center gap-3 flex-1 min-w-0 px-3">
+        {/* 3D Image Frame */}
+        <div className="relative w-12 h-12 flex-shrink-0">
+          <div
+            className="absolute inset-0 border-2 border-b-4 overflow-hidden"
+            style={{
+              backgroundColor: `${accentColor.value}15`,
+              borderColor: `${accentColor.value}30`,
+              borderBottomColor: `${accentColor.value}50`,
+              boxShadow: `0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20`,
+            }}
+          >
+            {contentPack.icon_url ? (
+              <img
+                src={contentPack.icon_url || "/placeholder.svg"}
+                alt={packName}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={() => setLocalIcon(null)}
+              />
+            ) : localIcon ? (
+              <img
+                src={`data:image/png;base64,${localIcon}`}
+                alt={packName}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={() => setLocalIcon(null)}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Icon icon={iconType} className="w-6 h-6 text-white/60" />
+              </div>
             )}
           </div>
-          <div className="text-white/60 text-2xl lowercase truncate">
+        </div>
+
+        <div className="flex flex-col min-w-0">
+          <div className="text-white py-1 font-minecraft text-2xl lowercase tracking-wide truncate flex items-center gap-2">
+            {packName}
+            {hasUpdate && (
+              <Button
+                size="xs"
+                variant="success"
+                className="flex items-center gap-1 cursor-pointer"
+                onClick={handleUpdate}
+                icon={
+                  isUpdating ? (
+                    <Icon
+                      icon="solar:refresh-circle-bold-duotone"
+                      className="w-3.5 h-3.5 animate-spin"
+                    />
+                  ) : (
+                    <Icon icon="solar:refresh-bold" className="w-3.5 h-3.5" />
+                  )
+                }
+              >
+                update
+              </Button>
+            )}
+          </div>
+          <div className="text-white/50 text-lg lowercase truncate">
             {contentPack.creator && (
               <span className="mr-2">by {contentPack.creator}</span>
             )}
@@ -230,44 +266,47 @@ export function ContentPackRow({
         </div>
       </div>
 
-      <div className="w-28 flex justify-center">
+      <div className="w-16 flex justify-center">
         <ToggleSwitch
-          enabled={
+          checked={
             contentPack.enabled !== false && contentPack.is_disabled !== true
           }
           onChange={onToggle}
+          size="sm"
+        />
+      </div>
+
+      <div className="w-24 flex items-center justify-center gap-1">
+        {onOpenDirectory && (
+          <IconButton
+            onClick={onOpenDirectory}
+            variant="secondary"
+            size="sm"
+            icon={<Icon icon="solar:folder-open-bold" />}
+            title="Open containing folder"
+          />
+        )}
+
+        <IconButton
+          onClick={handleDelete}
+          variant={deleteConfirm ? "destructive" : "secondary"}
+          size="sm"
+          icon={
+            <Icon
+              icon={
+                deleteConfirm
+                  ? "solar:danger-bold"
+                  : "solar:trash-bin-trash-bold"
+              }
+            />
+          }
           title={
-            contentPack.enabled !== false && contentPack.is_disabled !== true
-              ? "Disable pack"
-              : "Enable pack"
+            deleteConfirm ? "Click again to confirm deletion" : "Delete pack"
           }
         />
       </div>
 
-      <div className="w-20 flex items-center justify-center gap-1">
-        {onOpenDirectory && (
-          <button
-            className="w-10 h-10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/20 active:scale-95 transition-all rounded-sm"
-            onClick={onOpenDirectory}
-            title="Open containing folder"
-          >
-            <Icon icon="pixel:folder-open-solid" className="w-5 h-5" />
-          </button>
-        )}
-
-        <button
-          className={cn(
-            "w-10 h-10 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 active:bg-white/20 active:scale-95 transition-all",
-            deleteConfirm && "bg-red-500/50 text-white",
-          )}
-          onClick={handleDelete}
-          title={
-            deleteConfirm ? "Click again to confirm deletion" : "Delete pack"
-          }
-        >
-          <Icon icon="pixel:trash-solid" className="w-5 h-5" />
-        </button>
-      </div>
+      {children}
     </div>
   );
 }

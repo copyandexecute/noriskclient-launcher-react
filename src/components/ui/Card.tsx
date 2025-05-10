@@ -18,23 +18,3 @@ export function Card({ children, className }: CardProps) {
     </div>
   );
 }
-
-export function CardHeader({ children, className }: CardProps) {
-  return (
-    <div className={cn("p-5 border-b border-white/20", className)}>
-      {children}
-    </div>
-  );
-}
-
-export function CardContent({ children, className }: CardProps) {
-  return <div className={cn("p-5", className)}>{children}</div>;
-}
-
-export function CardFooter({ children, className }: CardProps) {
-  return (
-    <div className={cn("p-5 border-t border-white/20", className)}>
-      {children}
-    </div>
-  );
-}

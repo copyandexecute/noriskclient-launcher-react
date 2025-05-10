@@ -1,16 +1,49 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "./components/layout/AppLayout";
 import { PlayTab } from "./components/tabs/PlayTab";
-import { SkinsTab } from "./components/tabs/SkinsTab";
-import { NewsTab } from "./components/tabs/NewsTab";
 import { SettingsTab } from "./components/tabs/SettingsTab";
-import { ProfilesTab } from "./components/tabs/ProfilesTab";
-import { StoreTab } from "./components/tabs/StoreTab";
-import { ModrinthTab } from "./components/tabs/ModrinthTab";
+import { ThemeInitializer } from "./components/ThemeInitializer";
+import { ScrollbarProvider } from "./components/ui/ScrollbarProvider";
+import { NewsSection } from "./components/news/NewsSection";
+import { ProfilesTab } from "./components/tabs/ProfilesTab.tsx";
+import ModrinthTab from "./components/tabs/ModrinthTab.tsx";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const storedTheme = localStorage.getItem("norisk-theme-storage");
+    if (storedTheme) {
+      try {
+        const themeData = JSON.parse(storedTheme);
+        if (themeData.state?.accentColor?.value) {
+          root.style.setProperty("--accent", themeData.state.accentColor.value);
+          root.style.setProperty(
+            "--accent-hover",
+            themeData.state.accentColor.hoverValue,
+          );
+
+          const hexToRgb = (hex: string) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(
+              hex,
+            );
+            return result
+              ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+              : null;
+          };
+
+          const rgbValue = hexToRgb(themeData.state.accentColor.value);
+          if (rgbValue) {
+            root.style.setProperty("--accent-rgb", rgbValue);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to parse stored theme:", e);
+      }
+    }
+  }, []);
 
   const handleNavChange = (tabId: string) => {
     setActiveTab(tabId);
@@ -25,11 +58,11 @@ export function App() {
       case "mods":
         return <ModrinthTab />;
       case "skins":
-        return <SkinsTab />;
+        return null;
       case "store":
-        return <StoreTab />;
+        return null;
       case "news":
-        return <NewsTab />;
+        return <NewsSection />;
       case "settings":
         return <SettingsTab />;
       default:
@@ -39,6 +72,8 @@ export function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
+      <ThemeInitializer />
+      <ScrollbarProvider />
       <AppLayout activeTab={activeTab} onNavChange={handleNavChange}>
         {renderTabContent()}
       </AppLayout>

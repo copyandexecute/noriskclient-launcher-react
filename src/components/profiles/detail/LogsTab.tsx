@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -16,6 +15,11 @@ import {
   uploadLogToMclogs,
 } from "../../../services/log-service";
 import { Icon } from "@iconify/react";
+import { Button } from "../../ui/buttons/Button";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { Select } from "../../ui/Select";
+import { IconButton } from "../../ui/buttons/IconButton";
+import { SearchInput } from "../../ui/SearchInput";
 
 interface LogsTabProps {
   profile: Profile;
@@ -74,6 +78,7 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   const [displayLines, setDisplayLines] = useState<ParsedLogLine[]>([]);
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -191,12 +196,9 @@ export function LogsTab({ profile }: LogsTabProps) {
     };
   }, []);
 
-  const handleLogSelect = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      setSelectedLogPath(event.target.value || null);
-    },
-    [],
-  );
+  const handleLogSelect = useCallback((value: string) => {
+    setSelectedLogPath(value || null);
+  }, []);
 
   const handleLevelFilterChange = useCallback(
     (level: LogLevel, checked: boolean) => {
@@ -205,12 +207,9 @@ export function LogsTab({ profile }: LogsTabProps) {
     [],
   );
 
-  const handleSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchTerm(event.target.value);
-    },
-    [],
-  );
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+  }, []);
 
   const handleCopyLog = useCallback(async () => {
     if (displayLines.length === 0) return;
@@ -277,121 +276,127 @@ export function LogsTab({ profile }: LogsTabProps) {
     }
   }, []);
 
+  const getLevelButtonStyle = (level: LogLevel) => {
+    if (!levelFilters[level]) {
+      return "secondary";
+    }
+
+    switch (level) {
+      case "ERROR":
+        return "destructive";
+      case "WARN":
+        return "warning";
+      case "INFO":
+        return "info";
+      case "DEBUG":
+        return "success";
+      case "TRACE":
+        return "purple";
+      default:
+        return "secondary";
+    }
+  };
+
   return (
-    <div className="h-full select-none flex flex-col text-white">
-      {/* Main container with border */}
-      <div className="border-2 border-white/30 h-full flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="bg-black/30 border-b-2 border-white/30 py-3 px-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {/* Level filters */}
-            <div className="flex items-center gap-2">
-              {LOG_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  onClick={() =>
-                    handleLevelFilterChange(level, !levelFilters[level])
-                  }
-                  disabled={isLoadingContent}
-                  className={`px-4 py-2 font-minecraft text-xl ${
-                    levelFilters[level]
-                      ? level === "ERROR"
-                        ? "bg-red-900/40 text-red-300 border-2 border-red-700/50"
-                        : level === "WARN"
-                          ? "bg-yellow-900/40 text-yellow-300 border-2 border-yellow-700/50"
-                          : level === "INFO"
-                            ? "bg-blue-900/40 text-blue-300 border-2 border-blue-700/50"
-                            : level === "DEBUG"
-                              ? "bg-cyan-900/40 text-cyan-300 border-2 border-cyan-700/50"
-                              : "bg-purple-900/40 text-purple-300 border-2 border-purple-700/50"
-                      : "bg-black/20 text-white/60 hover:text-white border-2 border-white/20"
-                  }`}
-                >
-                  {level.toLowerCase()}
-                </button>
-              ))}
-            </div>
+    <div className="h-full select-none p-4 flex flex-col text-white">
+      <div
+        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
+        style={{
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
+        <div
+          className="border-b-2 py-6 px-4 flex items-center justify-between"
+          style={{
+            backgroundColor: `${accentColor.value}20`,
+            borderColor: `${accentColor.value}40`,
+          }}
+        >
+          <div className="flex items-center py-1 gap-2 overflow-x-auto scrollbar-hide">
+            {LOG_LEVELS.map((level) => (
+              <Button
+                key={level}
+                onClick={() =>
+                  handleLevelFilterChange(level, !levelFilters[level])
+                }
+                disabled={isLoadingContent}
+                variant={getLevelButtonStyle(level) as any}
+                size="sm"
+              >
+                {level.toLowerCase()}
+              </Button>
+            ))}
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Search input */}
-            <div className="relative w-64">
-              <input
-                type="text"
-                placeholder="Filter lines..."
-                value={searchTerm}
-                onChange={handleSearchChange}
-                disabled={isLoadingContent}
-                className="w-full bg-black/20 backdrop-blur-md border-2 border-white/10 px-3 py-2 text-white font-minecraft text-xl shadow-sm tracking-wide"
+          <div className="flex items-center gap-2">
+            <SearchInput
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="Filter lines..."
+              className="w-44"
+            />
+
+            <div className="flex items-center gap-2">
+              <IconButton
+                onClick={handleCopyLog}
+                disabled={
+                  displayLines.length === 0 || isLoadingContent || copied
+                }
+                variant={copied ? "success" : "secondary"}
+                size="sm"
+                icon={
+                  <Icon
+                    icon={
+                      copied ? "solar:check-circle-bold" : "solar:copy-bold"
+                    }
+                  />
+                }
               />
-              {searchTerm && (
-                <button
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
-                  onClick={() => setSearchTerm("")}
-                >
-                  <Icon icon="pixel:window-close-solid" className="w-4 h-4" />
-                </button>
+
+              {rawLogContentForCopy && (
+                <IconButton
+                  onClick={handleUploadLog}
+                  disabled={isLoadingContent || isUploading}
+                  variant="secondary"
+                  size="sm"
+                  icon={
+                    <Icon
+                      icon={
+                        isUploading
+                          ? "solar:refresh-circle-bold"
+                          : "solar:upload-bold"
+                      }
+                      className={isUploading ? "animate-spin" : ""}
+                    />
+                  }
+                />
+              )}
+
+              {logFiles.length > 0 && (
+                <IconButton
+                  onClick={handleOpenLogsFolder}
+                  disabled={isLoadingList}
+                  variant="secondary"
+                  size="sm"
+                  icon={<Icon icon="solar:folder-bold" />}
+                />
               )}
             </div>
-
-            {/* Copy button */}
-            <button
-              onClick={handleCopyLog}
-              disabled={displayLines.length === 0 || isLoadingContent || copied}
-              className={`bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 ${
-                copied
-                  ? "border-green-500/30 text-green-400"
-                  : "border-white/30"
-              } px-5 py-2 font-minecraft text-xl flex items-center gap-2 transition-colors`}
-            >
-              <Icon
-                icon={copied ? "pixel:check" : "pixel:copy"}
-                className="w-5 h-5"
-              />
-              <span>{copied ? "copied" : "copy"}</span>
-            </button>
-
-            {/* Upload button */}
-            {rawLogContentForCopy && (
-              <button
-                onClick={handleUploadLog}
-                disabled={isLoadingContent || isUploading}
-                className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-5 py-2 font-minecraft text-xl flex items-center gap-2 transition-colors"
-              >
-                {isUploading ? (
-                  <Icon
-                    icon="pixel:spinner-solid"
-                    className="w-5 h-5 animate-spin"
-                  />
-                ) : (
-                  <Icon icon="pixel:upload" className="w-5 h-5" />
-                )}
-                <span>{isUploading ? "uploading..." : "upload"}</span>
-              </button>
-            )}
-
-            {/* Open folder button */}
-            {logFiles.length > 0 && (
-              <button
-                onClick={handleOpenLogsFolder}
-                disabled={isLoadingList}
-                className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-5 py-2 font-minecraft text-xl flex items-center gap-2 transition-colors"
-              >
-                <Icon icon="pixel:folder-open-solid" className="w-5 h-5" />
-                <span>logs folder</span>
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Content Area - Only this part scrolls */}
         <div className="flex-1 overflow-hidden min-h-0 relative">
           {isLoadingList || isLoadingContent ? (
             <div className="absolute inset-0 flex items-center justify-center bg-black/30">
               <div className="flex flex-col items-center">
                 <div className="relative w-16 h-16 mb-4">
                   <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"></div>
+                  <div
+                    className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"
+                    style={{ borderTopColor: accentColor.value }}
+                  ></div>
                 </div>
                 <div className="font-minecraft text-2xl text-white/80 tracking-wide lowercase">
                   Loading logs...
@@ -400,7 +405,7 @@ export function LogsTab({ profile }: LogsTabProps) {
             </div>
           ) : errorList || errorContent ? (
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="p-6 bg-red-900/30 border-2 border-red-700/50 text-red-300 text-2xl max-w-2xl">
+              <div className="p-6 bg-red-900/30 border-2 border-red-700/50 text-red-300 text-2xl max-w-2xl rounded-lg">
                 Error: {errorList || errorContent}
               </div>
             </div>
@@ -408,7 +413,7 @@ export function LogsTab({ profile }: LogsTabProps) {
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
                 <Icon
-                  icon="pixel:file-text"
+                  icon="solar:file-text-bold"
                   className="w-16 h-16 text-white/30 mx-auto mb-4"
                 />
                 <p className="text-white/60 font-minecraft text-2xl tracking-wide lowercase select-none">
@@ -423,7 +428,7 @@ export function LogsTab({ profile }: LogsTabProps) {
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
                 <Icon
-                  icon="pixel:filter"
+                  icon="solar:filter-bold"
                   className="w-16 h-16 text-white/30 mx-auto mb-4"
                 />
                 <p className="text-white/60 font-minecraft text-2xl tracking-wide lowercase select-none">
@@ -480,8 +485,13 @@ export function LogsTab({ profile }: LogsTabProps) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="bg-black/30 border-t-2 border-white/30 py-3 px-4 flex justify-between items-center">
+        <div
+          className="border-t-2 py-3 px-4 flex justify-between items-center"
+          style={{
+            backgroundColor: `${accentColor.value}20`,
+            borderColor: `${accentColor.value}40`,
+          }}
+        >
           <div className="text-white/70 font-minecraft text-xl">
             {displayLines.length > 0 ? (
               <>
@@ -492,37 +502,41 @@ export function LogsTab({ profile }: LogsTabProps) {
             )}
           </div>
 
-          {/* Log file selector in the footer */}
           <div className="flex items-center gap-3">
             {logFiles.length > 0 && (
               <div className="flex items-center gap-2 relative">
-                <select
-                  value={selectedLogPath ?? ""}
+                <Select
+                  value={selectedLogPath || ""}
                   onChange={handleLogSelect}
+                  options={[
+                    {
+                      value: "",
+                      label: "-- Select Log --",
+                      // @ts-ignore
+                      disabled: !!selectedLogPath,
+                    },
+                    ...logFiles.map((path) => ({
+                      value: path,
+                      label: getFilename(path),
+                    })),
+                  ]}
+                  className="w-64"
                   disabled={isLoadingList}
-                  className="bg-black/20 backdrop-blur-md border-2 border-white/10 px-4 py-2 text-white font-minecraft text-xl shadow-sm appearance-none pr-12 tracking-wide"
-                >
-                  <option value="" disabled={!!selectedLogPath}>
-                    -- Select Log --
-                  </option>
-                  {logFiles.map((path) => (
-                    <option key={path} value={path} className="text-xl">
-                      {getFilename(path)}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-white">
-                  <Icon icon="pixel:chevron-down" className="w-6 h-6" />
-                </div>
+                />
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Upload URL notification */}
       {uploadUrl && (
-        <div className="mt-4 flex items-center gap-2 bg-black/20 backdrop-blur-md border-2 border-white/10 p-3">
+        <div
+          className="mt-4 flex items-center gap-2 p-3 rounded-lg"
+          style={{
+            backgroundColor: `${accentColor.value}20`,
+            borderColor: `${accentColor.value}40`,
+          }}
+        >
           <span className="text-white/70 font-minecraft text-xl">
             Log uploaded:
           </span>
@@ -542,11 +556,10 @@ export function LogsTab({ profile }: LogsTabProps) {
         </div>
       )}
 
-      {/* Upload error notification */}
       {uploadError && (
-        <div className="mt-4 flex items-center gap-2 bg-red-900/30 border-2 border-red-700/50 p-3">
+        <div className="mt-4 flex items-center gap-2 bg-red-900/30 border-2 border-red-700/50 p-3 rounded-lg">
           <Icon
-            icon="pixel:exclamation-triangle-solid"
+            icon="solar:danger-triangle-bold"
             className="w-5 h-5 text-red-400"
           />
           <span

@@ -1,17 +1,17 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useState } from "react";
+import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
-import { FormField } from "../../ui/FormField";
-import { TextInput } from "../../ui/TextInput";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { Input } from "../../ui/Input";
 import { TextArea } from "../../ui/TextArea";
+import { Select } from "../../ui/Select";
 import { RangeSlider } from "../../ui/RangeSlider";
-import { SelectInput } from "../../ui/SelectInput";
-import { SectionTitle } from "../../ui/SectionTitle";
-import { LoadingIndicator } from "../../ui/LoadingIndicator";
 
-export interface GeneralStepProps {
+interface GeneralStepProps {
   profile: Partial<Profile>;
   updateProfile: (updates: Partial<Profile>) => void;
   systemRamMb: number;
@@ -36,6 +36,7 @@ export function GeneralStep({
   const [memoryMaxMb, setMemoryMaxMb] = useState<number>(
     profile.settings?.memory?.max || 4096,
   );
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const loadNoriskPacks = async () => {
@@ -57,7 +58,8 @@ export function GeneralStep({
     loadNoriskPacks();
   }, []);
 
-  const handleNameChange = (name: string) => {
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.value;
     updateProfile({ name });
 
     if (!name) {
@@ -88,90 +90,141 @@ export function GeneralStep({
   );
 
   return (
-    <div className="space-y-8 select-none">
-      <SectionTitle
-        title="general information"
-        description="enter basic information about your profile. the profile name is required."
-      />
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
+          profile details
+        </h2>
+        <p className="text-xl text-white/70 font-minecraft tracking-wide">
+          Enter basic information about your Minecraft profile.
+        </p>
+      </div>
 
-      <div className="space-y-6">
-        <FormField
-          label="profile name"
-          required
-          error={nameError ? nameError.toLowerCase() : null}
-        >
-          <TextInput
+      <div
+        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
+        style={{
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}60`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        }}
+      >
+        <div>
+          <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
+            profile name <span className="text-red-400">*</span>
+          </label>
+          <Input
             value={profile.name || ""}
             onChange={handleNameChange}
-            placeholder="my awesome profile"
-            className="text-2xl tracking-wide"
+            placeholder="My Awesome Profile"
+            error={nameError}
+            icon={<Icon icon="solar:user-bold" className="w-5 h-5" />}
           />
-        </FormField>
+        </div>
 
-        <FormField label="description">
+        <div>
+          <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
+            description
+          </label>
           <TextArea
             value={profile.description || ""}
-            onChange={(value) => updateProfile({ description: value || null })}
-            placeholder="a brief description of your profile"
-            className="text-2xl tracking-wide"
+            onChange={(e) =>
+              updateProfile({ description: e.target.value || null })
+            }
+            placeholder="A brief description of your profile"
           />
-        </FormField>
+        </div>
 
-        <FormField label="group">
-          <TextInput
+        <div>
+          <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
+            group
+          </label>
+          <Input
             value={profile.group || ""}
-            onChange={(value) => updateProfile({ group: value || null })}
+            onChange={(e) => updateProfile({ group: e.target.value || null })}
             placeholder="e.g. modpacks, vanilla+"
-            className="text-2xl tracking-wide"
+            icon={<Icon icon="solar:folder-bold" className="w-5 h-5" />}
           />
-        </FormField>
+        </div>
+      </div>
 
-        <FormField label={`maximum ram: ${memoryMaxMb} mb`}>
-          <div className="flex items-center gap-5">
-            <RangeSlider
-              value={memoryMaxMb}
-              onChange={handleMemoryChange}
-              min={1024}
-              max={systemRamMb}
-              step={512}
-              className="flex-1"
-            />
-            <TextInput
-              type="number"
-              value={String(memoryMaxMb)}
-              onChange={(value) => handleMemoryChange(Number.parseInt(value))}
-              className="w-40 text-2xl tracking-wide"
-            />
-          </div>
-          <p className="text-xl text-white/60 mt-3 font-minecraft tracking-wide select-none">
-            system ram: {Math.round(systemRamMb / 1024)} gb
+      <div
+        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
+        style={{
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}60`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        }}
+      >
+        <div>
+          <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
+            maximum ram: {memoryMaxMb} mb ({(memoryMaxMb / 1024).toFixed(1)} gb)
+          </label>
+          <RangeSlider
+            value={memoryMaxMb}
+            onChange={handleMemoryChange}
+            min={1024}
+            max={systemRamMb}
+            step={512}
+            minLabel="1 GB"
+            maxLabel={`${(systemRamMb / 1024).toFixed(1)} GB`}
+          />
+          <p className="text-lg text-white/60 mt-3 font-minecraft tracking-wide">
+            Recommended:{" "}
+            {Math.min(Math.max(Math.floor(systemRamMb / 4), 2048), 8192)} MB (
+            {(
+              Math.min(Math.max(Math.floor(systemRamMb / 4), 2048), 8192) / 1024
+            ).toFixed(1)}{" "}
+            GB)
           </p>
-        </FormField>
+        </div>
 
-        <FormField label="norisk client pack (optional)">
+        <div>
+          <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
+            norisk client pack
+          </label>
           {loading ? (
-            <LoadingIndicator message="loading norisk packs..." />
+            <div className="flex items-center gap-2 text-white/70">
+              <Icon
+                icon="solar:refresh-bold"
+                className="w-5 h-5 animate-spin"
+              />
+              <span className="font-minecraft text-xl">
+                Loading NoRisk packs...
+              </span>
+            </div>
           ) : (
             <>
-              <SelectInput
+              <Select
                 value={profile.selected_norisk_pack_id || ""}
                 onChange={(value) =>
                   updateProfile({
                     selected_norisk_pack_id: value === "" ? null : value,
                   })
                 }
-                options={[{ value: "", label: "none" }, ...noriskPackOptions]}
-                className="text-2xl tracking-wide"
+                options={[
+                  { value: "", label: "None (Optional)" },
+                  ...noriskPackOptions,
+                ]}
               />
               {profile.selected_norisk_pack_id &&
                 noriskPacks[profile.selected_norisk_pack_id] && (
-                  <p className="text-xl text-white/60 mt-4 font-minecraft tracking-wide select-none">
-                    {noriskPacks[profile.selected_norisk_pack_id].description}
-                  </p>
+                  <div
+                    className="mt-4 p-4 rounded-md border-2"
+                    style={{
+                      backgroundColor: `${accentColor.value}20`,
+                      borderColor: `${accentColor.value}40`,
+                    }}
+                  >
+                    <p className="text-xl text-white/80 font-minecraft tracking-wide">
+                      {noriskPacks[profile.selected_norisk_pack_id].description}
+                    </p>
+                  </div>
                 )}
             </>
           )}
-        </FormField>
+        </div>
       </div>
     </div>
   );

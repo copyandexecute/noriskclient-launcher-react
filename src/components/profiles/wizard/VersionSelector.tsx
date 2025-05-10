@@ -1,7 +1,12 @@
 "use client";
 
-import type { VersionType } from "../../../data/versions-data";
-import { TabButton } from "../../ui/TabButton";
+import { useState } from "react";
+import { Icon } from "@iconify/react";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { SearchInput } from "../../ui/SearchInput";
+import { Label } from "../../ui/Label";
+
+type VersionType = "release" | "snapshot" | "old-beta" | "old-alpha";
 
 interface VersionSelectorProps {
   selectedVersion: string;
@@ -18,58 +23,122 @@ export function VersionSelector({
   onVersionTypeSelect,
   versions,
 }: VersionSelectorProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredVersions = versions.filter((version) =>
+    searchQuery
+      ? version.toLowerCase().includes(searchQuery.toLowerCase())
+      : true,
+  );
+
   return (
     <div className="space-y-6 select-none">
-      <div className="flex flex-wrap bg-black/30 backdrop-blur-md border-2 border-white/30 rounded-lg overflow-hidden">
-        <TabButton
-          label="release"
-          isActive={selectedVersionType === "release"}
-          onClick={() => onVersionTypeSelect("release")}
-        />
-        <TabButton
-          label="snapshot"
-          isActive={selectedVersionType === "snapshot"}
-          onClick={() => onVersionTypeSelect("snapshot")}
-        />
-        <TabButton
-          label="old-beta"
-          isActive={selectedVersionType === "old-beta"}
-          onClick={() => onVersionTypeSelect("old-beta")}
-        />
-        <TabButton
-          label="old-alpha"
-          isActive={selectedVersionType === "old-alpha"}
-          onClick={() => onVersionTypeSelect("old-alpha")}
-        />
-      </div>
-
-      <div className="h-[320px] overflow-y-auto custom-scrollbar border-2 border-white/30 bg-black/30 backdrop-blur-md rounded-lg p-6">
-        {versions.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-2xl text-white/70 font-minecraft tracking-wide">
-              no versions available
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {versions.map((version) => (
-              <button
-                key={version}
-                className={`py-3 px-4 font-minecraft text-2xl text-center lowercase tracking-wide rounded-md transition-all duration-200 ${
-                  selectedVersion === version
-                    ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-                    : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white hover:border-white/30"
-                }`}
-                onClick={() => onVersionSelect(version)}
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            version type
+          </h3>
+          <div className="flex flex-wrap">
+            {["release", "snapshot", "old-beta", "old-alpha"].map((type) => (
+              <Label
+                key={type}
+                variant={selectedVersionType === type ? "default" : "ghost"}
+                size="md"
+                className="cursor-pointer mr-2 mb-2 text-xl"
+                onClick={() => onVersionTypeSelect(type as VersionType)}
               >
-                {version}
-              </button>
+                {type}
+              </Label>
             ))}
           </div>
-        )}
+        </div>
+
+        <div>
+          <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
+            game version
+          </h3>
+          <div className="mb-3">
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="search versions..."
+              className="w-full text-2xl py-3"
+            />
+          </div>
+
+          <div className="flex-1 relative">
+            <div
+              className="max-h-48 overflow-y-auto custom-scrollbar rounded-lg border-2 border-b-4"
+              style={{
+                backgroundColor: `${accentColor.value}10`,
+                borderColor: `${accentColor.value}60`,
+                borderBottomColor: accentColor.value,
+              }}
+            >
+              {filteredVersions.length === 0 ? (
+                <div className="p-4 text-2xl text-white/70 text-center select-none">
+                  no versions found matching your search
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3">
+                  {filteredVersions.map((version) => (
+                    <Label
+                      key={version}
+                      variant={
+                        selectedVersion === version ? "default" : "ghost"
+                      }
+                      size="md"
+                      className="cursor-pointer text-center text-xl"
+                      onClick={() => onVersionSelect(version)}
+                    >
+                      {version}
+                    </Label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {selectedVersion && (
+        <div
+          className="p-4 rounded-lg border-2 border-b-4 flex items-center gap-4"
+          style={{
+            backgroundColor: `${accentColor.value}10`,
+            borderColor: `${accentColor.value}60`,
+            borderBottomColor: accentColor.value,
+            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          }}
+        >
+          <div
+            className="w-12 h-12 flex items-center justify-center rounded-md"
+            style={{
+              backgroundColor: `${accentColor.value}30`,
+              borderWidth: "2px",
+              borderStyle: "solid",
+              borderColor: `${accentColor.value}60`,
+            }}
+          >
+            <Icon icon="solar:widget-bold" className="w-7 h-7 text-white" />
+          </div>
+          <div>
+            <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
+              selected: minecraft {selectedVersion}
+            </div>
+            <div className="text-lg text-white/70 tracking-wide lowercase">
+              {selectedVersionType === "release"
+                ? "stable release"
+                : selectedVersionType === "snapshot"
+                  ? "experimental snapshot"
+                  : selectedVersionType === "old-beta"
+                    ? "legacy beta version"
+                    : "legacy alpha version"}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-export default VersionSelector;
