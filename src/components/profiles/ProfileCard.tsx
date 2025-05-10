@@ -13,15 +13,14 @@ import {
 import { IconButton } from "../ui/buttons/IconButton";
 import { Button } from "../ui/buttons/Button";
 import * as ProcessService from "../../services/process-service";
-import { processMonitor } from "../../services/process-monitor";
-import { listen } from "@tauri-apps/api/event";
+import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
-import { Label } from "../ui/Label";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
 import { toast } from "react-hot-toast";
 import { ProfileContextMenu } from "./ProfileContextMenu";
 import * as ProfileService from "../../services/profile-service";
+import { EventType, EventPayload } from "../../types/events";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -32,126 +31,142 @@ interface ProfileCardProps {
 }
 
 export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelete }: ProfileCardProps) {
-  const { initializeProfile, getProfileState, resetLaunchState } =
+  const { initializeProfile, getProfileState, resetLaunchState, setLaunchError } =
     useLaunchStateStore();
   const accentColor = useThemeStore((state) => state.accentColor);
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [isButtonDisabledBriefly, setIsButtonDisabledBriefly] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
-  const [launchError, setLaunchError] = useState<string | null>(null);
-  const eventListenersSetUp = useRef(false);
   const { confirm, confirmDialog } = useConfirmDialog();
   const cardRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    initializeProfile(profile.id);
+    if (profile.id) {
+      initializeProfile(profile.id);
+    }
   }, [profile.id, initializeProfile]);
 
-  const { launchState, currentStep, launchProgress } = getProfileState(
-    profile.id,
-  );
+  const { launchState } = getProfileState(profile.id);
   const isProfileCurrentlyLaunching = launchState === LaunchState.LAUNCHING;
 
   useEffect(() => {
-    if (eventListenersSetUp.current) return;
+    if (!profile.id) return;
 
-    const setupListeners = async () => {
-      const unlistenEvent = await listen("event", (event) => {
-        const payload = event.payload as any;
-        if (
-          payload.target_id === profile.id &&
-          payload.event_type?.toLowerCase() === "minecraft_output"
-        ) {
-          console.log("Game started event received, resetting buttons");
-          setIsLaunching(false);
-          resetLaunchState(profile.id);
-        }
-      });
+    console.log(`[ProfileCard ${profile.id}] Setting up state_event listener.`);
+    let isMounted = true;
 
-      const unlistenExit = await listen("minecraft_process_exited", (event) => {
-        const payload = event.payload as any;
-        if (payload.profile_id === profile.id) {
-          console.log("Process exited event received, resetting buttons");
-          setIsLaunching(false);
-          resetLaunchState(profile.id);
-        }
-      });
+    const handleStateEvent = (event: TauriEvent<EventPayload>) => {
+      if (!isMounted) return;
+      const payload = event.payload;
 
-      const unlistenState = await listen("state_event", (event) => {
-        const payload = event.payload as any;
-        if (payload.target_id === profile.id) {
-          if (payload.event_type?.toLowerCase() === "minecraft_output") {
-            console.log("State event: game started, resetting buttons");
-            setIsLaunching(false);
-            resetLaunchState(profile.id);
-          } else if (
-            payload.event_type?.toLowerCase() === "minecraft_process_exited"
-          ) {
-            console.log("State event: process exited, resetting buttons");
-            setIsLaunching(false);
-            resetLaunchState(profile.id);
+      if (payload.target_id === profile.id) {
+        if (payload.event_type === EventType.LaunchSuccessful) {
+          console.log(`[ProfileCard ${profile.id}] Event: LaunchSuccessful`);
+          toast.success(`Profile '${profile.name}' launched successfully!`);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
           }
+          setIsButtonDisabledBriefly(true);
+          setTimeout(() => {
+            setIsLaunching(false);
+            resetLaunchState(profile.id);
+            setIsButtonDisabledBriefly(false);
+          }, 300);
+        } else if (payload.event_type === EventType.Error) {
+          const errorMessage = payload.message || "An unknown error occurred during launch.";
+          console.error(`[ProfileCard ${profile.id}] Event: Error - ${errorMessage}`);
+          toast.error(errorMessage);
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          setIsButtonDisabledBriefly(true);
+          setTimeout(() => {
+            setIsLaunching(false);
+            resetLaunchState(profile.id);
+            setIsButtonDisabledBriefly(false);
+          }, 300);
+        } else if (payload.event_type === EventType.MinecraftOutput) {
+          console.log(`[ProfileCard ${profile.id}] Event: MinecraftOutput - ${payload.message}`);
+        } else if (payload.event_type === EventType.MinecraftProcessExited) {
+          console.log(`[ProfileCard ${profile.id}] Event: MinecraftProcessExited - Success: ${payload.error}`);
         }
-      });
-
-      return () => {
-        unlistenEvent();
-        unlistenExit();
-        unlistenState();
-      };
+      }
     };
 
-    setupListeners();
-    eventListenersSetUp.current = true;
+    const unlistenPromise = listen<EventPayload>("state_event", handleStateEvent);
 
-    const intervalId = setInterval(() => {
-      if (isLaunching || isProfileCurrentlyLaunching) {
-        ProcessService.isMinecraftRunning(profile.id)
-          .then((isRunning) => {
-            if (isRunning) {
-              console.log(
-                "Game is running, resetting buttons state to allow multiple instances",
-              );
-              setIsLaunching(false);
-              resetLaunchState(profile.id);
-            }
-          })
-          .catch(() => {});
+    const cleanup = async () => {
+      console.log(`[ProfileCard ${profile.id}] Cleaning up state_event listener.`);
+      isMounted = false;
+      try {
+        const unlisten = await unlistenPromise;
+        unlisten();
+      } catch (error) {
+        console.error(`[ProfileCard ${profile.id}] Error during state_event listener cleanup:`, error);
       }
-    }, 1000);
+    };
 
     return () => {
-      clearInterval(intervalId);
+      cleanup();
     };
-  }, [profile.id, isLaunching, isProfileCurrentlyLaunching, resetLaunchState]);
+  }, [profile.id, profile.name, resetLaunchState]);
 
   useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const isRunning = await ProcessService.isMinecraftRunning(profile.id);
-        if (isRunning) {
-          if (isLaunching || isProfileCurrentlyLaunching) {
-            setIsLaunching(false);
-            resetLaunchState(profile.id);
-          }
-        }
-      } catch (err) {
-        console.error("Error checking profile status:", err);
+    if (!profile.id) return;
+
+    const clearPolling = () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+        console.log(`[ProfileCard ${profile.id}] Polling for is_profile_launching stopped.`);
       }
     };
 
-    checkStatus();
-  }, [
-    profile.id,
-    profile.state,
-    isLaunching,
-    isProfileCurrentlyLaunching,
-    resetLaunchState,
-  ]);
+    if (isLaunching) {
+      console.log(`[ProfileCard ${profile.id}] Starting polling for is_profile_launching.`);
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const isStillLaunchingBackend = await ProfileService.isProfileLaunching(profile.id);
+          if (!isStillLaunchingBackend) {
+            console.log(`[ProfileCard ${profile.id}] Polling: Backend reports profile is NOT launching. Resetting UI.`);
+            clearPolling();
+            const currentProfileState = getProfileState(profile.id);
+            if (currentProfileState.error) {
+                console.warn(`[ProfileCard ${profile.id}] Polling reset UI, an error was previously logged in global state: ${currentProfileState.error}`);
+            }
+            setIsButtonDisabledBriefly(true);
+            setTimeout(() => {
+              setIsLaunching(false);
+              resetLaunchState(profile.id);
+              setIsButtonDisabledBriefly(false);
+            }, 300);
+          }
+        } catch (err: any) {
+          console.error(`[ProfileCard ${profile.id}] Error during is_profile_launching polling:`, err);
+          toast.error(`Polling error: ${err.message || "Unknown error"}`);
+          clearPolling();
+          setIsButtonDisabledBriefly(true);
+          setTimeout(() => {
+            setIsLaunching(false);
+            resetLaunchState(profile.id);
+            setIsButtonDisabledBriefly(false);
+          }, 300);
+        }
+      }, 2000);
+    } else {
+      clearPolling();
+    }
+
+    return clearPolling;
+  }, [profile.id, isLaunching, resetLaunchState, getProfileState]);
 
   const getModLoaderIcon = () => {
     switch (profile.loader) {
@@ -176,70 +191,61 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
   };
 
   const handlePlay = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event from bubbling up to the card
-    setLaunchError(null);
+    e.stopPropagation();
+    if (!profile.id) return;
 
     if (isLaunching) {
       try {
         await ProcessService.abort(profile.id);
-        processMonitor.stopMonitoring();
-        resetLaunchState(profile.id);
+        toast.success("Launch cancellation requested.");
       } catch (error) {
-        console.error("Failed to abort launch:", error);
-        setLaunchError(
-          error instanceof Error ? error.message : "Failed to abort launch",
-        );
+        console.error("Failed to request launch cancellation:", error);
+        const message = error instanceof Error ? error.message : "Failed to cancel launch";
+        toast.error(`Cancellation request failed: ${message}`);
       } finally {
-        setIsLaunching(false);
+        console.log(`[ProfileCard ${profile.id}] User clicked CANCEL. Resetting UI immediately.`);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          console.log(`[ProfileCard ${profile.id}] Polling stopped due to CANCEL action.`);
+        }
+        setIsButtonDisabledBriefly(true);
+        setTimeout(() => {
+          setIsLaunching(false);
+          resetLaunchState(profile.id);
+          setIsButtonDisabledBriefly(false);
+        }, 300);
       }
       return;
     }
 
+    console.log(`[ProfileCard ${profile.id}] Initiating new launch. Resetting states.`);
     setIsLaunching(true);
+    resetLaunchState(profile.id);
+
     try {
       await ProcessService.launch(profile.id);
-
-      setTimeout(() => {
-        ProcessService.isMinecraftRunning(profile.id)
-          .then((isRunning) => {
-            if (isRunning) {
-              console.log("Game is running after timeout, resetting buttons");
-              setIsLaunching(false);
-              resetLaunchState(profile.id);
-            }
-          })
-          .catch(() => {
-            setIsLaunching(false);
-            resetLaunchState(profile.id);
-          });
-      }, 5000);
     } catch (error) {
-      console.error("Failed to launch profile:", error);
-      setIsLaunching(false);
-      resetLaunchState(profile.id);
-      setLaunchError(
-        error instanceof Error ? error.message : "Failed to launch profile",
-      );
-    }
-  };
-
-  const handleAbort = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await ProcessService.abort(profile.id);
-      setIsLaunching(false);
-      resetLaunchState(profile.id);
-    } catch (err) {
-      console.error("Error aborting launch:", err);
-      setLaunchError(
-        err instanceof Error ? err.message : "Failed to abort launch",
-      );
+      console.error("Failed to initiate launch profile:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to launch profile";
+      toast.error(`Launch initiation failed: ${errorMessage}`);
+      setLaunchError(profile.id, errorMessage);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+        console.log(`[ProfileCard ${profile.id}] Polling stopped due to initial launch failure.`);
+      }
+      setIsButtonDisabledBriefly(true);
+      setTimeout(() => {
+        setIsLaunching(false);
+        resetLaunchState(profile.id);
+        setIsButtonDisabledBriefly(false);
+      }, 300);
     }
   };
 
   const handleClone = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    setLaunchError(null);
 
     try {
       const newName = await confirm({
@@ -255,7 +261,11 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
 
       if (newName && typeof newName === "string") {
         setIsCloning(true);
-        
+        if (!profile.id) {
+            toast.error("Profile ID is missing, cannot clone.");
+            setIsCloning(false);
+            return;
+        }
         const clonePromise = useProfileStore.getState().copyProfile(profile.id, newName, null);
 
         toast.promise(
@@ -296,7 +306,6 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
   };
 
   const handleOpenFolder = async () => {
-    // No e.stopPropagation() needed as this is called from context menu action
     const openPromise = ProfileService.openProfileFolder(profile.id);
 
     toast.promise(openPromise, {
@@ -304,8 +313,6 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
       success: `Successfully opened folder for '${profile.name}'!`,
       error: (err) => {
         const message = err instanceof Error ? err.message : String(err);
-        // Check if the error message indicates the folder doesn't exist, which can happen
-        // if the profile was just created and not launched/installed yet.
         if (message.toLowerCase().includes("not found") || message.toLowerCase().includes("does not exist")) {
           return `Profile folder for '${profile.name}' does not exist yet. Launch the profile to create it.`;
         }
@@ -314,21 +321,14 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
     });
   };
 
-  // Wrapper for context menu duplicate to match signature
   const handleDuplicateFromContextMenu = () => {
-    // We need to simulate parts of handleClone or refactor handleClone
-    // For now, let's call handleClone. It expects an event, so we pass a partial mock.
-    // This isn't ideal, long-term handleClone should be refactored if it doesn't always need the event.
     const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
     handleClone(mockEvent);
   };
 
-  // Wrapper for context menu delete to match signature and include confirm dialog
   const handleDeleteFromContextMenu = () => {
-    // Call the ProfileCard's handleDelete, which includes the confirm dialog.
-    // It expects a MouseEvent, so we pass a mock.
     const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
-    handleDelete(mockEvent); // This handleDelete is from ProfileCard, contains confirm()
+    handleDelete(mockEvent);
   };
 
   const handleContextMenu = (event: React.MouseEvent) => {
@@ -486,33 +486,6 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
               aria-label="Settings"
             />
           )}
-          <IconButton
-            onClick={handleClone}
-            variant="secondary"
-            size="xs"
-            disabled={isLaunching || isProfileCurrentlyLaunching || isCloning}
-            icon={<Icon icon="solar:copy-bold" className="w-3.5 h-3.5" />}
-            aria-label="Clone Profile"
-            title="Clone Profile"
-          />
-          {/* Temporary Test Button for Context Menu */}
-          <IconButton
-            onClick={(e) => {
-              e.stopPropagation();
-              // Simulate context menu opening at a fixed position or near the button
-              const rect = (e.target as HTMLElement).closest('button')?.getBoundingClientRect();
-              setContextMenuPosition({ 
-                x: rect ? rect.left : 200, 
-                y: rect ? rect.bottom + 5 : 200 
-              });
-              setContextMenuVisible(!contextMenuVisible); // Toggle visibility
-            }}
-            variant="warning" // Different color for testing
-            size="xs"
-            icon={<Icon icon="solar:question-circle-bold" className="w-3.5 h-3.5" />}
-            aria-label="Test Context Menu"
-            title="Test Context Menu"
-          />
         </div>
       </div>
 
@@ -520,15 +493,6 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
         className="p-4 flex-1 flex flex-col justify-end"
         style={{ backgroundColor: `${accentColor.value}05` }}
       >
-        {launchError && (
-          <div
-            className="mb-3 p-2 bg-red-500/20 border border-red-500/40 text-red-400 text-xs font-minecraft rounded-sm"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {launchError}
-          </div>
-        )}
-
         <div className="flex flex-col gap-3">
           {isLaunching ? (
             <div
@@ -536,33 +500,26 @@ export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelet
               onClick={(e) => e.stopPropagation()}
             >
               <Button
-                onClick={handleAbort}
+                onClick={handlePlay}
                 variant="destructive"
                 size="md"
+                disabled={isButtonDisabledBriefly}
                 icon={
                   <Icon
-                    icon="solar:close-bold"
+                    icon="eos-icons:loading"
                     className="w-5 h-5 text-white"
                   />
                 }
               >
-                ABORT
+                CANCEL
               </Button>
-              <div className="w-full h-[3px] bg-black/40 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-red-400 transition-all duration-300"
-                  style={{ width: `${Math.max(1, launchProgress * 100)}%` }}
-                />
-              </div>
-              <Label variant="secondary" size="sm" className="text-center">
-                {currentStep}
-              </Label>
             </div>
           ) : (
             <Button
               onClick={handlePlay}
               variant="default"
               size="md"
+              disabled={isButtonDisabledBriefly}
               icon={
                 <Icon icon="solar:play-bold" className="w-4 h-4 text-white" />
               }

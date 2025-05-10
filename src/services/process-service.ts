@@ -3,7 +3,16 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ProcessMetadata } from "../types/processState";
 
 export async function isMinecraftRunning(profileId: string): Promise<boolean> {
-  return invoke<boolean>("is_minecraft_running", { profileId });
+  try {
+    const runningProcesses = await getRunningProcesses();
+    // Assuming ProcessMetadata has a field like 'profile_id' or 'profileId'
+    // Adjust 'proc.profile_id' if the actual field name is different
+    const processesForProfile = runningProcesses.filter(proc => proc.profile_id === profileId);
+    return processesForProfile.length > 0;
+  } catch (error) {
+    console.error(`[ProcessService] Error in isMinecraftRunning for profile ${profileId}:`, error);
+    return false; // Assume not running on error
+  }
 }
 
 export async function killMinecraft(profileId: string): Promise<void> {
