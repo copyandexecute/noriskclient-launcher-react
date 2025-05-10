@@ -259,15 +259,21 @@ pub async fn launch_profile(
                         "Successfully installed/launched Minecraft version {} for profile {}",
                         version, profile_id
                     );
-                    // Optionally: If you want a specific success event to be emitted from here
-                    // state.emit_event(EventPayload {
-                    //     event_id: uuid::Uuid::new_v4(),
-                    //     event_type: EventType::LaunchingMinecraft, // Or a new "LaunchSuccessful" type
-                    //     target_id: Some(profile_id),
-                    //     message: format!("Profile {} launched successfully.", profile_id),
-                    //     progress: Some(1.0),
-                    //     error: None,
-                    // }).await.unwrap_or_else(|e| error!("Failed to emit launch success event: {}", e));
+                    // Emit the new LaunchSuccessful event
+                    let success_payload = EventPayload {
+                        event_id: uuid::Uuid::new_v4(),
+                        event_type: EventType::LaunchSuccessful,
+                        target_id: Some(profile_id),
+                        message: format!("Profile {} launched successfully.", profile_id),
+                        progress: Some(1.0), // Indicate completion
+                        error: None,
+                    };
+                    if let Err(emit_err) = state.emit_event(success_payload).await {
+                        error!(
+                            "Failed to emit LaunchSuccessful event for profile {}: {}",
+                            profile_id, emit_err
+                        );
+                    }
                 }
                 Err(e) => {
                     let error_message = e.to_string();

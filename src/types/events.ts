@@ -23,11 +23,12 @@ export enum EventType {
   TriggerProfileUpdate = "trigger_profile_update",
   MinecraftProcessExited = "minecraft_process_exited",
   Error = "error",
+  LaunchSuccessful = "launch_successful",
 }
 
 export interface EventPayload {
   event_id: string;
-  event_type: string;
+  event_type: EventType;
   target_id: string | null;
   message: string;
   progress: number | null;

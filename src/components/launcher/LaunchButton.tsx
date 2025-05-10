@@ -15,6 +15,7 @@ import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
 import { toast } from 'react-hot-toast';
+import { EventType as FrontendEventType, EventPayload as FrontendEventPayload } from "../../types/events";
 
 interface Version {
   id: string;
@@ -95,22 +96,37 @@ export function LaunchButton({
     // Listener for detailed status messages while launching
     const setupDetailedListener = async () => {
       console.log(`[LaunchButton] Setting up detailed status listener for ${selectedVersion}`);
-      unlistenDetailedStateEvent = await listen<any>(
+      unlistenDetailedStateEvent = await listen<FrontendEventPayload>(
         "state_event",
-        (event: TauriEvent<any>) => {
-          if (event.payload && event.payload.target_id === selectedVersion) {
-            if (event.payload.message) {
-              setDetailedStatusMessage(event.payload.message);
-            }
-            if (event.payload.event_type?.toLowerCase() === "error") {
+        (event: TauriEvent<FrontendEventPayload>) => {
+          if (event.payload.target_id === selectedVersion) {
+            const eventTypeFromPayload = event.payload.event_type;
+            const eventMessage = event.payload.message;
+
+            if (eventTypeFromPayload === FrontendEventType.LaunchSuccessful) {
+              console.log(`[LaunchButton] LaunchSuccessful event for ${selectedVersion}`);
+              setIsLaunching(false);
+              setDetailedStatusMessage(null);
+              setTransientStatus({ message: "ERFOLGREICH GESTARTET!", color: "text-green-400" });
+              setTimeout(() => setTransientStatus(null), 3000);
+              if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+                console.log("[LaunchButton] Polling stopped due to LaunchSuccessful event for", selectedVersion);
+              }
+            } else if (eventTypeFromPayload === FrontendEventType.Error) {
               console.log(`[LaunchButton] Error event via state_event for ${selectedVersion}, resetting UI.`);
-              const eventErrorMsg = event.payload.message || "Fehler während des Startvorgangs.";
+              const eventErrorMsg = eventMessage || "Fehler während des Startvorgangs.";
               toast.error(`Fehler: ${eventErrorMsg}`);
               if (selectedVersion) {
-                setLaunchError(selectedVersion, eventErrorMsg);
+                setLaunchError(selectedVersion, eventErrorMsg); 
               }
               setIsLaunching(false); 
               setTransientStatus(null); 
+            } else {
+              if (eventMessage) {
+                setDetailedStatusMessage(eventMessage);
+              }
             }
           }
         }
@@ -153,22 +169,25 @@ export function LaunchButton({
           
           if (launcherTaskFinished) {
             console.log("[LaunchButton] Polling determined launcher task finished for", selectedVersion, ". Resetting UI.");
+            // If a LaunchSuccessful event is reliably emitted, this part might become redundant
+            // for setting success. For now, keep it as a fallback or general cleanup.
             setIsLaunching(false);
             clearPolling();
 
-            // Re-fetch current profile state to check for errors before showing success
             const currentProfileState = getProfileState(selectedVersion);
             if (currentProfileState.launchState === LaunchState.ERROR || currentProfileState.error) {
-              console.log("[LaunchButton] Launch task finished, but an error was detected. Suppressing success message.");
+              console.log("[LaunchButton] Polling: Launch task finished, but an error was detected.");
               const errorMsg = currentProfileState.error || "Ein Fehler ist aufgetreten.";
               setDetailedStatusMessage(errorMsg); 
-              // toast.error already shown by state_event listener or handleLaunch catch block usually
               setTransientStatus(null);
             } else {
-              console.log("[LaunchButton] Launch task finished successfully. Showing success message.");
-              setDetailedStatusMessage(null); 
-              setTransientStatus({ message: "ERFOLGREICH GESTARTET!", color: "text-green-400" });
-              setTimeout(() => setTransientStatus(null), 3000); 
+              // The LaunchSuccessful event should ideally handle this.
+              // If that event is missed for some reason, this polling logic might still show success.
+              // To prevent double messaging, we might remove this 'else' block if LaunchSuccessful is robust.
+              console.log("[LaunchButton] Polling: Launch task finished successfully (fallback). Consider relying on LaunchSuccessful event.");
+              // setDetailedStatusMessage(null); 
+              // setTransientStatus({ message: "ERFOLGREICH GESTARTET! (Poll)", color: "text-green-400" });
+              // setTimeout(() => setTransientStatus(null), 3000); 
             }
           }
         } catch (err: any) {

@@ -16,6 +16,7 @@ use crate::state::profile_state::{ModLoader, Profile};
 use crate::state::state_manager::State;
 use log::{error, info};
 use uuid::Uuid;
+use rand::Rng;
 
 use super::minecraft_auth::Credentials;
 use super::modloader::ModloaderFactory;
@@ -86,8 +87,18 @@ pub async fn install_minecraft_version(
         launcher_config.concurrent_downloads
     );
 
-    // <--- HARDCODED TEST ERROR --- >
-    return Err(AppError::Unknown("Testfehler für das Error-Handling!".to_string()));
+    // <--- HARDCODED TEST ERROR (50% CHANCE) --- >
+    let should_throw_error = {
+        let mut rng = rand::thread_rng(); // Create and use RNG in a tight scope
+        rng.gen_bool(0.5) // 0.5 means 50% probability
+    }; // rng goes out of scope here
+
+    if should_throw_error {
+        info!("[InstallTest] Randomly decided to throw test error.");
+        return Err(AppError::Unknown("Testfehler (50% Chance) für das Error-Handling!".to_string()));
+    } else {
+        info!("[InstallTest] Randomly decided NOT to throw test error. Proceeding normally.");
+    }
     // <--- END HARDCODED TEST ERROR --- >
 
     if let Some(world) = &quick_play_singleplayer {

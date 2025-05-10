@@ -32,6 +32,7 @@ pub enum EventType {
     TriggerProfileUpdate,
     MinecraftProcessExited,
     Error,
+    LaunchSuccessful,
 }
 
 #[derive(Serialize, Clone)]
