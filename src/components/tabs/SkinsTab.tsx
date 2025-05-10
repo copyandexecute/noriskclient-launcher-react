@@ -351,7 +351,7 @@ export function SkinsTab() {
                                         <div className="flex gap-3 flex-wrap">
                                             {/* Use Button component */} 
                                             <Button 
-                                                variant="primary"
+                                                variant="default"
                                                 onClick={handleUploadSkin} 
                                                 disabled={loading} 
                                                 className="text-lg py-2 px-5 font-minecraft lowercase"
@@ -360,7 +360,7 @@ export function SkinsTab() {
                                                 Upload New Skin
                                             </Button>
                                             <Button 
-                                                variant="danger"
+                                                variant="destructive"
                                                 onClick={handleResetSkin} 
                                                 disabled={loading} 
                                                 className="text-lg py-2 px-5 font-minecraft lowercase"
@@ -454,7 +454,7 @@ export function SkinsTab() {
                                         </div>
                                         <div className="flex gap-3 pt-2">
                                             <Button 
-                                                variant="primary"
+                                                variant="default"
                                                 onClick={saveEditSkin} 
                                                 disabled={localSkinsLoading}
                                                 className="text-lg py-2 px-5 font-minecraft lowercase"
