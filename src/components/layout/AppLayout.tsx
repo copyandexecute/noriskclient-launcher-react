@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 
@@ -20,6 +20,7 @@ import AccentGrid from ".././effects/AccentGrid";
 import AccentVoxels from ".././effects/AccentVoxels";
 import AccentLightning from ".././effects/AccentLightning";
 import AccentLiquidChrome from ".././effects/AccentLiquidChrome";
+import * as ConfigService from "../../services/launcher-config-service";
 
 const navItems = [
   { id: "play", icon: "solar:play-bold", label: "Play" },
@@ -271,6 +272,20 @@ interface HeaderBarProps {
 
 function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const fetchedVersion = await ConfigService.getAppVersion();
+        setAppVersion(`v${fetchedVersion}`);
+      } catch (error) {
+        console.error("Failed to fetch app version:", error);
+        setAppVersion("v?.?.?");
+      }
+    };
+    fetchVersion();
+  }, []);
 
   return (
     <div
@@ -284,6 +299,9 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
           data-tauri-drag-region
         >
           <span className="text-white">noriskclient</span>
+          <span className="text-white/70 text-sm font-normal ml-2">
+            {appVersion || "v?.?.?"}
+          </span>
         </h1>
       </div>
 

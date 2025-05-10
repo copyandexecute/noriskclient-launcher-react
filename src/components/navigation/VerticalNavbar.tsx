@@ -7,7 +7,6 @@ import { cn } from "../../lib/utils";
 import { Logo } from "../ui/Logo";
 import { NavButton } from "../ui/nav/NavButton";
 import { NavTooltip } from "../ui/nav/NavTooltip";
-import { Label } from "../ui/Label";
 import * as ConfigService from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
 
@@ -136,16 +135,6 @@ export function VerticalNavbar({
             )}
           </div>
         ))}
-      </div>
-
-      <div className="mt-6">
-        <Label
-          variant="secondary"
-          size="sm"
-          className="opacity-70 w-20 break-words"
-        >
-          {appVersion || version || "loading..."}
-        </Label>
       </div>
     </div>
   );
