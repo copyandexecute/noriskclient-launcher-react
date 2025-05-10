@@ -4,14 +4,13 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
-import { LaunchStatus } from "./LaunchStatus";
-import { useLaunchStateStore } from "../../store/launch-state-store";
+import { useLaunchStateStore, LaunchState } from "../../store/launch-state-store";
 import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { ProfileSelectionModal } from "./ProfileSelectionModal";
 import * as ProcessService from "../../services/process-service";
 import { processMonitor } from "../../services/process-monitor";
-import { listen } from "@tauri-apps/api/event";
+import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
 
@@ -38,12 +37,10 @@ export function LaunchButton({
   versions,
   maxWidth = "300px",
 }: LaunchButtonProps) {
-  const [showLaunchStatus, setShowLaunchStatus] = useState(false);
-  const [hideStatusTimeoutId, setHideStatusTimeoutId] =
-    useState<NodeJS.Timeout | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const eventListenersSetUp = useRef(false);
   const { accentColor } = useThemeStore();
+  const [detailedStatusMessage, setDetailedStatusMessage] = useState<string | null>(null);
 
   const { selectedVersion, setSelectedVersion, openModal } =
     useVersionSelectionStore();
@@ -51,7 +48,7 @@ export function LaunchButton({
   const { initializeProfile, getProfileState } = useLaunchStateStore();
 
   const profileState = getProfileState(selectedVersion);
-  const { launchProgress, currentStep, error, logHistory } = profileState;
+  const { launchProgress, currentStep, error, logHistory, launchState } = profileState;
 
   useEffect(() => {
     if (defaultVersion && !selectedVersion) {
@@ -60,78 +57,113 @@ export function LaunchButton({
   }, [defaultVersion, selectedVersion, setSelectedVersion]);
 
   useEffect(() => {
-    if (eventListenersSetUp.current) return;
+    if (eventListenersSetUp.current && !selectedVersion) return;
 
-    const setupListeners = async () => {
-      const unlistenEvent = await listen("event", (event) => {
+    let unlistenStart: (() => void) | undefined;
+    let unlistenExit: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+    let unlistenDetailedStateEvent: (() => void) | undefined;
+
+    const setupBaseListeners = async () => {
+      if (!selectedVersion) return;
+      unlistenStart = await listen("event", (event: TauriEvent<any>) => {
         const payload = event.payload as any;
         if (
           payload.target_id === selectedVersion &&
           payload.event_type?.toLowerCase() === "minecraft_output"
         ) {
-          console.log("Game started event received, resetting buttons");
+          console.log("[LaunchButton] Game started event, resetting UI");
           setIsLaunching(false);
+          setDetailedStatusMessage(null);
         }
       });
 
-      const unlistenExit = await listen("minecraft_process_exited", (event) => {
+      unlistenExit = await listen("minecraft_process_exited", (event: TauriEvent<any>) => {
         const payload = event.payload as any;
         if (payload.profile_id === selectedVersion) {
-          console.log("Process exited event received, resetting buttons");
+          console.log("[LaunchButton] Process exited event, resetting UI");
           setIsLaunching(false);
+          setDetailedStatusMessage(null);
         }
       });
-
-      const unlistenState = await listen("state_event", (event) => {
+      
+      unlistenError = await listen("launch_error_event", (event: TauriEvent<any>) => {
         const payload = event.payload as any;
-        if (payload.target_id === selectedVersion) {
-          if (payload.event_type?.toLowerCase() === "minecraft_output") {
-            console.log("State event: game started, resetting buttons");
-            setIsLaunching(false);
-          } else if (
-            payload.event_type?.toLowerCase() === "minecraft_process_exited"
-          ) {
-            console.log("State event: process exited, resetting buttons");
-            setIsLaunching(false);
-          }
+        if (payload.profile_id === selectedVersion) {
+          console.log("[LaunchButton] Launch error event received, resetting UI");
+          setIsLaunching(false);
+          setDetailedStatusMessage(null);
         }
       });
-
-      return () => {
-        unlistenEvent();
-        unlistenExit();
-        unlistenState();
-      };
     };
 
-    setupListeners();
-    eventListenersSetUp.current = true;
+    const setupDetailedListener = async () => {
+      if (!selectedVersion) return;
+      console.log(`[LaunchButton] Setting up detailed listener for ${selectedVersion}`);
+      unlistenDetailedStateEvent = await listen<any>(
+        "state_event", 
+        (event: TauriEvent<any>) => {
+          if (event.payload && event.payload.target_id === selectedVersion) {
+            if (event.payload.message) {
+              console.log(`[LaunchButton] Detailed state_event for ${selectedVersion}: ${event.payload.message}`);
+              setDetailedStatusMessage(event.payload.message);
+            }
+            if (event.payload.event_type?.toLowerCase() === "error") {
+              console.log(`[LaunchButton] Error event received for ${selectedVersion}, resetting UI.`);
+              setIsLaunching(false);
+            }
+          }
+        }
+      );
+    };
+
+    if (isLaunching && selectedVersion) {
+      setupDetailedListener();
+      if (!detailedStatusMessage) setDetailedStatusMessage("Initializing launch...");
+    } else {
+      setDetailedStatusMessage(null);
+      if (unlistenDetailedStateEvent) {
+        unlistenDetailedStateEvent();
+        unlistenDetailedStateEvent = undefined;
+      }
+    }
+    
+    if (!eventListenersSetUp.current && selectedVersion) {
+      setupBaseListeners();
+      eventListenersSetUp.current = true;
+    }
 
     const intervalId = setInterval(() => {
       if (selectedVersion) {
         ProcessService.isMinecraftRunning(selectedVersion)
           .then((isRunning) => {
-            if (isRunning && isLaunching) {
-              console.log("Game is running, resetting buttons state");
+            if (!isRunning && isLaunching) {
+              console.log("[LaunchButton] Minecraft not running (polled), resetting UI");
               setIsLaunching(false);
+            } else if (isRunning && !isLaunching){
             }
           })
           .catch(() => {});
       }
-    }, 1000);
+    }, 3000);
 
     return () => {
+      if (unlistenStart) unlistenStart();
+      if (unlistenExit) unlistenExit();
+      if (unlistenError) unlistenError();
+      if (unlistenDetailedStateEvent) unlistenDetailedStateEvent();
       clearInterval(intervalId);
     };
-  }, [selectedVersion]);
+  }, [selectedVersion, isLaunching]);
 
   useEffect(() => {
     if (selectedVersion) {
       initializeProfile(selectedVersion);
-
       ProcessService.isMinecraftRunning(selectedVersion)
         .then((isRunning) => {
-          if (!isRunning && isLaunching) {
+          if (isRunning && !isLaunching) {
+            console.log("[LaunchButton] Game already running on init, setting UI to launching (stop mode)");
+          } else if (!isRunning && isLaunching) {
             setIsLaunching(false);
           }
         })
@@ -141,36 +173,6 @@ export function LaunchButton({
     }
   }, [selectedVersion, initializeProfile]);
 
-  useEffect(() => {
-    if (isLaunching) {
-      setShowLaunchStatus(true);
-
-      if (hideStatusTimeoutId) {
-        clearTimeout(hideStatusTimeoutId);
-        setHideStatusTimeoutId(null);
-      }
-    } else {
-      if (hideStatusTimeoutId) {
-        clearTimeout(hideStatusTimeoutId);
-      }
-
-      const timeoutId = setTimeout(() => {
-        setShowLaunchStatus(false);
-        setHideStatusTimeoutId(null);
-      }, 5000);
-
-      setHideStatusTimeoutId(timeoutId);
-    }
-  }, [isLaunching]);
-
-  useEffect(() => {
-    return () => {
-      if (hideStatusTimeoutId) {
-        clearTimeout(hideStatusTimeoutId);
-      }
-    };
-  }, [hideStatusTimeoutId]);
-
   const handleLaunch = async () => {
     if (!selectedVersion) return;
 
@@ -178,30 +180,29 @@ export function LaunchButton({
       try {
         await ProcessService.abort(selectedVersion);
         processMonitor.stopMonitoring();
-      } catch (error) {
-        console.error("Failed to abort launch:", error);
+      } catch (err) {
+        console.error("Failed to abort launch:", err);
       } finally {
         setIsLaunching(false);
+        setDetailedStatusMessage(null);
       }
       return;
     }
 
     setIsLaunching(true);
+    setDetailedStatusMessage("Starting launch process...");
     try {
       await ProcessService.launch(selectedVersion);
-
-      setTimeout(() => {
-        setIsLaunching(false);
-      }, 10000);
-    } catch (error) {
-      console.error("Failed to launch profile:", error);
+    } catch (err: any) {
+      console.error("Failed to launch profile:", err);
       setIsLaunching(false);
+      setDetailedStatusMessage(null);
     }
   };
 
   const handleVersionChange = (version: string) => {
     if (isLaunching) return;
-
+    setDetailedStatusMessage(null);
     if (onVersionChange) {
       onVersionChange(version);
     }
@@ -213,34 +214,33 @@ export function LaunchButton({
     openModal();
   };
 
-  const getButtonText = () => {
-    if (isLaunching) {
-      return "STOP";
-    } else if (error) {
-      return "ERROR";
-    } else {
-      return "LAUNCH";
-    }
-  };
-
-  const getButtonVariant = () => {
-    if (isLaunching) {
-      return "destructive";
-    } else if (error) {
-      return "destructive";
-    } else {
-      return "default";
-    }
-  };
-
-  const getButtonIcon = () => {
+  const getMainButtonIcon = () => {
     if (isLaunching) {
       return <Icon icon="solar:stop-bold" width="24" height="24" />;
-    } else if (error) {
+    } else if (error && launchState === LaunchState.ERROR) {
       return <Icon icon="solar:danger-triangle-bold" width="24" height="24" />;
-    } else {
-      return <Icon icon="solar:play-bold" width="24" height="24" />;
     }
+    return <Icon icon="solar:play-bold" width="24" height="24" />;
+  };
+
+  const getMainButtonText = () => {
+    if (isLaunching) {
+      return "STOP";
+    }
+    if (error && launchState === LaunchState.ERROR) {
+      return "ERROR";
+    }
+    return "LAUNCH";
+  };
+  
+  const getButtonVariant = () => {
+    if (isLaunching) {
+      return "destructive"; 
+    } 
+    if (error && launchState === LaunchState.ERROR) { 
+      return "destructive";
+    }
+    return "default";
   };
 
   return (
@@ -248,23 +248,23 @@ export function LaunchButton({
       className={cn("relative flex flex-col justify-center", className)}
       style={{ maxWidth }}
     >
-      {error && (
+      {error && !isLaunching && launchState === LaunchState.ERROR && (
         <div className="absolute -top-12 left-0 right-0 bg-red-500/80 text-white p-2 rounded text-center">
           {error}
         </div>
       )}
 
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           <Button
             onClick={handleLaunch}
             disabled={!selectedVersion}
             variant={getButtonVariant()}
             size="lg"
-            icon={getButtonIcon()}
+            icon={getMainButtonIcon()}
             className="flex-1"
           >
-            {getButtonText()}
+            {getMainButtonText()}
           </Button>
 
           <IconButton
@@ -285,23 +285,19 @@ export function LaunchButton({
             }
           ></IconButton>
         </div>
-
-        <div className="h-[60px] relative">
-          {showLaunchStatus && selectedVersion && (
-            <LaunchStatus
-              profileId={selectedVersion}
-              isLaunching={isLaunching}
-              currentStep={currentStep}
-              progress={launchProgress}
-              logHistory={logHistory}
-              onAbort={() => {
-                ProcessService.abort(selectedVersion);
-                setIsLaunching(false);
-              }}
-              className="absolute top-0 left-0 right-0 w-full"
-            />
-          )}
-        </div>
+        
+        {isLaunching && (
+          <div 
+            className="absolute top-full left-0 right-0 mt-2 flex justify-center"
+          >
+            <p 
+              className="text-2xl text-gray-300 font-minecraft lowercase whitespace-nowrap"
+              title={detailedStatusMessage || currentStep || ""} 
+            >
+              {detailedStatusMessage || currentStep || "Launching..."}
+            </p>
+          </div>
+        )}
       </div>
 
       {versions && (
