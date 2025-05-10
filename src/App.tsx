@@ -8,6 +8,7 @@ import { ScrollbarProvider } from "./components/ui/ScrollbarProvider";
 import { NewsSection } from "./components/news/NewsSection";
 import { ProfilesTab } from "./components/tabs/ProfilesTab.tsx";
 import ModrinthTab from "./components/tabs/ModrinthTab.tsx";
+import { GlobalToaster } from "./components/ui/GlobalToaster";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
@@ -74,6 +75,7 @@ export function App() {
     <div className="flex flex-col h-screen w-screen overflow-hidden">
       <ThemeInitializer />
       <ScrollbarProvider />
+      <GlobalToaster />
       <AppLayout activeTab={activeTab} onNavChange={handleNavChange}>
         {renderTabContent()}
       </AppLayout>

@@ -9,6 +9,7 @@ import * as ProfileService from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
+import { toast } from "react-hot-toast";
 
 export function PlayTab() {
   const [profiles, setProfiles] = useState<any[]>([]);
@@ -109,6 +110,48 @@ export function PlayTab() {
                   />
                 </div>
               )}
+              {/* Test buttons for toasts */}
+              <div className="flex justify-center gap-2 mt-2">
+                <button
+                  onClick={() => toast.success("Successfully toasted!")}
+                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Success Toast
+                </button>
+                <button
+                  onClick={() => toast.error("This is an error!")}
+                  className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Error Toast
+                </button>
+                <button
+                  onClick={() => toast("Here is a toast.")}
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Default Toast
+                </button>
+                <button
+                  onClick={() => {
+                    const promise = new Promise((resolve, reject) => {
+                      setTimeout(() => {
+                        if (Math.random() > 0.5) {
+                          resolve("Promise resolved successfully!");
+                        } else {
+                          reject("Promise rejected with an error!");
+                        }
+                      }, 2000); // Simulate network request
+                    });
+                    toast.promise(promise, {
+                      loading: "Saving...",
+                      success: (data) => <b>{data.toString()}</b>,
+                      error: (err) => <b>{err.toString()}</b>,
+                    });
+                  }}
+                  className="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Promise Toast
+                </button>
+              </div>
             </div>
           </div>
         </div>
