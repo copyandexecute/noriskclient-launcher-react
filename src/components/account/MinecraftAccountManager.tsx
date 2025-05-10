@@ -6,12 +6,6 @@ import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import type { MinecraftAccount } from "../../types/minecraft";
-import {
-  showErrorToast,
-  showInfoToast,
-  showLoadingToast,
-  showSuccessToast,
-} from "../../utils/toast-utils";
 import { DropdownHeader } from "../ui/dropdown/DropdownHeader";
 import { DropdownFooter } from "../ui/dropdown/DropdownFooter";
 import { DropdownDivider } from "../ui/dropdown/DropdownDivider";
@@ -36,76 +30,19 @@ export function MinecraftAccountManager({
   } = useMinecraftAuthStore();
 
   const handleAddAccount = async () => {
-    let toastId: string | number | undefined;
     try {
-      toastId = showLoadingToast("Starting Microsoft login...");
-      console.log(`[Toast Debug] Loading Toast ID generated: ${toastId}`);
-
       await addAccount();
-      console.log(
-        `[Toast Debug] addAccount successful. Replacing Toast ID: ${toastId}`,
-      );
-
-      showSuccessToast("Account added successfully!", undefined, {
-        id: toastId,
-      });
     } catch (err) {
-      console.error("Error during addAccount process:", err);
-      const errorMessage =
-        err instanceof Error ? err.message : "An unknown error occurred";
-      console.log(
-        `[Toast Debug] addAccount caught error. Replacing Toast ID: ${toastId} with error: ${errorMessage}`,
-      );
-
-      if (errorMessage === "Login process cancelled by user.") {
-        showInfoToast("Login Cancelled", "The login process was cancelled.", {
-          id: toastId,
-        });
-      } else {
-        showErrorToast("Failed to add account", errorMessage, { id: toastId });
-      }
+      console.error("Error adding account:", err);
     }
   };
 
   const handleSetActive = async (accountId: string) => {
-    const accountToActivate = accounts.find((acc) => acc.id === accountId);
-    const accountName =
-      accountToActivate?.minecraft_username ||
-      accountToActivate?.username ||
-      "Account";
-    let toastId: string | number | undefined;
-    try {
-      toastId = showLoadingToast(`Setting ${accountName} as active...`);
-      await setActiveAccount(accountId);
-      showSuccessToast(`${accountName} is now the active account.`, undefined, {
-        id: toastId,
-      });
-    } catch (err) {
-      console.error(`Error setting active account ${accountId}:`, err);
-      const errorMessage =
-        err instanceof Error ? err.message : "An unknown error occurred";
-      showErrorToast("Failed to set active account", errorMessage, {
-        id: toastId,
-      });
-    }
+    await setActiveAccount(accountId);
   };
 
   const handleRemoveAccount = async (accountId: string) => {
-    const accountToRemove = accounts.find((acc) => acc.id === accountId);
-    const accountName =
-      accountToRemove?.minecraft_username ||
-      accountToRemove?.username ||
-      "Account";
-    let toastId: string | number | undefined;
-    try {
-      await removeAccount(accountId);
-      showSuccessToast(`${accountName} removed successfully.`);
-    } catch (err) {
-      console.error(`Error removing account ${accountId}:`, err);
-      const errorMessage =
-        err instanceof Error ? err.message : "An unknown error occurred";
-      showErrorToast("Failed to remove account", errorMessage);
-    }
+    await removeAccount(accountId);
   };
 
   if (isInDropdown) {
@@ -187,6 +124,8 @@ export function MinecraftAccountManager({
   return (
     <Modal title="minecraft account manager" onClose={onClose} width="lg">
       <div className="p-6">
+        {error && <StatusMessage type="error" message={error} />}
+
         <div className="space-y-6">
           <div>
             <h3 className="text-2xl font-minecraft text-white mb-5 lowercase select-none">

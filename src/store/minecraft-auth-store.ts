@@ -68,18 +68,14 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
           isLoading: false,
         });
       } else {
-        console.log("Login process did not return a new account (likely cancelled).");
         set({ isLoading: false });
-        throw new Error("Login process cancelled by user.");
       }
     } catch (error) {
-      console.error("Failed to add account (in store):", error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Failed to add account:", error);
       set({
-        error: `Failed to add account: ${errorMessage}`,
+        error: `Failed to add account: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
       });
-      throw error;
     }
   },
 

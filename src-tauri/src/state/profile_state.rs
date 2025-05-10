@@ -176,7 +176,9 @@ pub struct ProfileSettings {
     #[serde(default)]
     pub use_custom_java_path: bool, // Ob der benutzerdefinierte Java-Pfad verwendet werden soll
     pub memory: MemorySettings,    // Speicher Einstellungen
+    #[serde(default)]
     pub resolution: Option<WindowSize>, // Auflösung
+    #[serde(default)]
     pub fullscreen: bool,          // Vollbild
     #[serde(default)]
     pub extra_game_args: Vec<String>, // Zusätzliche Argumente für das Spiel
@@ -1583,8 +1585,8 @@ impl Default for MemorySettings {
 impl Default for WindowSize {
     fn default() -> Self {
         Self {
-            width: 1280,
-            height: 720,
+            width: 854,
+            height: 480,
         }
     }
 }
