@@ -99,15 +99,15 @@ export function PlayTab() {
               autoRotate={true}
             />
 
-            <div className="absolute -bottom-14 left-20 right-0 w-full flex flex-col gap-3">
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-full max-w-[500px] flex flex-col gap-3">
               {isInitialized && (
-                <div className="px-4 w-full">
-                  <LaunchButton
-                    defaultVersion={selectedVersion}
-                    onVersionChange={handleVersionChange}
-                    versions={versions}
-                  />
-                </div>
+                <LaunchButton
+                  defaultVersion={selectedVersion}
+                  onVersionChange={handleVersionChange}
+                  versions={versions}
+                  maxWidth="300px"
+                  className="mx-auto"
+                />
               )}
             </div>
           </div>

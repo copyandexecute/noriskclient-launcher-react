@@ -4,9 +4,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
-import { LaunchStatus } from "./LaunchStatus";
 import { useLaunchStateStore } from "../../store/launch-state-store";
-import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { ProfileSelectionModal } from "./ProfileSelectionModal";
 import * as ProcessService from "../../services/process-service";
@@ -14,6 +12,7 @@ import { processMonitor } from "../../services/process-monitor";
 import { listen } from "@tauri-apps/api/event";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
+import { gsap } from "gsap";
 
 interface Version {
   id: string;
@@ -36,14 +35,13 @@ export function LaunchButton({
   className,
   onVersionChange,
   versions,
-  maxWidth = "300px",
+  maxWidth = "280px",
 }: LaunchButtonProps) {
-  const [showLaunchStatus, setShowLaunchStatus] = useState(false);
-  const [hideStatusTimeoutId, setHideStatusTimeoutId] =
-    useState<NodeJS.Timeout | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const eventListenersSetUp = useRef(false);
   const { accentColor } = useThemeStore();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
 
   const { selectedVersion, setSelectedVersion, openModal } =
     useVersionSelectionStore();
@@ -51,8 +49,7 @@ export function LaunchButton({
   const { initializeProfile, getProfileState } = useLaunchStateStore();
 
   const profileState = getProfileState(selectedVersion);
-  const { launchProgress, currentStep, error, logHistory } = profileState;
-
+  const { launchProgress, error, launchState } = profileState;
   useEffect(() => {
     if (defaultVersion && !selectedVersion) {
       setSelectedVersion(defaultVersion);
@@ -142,34 +139,14 @@ export function LaunchButton({
   }, [selectedVersion, initializeProfile]);
 
   useEffect(() => {
-    if (isLaunching) {
-      setShowLaunchStatus(true);
-
-      if (hideStatusTimeoutId) {
-        clearTimeout(hideStatusTimeoutId);
-        setHideStatusTimeoutId(null);
-      }
-    } else {
-      if (hideStatusTimeoutId) {
-        clearTimeout(hideStatusTimeoutId);
-      }
-
-      const timeoutId = setTimeout(() => {
-        setShowLaunchStatus(false);
-        setHideStatusTimeoutId(null);
-      }, 5000);
-
-      setHideStatusTimeoutId(timeoutId);
+    if (progressRef.current && isLaunching) {
+      gsap.to(progressRef.current, {
+        width: `${Math.max(1, launchProgress * 100)}%`,
+        duration: 0.3,
+        ease: "power1.out",
+      });
     }
-  }, [isLaunching]);
-
-  useEffect(() => {
-    return () => {
-      if (hideStatusTimeoutId) {
-        clearTimeout(hideStatusTimeoutId);
-      }
-    };
-  }, [hideStatusTimeoutId]);
+  }, [launchProgress, isLaunching]);
 
   const handleLaunch = async () => {
     if (!selectedVersion) return;
@@ -208,101 +185,118 @@ export function LaunchButton({
   };
 
   const handleOpenModal = (e: React.MouseEvent) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent event bubbling
     if (isLaunching) return;
     openModal();
   };
 
   const getButtonText = () => {
     if (isLaunching) {
-      return "STOP";
+      return "STOP GAME";
     } else if (error) {
       return "ERROR";
     } else {
-      return "LAUNCH";
-    }
-  };
-
-  const getButtonVariant = () => {
-    if (isLaunching) {
-      return "destructive";
-    } else if (error) {
-      return "destructive";
-    } else {
-      return "default";
+      return "LAUNCH GAME";
     }
   };
 
   const getButtonIcon = () => {
     if (isLaunching) {
-      return <Icon icon="solar:stop-bold" width="24" height="24" />;
+      return <Icon icon="solar:stop-bold" width="32" height="32" />;
     } else if (error) {
-      return <Icon icon="solar:danger-triangle-bold" width="24" height="24" />;
+      return <Icon icon="solar:danger-triangle-bold" width="32" height="32" />;
     } else {
-      return <Icon icon="solar:play-bold" width="24" height="24" />;
+      return <Icon icon="solar:play-bold" width="32" height="32" />;
     }
   };
 
   return (
     <div
-      className={cn("relative flex flex-col justify-center", className)}
+      className={cn("relative flex items-center gap-2", className)}
       style={{ maxWidth }}
     >
-      {error && (
+      {error && !isLaunching && (
         <div className="absolute -top-12 left-0 right-0 bg-red-500/80 text-white p-2 rounded text-center">
           {error}
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleLaunch}
-            disabled={!selectedVersion}
-            variant={getButtonVariant()}
-            size="lg"
-            icon={getButtonIcon()}
-            className="flex-1"
-          >
-            {getButtonText()}
-          </Button>
+      <button
+        ref={buttonRef}
+        onClick={handleLaunch}
+        disabled={!selectedVersion}
+        className={cn(
+          "flex-1 h-20 font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-200",
+          "rounded-md text-white tracking-wider lowercase",
+          "flex items-center justify-center px-6",
+          "text-shadow-sm",
+          "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+          "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
+          "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0",
+          "disabled:hover:shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+        )}
+        style={{
+          backgroundColor: isLaunching
+            ? "#d32f2f30"
+            : error
+              ? "#d32f2f30"
+              : `${accentColor.value}30`,
+          borderColor: isLaunching
+            ? "#d32f2f80"
+            : error
+              ? "#d32f2f80"
+              : `${accentColor.value}80`,
+          borderBottomColor: isLaunching
+            ? "#d32f2f"
+            : error
+              ? "#d32f2f"
+              : accentColor.value,
+          boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)`,
+        }}
+      >
+        <span
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
+          style={{
+            backgroundColor: isLaunching
+              ? "#ff5252"
+              : error
+                ? "#ff5252"
+                : accentColor.hoverValue,
+            opacity: 0.8,
+          }}
+        />
 
-          <IconButton
-            onClick={handleOpenModal}
-            disabled={isLaunching || !versions || versions.length === 0}
-            variant="secondary"
-            size="lg"
-            className="relative overflow-hidden transition-all duration-300"
-            style={{
-              borderColor: `${accentColor.value}80`,
-              borderBottomColor: accentColor.value,
-              boxShadow:
-                "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
-              backgroundColor: `${accentColor.value}10`,
-            }}
-            icon={
-              <Icon icon="solar:alt-arrow-down-bold" width="24" height="24" />
-            }
-          ></IconButton>
+        <div className="flex items-center justify-center gap-3 z-10">
+          {getButtonIcon()}
+          <span className="text-2xl font-bold">{getButtonText()}</span>
         </div>
 
-        <div className="h-[60px] relative">
-          {showLaunchStatus && selectedVersion && (
-            <LaunchStatus
-              profileId={selectedVersion}
-              isLaunching={isLaunching}
-              currentStep={currentStep}
-              progress={launchProgress}
-              logHistory={logHistory}
-              onAbort={() => {
-                ProcessService.abort(selectedVersion);
-                setIsLaunching(false);
-              }}
-              className="absolute top-0 left-0 right-0 w-full"
+        {isLaunching && (
+          <div className="absolute inset-0 bg-black/20">
+            <div
+              ref={progressRef}
+              className="h-full bg-white/20 transition-all duration-300"
+              style={{ width: `${Math.max(1, launchProgress * 100)}%` }}
             />
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </button>
+
+      <IconButton
+        onClick={handleOpenModal}
+        disabled={isLaunching || !versions || versions.length === 0}
+        variant="secondary"
+        size="xl"
+        className="relative overflow-hidden transition-all duration-300 h-20 w-20"
+        style={{
+          borderColor: `${accentColor.value}80`,
+          borderBottomColor: accentColor.value,
+          boxShadow:
+            "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
+          backgroundColor: `${accentColor.value}10`,
+        }}
+        icon={<Icon icon="solar:alt-arrow-down-bold" width="32" height="32" />}
+      />
 
       {versions && (
         <ProfileSelectionModal

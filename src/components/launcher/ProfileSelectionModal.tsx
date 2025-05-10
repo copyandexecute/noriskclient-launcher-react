@@ -58,7 +58,7 @@ export function ProfileSelectionModal({
 
   return (
     <Modal
-      title="select profile"
+      title={title}
       onClose={closeModal}
       width="lg"
       footer={renderFooter()}
