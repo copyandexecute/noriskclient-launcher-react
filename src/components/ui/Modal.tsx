@@ -10,20 +10,26 @@ import { IconButton } from "./buttons/IconButton";
 
 interface ModalProps {
   title: string;
+  titleIcon?: React.ReactNode;
+  titleSubtitle?: React.ReactNode;
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
   width?: "sm" | "md" | "lg" | "xl" | "full";
   closeOnClickOutside?: boolean;
+  headerActions?: React.ReactNode;
 }
 
 export function Modal({
   title,
+  titleIcon,
+  titleSubtitle,
   onClose,
   children,
   footer,
   width = "md",
   closeOnClickOutside = true,
+  headerActions,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -143,24 +149,37 @@ export function Modal({
             backgroundColor: `${accentColor.value}30`,
           }}
         >
-          <h2 className="text-3xl font-minecraft text-white lowercase">
-            {title}
-          </h2>
-          <IconButton
-            icon={
-              <Icon
-                icon="solar:close-square-bold"
-                className="w-4 h-4 text-white"
-              />
-            }
-            onClick={(e) => {
-              e.stopPropagation();
-              handleClose();
-            }}
-            variant="secondary"
-            size="sm"
-            aria-label="Close"
-          />
+          <div className="flex items-start space-x-3">
+            {titleIcon && (
+              <span className="text-white flex-shrink-0 pt-1.5">
+                {titleIcon}
+              </span>
+            )}
+            <div className="flex flex-col">
+              <h2 className="text-3xl font-minecraft text-white lowercase">
+                {title}
+              </h2>
+              {titleSubtitle && <div className="mt-0.5">{titleSubtitle}</div>}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {headerActions}
+            <IconButton
+              icon={
+                <Icon
+                  icon="solar:close-square-bold"
+                  className="w-4 h-4 text-white"
+                />
+              }
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClose();
+              }}
+              variant="secondary"
+              size="sm"
+              aria-label="Close"
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>

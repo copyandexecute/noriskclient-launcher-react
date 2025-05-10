@@ -15,7 +15,7 @@ import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
 import { toast } from 'react-hot-toast';
-import { EventType as FrontendEventType, EventPayload as FrontendEventPayload } from "../../types/events";
+import { EventType as FrontendEventType, EventPayload as FrontendEventPayload, MinecraftProcessExitedPayload } from "../../types/events";
 
 interface Version {
   id: string;
@@ -65,7 +65,6 @@ export function LaunchButton({
     if (!selectedVersion) return;
 
     let unlistenStart: (() => void) | undefined;
-    let unlistenExit: (() => void) | undefined;
     let unlistenDetailedStateEvent: (() => void) | undefined;
 
     // Listener for game actually starting (e.g., reaching main menu)
@@ -81,16 +80,6 @@ export function LaunchButton({
           setDetailedStatusMessage(null);
         }
       });
-
-      unlistenExit = await listen("minecraft_process_exited", (event: TauriEvent<any>) => {
-        const payload = event.payload as any;
-        if (payload.profile_id === selectedVersion) {
-          console.log("[LaunchButton] Process exited event, resetting UI.");
-          setIsLaunching(false);
-          setDetailedStatusMessage(null);
-          setTransientStatus(null);
-        }
-      });
     };
 
     // Listener for detailed status messages while launching
@@ -100,10 +89,10 @@ export function LaunchButton({
         "state_event",
         (event: TauriEvent<FrontendEventPayload>) => {
           if (event.payload.target_id === selectedVersion) {
-            const eventTypeFromPayload = event.payload.event_type;
+            const eventTypeFromPayload = event.payload.event_type; 
             const eventMessage = event.payload.message;
 
-            if (eventTypeFromPayload === FrontendEventType.LaunchSuccessful) {
+            if (eventTypeFromPayload === FrontendEventType.LaunchSuccessful) { 
               console.log(`[LaunchButton] LaunchSuccessful event for ${selectedVersion}`);
               setIsLaunching(false);
               setDetailedStatusMessage(null);
@@ -124,6 +113,7 @@ export function LaunchButton({
               setIsLaunching(false); 
               setTransientStatus(null); 
             } else {
+              // Handle other detailed messages (progress, steps, etc.) for the selectedVersion
               if (eventMessage) {
                 setDetailedStatusMessage(eventMessage);
               }
@@ -145,7 +135,6 @@ export function LaunchButton({
 
     return () => {
       if (unlistenStart) unlistenStart();
-      if (unlistenExit) unlistenExit();
       if (unlistenDetailedStateEvent) unlistenDetailedStateEvent();
     };
   }, [selectedVersion, isLaunching]); // isLaunching dependency manages detailed listener

@@ -9,9 +9,19 @@ import { NewsSection } from "./components/news/NewsSection";
 import { ProfilesTab } from "./components/tabs/ProfilesTab.tsx";
 import ModrinthTab from "./components/tabs/ModrinthTab.tsx";
 import { GlobalToaster } from "./components/ui/GlobalToaster";
+import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
+import { toast } from 'react-hot-toast';
+import {
+  EventType as FrontendEventType,
+  EventPayload as FrontendEventPayload,
+  MinecraftProcessExitedPayload
+} from "./types/events";
+import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
+import { useCrashModalStore } from "./store/crash-modal-store";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
+  const { openCrashModal } = useCrashModalStore();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -46,6 +56,30 @@ export function App() {
     }
   }, []);
 
+  // Global listener for Minecraft crash events
+  useEffect(() => {
+    const unlisten = listen<FrontendEventPayload>("state_event", (event: TauriEvent<FrontendEventPayload>) => {
+      if (event.payload.event_type === FrontendEventType.MinecraftProcessExited) {
+        try {
+          const exitPayload: MinecraftProcessExitedPayload = JSON.parse(event.payload.message);
+          console.log("[App.tsx] Global MinecraftProcessExited event:", exitPayload);
+          if (!exitPayload.success) {
+            const crashMsg = `Minecraft crashed (Exit Code: ${exitPayload.exit_code ?? 'N/A'}). See crash report for details.`;
+            toast.error(crashMsg, { duration: 10000 }); 
+            openCrashModal(exitPayload); 
+          }
+        } catch (e) {
+          console.error("[App.tsx] Failed to parse MinecraftProcessExitedPayload:", e);
+          toast.error("Could not globally process Minecraft process status.");
+        }
+      }
+    });
+
+    return () => {
+      unlisten.then(f => f());
+    };
+  }, [openCrashModal]);
+
   const handleNavChange = (tabId: string) => {
     setActiveTab(tabId);
   };
@@ -76,6 +110,7 @@ export function App() {
       <ThemeInitializer />
       <ScrollbarProvider />
       <GlobalToaster />
+      <GlobalCrashReportModal />
       <AppLayout activeTab={activeTab} onNavChange={handleNavChange}>
         {renderTabContent()}
       </AppLayout>
