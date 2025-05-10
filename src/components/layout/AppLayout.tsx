@@ -299,7 +299,7 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
           data-tauri-drag-region
         >
           <span className="text-white">noriskclient</span>
-          <span className="text-white/70 text-sm font-normal ml-2">
+          <span className="text-white/70 font-minecraft-ten text-[8px] font-normal ml-2">
             {appVersion || "v?.?.?"}
           </span>
         </h1>
