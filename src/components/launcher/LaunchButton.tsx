@@ -3,6 +3,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
+import { invoke } from "@tauri-apps/api/core";
 import { cn } from "../../lib/utils";
 import { useLaunchStateStore, LaunchState } from "../../store/launch-state-store";
 import { Button } from "../ui/buttons/Button";
@@ -38,9 +39,9 @@ export function LaunchButton({
   maxWidth = "300px",
 }: LaunchButtonProps) {
   const [isLaunching, setIsLaunching] = useState(false);
-  const eventListenersSetUp = useRef(false);
   const { accentColor } = useThemeStore();
   const [detailedStatusMessage, setDetailedStatusMessage] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for the polling interval
 
   const { selectedVersion, setSelectedVersion, openModal } =
     useVersionSelectionStore();
@@ -56,24 +57,24 @@ export function LaunchButton({
     }
   }, [defaultVersion, selectedVersion, setSelectedVersion]);
 
+  // Effect for managing event listeners (game start/exit, detailed status)
   useEffect(() => {
-    if (eventListenersSetUp.current && !selectedVersion) return;
+    if (!selectedVersion) return;
 
     let unlistenStart: (() => void) | undefined;
     let unlistenExit: (() => void) | undefined;
-    let unlistenError: (() => void) | undefined;
     let unlistenDetailedStateEvent: (() => void) | undefined;
 
-    const setupBaseListeners = async () => {
-      if (!selectedVersion) return;
+    // Listener for game actually starting (e.g., reaching main menu)
+    const setupGameLifecycleListeners = async () => {
       unlistenStart = await listen("event", (event: TauriEvent<any>) => {
         const payload = event.payload as any;
         if (
           payload.target_id === selectedVersion &&
           payload.event_type?.toLowerCase() === "minecraft_output"
         ) {
-          console.log("[LaunchButton] Game started event, resetting UI");
-          setIsLaunching(false);
+          console.log("[LaunchButton] Game started (minecraft_output) event, resetting UI if still launching.");
+          if(isLaunching) setIsLaunching(false); // Reset if this event definitively means launcher is done
           setDetailedStatusMessage(null);
         }
       });
@@ -81,94 +82,102 @@ export function LaunchButton({
       unlistenExit = await listen("minecraft_process_exited", (event: TauriEvent<any>) => {
         const payload = event.payload as any;
         if (payload.profile_id === selectedVersion) {
-          console.log("[LaunchButton] Process exited event, resetting UI");
-          setIsLaunching(false);
-          setDetailedStatusMessage(null);
-        }
-      });
-      
-      unlistenError = await listen("launch_error_event", (event: TauriEvent<any>) => {
-        const payload = event.payload as any;
-        if (payload.profile_id === selectedVersion) {
-          console.log("[LaunchButton] Launch error event received, resetting UI");
+          console.log("[LaunchButton] Process exited event, resetting UI.");
           setIsLaunching(false);
           setDetailedStatusMessage(null);
         }
       });
     };
 
+    // Listener for detailed status messages while launching
     const setupDetailedListener = async () => {
-      if (!selectedVersion) return;
-      console.log(`[LaunchButton] Setting up detailed listener for ${selectedVersion}`);
+      console.log(`[LaunchButton] Setting up detailed status listener for ${selectedVersion}`);
       unlistenDetailedStateEvent = await listen<any>(
-        "state_event", 
+        "state_event",
         (event: TauriEvent<any>) => {
           if (event.payload && event.payload.target_id === selectedVersion) {
             if (event.payload.message) {
-              console.log(`[LaunchButton] Detailed state_event for ${selectedVersion}: ${event.payload.message}`);
               setDetailedStatusMessage(event.payload.message);
             }
             if (event.payload.event_type?.toLowerCase() === "error") {
-              console.log(`[LaunchButton] Error event received for ${selectedVersion}, resetting UI.`);
-              setIsLaunching(false);
+              console.log(`[LaunchButton] Error event via state_event for ${selectedVersion}, resetting UI.`);
+              setIsLaunching(false); 
             }
           }
         }
       );
     };
-
-    if (isLaunching && selectedVersion) {
+    
+    setupGameLifecycleListeners();
+    if (isLaunching) {
       setupDetailedListener();
-      if (!detailedStatusMessage) setDetailedStatusMessage("Initializing launch...");
+      // Initial message, will be overwritten by detailed events
+      if (!detailedStatusMessage) setDetailedStatusMessage("Initializing launch..."); 
     } else {
       setDetailedStatusMessage(null);
-      if (unlistenDetailedStateEvent) {
-        unlistenDetailedStateEvent();
-        unlistenDetailedStateEvent = undefined;
-      }
+      if (unlistenDetailedStateEvent) unlistenDetailedStateEvent(); // Clean up if not launching
     }
-    
-    if (!eventListenersSetUp.current && selectedVersion) {
-      setupBaseListeners();
-      eventListenersSetUp.current = true;
-    }
-
-    const intervalId = setInterval(() => {
-      if (selectedVersion) {
-        ProcessService.isMinecraftRunning(selectedVersion)
-          .then((isRunning) => {
-            if (!isRunning && isLaunching) {
-              console.log("[LaunchButton] Minecraft not running (polled), resetting UI");
-              setIsLaunching(false);
-            } else if (isRunning && !isLaunching){
-            }
-          })
-          .catch(() => {});
-      }
-    }, 3000);
 
     return () => {
       if (unlistenStart) unlistenStart();
       if (unlistenExit) unlistenExit();
-      if (unlistenError) unlistenError();
       if (unlistenDetailedStateEvent) unlistenDetailedStateEvent();
-      clearInterval(intervalId);
     };
+  }, [selectedVersion, isLaunching]); // isLaunching dependency manages detailed listener
+
+  // Effect for Polling 'is_profile_launching' status (Svelte-like approach)
+  useEffect(() => {
+    const clearPolling = () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+        console.log("[LaunchButton] Polling stopped for", selectedVersion);
+      }
+    };
+
+    if (isLaunching && selectedVersion) {
+      console.log("[LaunchButton] Starting polling for launcher task finished for", selectedVersion);
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          // This should behave like Svelte's `is_profile_launching`
+          const isStillLaunching = await invoke<boolean>('is_profile_launching', { profileId: selectedVersion });
+          const launcherTaskFinished = !isStillLaunching;
+          
+          if (launcherTaskFinished) {
+            console.log("[LaunchButton] Polling determined launcher task finished for", selectedVersion, ". Resetting UI.");
+            setIsLaunching(false);
+            clearPolling(); // Stop polling once task is finished
+          }
+        } catch (err) {
+          console.error("[LaunchButton] Error during polling isMinecraftRunning:", err);
+          setIsLaunching(false); // Reset on error to be safe
+          clearPolling();
+        }
+      }, 1500); // Poll every 1.5 seconds
+    } else {
+      clearPolling(); // Stop polling if not launching or no version selected
+    }
+
+    return clearPolling; // Cleanup on unmount or when dependencies change
   }, [selectedVersion, isLaunching]);
 
+  // Effect for initializing profile state (less frequent updates)
   useEffect(() => {
     if (selectedVersion) {
       initializeProfile(selectedVersion);
+      // Check initial running state (could be simplified or integrated with polling start)
       ProcessService.isMinecraftRunning(selectedVersion)
         .then((isRunning) => {
           if (isRunning && !isLaunching) {
-            console.log("[LaunchButton] Game already running on init, setting UI to launching (stop mode)");
+            // Potentially set isLaunching to true if MC is already running and we want STOP button
+            // console.log("[LaunchButton] Game already running on init, setting UI to STOP mode");
+            // setIsLaunching(true); 
           } else if (!isRunning && isLaunching) {
-            setIsLaunching(false);
+             // This case is now handled by the new polling logic if isLaunching was true
           }
         })
         .catch(() => {
-          setIsLaunching(false);
+          if(isLaunching) setIsLaunching(false); // If check fails while launching, assume not running
         });
     }
   }, [selectedVersion, initializeProfile]);
@@ -179,11 +188,11 @@ export function LaunchButton({
     if (isLaunching) {
       try {
         await ProcessService.abort(selectedVersion);
-        processMonitor.stopMonitoring();
+        // processMonitor.stopMonitoring(); // This might be handled by abort or not needed here
       } catch (err) {
         console.error("Failed to abort launch:", err);
       } finally {
-        setIsLaunching(false);
+        setIsLaunching(false); 
         setDetailedStatusMessage(null);
       }
       return;
@@ -193,6 +202,7 @@ export function LaunchButton({
     setDetailedStatusMessage("Starting launch process...");
     try {
       await ProcessService.launch(selectedVersion);
+      // Polling will take over to determine when to set isLaunching back to false
     } catch (err: any) {
       console.error("Failed to launch profile:", err);
       setIsLaunching(false);
@@ -201,7 +211,7 @@ export function LaunchButton({
   };
 
   const handleVersionChange = (version: string) => {
-    if (isLaunching) return;
+    if (isLaunching) return; 
     setDetailedStatusMessage(null);
     if (onVersionChange) {
       onVersionChange(version);
@@ -235,9 +245,9 @@ export function LaunchButton({
   
   const getButtonVariant = () => {
     if (isLaunching) {
-      return "destructive"; 
-    } 
-    if (error && launchState === LaunchState.ERROR) { 
+      return "destructive";
+    }
+    if (error && launchState === LaunchState.ERROR) {
       return "destructive";
     }
     return "default";
