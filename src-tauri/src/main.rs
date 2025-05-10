@@ -123,9 +123,9 @@ async fn main() {
                 // --- State Initialization --- 
                 info!("Initiating state initialization...");
                 // Lade Dummy-Versionen/Packs (Beispielhaft, existierendem Code nachempfunden)
-                let _ = norisk_versions::load_dummy_versions().await;
-                let _ = norisk_packs::load_dummy_modpacks().await;
-                crate::utils::debug_utils::debug_print_news_and_changelogs().await;
+                //let _ = norisk_versions::load_dummy_versions().await;
+                //let _ = norisk_packs::load_dummy_modpacks().await;
+                //crate::utils::debug_utils::debug_print_news_and_changelogs().await;
 
                 if let Err(e) = state::state_manager::State::init(Arc::new(app_handle.clone())).await {
                     error!("CRITICAL: Failed to initialize state: {}. Update check and main window might not proceed correctly.", e);
@@ -192,10 +192,10 @@ async fn main() {
                 }
 
                 // --- Other Async Steps (can run after main window is shown) ---
-                debug_utils::debug_print_all_profile_worlds().await;
-                debug_utils::debug_print_all_profile_servers().await;
-                let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
-                info!("Ping info: {:?}", ping_info);
+                //debug_utils::debug_print_all_profile_worlds().await;
+                //debug_utils::debug_print_all_profile_servers().await;
+                //let ping_info = utils::mc_utils::ping_server_status("gommehd.net").await;
+                //info!("Ping info: {:?}", ping_info);
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 
