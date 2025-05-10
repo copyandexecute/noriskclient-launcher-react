@@ -8,4 +8,5 @@ export interface LauncherConfig {
   concurrent_downloads: number; // usize
   enable_discord_presence: boolean;
   check_beta_channel: boolean; // Added from Rust struct
+  profile_grouping_criterion: string | null; // Option<String>
 } 

@@ -24,8 +24,12 @@ export async function getLauncherConfig(): Promise<LauncherConfig> {
  */
 export async function setLauncherConfig(config: LauncherConfig): Promise<LauncherConfig> {
    try {
+    // The backend command `set_launcher_config` likely expects the payload under a specific key,
+    // often `config` or `newConfig`. Let's ensure it matches the command definition.
+    // Assuming the command expects ` { config: new_config_value } ` based on typical patterns.
+    // If it's just `new_config`, then it would be `invoke("set_launcher_config", new_config)`
     const updatedConfig = await invoke<LauncherConfig>("set_launcher_config", {
-      config: config, // Pass the config object under the 'config' key
+      config: config, // Ensure this matches the argument name in the Rust command handler
     });
     console.log("[LauncherConfigService] Saved config:", updatedConfig);
     return updatedConfig;
@@ -48,5 +52,28 @@ export async function getAppVersion(): Promise<string> {
   } catch (error) {
     console.error("[LauncherConfigService] Failed to get app version:", error);
     throw error;
+  }
+}
+
+/**
+ * Sets the profile grouping preference in the launcher configuration.
+ * Fetches the current config, updates the criterion, and saves it back.
+ * @param criterion The new grouping criterion string (e.g., "none", "loader").
+ * @returns A promise that resolves when the preference is successfully set.
+ * @throws If fetching or setting the config fails.
+ */
+export async function setProfileGroupingPreference(criterion: string): Promise<void> {
+  console.log(`[LauncherConfigService] Setting profile grouping preference to: ${criterion}`);
+  try {
+    const currentConfig = await getLauncherConfig();
+    const newConfig: LauncherConfig = {
+      ...currentConfig,
+      profile_grouping_criterion: criterion === "none" ? null : criterion,
+    };
+    await setLauncherConfig(newConfig);
+    console.log("[LauncherConfigService] Successfully set profile grouping preference.");
+  } catch (error) {
+    console.error("[LauncherConfigService] Failed to set profile grouping preference:", error);
+    throw error; // Re-throw the error to be handled by the caller
   }
 } 

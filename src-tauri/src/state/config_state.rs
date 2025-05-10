@@ -25,6 +25,8 @@ pub struct LauncherConfig {
     pub enable_discord_presence: bool,
     #[serde(default)]
     pub check_beta_channel: bool,
+    #[serde(default = "default_profile_grouping_criterion")]
+    pub profile_grouping_criterion: Option<String>,
 }
 
 fn default_config_version() -> u32 {
@@ -39,6 +41,10 @@ fn default_discord_presence() -> bool {
     true
 }
 
+fn default_profile_grouping_criterion() -> Option<String> {
+    Some("group".to_string()) // Default to "group"
+}
+
 impl Default for LauncherConfig {
     fn default() -> Self {
         Self {
@@ -48,6 +54,7 @@ impl Default for LauncherConfig {
             concurrent_downloads: default_concurrent_downloads(),
             enable_discord_presence: default_discord_presence(),
             check_beta_channel: true,
+            profile_grouping_criterion: default_profile_grouping_criterion(),
         }
     }
 }
@@ -154,6 +161,7 @@ impl ConfigManager {
                 && current.concurrent_downloads == new_config.concurrent_downloads
                 && current.enable_discord_presence == new_config.enable_discord_presence
                 && current.check_beta_channel == new_config.check_beta_channel
+                && current.profile_grouping_criterion == new_config.profile_grouping_criterion
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -192,6 +200,12 @@ impl ConfigManager {
                         current.check_beta_channel, new_config.check_beta_channel
                     );
                 }
+                if current.profile_grouping_criterion != new_config.profile_grouping_criterion {
+                    info!(
+                        "Changing profile grouping criterion: {:?} -> {:?}",
+                        current.profile_grouping_criterion, new_config.profile_grouping_criterion
+                    );
+                }
 
                 // Update config while preserving version
                 *config = LauncherConfig {
@@ -201,6 +215,7 @@ impl ConfigManager {
                     concurrent_downloads: new_config.concurrent_downloads,
                     enable_discord_presence: new_config.enable_discord_presence,
                     check_beta_channel: new_config.check_beta_channel,
+                    profile_grouping_criterion: new_config.profile_grouping_criterion.clone(),
                 };
 
                 true
