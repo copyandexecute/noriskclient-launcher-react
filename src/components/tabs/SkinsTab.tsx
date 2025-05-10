@@ -13,7 +13,7 @@ import type {
 } from "../../types/localSkin"; // Assuming types are here, use relative path
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store"; // Use relative path
 import { MinecraftSkinService } from "../../services/minecraft-skin-service"; // Import the new service
-import { Button } from "../ui/Button"; // Assuming Button component exists
+import { Button } from "../ui/buttons/Button"; // Assuming Button component exists
 import { Icon } from "@iconify/react"; // For icons in buttons
 import { StatusMessage } from "../ui/StatusMessage"; // Assuming StatusMessage component exists for errors/success
 

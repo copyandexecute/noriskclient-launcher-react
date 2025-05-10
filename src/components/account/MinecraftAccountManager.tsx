@@ -10,6 +10,7 @@ import { DropdownHeader } from "../ui/dropdown/DropdownHeader";
 import { DropdownFooter } from "../ui/dropdown/DropdownFooter";
 import { DropdownDivider } from "../ui/dropdown/DropdownDivider";
 import { Label } from "../ui/Label";
+import { StatusMessage } from "../ui/StatusMessage";
 
 interface MinecraftAccountManagerProps {
   onClose: () => void;
