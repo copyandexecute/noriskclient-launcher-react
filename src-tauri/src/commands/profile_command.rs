@@ -31,6 +31,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
 use uuid::Uuid;
+use crate::state::event_state::{EventPayload, EventType};
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -253,12 +254,52 @@ pub async fn launch_profile(
             state.process_manager.remove_launching_process(profile_id);
 
             match install_result {
-                Ok(_) => info!(
-                    "Successfully installed/launched Minecraft version {}",
-                    version
-                ),
-                Err(e) => info!("Error installing/launching Minecraft: {}", e),
+                Ok(_) => {
+                    info!(
+                        "Successfully installed/launched Minecraft version {} for profile {}",
+                        version, profile_id
+                    );
+                    // Optionally: If you want a specific success event to be emitted from here
+                    // state.emit_event(EventPayload {
+                    //     event_id: uuid::Uuid::new_v4(),
+                    //     event_type: EventType::LaunchingMinecraft, // Or a new "LaunchSuccessful" type
+                    //     target_id: Some(profile_id),
+                    //     message: format!("Profile {} launched successfully.", profile_id),
+                    //     progress: Some(1.0),
+                    //     error: None,
+                    // }).await.unwrap_or_else(|e| error!("Failed to emit launch success event: {}", e));
+                }
+                Err(e) => {
+                    let error_message = e.to_string();
+                    info!(
+                        "Error installing/launching Minecraft for profile {}: {}",
+                        profile_id, error_message
+                    );
+                    
+                    // Emit an error event to the frontend
+                    let event_payload = EventPayload {
+                        event_id: uuid::Uuid::new_v4(), // A new UUID for this specific error event
+                        event_type: EventType::Error,   // Use the existing Error type
+                        target_id: Some(profile_id),
+                        message: error_message.clone(), // The error message for the 'message' field
+                        progress: None,                 // Progress is not relevant for a final error
+                        error: Some(error_message),     // The error message for the 'error' field
+                    };
+
+                    if let Err(emit_err) = state.emit_event(event_payload).await {
+                        error!(
+                            "Failed to emit error event to frontend for profile {}: {}",
+                            profile_id, emit_err
+                        );
+                    }
+                }
             }
+        } else {
+            error!(
+                "Failed to get state within spawned task for profile_id: {}. Install error (if any): {:?}", 
+                profile_id, 
+                install_result.err().map(|e| e.to_string())
+            );
         }
     });
 

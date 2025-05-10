@@ -14,6 +14,7 @@ import { processMonitor } from "../../services/process-monitor";
 import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useVersionSelectionStore } from "../../store/version-selection-store";
+import { toast } from 'react-hot-toast';
 
 interface Version {
   id: string;
@@ -47,7 +48,7 @@ export function LaunchButton({
   const { selectedVersion, setSelectedVersion, openModal } =
     useVersionSelectionStore();
 
-  const { initializeProfile, getProfileState } = useLaunchStateStore();
+  const { initializeProfile, getProfileState, setLaunchError, resetLaunchState } = useLaunchStateStore();
 
   const profileState = getProfileState(selectedVersion);
   const { launchProgress, currentStep, error, logHistory, launchState } = profileState;
@@ -103,8 +104,13 @@ export function LaunchButton({
             }
             if (event.payload.event_type?.toLowerCase() === "error") {
               console.log(`[LaunchButton] Error event via state_event for ${selectedVersion}, resetting UI.`);
+              const eventErrorMsg = event.payload.message || "Fehler während des Startvorgangs.";
+              toast.error(`Fehler: ${eventErrorMsg}`);
+              if (selectedVersion) {
+                setLaunchError(selectedVersion, eventErrorMsg);
+              }
               setIsLaunching(false); 
-              setTransientStatus(null);
+              setTransientStatus(null); 
             }
           }
         }
@@ -146,17 +152,31 @@ export function LaunchButton({
           const launcherTaskFinished = !isStillLaunching;
           
           if (launcherTaskFinished) {
-            console.log("[LaunchButton] Polling determined launcher task finished for", selectedVersion, ". Resetting UI and showing success.");
+            console.log("[LaunchButton] Polling determined launcher task finished for", selectedVersion, ". Resetting UI.");
             setIsLaunching(false);
-            setDetailedStatusMessage(null);
-            setTransientStatus({ message: "ERFOLGREICH GESTARTET!", color: "text-green-400" });
-            clearPolling(); 
-            setTimeout(() => setTransientStatus(null), 3000);
+            clearPolling();
+
+            // Re-fetch current profile state to check for errors before showing success
+            const currentProfileState = getProfileState(selectedVersion);
+            if (currentProfileState.launchState === LaunchState.ERROR || currentProfileState.error) {
+              console.log("[LaunchButton] Launch task finished, but an error was detected. Suppressing success message.");
+              const errorMsg = currentProfileState.error || "Ein Fehler ist aufgetreten.";
+              setDetailedStatusMessage(errorMsg); 
+              // toast.error already shown by state_event listener or handleLaunch catch block usually
+              setTransientStatus(null);
+            } else {
+              console.log("[LaunchButton] Launch task finished successfully. Showing success message.");
+              setDetailedStatusMessage(null); 
+              setTransientStatus({ message: "ERFOLGREICH GESTARTET!", color: "text-green-400" });
+              setTimeout(() => setTransientStatus(null), 3000); 
+            }
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error("[LaunchButton] Error during polling is_profile_launching:", err);
+          const pollErrorMsg = err.message || err.toString() || "Fehler beim Prüfen des Profilstatus.";
+          toast.error(`Polling-Fehler: ${pollErrorMsg}`);
           setIsLaunching(false); 
-          setDetailedStatusMessage("Fehler beim Prüfen des Startstatus.");
+          setDetailedStatusMessage(pollErrorMsg);
           setTransientStatus(null);
           clearPolling();
         }
@@ -195,26 +215,37 @@ export function LaunchButton({
     if (isLaunching) {
       try {
         await ProcessService.abort(selectedVersion);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to abort launch:", err);
+        const abortErrorMsg = typeof err === 'string' ? err : (err.message || err.toString() || "Fehler beim Abbrechen.");
+        toast.error(`Abbruch fehlgeschlagen: ${abortErrorMsg}`);
       } finally {
         setIsLaunching(false); 
         setDetailedStatusMessage(null);
-        setTransientStatus(null);
+        setTransientStatus(null); 
       }
       return;
     }
 
     setIsLaunching(true);
-    setDetailedStatusMessage("Starte Profil...");
+    setDetailedStatusMessage("Starte Profil..."); 
+    setTransientStatus(null); 
+    if (selectedVersion) {
+      resetLaunchState(selectedVersion);
+    }
 
     try {
       await ProcessService.launch(selectedVersion);
     } catch (err: any) {
       console.error("Failed to launch profile:", err);
+      const launchErrorMsg = typeof err === 'string' ? err : (err.message || err.toString() || "Unbekannter Fehler beim Start.");
+      toast.error(`Start fehlgeschlagen: ${launchErrorMsg}`);
+      if (selectedVersion) {
+        setLaunchError(selectedVersion, launchErrorMsg);
+      }
       setIsLaunching(false);
-      setDetailedStatusMessage("Fehler beim Start."); 
-      setTransientStatus(null);
+      setDetailedStatusMessage(launchErrorMsg); 
+      setTransientStatus(null); 
     }
   };
 
@@ -235,9 +266,7 @@ export function LaunchButton({
   const getMainButtonIcon = () => {
     if (isLaunching) {
       return <Icon icon="solar:stop-bold" width="24" height="24" />;
-    } else if (error && launchState === LaunchState.ERROR) {
-      return <Icon icon="solar:danger-triangle-bold" width="24" height="24" />;
-    }
+    } 
     return <Icon icon="solar:play-bold" width="24" height="24" />;
   };
 
@@ -245,17 +274,11 @@ export function LaunchButton({
     if (isLaunching) {
       return "STOP";
     }
-    if (error && launchState === LaunchState.ERROR) {
-      return "ERROR";
-    }
     return "LAUNCH";
   };
   
   const getButtonVariant = () => {
     if (isLaunching) {
-      return "destructive";
-    }
-    if (error && launchState === LaunchState.ERROR) {
       return "destructive";
     }
     return "default";
@@ -266,12 +289,6 @@ export function LaunchButton({
       className={cn("relative flex flex-col justify-center", className)}
       style={{ maxWidth }}
     >
-      {error && !isLaunching && launchState === LaunchState.ERROR && (
-        <div className="absolute -top-12 left-0 right-0 bg-red-500/80 text-white p-2 rounded text-center">
-          {error}
-        </div>
-      )}
-
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2 relative">
           <Button

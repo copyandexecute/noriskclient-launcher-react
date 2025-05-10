@@ -86,6 +86,10 @@ pub async fn install_minecraft_version(
         launcher_config.concurrent_downloads
     );
 
+    // <--- HARDCODED TEST ERROR --- >
+    return Err(AppError::Unknown("Testfehler für das Error-Handling!".to_string()));
+    // <--- END HARDCODED TEST ERROR --- >
+
     if let Some(world) = &quick_play_singleplayer {
         info!(
             "[Launch] Quick Play: Launching directly into singleplayer world: {}",
