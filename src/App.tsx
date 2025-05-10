@@ -63,10 +63,15 @@ export function App() {
         try {
           const exitPayload: MinecraftProcessExitedPayload = JSON.parse(event.payload.message);
           console.log("[App.tsx] Global MinecraftProcessExited event:", exitPayload);
-          if (!exitPayload.success) {
-            const crashMsg = `Minecraft crashed (Exit Code: ${exitPayload.exit_code ?? 'N/A'}). See crash report for details.`;
+          // Only show crash report if not successful AND exit code is not 1
+          if (!exitPayload.success && exitPayload.exit_code !== 1) {
+            const crashMsg = `Minecraft exited unexpectedly (Code: ${exitPayload.exit_code ?? 'N/A'}). See report for details.`;
             toast.error(crashMsg, { duration: 10000 }); 
             openCrashModal(exitPayload); 
+          } else if (!exitPayload.success && exitPayload.exit_code === 1) {
+            console.log(`[App.tsx] Minecraft process exited with code 1 (profile: ${exitPayload.profile_id}). Considered a normal close, no crash modal.`);
+            // Optionally, you could show a more neutral toast here if desired, e.g.:
+            // toast.info(`Minecraft (Profile: ${exitPayload.profile_id_or_name}) closed.`, { duration: 3000 });
           }
         } catch (e) {
           console.error("[App.tsx] Failed to parse MinecraftProcessExitedPayload:", e);
