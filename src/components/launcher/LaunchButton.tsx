@@ -41,7 +41,8 @@ export function LaunchButton({
   const [isLaunching, setIsLaunching] = useState(false);
   const { accentColor } = useThemeStore();
   const [detailedStatusMessage, setDetailedStatusMessage] = useState<string | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for the polling interval
+  const [transientStatus, setTransientStatus] = useState<{ message: string, color: string } | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { selectedVersion, setSelectedVersion, openModal } =
     useVersionSelectionStore();
@@ -74,7 +75,7 @@ export function LaunchButton({
           payload.event_type?.toLowerCase() === "minecraft_output"
         ) {
           console.log("[LaunchButton] Game started (minecraft_output) event, resetting UI if still launching.");
-          if(isLaunching) setIsLaunching(false); // Reset if this event definitively means launcher is done
+          if(isLaunching) setIsLaunching(false);
           setDetailedStatusMessage(null);
         }
       });
@@ -85,6 +86,7 @@ export function LaunchButton({
           console.log("[LaunchButton] Process exited event, resetting UI.");
           setIsLaunching(false);
           setDetailedStatusMessage(null);
+          setTransientStatus(null);
         }
       });
     };
@@ -102,6 +104,7 @@ export function LaunchButton({
             if (event.payload.event_type?.toLowerCase() === "error") {
               console.log(`[LaunchButton] Error event via state_event for ${selectedVersion}, resetting UI.`);
               setIsLaunching(false); 
+              setTransientStatus(null);
             }
           }
         }
@@ -139,21 +142,25 @@ export function LaunchButton({
       console.log("[LaunchButton] Starting polling for launcher task finished for", selectedVersion);
       pollingIntervalRef.current = setInterval(async () => {
         try {
-          // This should behave like Svelte's `is_profile_launching`
           const isStillLaunching = await invoke<boolean>('is_profile_launching', { profileId: selectedVersion });
           const launcherTaskFinished = !isStillLaunching;
           
           if (launcherTaskFinished) {
-            console.log("[LaunchButton] Polling determined launcher task finished for", selectedVersion, ". Resetting UI.");
+            console.log("[LaunchButton] Polling determined launcher task finished for", selectedVersion, ". Resetting UI and showing success.");
             setIsLaunching(false);
-            clearPolling(); // Stop polling once task is finished
+            setDetailedStatusMessage(null);
+            setTransientStatus({ message: "ERFOLGREICH GESTARTET!", color: "text-green-400" });
+            clearPolling(); 
+            setTimeout(() => setTransientStatus(null), 3000);
           }
         } catch (err) {
-          console.error("[LaunchButton] Error during polling isMinecraftRunning:", err);
-          setIsLaunching(false); // Reset on error to be safe
+          console.error("[LaunchButton] Error during polling is_profile_launching:", err);
+          setIsLaunching(false); 
+          setDetailedStatusMessage("Fehler beim Prüfen des Startstatus.");
+          setTransientStatus(null);
           clearPolling();
         }
-      }, 1500); // Poll every 1.5 seconds
+      }, 1500);
     } else {
       clearPolling(); // Stop polling if not launching or no version selected
     }
@@ -188,25 +195,26 @@ export function LaunchButton({
     if (isLaunching) {
       try {
         await ProcessService.abort(selectedVersion);
-        // processMonitor.stopMonitoring(); // This might be handled by abort or not needed here
       } catch (err) {
         console.error("Failed to abort launch:", err);
       } finally {
         setIsLaunching(false); 
         setDetailedStatusMessage(null);
+        setTransientStatus(null);
       }
       return;
     }
 
     setIsLaunching(true);
-    setDetailedStatusMessage("Starting launch process...");
+    setDetailedStatusMessage("Starte Profil...");
+
     try {
       await ProcessService.launch(selectedVersion);
-      // Polling will take over to determine when to set isLaunching back to false
     } catch (err: any) {
       console.error("Failed to launch profile:", err);
       setIsLaunching(false);
-      setDetailedStatusMessage(null);
+      setDetailedStatusMessage("Fehler beim Start."); 
+      setTransientStatus(null);
     }
   };
 
@@ -296,15 +304,26 @@ export function LaunchButton({
           ></IconButton>
         </div>
         
-        {isLaunching && (
+        {(isLaunching || transientStatus) && (
           <div 
             className="absolute top-full left-0 right-0 mt-2 flex justify-center"
           >
             <p 
-              className="text-2xl text-gray-300 font-minecraft lowercase whitespace-nowrap"
-              title={detailedStatusMessage || currentStep || ""} 
+              className={cn(
+                "text-2xl font-minecraft lowercase whitespace-nowrap",
+                transientStatus ? transientStatus.color : "text-gray-300" 
+              )}
+              title={
+                transientStatus?.message ||
+                detailedStatusMessage ||
+                currentStep ||
+                (isLaunching ? "Wird gestartet..." : "")
+              } 
             >
-              {detailedStatusMessage || currentStep || "Launching..."}
+              {transientStatus?.message ||
+                detailedStatusMessage ||
+                currentStep ||
+                (isLaunching ? "Wird gestartet..." : "")}
             </p>
           </div>
         )}
