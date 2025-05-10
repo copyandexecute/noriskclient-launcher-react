@@ -18,6 +18,7 @@ import { ProfileSettings } from "../profiles/ProfileSettings.tsx";
 import { ProfileWizard } from "../profiles/ProfileWizard.tsx";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/buttons/Button";
+import { toast } from "react-hot-toast";
 
 // Define grouping options
 const groupingOptions = [
@@ -132,10 +133,36 @@ export function ProfilesTab() {
     }, {} as Record<string, Profile[]>);
   })();
 
+  // Helper function to compare Minecraft versions (newest first)
+  const compareMinecraftVersions = (v1: string, v2: string): number => {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+    const len = Math.max(parts1.length, parts2.length);
+
+    for (let i = 0; i < len; i++) {
+      const p1 = parts1[i] || 0;
+      const p2 = parts2[i] || 0;
+      if (p1 > p2) return -1; // v1 is newer
+      if (p1 < p2) return 1;  // v2 is newer
+    }
+    return 0;
+  };
+
   const sortedGroupKeys = Object.keys(groupedProfiles).sort((a, b) => {
     const specialKeys = ['All Profiles', 'Unknown', 'Vanilla', 'Unknown Version', 'No Group'];
-    if (specialKeys.includes(a)) return 1;
-    if (specialKeys.includes(b)) return -1;
+    const isASpecial = specialKeys.includes(a);
+    const isBSpecial = specialKeys.includes(b);
+
+    if (isASpecial && !isBSpecial) return 1;  // a is special, b is not -> a comes after b
+    if (!isASpecial && isBSpecial) return -1; // b is special, a is not -> b comes after a
+    if (isASpecial && isBSpecial) return a.localeCompare(b); // both special, sort alphabetically (or however you prefer)
+    
+    // If grouping by game version, use custom sort
+    if (groupingCriterion === 'game_version') {
+      return compareMinecraftVersions(a, b);
+    }
+    
+    // Default alphabetical sort for other criteria
     return a.localeCompare(b);
   });
 
@@ -159,6 +186,22 @@ export function ProfilesTab() {
   const handleImportComplete = () => {
     fetchProfiles();
     setShowImport(false);
+  };
+
+  const handleDeleteProfile = async (profileId: string, profileName: string) => {
+    const deletePromise = useProfileStore.getState().deleteProfile(profileId);
+
+    toast.promise(
+      deletePromise,
+      {
+        loading: `Deleting profile '${profileName}'...`,
+        success: () => {
+          fetchProfiles(); // Refresh profiles list on success
+          return `Profile '${profileName}' deleted successfully!`;
+        },
+        error: (err) => `Failed to delete profile: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    );
   };
 
   return (
@@ -253,6 +296,8 @@ export function ProfilesTab() {
                           profile={profile}
                           onEdit={() => handleEditProfile(profile)}
                           onClick={() => handleViewProfile(profile)}
+                          onProfileCloned={fetchProfiles}
+                          onDelete={handleDeleteProfile}
                         />
                       ))}
                     </div>

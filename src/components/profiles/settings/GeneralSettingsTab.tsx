@@ -15,6 +15,7 @@ interface GeneralSettingsTabProps {
   editedProfile: Profile;
   updateProfile: (updates: Partial<Profile>) => void;
   onDelete: () => void;
+  isDeleting?: boolean;
 }
 
 interface NoriskPack {
@@ -28,6 +29,7 @@ export function GeneralSettingsTab({
   editedProfile,
   updateProfile,
   onDelete,
+  isDeleting,
 }: GeneralSettingsTabProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [noriskPacks, setNoriskPacks] = useState<Record<string, NoriskPack>>(
@@ -213,16 +215,28 @@ export function GeneralSettingsTab({
             <Button
               onClick={handleDelete}
               variant="destructive"
+              disabled={isDeleting || loading}
               icon={
-                <Icon
-                  icon="solar:trash-bin-trash-bold"
-                  className="w-5 h-5 text-white"
-                />
+                isDeleting ? (
+                  <Icon
+                    icon="solar:refresh-bold"
+                    className="w-5 h-5 animate-spin text-white"
+                  />
+                ) : (
+                  <Icon
+                    icon="solar:trash-bin-trash-bold"
+                    className="w-5 h-5 text-white"
+                  />
+                )
               }
               size="md"
               className="text-2xl"
             >
-              {confirmDelete ? "confirm delete" : "delete instance"}
+              {isDeleting
+                ? "deleting..."
+                : confirmDelete
+                  ? "confirm delete"
+                  : "delete instance"}
             </Button>
           </div>
         </div>

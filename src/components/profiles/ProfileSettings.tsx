@@ -16,6 +16,7 @@ import { StatusMessage } from "../ui/StatusMessage";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Input } from "../ui/Input";
 import { Checkbox } from "../ui/Checkbox";
+import { toast } from "react-hot-toast";
 
 interface ProfileSettingsProps {
   profile: Profile;
@@ -31,6 +32,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [exportFilename, setExportFilename] = useState(profile.name);
   const [exportIncludeFiles, setExportIncludeFiles] = useState(true);
   const [exportOpenFolder, setExportOpenFolder] = useState(true);
@@ -100,17 +102,36 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
 
   const handleDelete = async () => {
     try {
-      setIsSaving(true);
+      setIsDeleting(true);
       setError(null);
       setSuccessMessage(null);
 
-      await deleteProfile(profile.id);
-      onClose();
+      const deletePromise = deleteProfile(profile.id);
+
+      toast.promise(
+        deletePromise,
+        {
+          loading: `Deleting profile '${profile.name}'...`,
+          success: () => {
+            onClose();
+            return `Profile '${profile.name}' deleted successfully!`;
+          },
+          error: (err) => {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            setError(`Failed to delete profile: ${errorMessage}`);
+            return `Failed to delete profile: ${errorMessage}`;
+          },
+        }
+      );
     } catch (err) {
-      console.error("Failed to delete profile:", err);
-      setError("Failed to delete profile. Please try again.");
+      console.error("Error during delete initiation:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`Failed to initiate profile deletion: ${errorMessage}`);
+      toast.error(`Failed to initiate profile deletion: ${errorMessage}`);
     } finally {
-      setIsSaving(false);
+      if (toast.error) {
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -304,6 +325,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             editedProfile={editedProfile}
             updateProfile={updateProfileData}
             onDelete={handleDelete}
+            isDeleting={isDeleting}
           />
         );
       case "installation":

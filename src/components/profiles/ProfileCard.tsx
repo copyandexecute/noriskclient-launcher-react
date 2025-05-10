@@ -19,14 +19,19 @@ import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { Label } from "../ui/Label";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
+import { toast } from "react-hot-toast";
+import { ProfileContextMenu } from "./ProfileContextMenu";
+import * as ProfileService from "../../services/profile-service";
 
 interface ProfileCardProps {
   profile: Profile;
   onEdit: () => void;
   onClick: () => void;
+  onProfileCloned: () => void;
+  onDelete: (profileId: string, profileName: string) => void;
 }
 
-export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
+export function ProfileCard({ profile, onEdit, onClick, onProfileCloned, onDelete }: ProfileCardProps) {
   const { initializeProfile, getProfileState, resetLaunchState } =
     useLaunchStateStore();
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -38,6 +43,9 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
   const eventListenersSetUp = useRef(false);
   const { confirm, confirmDialog } = useConfirmDialog();
   const cardRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     initializeProfile(profile.id);
@@ -247,15 +255,113 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
 
       if (newName && typeof newName === "string") {
         setIsCloning(true);
-        await useProfileStore.getState().copyProfile(profile.id, newName);
+        
+        const clonePromise = useProfileStore.getState().copyProfile(profile.id, newName, null);
+
+        toast.promise(
+          clonePromise,
+          {
+            loading: `Cloning profile '${profile.name}'...`,
+            success: () => {
+              onProfileCloned();
+              return `Profile '${newName}' cloned successfully!`;
+            },
+            error: (err) => `Failed to clone profile: ${err instanceof Error ? err.message : String(err)}`,
+          }
+        ).finally(() => {
+          setIsCloning(false);
+        });
       }
-    } catch (error) {
-      console.error("Failed to clone profile:", error);
-      setLaunchError("Failed to clone profile");
-    } finally {
+    } catch (err) {
+      console.error("Error in clone setup or dialog: ", err);
+      toast.error("Could not initiate cloning process.");
       setIsCloning(false);
     }
   };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const confirmed = await confirm({
+      title: "delete profile",
+      message: `Are you sure you want to delete profile "${profile.name}"? This action cannot be undone.`,
+      confirmText: "DELETE",
+      cancelText: "CANCEL",
+      type: "warning",
+      fullscreen: true,
+    });
+
+    if (confirmed) {
+      onDelete(profile.id, profile.name);
+    }
+  };
+
+  const handleOpenFolder = async () => {
+    // No e.stopPropagation() needed as this is called from context menu action
+    const openPromise = ProfileService.openProfileFolder(profile.id);
+
+    toast.promise(openPromise, {
+      loading: `Opening folder for '${profile.name}'...`,
+      success: `Successfully opened folder for '${profile.name}'!`,
+      error: (err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        // Check if the error message indicates the folder doesn't exist, which can happen
+        // if the profile was just created and not launched/installed yet.
+        if (message.toLowerCase().includes("not found") || message.toLowerCase().includes("does not exist")) {
+          return `Profile folder for '${profile.name}' does not exist yet. Launch the profile to create it.`;
+        }
+        return `Failed to open folder: ${message}`;
+      },
+    });
+  };
+
+  // Wrapper for context menu duplicate to match signature
+  const handleDuplicateFromContextMenu = () => {
+    // We need to simulate parts of handleClone or refactor handleClone
+    // For now, let's call handleClone. It expects an event, so we pass a partial mock.
+    // This isn't ideal, long-term handleClone should be refactored if it doesn't always need the event.
+    const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
+    handleClone(mockEvent);
+  };
+
+  // Wrapper for context menu delete to match signature and include confirm dialog
+  const handleDeleteFromContextMenu = () => {
+    // Call the ProfileCard's handleDelete, which includes the confirm dialog.
+    // It expects a MouseEvent, so we pass a mock.
+    const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
+    handleDelete(mockEvent); // This handleDelete is from ProfileCard, contains confirm()
+  };
+
+  const handleContextMenu = (event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+    setContextMenuVisible(true);
+  };
+
+  const closeContextMenu = () => {
+    console.log("[ProfileCard] closeContextMenu called");
+    setContextMenuVisible(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenuVisible && contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+        console.log("[ProfileCard] handleClickOutside - closing menu");
+        closeContextMenu();
+      } else if (contextMenuVisible) {
+        console.log("[ProfileCard] handleClickOutside - click was inside menu or on menu itself, not closing.");
+      }
+    };
+
+    if (contextMenuVisible) {
+      const timerId = setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+      }, 0);
+      return () => {
+        clearTimeout(timerId);
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [contextMenuVisible]);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -310,6 +416,7 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleCardClick}
+      onContextMenu={handleContextMenu}
     >
       <span
         className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
@@ -368,36 +475,44 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-          <IconButton
-            icon={
-              isCloning ? (
-                <Icon
-                  icon="solar:refresh-bold"
-                  className="w-4 h-4 animate-spin"
-                />
-              ) : (
-                <Icon icon="solar:copy-bold" className="w-4 h-4" />
-              )
-            }
-            onClick={handleClone}
-            disabled={isCloning}
-            size="sm"
-            variant="default"
-            aria-label="Clone Profile"
-          />
+        <div className="flex items-center gap-1.5">
           {!profile.is_standard_version && (
             <IconButton
-              icon={<Icon icon="solar:settings-bold" className="w-4 h-4" />}
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-              size="sm"
-              variant="default"
-              aria-label="Edit Profile"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              variant="secondary"
+              size="xs"
+              disabled={isLaunching || isProfileCurrentlyLaunching || isCloning}
+              icon={<Icon icon="solar:settings-bold" className="w-3.5 h-3.5" />}
+              aria-label="Settings"
             />
           )}
+          <IconButton
+            onClick={handleClone}
+            variant="secondary"
+            size="xs"
+            disabled={isLaunching || isProfileCurrentlyLaunching || isCloning}
+            icon={<Icon icon="solar:copy-bold" className="w-3.5 h-3.5" />}
+            aria-label="Clone Profile"
+            title="Clone Profile"
+          />
+          {/* Temporary Test Button for Context Menu */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              // Simulate context menu opening at a fixed position or near the button
+              const rect = (e.target as HTMLElement).closest('button')?.getBoundingClientRect();
+              setContextMenuPosition({ 
+                x: rect ? rect.left : 200, 
+                y: rect ? rect.bottom + 5 : 200 
+              });
+              setContextMenuVisible(!contextMenuVisible); // Toggle visibility
+            }}
+            variant="warning" // Different color for testing
+            size="xs"
+            icon={<Icon icon="solar:question-circle-bold" className="w-3.5 h-3.5" />}
+            aria-label="Test Context Menu"
+            title="Test Context Menu"
+          />
         </div>
       </div>
 
@@ -458,6 +573,17 @@ export function ProfileCard({ profile, onEdit, onClick }: ProfileCardProps) {
         </div>
       </div>
       {confirmDialog}
+      <ProfileContextMenu
+        ref={contextMenuRef}
+        profile={profile}
+        visible={contextMenuVisible}
+        x={contextMenuPosition.x}
+        y={contextMenuPosition.y}
+        onClose={closeContextMenu}
+        onDelete={handleDeleteFromContextMenu}
+        onDuplicate={handleDuplicateFromContextMenu}
+        onOpenFolder={handleOpenFolder}
+      />
     </div>
   );
 }

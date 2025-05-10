@@ -21,6 +21,7 @@ import { GeneralStep } from "./wizard/GeneralStep";
 import { VersionStep } from "./wizard/VersionStep";
 import { ModLoaderStep } from "./wizard/ModLoaderStep";
 import { WizardSummary } from "./wizard/WizardSummary";
+import { toast } from "react-hot-toast";
 
 interface ProfileWizardProps {
   onClose: () => void;
@@ -161,25 +162,27 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
   };
 
   const handleCreate = async () => {
-    try {
-      setCreating(true);
-      setError(null);
+    setCreating(true);
+    setError(null);
 
-      if (!profile.name) {
-        setError("Profile name is required");
-        setCreating(false);
-        return;
-      }
+    if (!profile.name) {
+      setError("Profile name is required");
+      setCreating(false);
+      toast.error("Profile name is required");
+      return;
+    }
 
-      if (!profile.game_version) {
-        setError("Minecraft version is required");
-        setCreating(false);
-        return;
-      }
+    if (!profile.game_version) {
+      setError("Minecraft version is required");
+      setCreating(false);
+      toast.error("Minecraft version is required");
+      return;
+    }
 
+    const creationPromise = async () => {
       const createParams: CreateProfileParams = {
-        name: profile.name,
-        game_version: profile.game_version,
+        name: profile.name!,
+        game_version: profile.game_version!,
         loader: profile.loader || "vanilla",
         loader_version: profile.loader_version || undefined,
         selected_norisk_pack_id:
@@ -200,14 +203,22 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
         .getState()
         .getProfile(profileId);
       onSave(createdProfile);
-    } catch (err) {
-      console.error("Failed to create profile:", err);
-      setError(
-        `Failed to create profile: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    } finally {
+      return createdProfile;
+    };
+
+    toast.promise(
+      creationPromise(),
+      {
+        loading: "Creating profile...",
+        success: (createdProf) => `Profile '${createdProf.name}' created successfully!`,
+        error: (err) => `Failed to create profile: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    ).catch((err) => {
+      setError(`Failed to create profile: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("Failed to create profile (toast.promise catch):", err);
+    }).finally(() => {
       setCreating(false);
-    }
+    });
   };
 
   const renderStepContent = () => {
