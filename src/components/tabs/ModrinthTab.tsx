@@ -6,7 +6,6 @@ import type { Profile } from "../../types/profile";
 import { listProfiles } from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
-import { Card } from "../ui/Card";
 import { useThemeStore } from "../../store/useThemeStore";
 
 interface ModrinthTabProps {
@@ -49,7 +48,7 @@ export function ModrinthTab({
   }, []);
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden p-4">
+    <div className="h-full flex flex-col overflow-hidden p-4">
       {error && <ErrorMessage message={error} />}
 
       {!profilesLoaded ? (
@@ -64,7 +63,7 @@ export function ModrinthTab({
           />
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 

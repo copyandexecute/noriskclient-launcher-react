@@ -50,7 +50,7 @@ export function EmptyState({
     <div
       ref={containerRef}
       className={cn(
-        "flex flex-col items-center justify-center p-8 rounded-lg",
+        "flex flex-col items-center justify-center h-full w-full p-8 rounded-lg",
         "border-2 border-b-4 shadow-md",
         className,
       )}
@@ -61,10 +61,10 @@ export function EmptyState({
         boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
       }}
     >
-      <div className="icon w-16 h-16 mb-4 flex items-center justify-center text-white">
-        <Icon icon={icon} className="w-16 h-16" />
+      <div className="icon w-32 h-32 mb-6 flex items-center justify-center text-white">
+        <Icon icon={icon} className="w-32 h-32" />
       </div>
-      <p className="text-xl font-minecraft text-white lowercase text-center">
+      <p className="text-2xl font-minecraft text-white lowercase text-center">
         {message}
       </p>
     </div>

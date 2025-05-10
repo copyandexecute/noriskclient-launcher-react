@@ -39,6 +39,7 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
     const accentColor = useThemeStore((state) => state.accentColor);
     const previousIsOpen = useRef(isOpen);
     const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [dropdownHeight, setDropdownHeight] = useState(300);
 
     useEffect(() => {
       setIsMounted(true);
@@ -82,77 +83,109 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(
       }
     }, [isOpen, animationState, isMounted]);
 
-    const calculatePosition = useCallback(() => {
-      if (!isOpen || !triggerRef.current) return;
-
-      const rect = triggerRef.current.getBoundingClientRect();
-      let top = 0;
-      let left = 0;
-
-      const viewportHeight = window.innerHeight;
-      const viewportWidth = window.innerWidth;
-
-      const estimatedHeight = Math.min(300, children ? 300 : 200);
-
-      const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
-
-      let effectivePosition = position;
-      if (
-        position === "bottom" &&
-        spaceBelow < estimatedHeight &&
-        spaceAbove > spaceBelow
-      ) {
-        effectivePosition = "top";
-      } else if (
-        position === "top" &&
-        spaceAbove < estimatedHeight &&
-        spaceBelow > spaceAbove
-      ) {
-        effectivePosition = "bottom";
+    // Update dropdown height after it's rendered
+    useEffect(() => {
+      if (isOpen && dropdownRef.current && animationState === "entered") {
+        const height = dropdownRef.current.offsetHeight;
+        setDropdownHeight(height);
+        // Recalculate position with the actual height
+        calculatePosition(height);
       }
+    }, [isOpen, animationState]);
 
-      switch (effectivePosition) {
-        case "bottom":
-          top = rect.bottom + 8;
-          left = rect.left + rect.width / 2 - width / 2;
-          break;
-        case "top":
-          top = rect.top - estimatedHeight - 8;
-          left = rect.left + rect.width / 2 - width / 2;
-          break;
-        case "left":
-          top = rect.top + rect.height / 2 - estimatedHeight / 2;
-          left = rect.left - width - 8;
-          break;
-        case "right":
-          top = rect.top + rect.height / 2 - estimatedHeight / 2;
-          left = rect.right + 8;
-          break;
-      }
+    const calculatePosition = useCallback(
+      (actualHeight?: number) => {
+        if (!isOpen || !triggerRef.current) return;
 
-      const padding = 8;
-      left = Math.max(padding, left);
-      left = Math.min(left, viewportWidth - width - padding);
+        const rect = triggerRef.current.getBoundingClientRect();
+        let top = 0;
+        let left = 0;
 
-      top = Math.max(padding, top);
-      top = Math.min(top, viewportHeight - estimatedHeight - padding);
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        const scrollY = window.scrollY || window.pageYOffset;
+        const scrollX = window.scrollX || window.pageXOffset;
 
-      setDropdownTop(top);
-      setDropdownLeft(left);
-    }, [isOpen, triggerRef, width, position, children]);
+        // Use actual height if available, otherwise estimate
+        const estimatedHeight = actualHeight || Math.min(400, dropdownHeight);
+        const offset = 12; // Increased offset for better spacing
+
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        let effectivePosition = position;
+        if (
+          position === "bottom" &&
+          spaceBelow < estimatedHeight &&
+          spaceAbove > estimatedHeight
+        ) {
+          effectivePosition = "top";
+        } else if (
+          position === "top" &&
+          spaceAbove < estimatedHeight &&
+          spaceBelow > estimatedHeight
+        ) {
+          effectivePosition = "bottom";
+        }
+
+        switch (effectivePosition) {
+          case "bottom":
+            top = rect.bottom + scrollY + offset;
+            left = rect.left + scrollX + rect.width / 2 - width / 2;
+            break;
+          case "top":
+            top = rect.top + scrollY - estimatedHeight - offset;
+            left = rect.left + scrollX + rect.width / 2 - width / 2;
+            break;
+          case "left":
+            top = rect.top + scrollY + rect.height / 2 - estimatedHeight / 2;
+            left = rect.left + scrollX - width - offset;
+            break;
+          case "right":
+            top = rect.top + scrollY + rect.height / 2 - estimatedHeight / 2;
+            left = rect.right + scrollX + offset;
+            break;
+        }
+
+        // Ensure dropdown stays within viewport
+        const padding = 16;
+        left = Math.max(padding + scrollX, left);
+        left = Math.min(left, viewportWidth + scrollX - width - padding);
+
+        // Ensure dropdown doesn't go above the viewport
+        top = Math.max(padding + scrollY, top);
+
+        // If dropdown would go below viewport, try to position it above if there's space
+        if (top + estimatedHeight > viewportHeight + scrollY - padding) {
+          if (rect.top - estimatedHeight - offset > padding) {
+            // Position above if there's enough space
+            top = rect.top + scrollY - estimatedHeight - offset;
+          } else {
+            // Otherwise, position at the bottom of the viewport with padding
+            top = viewportHeight + scrollY - estimatedHeight - padding;
+          }
+        }
+
+        setDropdownTop(top);
+        setDropdownLeft(left);
+      },
+      [isOpen, triggerRef, width, position, dropdownHeight],
+    );
 
     useEffect(() => {
+      const handleResizeOrScroll = () => calculatePosition();
+
       if (isOpen) {
         calculatePosition();
-        window.addEventListener("resize", calculatePosition);
+        window.addEventListener("resize", handleResizeOrScroll);
+        window.addEventListener("scroll", handleResizeOrScroll, true);
       }
 
       return () => {
-        window.removeEventListener("resize", calculatePosition);
+        window.removeEventListener("resize", handleResizeOrScroll);
+        window.removeEventListener("scroll", handleResizeOrScroll, true);
       };
     }, [isOpen, calculatePosition]);
-
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
         if (

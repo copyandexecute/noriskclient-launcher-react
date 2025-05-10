@@ -70,7 +70,7 @@ export function SearchInput({
     <div
       ref={containerRef}
       className={cn(
-        "relative flex items-center h-10 rounded-md transition-all duration-200",
+        "relative flex items-center h-[42px] rounded-md transition-all duration-200",
         "border-2 border-b-4 shadow-md",
         className,
       )}
@@ -89,7 +89,7 @@ export function SearchInput({
       />
 
       <div className="flex items-center justify-center w-10 h-full text-white">
-        <Icon icon="solar:magnifer-bold" className="w-4 h-4" />
+        <Icon icon="solar:magnifer-bold" className="w-5 h-5" />
       </div>
 
       <input
@@ -98,7 +98,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 h-full bg-transparent border-none outline-none px-2 text-white font-minecraft text-base placeholder:text-white/50 lowercase"
+        className="flex-1 h-full bg-transparent border-none outline-none px-2 text-white font-minecraft text-xl placeholder:text-white/50 lowercase"
         onFocus={handleFocus}
         onBlur={handleBlur}
       />
@@ -109,7 +109,7 @@ export function SearchInput({
           onClick={handleClear}
           className="flex items-center justify-center w-8 h-full transition-opacity duration-200 hover:opacity-80 text-white"
         >
-          <Icon icon="solar:close-circle-bold" className="w-3 h-3" />
+          <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
         </button>
       )}
     </div>

@@ -7,7 +7,7 @@ import { cn } from "../../lib/utils";
 import * as ProcessService from "../../services/process-service";
 import type { ProcessMetadata } from "../../types/processState";
 import { timeAgo } from "../../utils/time-utils";
-import { Button } from "../ui/buttons/Button";
+import { Button } from "../ui/./buttons/Button";
 import { IconButton } from "../ui/./buttons/IconButton";
 import { Label } from "../ui/./Label";
 import { Dropdown } from "../ui/./dropdown/Dropdown";
@@ -32,7 +32,6 @@ export function RunningInstancesIndicator({
   const [viewingLogsId, setViewingLogsId] = useState<string | null>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
-  const pulseRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const prevInstanceCount = useRef<number>(0);
 
@@ -91,22 +90,6 @@ export function RunningInstancesIndicator({
     };
   }, [fetchProcesses]);
 
-  useEffect(() => {
-    if (processes.length > 0 && pulseRef.current) {
-      const pulseAnimation = gsap.to(pulseRef.current, {
-        scale: 1.5,
-        opacity: 0,
-        duration: 1.5,
-        repeat: -1,
-        ease: "sine.out",
-      });
-
-      return () => {
-        pulseAnimation.kill();
-      };
-    }
-  }, [processes.length]);
-
   const handleToggleDropdown = () => {
     setIsDropdownOpen(!isDropdownOpen);
   };
@@ -162,32 +145,18 @@ export function RunningInstancesIndicator({
   return (
     <div className={cn("relative", className)}>
       <div ref={buttonRef} className="relative">
-        {hasInstances && (
-          <div
-            ref={pulseRef}
-            className="absolute inset-0 rounded-md pointer-events-none"
-            style={{ backgroundColor: "#10b981", opacity: 0.3 }}
-          />
-        )}
-
         <Button
           variant={hasInstances ? "success" : "default"}
-          size="md"
+          size="sm"
           onClick={handleToggleDropdown}
           icon={<Icon icon="solar:monitor-bold" className="w-4 h-4" />}
-          className="h-10 relative"
+          className="h-10"
         >
           {isLoading && instanceCount === 0
             ? "Loading..."
             : instanceCount === 0
               ? "No instances"
               : `${instanceCount} Instance${instanceCount !== 1 ? "s" : ""}`}
-
-          {hasInstances && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold bg-green-500 text-white border-2 border-black">
-              {instanceCount}
-            </span>
-          )}
         </Button>
 
         <div
@@ -308,15 +277,23 @@ export function RunningInstancesIndicator({
                             {timeAgo(new Date(process.start_time).getTime())}
                             {typeof process.state === "object" &&
                               "Crashed" in process.state && (
-                                <span className="ml-2 px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-sm">
+                                <Label
+                                  variant="destructive"
+                                  size="xs"
+                                  className="ml-2"
+                                >
                                   Crashed
-                                </span>
+                                </Label>
                               )}
                             {typeof process.state === "string" &&
                               process.state !== "Running" && (
-                                <span className="ml-2 px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-sm">
+                                <Label
+                                  variant="warning"
+                                  size="xs"
+                                  className="ml-2"
+                                >
                                   {process.state}
-                                </span>
+                                </Label>
                               )}
                           </div>
                         </div>
@@ -374,13 +351,19 @@ export function RunningInstancesIndicator({
             <DropdownDivider />
             <DropdownFooter>
               <div className="flex items-center justify-between w-full">
-                <Label variant="success" size="md">
+                <Label
+                  variant="success"
+                  size="sm"
+                  icon={
+                    <Icon icon="solar:play-circle-bold" className="w-4 h-4" />
+                  }
+                >
                   {processes.length} instance{processes.length !== 1 ? "s" : ""}{" "}
                   running
                 </Label>
                 <Button
                   variant="destructive"
-                  size="sm"
+                  size="xs"
                   onClick={handleStopAll}
                   icon={
                     <Icon icon="solar:stop-circle-bold" className="w-4 h-4" />
