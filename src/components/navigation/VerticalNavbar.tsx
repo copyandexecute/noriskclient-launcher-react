@@ -5,10 +5,11 @@ import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { Logo } from "../ui/Logo";
-import { NavButton } from ".././ui/nav/NavButton";
-import { NavTooltip } from ".././ui/nav/NavTooltip";
-import { Label } from ".././ui/Label";
+import { NavButton } from "../ui/nav/NavButton";
+import { NavTooltip } from "../ui/nav/NavTooltip";
+import { Label } from "../ui/Label";
 import * as ConfigService from "../../services/launcher-config-service";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface NavItem {
   id: string;
@@ -37,6 +38,7 @@ export function VerticalNavbar({
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     if (activeItem) {
@@ -102,9 +104,14 @@ export function VerticalNavbar({
     <div
       ref={navRef}
       className={cn(
-        "flex flex-col items-center py-6 w-24 bg-black/50 backdrop-blur-lg border-r border-white/10",
+        "flex flex-col items-center py-6 w-24 bg-black/50 backdrop-blur-lg",
         className,
       )}
+      style={{
+        borderRight: `2px solid ${accentColor.value}60`,
+        borderLeft: `2px solid ${accentColor.value}60`,
+        boxShadow: `0 0 15px ${accentColor.value}30 inset`,
+      }}
     >
       <div className="mb-12">
         <Logo size="sm" />

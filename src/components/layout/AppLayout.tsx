@@ -53,9 +53,12 @@ export function AppLayout({
   const closeRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
 
+  // Get the current background effect from our store
   const { currentEffect } = useBackgroundEffectStore();
 
+  // Function to create a dark background color that complements the accent color
   const getComplementaryBackground = () => {
+    // Convert hex to RGB
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
       return result
@@ -64,15 +67,18 @@ export function AppLayout({
             g: Number.parseInt(result[2], 16),
             b: Number.parseInt(result[3], 16),
           }
-        : { r: 34, g: 34, b: 34 };
+        : { r: 34, g: 34, b: 34 }; // Default to #222 if parsing fails
     };
 
     const rgb = hexToRgb(accentColor.value);
 
+    // Create a very dark version of the accent color (10% of original)
+    // This ensures it's dark enough for readability but still has a hint of the accent
     const darkR = Math.floor(rgb.r * 0.1);
     const darkG = Math.floor(rgb.g * 0.1);
     const darkB = Math.floor(rgb.b * 0.1);
 
+    // Ensure the background is not too bright (max 30 per channel)
     const finalR = Math.min(darkR, 30);
     const finalG = Math.min(darkG, 30);
     const finalB = Math.min(darkB, 30);
@@ -80,6 +86,7 @@ export function AppLayout({
     return `rgb(${finalR}, ${finalG}, ${finalB})`;
   };
 
+  // Get the background color
   const backgroundColor = getComplementaryBackground();
 
   useEffect(() => {
@@ -103,6 +110,7 @@ export function AppLayout({
 
     const setupWindowControls = async () => {
       try {
+        // Try to import Tauri API, but don't fail if not available (for web development)
         const tauriModule = await import("@tauri-apps/api/window").catch(
           () => null,
         );
@@ -129,6 +137,7 @@ export function AppLayout({
             );
           }
         } else {
+          // Fallback for web development
           console.log(
             "Tauri API not available, window controls will be decorative only",
           );
@@ -184,12 +193,14 @@ export function AppLayout({
   return (
     <div
       ref={launcherRef}
-      className="h-screen w-full bg-black/50 backdrop-blur-lg border-2 border-white/20 overflow-hidden relative flex shadow-[0_0_25px_rgba(0,0,0,0.4)]"
+      className="h-screen w-full bg-black/50 backdrop-blur-lg border-2 overflow-hidden relative flex shadow-[0_0_25px_rgba(0,0,0,0.4)]"
       style={{
         backgroundColor: backgroundColor,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundImage: `linear-gradient(to bottom right, ${backgroundColor}, rgba(0,0,0,0.9))`,
+        borderColor: `${accentColor.value}30`,
+        boxShadow: `0 0 15px ${accentColor.value}30, inset 0 0 10px ${accentColor.value}20`,
       }}
     >
       <BorderGlowEffects accentColor={accentColor.value} />
@@ -198,7 +209,7 @@ export function AppLayout({
         items={navItems}
         activeItem={activeTab}
         onItemClick={onNavChange}
-        className="h-full border-r-2 border-white/20 z-10"
+        className="h-full border-r-2 z-10"
         version={appConfig.version}
       />
 
@@ -227,25 +238,25 @@ function BorderGlowEffects({ accentColor }: { accentColor: string }) {
       <div
         className="absolute top-0 left-0 right-0 h-[2px]"
         style={{
-          background: `linear-gradient(to right, transparent, ${accentColor}40, transparent)`,
+          background: `linear-gradient(to right, transparent, ${accentColor}70, transparent)`,
         }}
       ></div>
       <div
         className="absolute bottom-0 left-0 right-0 h-[2px]"
         style={{
-          background: `linear-gradient(to right, transparent, ${accentColor}40, transparent)`,
+          background: `linear-gradient(to right, transparent, ${accentColor}70, transparent)`,
         }}
       ></div>
       <div
         className="absolute top-0 bottom-0 left-0 w-[2px]"
         style={{
-          background: `linear-gradient(to bottom, transparent, ${accentColor}40, transparent)`,
+          background: `linear-gradient(to bottom, transparent, ${accentColor}70, transparent)`,
         }}
       ></div>
       <div
         className="absolute top-0 bottom-0 right-0 w-[2px]"
         style={{
-          background: `linear-gradient(to bottom, transparent, ${accentColor}40, transparent)`,
+          background: `linear-gradient(to bottom, transparent, ${accentColor}70, transparent)`,
         }}
       ></div>
     </>
@@ -259,9 +270,12 @@ interface HeaderBarProps {
 }
 
 function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
   return (
     <div
-      className="h-20 flex-shrink-0 border-b-2 border-white/20 bg-black/40 backdrop-blur-lg flex items-center justify-between px-8 z-10"
+      className="h-20 flex-shrink-0 border-b-2 bg-black/40 backdrop-blur-lg flex items-center justify-between px-8 z-10"
+      style={{ borderColor: `${accentColor.value}40` }}
       data-tauri-drag-region
     >
       <div className="flex items-center gap-4" data-tauri-drag-region>

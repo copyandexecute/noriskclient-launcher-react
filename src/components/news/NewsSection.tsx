@@ -183,10 +183,18 @@ export function NewsSection({ className }: NewsSectionProps) {
   };
 
   return (
-    <div ref={newsRef} className={cn("h-full flex flex-col", className)}>
+    <div
+      ref={newsRef}
+      className={cn("h-full flex flex-col", className)}
+      style={{
+        borderLeft: `2px solid ${accentColor.value}60`,
+        borderRight: `2px solid ${accentColor.value}60`,
+        boxShadow: `0 0 15px ${accentColor.value}30 inset`,
+      }}
+    >
       <div
-        className="flex justify-between items-center p-3 border-b-2 border-white/10"
-        style={{ borderColor: `${accentColor.value}30` }}
+        className="flex justify-between items-center p-3 border-b-2"
+        style={{ borderColor: `${accentColor.value}60` }}
       >
         <Label
           variant="default"
