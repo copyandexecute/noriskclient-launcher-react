@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Profile, ProfileFilterType } from "../../types/profile";
+import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
 import { ProfileDetailView } from "../profiles/ProfileDetailView";
 import { useProfileStore } from "../../store/profile-store";
 import { SearchInput } from "../ui/SearchInput";
 import { IconButton } from "../ui/buttons/IconButton";
-import { Label } from "../ui/Label";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
@@ -17,6 +16,16 @@ import { gsap } from "gsap";
 import { ProfileImport } from "../profiles/ProfileImport";
 import { ProfileSettings } from "../profiles/ProfileSettings.tsx";
 import { ProfileWizard } from "../profiles/ProfileWizard.tsx";
+import { Select } from "../ui/Select";
+import { Button } from "../ui/buttons/Button";
+
+// Define grouping options
+const groupingOptions = [
+  { value: "none", label: "No Grouping", icon: <Icon icon="solar:menu-dots-linear" className="w-4 h-4" /> },
+  { value: "loader", label: "Loader", icon: <Icon icon="solar:box-bold" className="w-4 h-4" /> },
+  { value: "game_version", label: "Game Version", icon: <Icon icon="solar:gamepad-bold" className="w-4 h-4" /> },
+  { value: "group", label: "Group", icon: <Icon icon="solar:users-group-rounded-bold" className="w-4 h-4" /> },
+];
 
 export function ProfilesTab() {
   const {
@@ -31,8 +40,8 @@ export function ProfilesTab() {
   const accentColor = useThemeStore((state) => state.accentColor);
   const tabRef = useRef<HTMLDivElement>(null);
 
-  const [filter, setFilter] = useState<ProfileFilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [groupingCriterion, setGroupingCriterion] = useState<string>("none");
   const [showWizard, setShowWizard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
@@ -88,7 +97,7 @@ export function ProfilesTab() {
     : [];
   const allProfiles = [...profiles, ...standardProfilesArray];
 
-  const filteredProfiles = allProfiles.filter((profile) => {
+  const initiallyFilteredProfiles = allProfiles.filter((profile) => {
     if (
       searchQuery &&
       !profile.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -96,14 +105,38 @@ export function ProfilesTab() {
       return false;
     }
 
-    if (filter === "custom" && profile.is_standard_version) {
-      return false;
-    }
-    if (filter === "standard" && !profile.is_standard_version) {
-      return false;
+    return true;
+  });
+
+  // Grouping logic
+  const groupedProfiles = (() => {
+    if (groupingCriterion === 'none') {
+      return { 'All Profiles': initiallyFilteredProfiles };
     }
 
-    return true;
+    return initiallyFilteredProfiles.reduce((acc, profile) => {
+      let key = 'Unknown';
+      if (groupingCriterion === 'loader') {
+        key = profile.loader?.toString() || 'Vanilla';
+      } else if (groupingCriterion === 'game_version') {
+        key = profile.game_version || 'Unknown Version';
+      } else if (groupingCriterion === 'group') {
+        key = profile.group || 'No Group';
+      }
+      
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(profile);
+      return acc;
+    }, {} as Record<string, Profile[]>);
+  })();
+
+  const sortedGroupKeys = Object.keys(groupedProfiles).sort((a, b) => {
+    const specialKeys = ['All Profiles', 'Unknown', 'Vanilla', 'Unknown Version', 'No Group'];
+    if (specialKeys.includes(a)) return 1;
+    if (specialKeys.includes(b)) return -1;
+    return a.localeCompare(b);
   });
 
   const handleCreateProfile = () => {
@@ -154,101 +187,79 @@ export function ProfilesTab() {
               boxShadow: `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)`,
             }}
           >
-            <div className="flex items-center gap-3 flex-wrap">
-              <Label
-                variant={filter === "all" ? "default" : "ghost"}
-                size="sm"
-                className="cursor-pointer"
-                onClick={() => setFilter("all")}
-                icon={
-                  <Icon
-                    icon="solar:widget-bold"
-                    className="w-4 h-4 text-white"
-                  />
-                }
-              >
-                all profiles
-              </Label>
-              <Label
-                variant={filter === "custom" ? "default" : "ghost"}
-                size="sm"
-                className="cursor-pointer"
-                onClick={() => setFilter("custom")}
-                icon={
-                  <Icon icon="solar:user-bold" className="w-4 h-4 text-white" />
-                }
-              >
-                custom profiles
-              </Label>
-              <Label
-                variant={filter === "standard" ? "default" : "ghost"}
-                size="sm"
-                className="cursor-pointer"
-                onClick={() => setFilter("standard")}
-                icon={
-                  <Icon
-                    icon="solar:crown-bold"
-                    className="w-4 h-4 text-white"
-                  />
-                }
-              >
-                norisk profiles
-              </Label>
-            </div>
-
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
               <SearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search profiles..."
-                className="w-full md:w-64"
+                className="w-full md:w-auto flex-grow md:flex-grow-0 h-[54px]"
               />
-              <IconButton
-                onClick={() => setShowImport(true)}
-                variant="secondary"
-                size="sm"
-                icon={
-                  <Icon
-                    icon="solar:upload-bold"
-                    className="w-4 h-4 text-white"
-                  />
-                }
-                aria-label="Import Profile"
+              <Select
+                value={groupingCriterion}
+                onChange={setGroupingCriterion}
+                options={groupingOptions}
+                className="w-full md:w-52"
               />
-              <IconButton
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button 
                 onClick={() => setShowWizard(true)}
                 variant="default"
-                size="sm"
-                icon={
-                  <Icon
-                    icon="solar:widget-add-bold"
-                    className="w-4 h-4 text-white"
-                  />
-                }
-                aria-label="New Profile"
-              />
+                size="md"
+                className="h-[54px]"
+                icon={<Icon icon="solar:widget-add-bold" className="w-5 h-5" />}
+                iconPosition="left"
+              >
+                CREATE
+              </Button>
+              <Button 
+                onClick={() => setShowImport(true)}
+                variant="secondary"
+                size="md"
+                className="h-[54px]"
+                icon={<Icon icon="solar:upload-bold" className="w-5 h-5" />}
+                iconPosition="left"
+              >
+                IMPORT
+              </Button>
             </div>
           </div>
 
           <div className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar">
-            {(loading || loadingStandard) &&
-            filter !== "standard" &&
-            filter !== "custom" ? (
+            {(loading || loadingStandard) ? (
               <LoadingState message="loading profiles..." />
             ) : error || standardError ? (
               <EmptyState
                 icon="solar:danger-triangle-bold"
                 message={error || standardError || ""}
               />
-            ) : filteredProfiles.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-                {filteredProfiles.map((profile) => (
-                  <ProfileCard
-                    key={profile.id}
-                    profile={profile}
-                    onEdit={() => handleEditProfile(profile)}
-                    onClick={() => handleViewProfile(profile)}
-                  />
+            ) : initiallyFilteredProfiles.length > 0 ? (
+              <div className="space-y-6">
+                {sortedGroupKeys.map((groupKey) => (
+                  <div key={groupKey}>
+                    {groupingCriterion !== 'none' && (
+                      <h2 
+                        className="text-2xl font-minecraft lowercase text-white mb-3 pb-1 border-b-2"
+                        style={{ borderColor: `${accentColor.value}40` }}
+                      >
+                        {groupKey}
+                      </h2>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+                      {groupedProfiles[groupKey].map((profile) => (
+                        <ProfileCard
+                          key={profile.id}
+                          profile={profile}
+                          onEdit={() => handleEditProfile(profile)}
+                          onClick={() => handleViewProfile(profile)}
+                        />
+                      ))}
+                    </div>
+                    {groupedProfiles[groupKey].length === 0 && groupingCriterion !== 'none' && (
+                       <p className="text-neutral-500 italic text-center py-4">No profiles in this group.</p>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
