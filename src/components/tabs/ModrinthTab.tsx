@@ -49,7 +49,7 @@ export function ModrinthTab({
   }, []);
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden p-4">
+    <div className="h-full flex flex-col overflow-hidden p-4">
       {error && <ErrorMessage message={error} />}
 
       {!profilesLoaded ? (
@@ -64,7 +64,7 @@ export function ModrinthTab({
           />
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
