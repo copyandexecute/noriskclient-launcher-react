@@ -205,6 +205,13 @@ pub struct ModrinthCategory {
     pub project_type: String,    // Project type this category applies to (e.g., "mod")
     pub header: String,          // Header for grouping (e.g., "gameplay")
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthLoader {
+    pub icon: String,
+    pub name: String,
+    pub supported_project_types: Vec<String>,
+}
 // --- End Structures for Tags/Categories ---
 
 // NEUE Struktur für den Input der Bulk-Abfrage
@@ -1047,4 +1054,51 @@ pub async fn get_modrinth_categories() -> Result<Vec<ModrinthCategory>> {
 
     log::info!("Successfully fetched {} categories.", categories.len());
     Ok(categories)
+}
+
+/// Fetches a list of all loaders from Modrinth.
+/// https://docs.modrinth.com/api/operations/loaderlist/
+pub async fn get_modrinth_loaders() -> Result<Vec<ModrinthLoader>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tag/loader", MODRINTH_API_BASE_URL);
+
+    log::info!("Fetching Modrinth loaders from: {}", url);
+
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch loaders failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body from loaders endpoint".to_string());
+        log::error!(
+            "Modrinth API error fetching loaders (Status: {}): {}",
+            status,
+            error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} fetching loaders: {}",
+            status, error_text
+        )));
+    }
+
+    let loaders = response
+        .json::<Vec<ModrinthLoader>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth loaders response: {}", e)))?;
+
+    log::info!("Successfully fetched {} loaders.", loaders.len());
+    Ok(loaders)
 }

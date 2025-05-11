@@ -235,3 +235,9 @@ export interface ModrinthCategory {
     project_type: string; // Project type this category applies to (e.g., "mod")
     header: string;      // Header for grouping (e.g., "gameplay")
 }
+
+export interface ModrinthLoader {
+    icon: string;                // SVG icon content
+    name: string;                // Name of the loader (e.g., "fabric")
+    supported_project_types: string[]; // Project types this loader is applicable to
+}

@@ -9,6 +9,7 @@ import type {
   ModrinthSortType,
   ModrinthVersion,
   ModrinthCategory,
+  ModrinthLoader,
 } from "../types/modrinth";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -106,5 +107,9 @@ export class ModrinthService {
 
   static async getModrinthCategories(): Promise<ModrinthCategory[]> {
     return invoke<ModrinthCategory[]>("get_modrinth_categories_command");
+  }
+
+  static async getModrinthLoaders(): Promise<ModrinthLoader[]> {
+    return invoke<ModrinthLoader[]>("get_modrinth_loaders_command");
   }
 }

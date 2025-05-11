@@ -337,6 +337,7 @@ async fn main() {
             //
             commands::nrc_commands::get_news_and_changelogs_command,
             commands::modrinth_commands::get_modrinth_categories_command,
+            commands::modrinth_commands::get_modrinth_loaders_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

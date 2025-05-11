@@ -233,3 +233,16 @@ pub async fn get_modrinth_categories_command() -> Result<Vec<modrinth::ModrinthC
     log::info!("Successfully fetched {} categories for frontend", categories.len());
     Ok(categories)
 }
+
+/// Fetches a list of all loaders from Modrinth.
+#[tauri::command]
+pub async fn get_modrinth_loaders_command() -> Result<Vec<modrinth::ModrinthLoader>, CommandError> {
+    log::debug!("Received get_modrinth_loaders_command");
+
+    let loaders = modrinth::get_modrinth_loaders()
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!("Successfully fetched {} loaders for frontend", loaders.len());
+    Ok(loaders)
+}
