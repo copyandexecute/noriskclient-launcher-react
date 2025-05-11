@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { LogLevel, ParsedLogLine } from "../../services/log-service";
 import { Button } from "../ui/buttons/Button";
@@ -293,8 +293,8 @@ export function LogViewerDisplay({
           </div>
         ) : (
           <div className="min-h-full p-4 bg-black/60 font-mono text-sm whitespace-pre-wrap">
-            {displayLines.map((line) => (
-              <div key={line.id} className="flex flex-nowrap items-start mb-1">
+            {displayLines.map((line, index) => (
+              <div key={`${line.id}-${index}`} className="flex flex-nowrap items-start mb-1">
                 {line.timestamp ? (
                   <>
                     <span

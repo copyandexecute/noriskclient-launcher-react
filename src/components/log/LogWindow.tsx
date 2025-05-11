@@ -200,9 +200,8 @@ export function LogWindow() {
         logListenerRef.current();
         logListenerRef.current = null;
       }
-      setInitialLoadComplete(false);
     };
-  }, [processId, isAutoscrollEnabled, scrollToBottom]);
+  }, [processId, isAutoscrollEnabled, scrollToBottom, initialLoadComplete, isLiveLogs]);
 
   useEffect(() => {
     const linesAfterLevelFilter = parsedLogLines.filter((line) => {
