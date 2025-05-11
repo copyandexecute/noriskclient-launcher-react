@@ -34,6 +34,9 @@ export type ModrinthProjectType = "mod" | "modpack" | "resourcepack" | "shader" 
 // Sort type enum matching backend
 export type ModrinthSortType = "relevance" | "downloads" | "follows" | "newest" | "updated";
 
+// New type for client/server side support
+export type ModrinthSideSupport = "required" | "optional" | "unsupported" | "unknown";
+
 export interface ModrinthVersion {
     id: string;
     project_id: string;
@@ -66,12 +69,19 @@ export interface ModrinthSearchHit {
     title: string;
     description: string;
     author: string | null;
-    icon_url: string | null;
+    categories: string[];
+    display_categories: string[];
+    client_side: ModrinthSideSupport;
+    server_side: ModrinthSideSupport;
     downloads: number;
     follows: number;
+    icon_url: string | null;
     latest_version: string | null;
+    date_created: string;
+    date_modified: string;
+    license: string;
+    gallery: string[];
     versions?: string[] | null;
-    // Add other fields if needed
 }
 
 // Add the context type for frontend use
@@ -188,8 +198,8 @@ export interface ModrinthProject {
     status: string; // e.g., "approved"
     moderator_message: ModrinthModeratorMessage | null;
     license: ModrinthLicense;
-    client_side: string; // "required", "optional", "unsupported", "unknown"
-    server_side: string; // "required", "optional", "unsupported", "unknown"
+    client_side: ModrinthSideSupport; // Updated type
+    server_side: ModrinthSideSupport; // Updated type
     downloads: number; // u64 in Rust
     followers: number; // u64 in Rust
     categories: string[];

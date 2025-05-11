@@ -18,16 +18,22 @@ pub async fn search_modrinth_projects(
     limit: Option<u32>,
     offset: Option<u32>,
     sort: Option<ModrinthSortType>,
+    categories_filter: Option<Vec<String>>,
+    client_side_filter: Option<String>,
+    server_side_filter: Option<String>,
 ) -> Result<ModrinthSearchResponse, CommandError> {
     log::debug!(
-        "Received search_modrinth_projects command: query={}, project_type={:?}, version={}, loader={}, limit={:?}, offset={:?}, sort={:?}",
+        "Received search_modrinth_projects command: query={}, project_type={:?}, version={}, loader={}, limit={:?}, offset={:?}, sort={:?}, categories={:?}, client_side={:?}, server_side={:?}",
         query,
         project_type,
         game_version.as_deref().unwrap_or("None"),
         loader.as_deref().unwrap_or("None"),
         limit,
         offset,
-        sort
+        sort,
+        categories_filter,
+        client_side_filter,
+        server_side_filter
     );
 
     let result = search_projects(
@@ -38,6 +44,9 @@ pub async fn search_modrinth_projects(
         limit,
         offset,
         sort,
+        categories_filter,
+        client_side_filter,
+        server_side_filter,
     )
     .await
     .map_err(CommandError::from)?;

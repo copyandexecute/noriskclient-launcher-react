@@ -262,6 +262,9 @@ pub async fn search_projects(
     limit: Option<u32>,
     offset: Option<u32>,
     sort: Option<ModrinthSortType>,
+    categories_filter: Option<Vec<String>>,
+    client_side_filter: Option<String>,
+    server_side_filter: Option<String>,
 ) -> Result<ModrinthSearchResponse> {
     let client = reqwest::Client::new();
     let base_url = format!("{}/search", MODRINTH_API_BASE_URL);
@@ -310,6 +313,35 @@ pub async fn search_projects(
         let loader_facet = format!("categories:{}", ld.to_lowercase());
         log::debug!("Modrinth search - Adding loader facet: {}", loader_facet);
         facets.push(loader_facet);
+    }
+
+    // Add categories filter (can be multiple)
+    if let Some(cats) = categories_filter {
+        for cat_value in cats {
+            if !cat_value.is_empty() {
+                let category_facet = format!("categories:{}", cat_value.to_lowercase()); // Assuming categories are best lowercased
+                log::debug!("Modrinth search - Adding category facet: {}", category_facet);
+                facets.push(category_facet);
+            }
+        }
+    }
+
+    // Add client_side filter
+    if let Some(cs_filter_val) = client_side_filter {
+        if !cs_filter_val.is_empty() {
+            let client_facet = format!("client_side:{}", cs_filter_val);
+            log::debug!("Modrinth search - Adding client_side facet: {}", client_facet);
+            facets.push(client_facet);
+        }
+    }
+
+    // Add server_side filter
+    if let Some(ss_filter_val) = server_side_filter {
+        if !ss_filter_val.is_empty() {
+            let server_facet = format!("server_side:{}", ss_filter_val);
+            log::debug!("Modrinth search - Adding server_side facet: {}", server_facet);
+            facets.push(server_facet);
+        }
     }
 
     // Modrinth expects facets like: [["versions:1.20.1"],["categories:fabric"]]
@@ -376,6 +408,9 @@ pub async fn search_mods(
         game_version,
         loader,
         limit,
+        None,
+        None,
+        None,
         None,
         None,
     )

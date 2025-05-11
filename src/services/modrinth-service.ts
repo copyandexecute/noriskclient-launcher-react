@@ -20,6 +20,9 @@ export class ModrinthService {
     limit = 20,
     offset = 0,
     sort?: ModrinthSortType,
+    categories?: string[],
+    clientSide?: string,
+    serverSide?: string,
   ): Promise<ModrinthSearchResponse> {
     return invoke<ModrinthSearchResponse>("search_modrinth_projects", {
       query,
@@ -29,6 +32,9 @@ export class ModrinthService {
       limit,
       offset,
       sort,
+      categories_filter: categories,
+      client_side_filter: clientSide,
+      server_side_filter: serverSide,
     });
   }
 
