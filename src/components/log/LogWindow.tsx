@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LogViewerDisplay } from "./LogViewerDisplay";
 import * as ProcessService from "../../services/process-service";
@@ -191,14 +190,17 @@ export function LogWindow() {
   }, [processId, isAutoscrollEnabled, scrollToBottom]);
 
   useEffect(() => {
-    const filteredLines = parsedLogLines.filter((line) => {
-      const levelMatch = !line.level || levelFilters[line.level];
-      const searchMatch =
-        !searchTerm ||
-        line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
-      return levelMatch && searchMatch;
+    const linesAfterLevelFilter = parsedLogLines.filter((line) => {
+      if (!line.level) return true;
+      return levelFilters[line.level];
     });
-    setDisplayLines(filteredLines);
+
+    const linesAfterSearchFilter = linesAfterLevelFilter.filter((line) => {
+      if (!searchTerm) return true;
+      return line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
+    });
+
+    setDisplayLines(linesAfterSearchFilter);
   }, [parsedLogLines, searchTerm, levelFilters]);
 
   useEffect(() => {
@@ -209,12 +211,9 @@ export function LogWindow() {
     };
   }, []);
 
-  const handleSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchTerm(event.target.value);
-    },
-    [],
-  );
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+  }, []);
 
   const handleOpenFolderForProcess = useCallback(async () => {
     if (!processId) return;
@@ -281,7 +280,7 @@ export function LogWindow() {
     }
   }, [displayLines]);
 
-  const handleOpenUploadUrl = useCallback(async (url: string | null) => {
+  const handleOpenUploadUrl = useCallback(async (url: string) => {
     if (!url) return;
     try {
       await openUrl(url);

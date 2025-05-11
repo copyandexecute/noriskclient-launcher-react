@@ -3,8 +3,14 @@
 import React from "react";
 import { Icon } from "@iconify/react";
 import type { LogLevel, ParsedLogLine } from "../../services/log-service";
+import { Button } from "../ui/buttons/Button";
+import { IconButton } from "../ui/buttons/IconButton";
+import { SearchInput } from "../ui/SearchInput";
+import { Select } from "../ui/Select";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface LogViewerDisplayProps {
+  // Required props
   isLoading: boolean;
   error: string | null;
   displayLines: ParsedLogLine[];
@@ -12,13 +18,15 @@ interface LogViewerDisplayProps {
   searchTerm: string;
   levelFilters: Record<LogLevel, boolean>;
   copied: boolean;
-  onSearchChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onSearchChange: (value: string) => void;
   onLevelFilterChange: (level: LogLevel, checked: boolean) => void;
   onCopyLog: () => void;
   logLevelsDefinition: readonly LogLevel[];
-  isAutoscrollEnabled: boolean;
-  onAutoscrollChange: (enabled: boolean) => void;
   scrollableContainerRef?: React.RefObject<HTMLDivElement>;
+  
+  // Optional props
+  isAutoscrollEnabled?: boolean;
+  onAutoscrollChange?: (enabled: boolean) => void;
   onOpenFolder?: () => void;
   onUploadLog?: () => void;
   isUploading?: boolean;
@@ -27,15 +35,20 @@ interface LogViewerDisplayProps {
   onOpenUploadUrl?: (url: string) => void;
   logFiles?: string[];
   selectedLogPath?: string | null;
-  onLogSelect?: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  onLogSelect?: (value: string) => void;
 }
 
-const getLevelColorClass = (level?: LogLevel): string => {
+function getFilename(path: string | null): string {
+  if (!path) return "";
+  return path.split(/[\\/]/).pop() || path;
+}
+
+function getLevelColorClass(level: LogLevel | undefined): string {
   switch (level) {
     case "ERROR":
-      return "text-red-400 font-semibold";
+      return "text-red-400";
     case "WARN":
-      return "text-yellow-400 font-semibold";
+      return "text-yellow-400";
     case "INFO":
       return "text-blue-400";
     case "DEBUG":
@@ -43,75 +56,9 @@ const getLevelColorClass = (level?: LogLevel): string => {
     case "TRACE":
       return "text-purple-400";
     default:
-      return "text-gray-400";
+      return "text-white/70";
   }
-};
-
-function getFilename(path: string | null): string {
-  if (!path) return "";
-  return path.split(/[\\/]/).pop() || path;
 }
-
-// Update the LogViewerDisplay component to match the WorldsTab styling
-// Replace the FilterButton component with this updated version
-
-const FilterButton = React.memo(
-  ({
-    level,
-    isActive,
-    onClick,
-    disabled,
-  }: {
-    level: LogLevel;
-    isActive: boolean;
-    onClick: () => void;
-    disabled: boolean;
-  }) => {
-    // Define styles based on level and active state
-    const getButtonStyle = () => {
-      const baseStyle = "px-4 py-2 font-minecraft text-xl";
-
-      if (!isActive) {
-        return `${baseStyle} bg-black/20 text-white/60 hover:text-white border-2 border-white/20`;
-      }
-
-      switch (level) {
-        case "ERROR":
-          return `${baseStyle} bg-red-900/40 text-red-300 border-2 border-red-700/50`;
-        case "WARN":
-          return `${baseStyle} bg-yellow-900/40 text-yellow-300 border-2 border-yellow-700/50`;
-        case "INFO":
-          return `${baseStyle} bg-blue-900/40 text-blue-300 border-2 border-blue-700/50`;
-        case "DEBUG":
-          return `${baseStyle} bg-cyan-900/40 text-cyan-300 border-2 border-cyan-700/50`;
-        case "TRACE":
-          return `${baseStyle} bg-purple-900/40 text-purple-300 border-2 border-purple-700/50`;
-        default:
-          return `${baseStyle} bg-white/10 text-white border-2 border-white/20`;
-      }
-    };
-
-    return (
-      <button
-        className={getButtonStyle()}
-        onClick={onClick}
-        disabled={disabled}
-        style={{ transition: "none" }}
-      >
-        {level.toLowerCase()}
-      </button>
-    );
-  },
-  (prevProps, nextProps) => {
-    // Only re-render if these props change
-    return (
-      prevProps.isActive === nextProps.isActive &&
-      prevProps.disabled === nextProps.disabled
-    );
-  },
-);
-
-FilterButton.displayName = "FilterButton";
 
 export function LogViewerDisplay({
   isLoading,
@@ -138,149 +85,39 @@ export function LogViewerDisplay({
   selectedLogPath = null,
   onLogSelect,
 }: LogViewerDisplayProps) {
-  // Update the LogHeader component
-  const LogHeader = () => (
-    <div className="flex items-center justify-between w-full">
-      <div className="flex items-center gap-2">
-        {logLevelsDefinition.map((level) => (
-          <FilterButton
-            key={level}
-            level={level}
-            isActive={levelFilters[level]}
-            onClick={() => onLevelFilterChange(level, !levelFilters[level])}
-            disabled={isLoading}
-          />
-        ))}
-      </div>
+  const accentColor = useThemeStore((state) => state.accentColor);
 
-      <div className="flex items-center gap-3">
-        <div className="relative w-64">
-          <input
-            type="text"
-            placeholder="Filter lines..."
-            value={searchTerm}
-            onChange={onSearchChange}
-            disabled={isLoading}
-            className="w-full bg-black/20 backdrop-blur-md border-2 border-white/10 px-3 py-2 text-white font-minecraft text-xl shadow-sm tracking-wide"
-          />
-          {searchTerm && (
-            <button
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-white/60 hover:text-white"
-              onClick={() =>
-                onSearchChange({
-                  target: { value: "" },
-                } as React.ChangeEvent<HTMLInputElement>)
-              }
-            >
-              <Icon icon="pixel:window-close-solid" className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+  const getLevelButtonStyle = (level: LogLevel) => {
+    if (!levelFilters[level]) {
+      return "secondary";
+    }
 
-        <button
-          onClick={onCopyLog}
-          disabled={displayLines.length === 0 || isLoading || copied}
-          className={`bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 ${
-            copied ? "border-green-500/30 text-green-400" : "border-white/30"
-          } px-5 py-2 font-minecraft text-xl flex items-center gap-2 transition-colors`}
-        >
-          <Icon
-            icon={copied ? "pixel:check" : "pixel:copy"}
-            className="w-5 h-5"
-          />
-          <span>{copied ? "copied" : "copy"}</span>
-        </button>
-
-        {onUploadLog && (
-          <button
-            onClick={onUploadLog}
-            disabled={parsedLogLinesCount === 0 || isLoading || isUploading}
-            className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-5 py-2 font-minecraft text-xl flex items-center gap-2 transition-colors"
-          >
-            {isUploading ? (
-              <Icon
-                icon="pixel:spinner-solid"
-                className="w-5 h-5 animate-spin"
-              />
-            ) : (
-              <Icon icon="pixel:upload" className="w-5 h-5" />
-            )}
-            <span>{isUploading ? "uploading..." : "upload"}</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // Update the LogFooter component
-  const LogFooter = () => (
-    <div className="flex items-center justify-between w-full">
-      <div className="flex items-center gap-4">
-        <div className="text-white/70 font-minecraft text-xl">
-          {displayLines.length} of {parsedLogLinesCount} lines
-        </div>
-
-        {isAutoscrollEnabled !== undefined && (
-          <label className="flex items-center gap-2 cursor-pointer text-white/70 hover:text-white font-minecraft text-xl">
-            <input
-              type="checkbox"
-              checked={isAutoscrollEnabled}
-              onChange={(e) => onAutoscrollChange(e.target.checked)}
-              className="w-4 h-4 accent-blue-500"
-            />
-            autoscroll
-          </label>
-        )}
-      </div>
-
-      <div className="flex items-center gap-3">
-        {onLogSelect && logFiles && logFiles.length > 0 && (
-          <div className="flex items-center gap-2 relative">
-            <select
-              value={selectedLogPath ?? ""}
-              onChange={onLogSelect}
-              disabled={isLoading}
-              className="bg-black/20 backdrop-blur-md border-2 border-white/10 px-4 py-2 text-white font-minecraft text-xl shadow-sm appearance-none pr-12 tracking-wide"
-            >
-              <option value="" disabled={!!selectedLogPath}>
-                -- Select Log --
-              </option>
-              {logFiles.map((path) => (
-                <option key={path} value={path} className="text-xl">
-                  {getFilename(path)}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-white">
-              <Icon icon="pixel:chevron-down" className="w-6 h-6" />
-            </div>
-          </div>
-        )}
-
-        {onOpenFolder && (
-          <button
-            onClick={onOpenFolder}
-            disabled={isLoading}
-            className="bg-black/20 hover:bg-black/30 disabled:bg-black/10 disabled:text-white/40 disabled:cursor-not-allowed backdrop-blur-md border-2 border-white/30 px-5 py-2 font-minecraft text-xl flex items-center gap-2 transition-colors"
-          >
-            <Icon icon="pixel:folder-open-solid" className="w-5 h-5" />
-            <span>logs folder</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // Update the main return statement for the component
-  // Replace the entire return statement with this updated version
+    switch (level) {
+      case "ERROR":
+        return "destructive";
+      case "WARN":
+        return "warning";
+      case "INFO":
+        return "info";
+      case "DEBUG":
+        return "success";
+      case "TRACE":
+        return "purple";
+      default:
+        return "secondary";
+    }
+  };
 
   if (isLoading) {
     return (
-      <div className="h-full flex justify-center items-center bg-black/20 backdrop-blur-md border-2 border-white/30">
+      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
         <div className="flex flex-col items-center">
           <div className="relative w-16 h-16 mb-4">
             <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
-            <div className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"></div>
+            <div
+              className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"
+              style={{ borderTopColor: accentColor.value }}
+            ></div>
           </div>
           <div className="font-minecraft text-2xl text-white/80 tracking-wide lowercase">
             Loading logs...
@@ -292,9 +129,9 @@ export function LogViewerDisplay({
 
   if (error) {
     return (
-      <div className="h-full flex justify-center items-center bg-black/20 backdrop-blur-md border-2 border-white/30 p-4">
-        <div className="p-6 bg-red-900/30 border-2 border-red-700/50 text-red-300 text-2xl max-w-2xl">
-          Error loading content: {error}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="p-6 bg-red-900/30 border-2 border-red-700/50 text-red-300 text-2xl max-w-2xl rounded-lg">
+          Error: {error}
         </div>
       </div>
     );
@@ -302,10 +139,10 @@ export function LogViewerDisplay({
 
   if (parsedLogLinesCount === 0) {
     return (
-      <div className="h-full bg-black/20 backdrop-blur-md border-2 border-white/30 flex justify-center items-center">
+      <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center">
           <Icon
-            icon="pixel:file-text"
+            icon="solar:file-text-bold"
             className="w-16 h-16 text-white/30 mx-auto mb-4"
           />
           <p className="text-white/60 font-minecraft text-2xl tracking-wide lowercase select-none">
@@ -319,42 +156,105 @@ export function LogViewerDisplay({
     );
   }
 
-  if (displayLines.length === 0) {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="bg-black/20 backdrop-blur-md border-2 border-white/10 w-full p-3">
-          <LogHeader />
-        </div>
-        <div className="flex-grow bg-black/20 backdrop-blur-md border-2 border-white/30 flex justify-center items-center">
-          <div className="text-center">
-            <Icon
-              icon="pixel:filter"
-              className="w-16 h-16 text-white/30 mx-auto mb-4"
-            />
-            <p className="text-white/60 font-minecraft text-2xl tracking-wide lowercase select-none">
-              No log lines match the current filters
-            </p>
-          </div>
-        </div>
-        <div className="bg-black/30 border-t-2 border-white/30 py-3 px-4 mt-2">
-          <LogFooter />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-full flex flex-col">
-      <div className="bg-black/20 backdrop-blur-md border-2 border-white/10 w-full p-3">
-        <LogHeader />
+      <div
+        className="border-b-2 py-6 px-4 flex items-center justify-between"
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}40`,
+        }}
+      >
+        <div className="flex items-center py-1 gap-2 overflow-x-auto scrollbar-hide">
+          {logLevelsDefinition.map((level) => (
+            <Button
+              key={level}
+              onClick={() => onLevelFilterChange(level, !levelFilters[level])}
+              disabled={isLoading}
+              variant={getLevelButtonStyle(level) as any}
+              size="sm"
+            >
+              {level.toLowerCase()}
+            </Button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <SearchInput
+            value={searchTerm}
+            onChange={onSearchChange}
+            placeholder="Filter lines..."
+            className="w-44"
+          />
+
+          <div className="flex items-center gap-2">
+            <IconButton
+              onClick={onCopyLog}
+              disabled={displayLines.length === 0 || isLoading || copied}
+              variant={copied ? "success" : "secondary"}
+              size="sm"
+              icon={
+                <Icon
+                  icon={
+                    copied ? "solar:check-circle-bold" : "solar:copy-bold"
+                  }
+                />
+              }
+            />
+
+            {onUploadLog && (
+              <IconButton
+                onClick={onUploadLog}
+                disabled={isLoading || isUploading || parsedLogLinesCount === 0}
+                variant="secondary"
+                size="sm"
+                icon={
+                  <Icon
+                    icon={
+                      isUploading
+                        ? "solar:refresh-circle-bold"
+                        : "solar:upload-bold"
+                    }
+                    className={isUploading ? "animate-spin" : ""}
+                  />
+                }
+              />
+            )}
+
+            {onOpenFolder && (
+              <IconButton
+                onClick={onOpenFolder}
+                disabled={isLoading}
+                variant="secondary"
+                size="sm"
+                icon={<Icon icon="solar:folder-bold" />}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="flex-grow border-2 border-white/30 flex flex-col overflow-hidden">
-        <div
-          className="flex-1 overflow-y-auto custom-scrollbar"
-          ref={scrollableContainerRef}
-        >
-          <div className="p-4 font-mono text-lg whitespace-pre-wrap">
+      <div
+        className="flex-1 h-full overflow-y-auto custom-scrollbar"
+        ref={scrollableContainerRef}
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
+        {displayLines.length === 0 ? (
+          <div className="p-4 h-full flex items-center justify-center">
+            <div className="text-center">
+              <Icon
+                icon="solar:filter-bold"
+                className="w-16 h-16 text-white/30 mx-auto mb-4"
+              />
+              <p className="text-white/60 font-minecraft text-2xl tracking-wide lowercase select-none">
+                No log lines match the current filters
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 bg-black/60 font-mono text-sm whitespace-pre-wrap">
             {displayLines.map((line) => (
               <div key={line.id} className="flex flex-nowrap items-start mb-1">
                 {line.timestamp ? (
@@ -391,15 +291,68 @@ export function LogViewerDisplay({
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      <div
+        className="border-t-2 py-3 px-4 flex justify-between items-center"
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}40`,
+        }}
+      >
+        <div className="text-white/70 font-minecraft text-xl">
+          {searchTerm || Object.values(levelFilters).some(v => !v)
+            ? `${displayLines.length} of ${parsedLogLinesCount} lines matching filters`
+            : `${parsedLogLinesCount} lines`}
         </div>
 
-        <div className="bg-black/30 border-t-2 border-white/30 py-3 px-4">
-          <LogFooter />
+        <div className="flex items-center gap-3">
+          {isAutoscrollEnabled !== undefined && onAutoscrollChange && (
+            <label className="flex items-center gap-2 cursor-pointer text-white/70 hover:text-white font-minecraft text-xl">
+              <input
+                type="checkbox"
+                checked={isAutoscrollEnabled}
+                onChange={(e) => onAutoscrollChange(e.target.checked)}
+                className="w-4 h-4 accent-blue-500"
+              />
+              autoscroll
+            </label>
+          )}
+
+          {logFiles.length > 0 && onLogSelect && (
+            <div className="flex items-center gap-2 relative">
+              <Select
+                value={selectedLogPath || ""}
+                onChange={onLogSelect}
+                options={[
+                  {
+                    value: "",
+                    label: "-- Select Log --",
+                    // @ts-ignore
+                    disabled: !!selectedLogPath,
+                  },
+                  ...logFiles.map((path) => ({
+                    value: path,
+                    label: getFilename(path),
+                  })),
+                ]}
+                className="w-64"
+                disabled={isLoading}
+              />
+            </div>
+          )}
         </div>
       </div>
 
       {uploadUrl && onOpenUploadUrl && (
-        <div className="mt-4 flex items-center gap-2 bg-black/20 backdrop-blur-md border-2 border-white/10 p-3">
+        <div
+          className="mt-4 flex items-center gap-2 p-3 rounded-lg"
+          style={{
+            backgroundColor: `${accentColor.value}20`,
+            borderColor: `${accentColor.value}40`,
+          }}
+        >
           <span className="text-white/70 font-minecraft text-xl">
             Log uploaded:
           </span>
@@ -407,7 +360,7 @@ export function LogViewerDisplay({
             href="#"
             onClick={(e) => {
               e.preventDefault();
-              onOpenUploadUrl(uploadUrl);
+              if (onOpenUploadUrl) onOpenUploadUrl(uploadUrl);
             }}
             target="_blank"
             rel="noopener noreferrer"
@@ -420,9 +373,9 @@ export function LogViewerDisplay({
       )}
 
       {uploadError && (
-        <div className="mt-4 flex items-center gap-2 bg-red-900/30 border-2 border-red-700/50 p-3">
+        <div className="mt-4 flex items-center gap-2 bg-red-900/30 border-2 border-red-700/50 p-3 rounded-lg">
           <Icon
-            icon="pixel:exclamation-triangle-solid"
+            icon="solar:danger-triangle-bold"
             className="w-5 h-5 text-red-400"
           />
           <span
