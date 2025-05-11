@@ -1,6 +1,6 @@
 "use client";
 
-import React, {useState, useEffect, useCallback, useMemo} from "react";
+import React, {useState, useEffect, useCallback, useMemo, memo} from "react";
 import {TabHeader} from "../ui/TabHeader";
 import {TabContent} from "../ui/TabContent";
 import type {
@@ -21,7 +21,223 @@ import {Modal} from "../ui/Modal.tsx";
 import {SearchInput} from "../ui/SearchInput.tsx";
 import {useDebounce} from "../../hooks/useDebounce";
 import {useThemeStore} from "../../store/useThemeStore.ts";
-import { toast } from "react-hot-toast";
+import {toast} from "react-hot-toast";
+
+const SkinPreview = memo(({
+														skin,
+														skinUrl,
+														index,
+														loading,
+														localSkinsLoading,
+														selectedLocalSkin,
+														onClick,
+														onEditSkin
+													}: {
+	skin: MinecraftSkin,
+	skinUrl?: string,
+	index: number,
+	loading: boolean,
+	localSkinsLoading: boolean,
+	selectedLocalSkin: MinecraftSkin | null,
+	onClick: (skin: MinecraftSkin) => void,
+	onEditSkin?: (skin: MinecraftSkin, event: React.MouseEvent<HTMLButtonElement>) => void
+}) => {
+	const accentColor = useThemeStore((state) => state.accentColor);
+
+	return (
+		<div
+			key={skin.id}
+			className={
+				`relative group bg-black/20 border-white/20 backdrop-blur-md border-2 rounded-lg p-4 pt-1 pb-2 transition-all 
+				duration-200 cursor-pointer hover:border-white/40 hover:bg-black/30 flex-col text-center animate-slide-up-fade-in
+				${(loading || localSkinsLoading) && selectedLocalSkin?.id === skin.id ? 'opacity-60 pointer-events-none' : ''}`
+			}
+			style={{
+				animationDelay: `${index * 0.075}s`,
+				borderColor: selectedLocalSkin?.id === skin.id ? `${accentColor.value}80` : undefined,
+				backgroundColor: selectedLocalSkin?.id === skin.id ? `${accentColor.value}10` : undefined,
+			}}
+			onClick={() => !loading && !localSkinsLoading && onClick(skin)}
+		>
+			{
+				onEditSkin &&
+				<button
+					className="absolute bottom-1.5 right-1.5 z-10 p-1.5 text-white/70 rounded
+					opacity-0 group-hover:opacity-100 transition-opacity hover:text-white
+					disabled:opacity-50 disabled:pointer-events-none"
+					onClick={(event) => onEditSkin(skin, event)}
+					title="Edit skin properties"
+					disabled={loading || localSkinsLoading}
+				>
+					<Icon icon="pixel:edit-solid" className="w-4 h-4"/>
+				</button>
+			}
+
+			<p className="font-minecraft text-white lowercase truncate text-3xl" title={skin.name}>
+				{skin.name}
+			</p>
+
+			<div className="h-64 flex relative pt-2 pb-2">
+				<SkinViewer
+					skinUrl={skinUrl ? skinUrl : `data:image/png;base64,${skin.base64_data}`}
+					width={130}
+					height={260}
+					className="mx-auto"
+					enableZoom={false}
+				/>
+			</div>
+
+			<p className="text-white/60 font-minecraft lowercase text-2xl">
+				{skin.variant === 'slim' ? 'Slim' : 'Classic'}
+			</p>
+
+			{(loading || localSkinsLoading) && selectedLocalSkin?.id === skin.id && (
+				<div
+					className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-lg">
+					<span className="font-minecraft text-lg text-white lowercase animate-pulse">
+						Applying...
+					</span>
+				</div>
+			)}
+		</div>
+	);
+});
+
+const EditSkinModal = memo(({
+	skin,
+	cancel,
+	saveSkin,
+	addSkin,
+	localSkinsLoading
+}: {
+	skin?: MinecraftSkin
+	cancel: () => void,
+	saveSkin: (skin: MinecraftSkin) => Promise<void>,
+	addSkin: (skin: MinecraftSkin) => Promise<void>,
+	localSkinsLoading: boolean,
+}) => {
+	const [name, setName] = useState<string>(skin?.name ?? "");
+	const [variant, setVariant] = useState<SkinVariant>(skin?.variant ?? "classic");
+	const [skinFile, setSkinFile] = useState<File | null>(null);
+	const [skinInput, setskinInput] = useState<string>("");
+
+	const finishEditingSkin = () => {
+		if (skin) {
+			saveSkin({
+				...skin,
+				name,
+				variant,
+			});
+		} else {
+			//addSkin()
+			// skin adden, jenachdem ob skinInput oder skinFile
+		}
+	};
+
+	return (
+		<Modal
+			title={`${skin ? "Edit Skin Properties" : "Add Skin"}`}
+			onClose={cancel}
+			footer={
+				<div className="flex gap-3 justify-center">
+					<Button
+						variant="default"
+						onClick={finishEditingSkin}
+						disabled={localSkinsLoading}
+					>
+						{localSkinsLoading ? 'Saving...' : 'Save Changes'}
+					</Button>
+					<Button
+						variant="secondary"
+						onClick={cancel}
+						disabled={localSkinsLoading}
+					>
+						Cancel
+					</Button>
+				</div>
+			}
+		>
+			<div className="p-4 space-y-2">
+				<label
+					className="block font-minecraft text-3xl -mt-3 text-white/80 lowercase"
+				>
+					Skin Name
+					<input
+						type="text"
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						placeholder="Enter skin name"
+						className="w-full bg-black/30 backdrop-blur-md border-2 border-white/20 px-4 py-2 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200"
+						disabled={localSkinsLoading}
+					/>
+				</label>
+				{!skin &&
+					<div className={"flex-col w-full pt-2"}>
+						<div className={"flex"}>
+							<label
+								className="block font-minecraft text-3xl -mt-3 text-white/80 lowercase flex-grow"
+								htmlFor={"skinInputField"}
+							>
+								Skin
+							</label>
+						</div>
+						<div className={"flex space-x-4"}>
+							<input
+								id={"skinInputField"}
+								type="text"
+								value={skinInput}
+								onChange={(e) => setskinInput(e.target.value)}
+								placeholder="Copy by username, UUID or download from URL"
+								className="w-full bg-black/30 backdrop-blur-md border-2 border-white/20 px-4 py-2 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200"
+								disabled={localSkinsLoading}
+							/>
+							<button
+								className="p-4 aspect-square bg-black/30 hover:bg-black/60 backdrop-blur-md border-2 border-white/20 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-300"
+								title={"Upload Skin from file"}
+							>
+								<Icon
+									icon="solar:folder-bold"
+									className="w-4 h-4 text-white"
+								/>
+							</button>
+						</div>
+					</div>
+				}
+				<div className={"flex"}>
+					<p className="font-minecraft text-3xl text-white/80 lowercase flex-grow">
+						Skin Variant
+					</p>
+					<div className="flex space-x-8">
+						<label className="flex items-center gap-3 cursor-pointer font-minecraft text-2xl text-white lowercase">
+							<input
+								type="radio"
+								name="editSkinVariant"
+								value="classic"
+								checked={variant === 'classic'}
+								onChange={() => setVariant('classic')}
+								disabled={localSkinsLoading}
+								className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
+							/>
+							Classic (Steve)
+						</label>
+						<label className="flex items-center gap-3 cursor-pointer font-minecraft text-2xl text-white lowercase">
+							<input
+								type="radio"
+								name="editSkinVariant"
+								value="slim"
+								checked={variant === 'slim'}
+								onChange={() => setVariant('slim')}
+								disabled={localSkinsLoading}
+								className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
+							/>
+							Slim (Alex)
+						</label>
+					</div>
+				</div>
+			</div>
+		</Modal>
+	);
+})
 
 export function SkinsTab() {
 	const {
@@ -30,8 +246,6 @@ export function SkinsTab() {
 		error: accountError,
 		initializeAccounts
 	} = useMinecraftAuthStore();
-	const accentColor = useThemeStore((state) => state.accentColor);
-
 	const [_, setSkinData] = useState<MinecraftProfile | null>(null);
 	const [loading, setLoading] = useState<boolean>(false);
 
@@ -40,13 +254,11 @@ export function SkinsTab() {
 	const [localSkinsError, setLocalSkinsError] = useState<string | null>(null);
 	const [selectedLocalSkin, setSelectedLocalSkin] = useState<MinecraftSkin | null>(null);
 
+	const [isEditingSkin, setIsEditingSkin] = useState<boolean>(false);
 	const [editingSkin, setEditingSkin] = useState<MinecraftSkin | null>(null);
-	const [editSkinName, setEditSkinName] = useState<string>("");
-	const [editSkinVariant, setEditSkinVariant] = useState<SkinVariant>("classic");
 
 	const [search, setSearch] = useState<string>("");
 	const debouncedSearch = useDebounce(search, 250);
-
 	const filteredSkins = useMemo(() => {
 		if (!debouncedSearch.trim()) return localSkins;
 		return localSkins.filter(skin =>
@@ -85,7 +297,6 @@ export function SkinsTab() {
 			setLoading(false);
 		}
 	}, [activeAccount]);
-
 	const loadLocalSkins = useCallback(async () => {
 		setLocalSkinsLoading(true);
 		try {
@@ -115,15 +326,24 @@ export function SkinsTab() {
 		}
 	}, [activeAccount, loadSkinData, loadLocalSkins, initializeAccounts, accountLoading]);
 
-	const handleUploadSkin = async () => {
+	const startEditSkin = (skin: MinecraftSkin | null, event?: React.MouseEvent<HTMLButtonElement> | undefined) => {
+		event?.stopPropagation();
+		setEditingSkin(skin);
+		setIsEditingSkin(true);
+	};
+
+	const cancelEditSkin = () => {
+		setEditingSkin(null);
+		setIsEditingSkin(false);
+	};
+
+	/*const handleUploadSkin = async () => {
 		if (!activeAccount) return;
 		setLoading(true);
 
 		try {
-			// Use the service method
 			await MinecraftSkinService.uploadSkin(activeAccount.id, activeAccount.access_token, selectedLocalSkin.variant);
-
-			toast.success("Skin updated successfully and added to your local library!");
+			toast.success("Skin successfully added to library!");
 			await loadSkinData(); // Reload current skin
 			await loadLocalSkins(); // Reload library
 		} catch (err) {
@@ -138,7 +358,46 @@ export function SkinsTab() {
 		} finally {
 			setLoading(false);
 		}
+	};*/
+
+	const saveSkin = async (skin: MinecraftSkin) => {
+		if (!skin) return;
+		setLocalSkinsLoading(true);
+
+		try {
+			const updatedSkin = await MinecraftSkinService.updateSkinProperties(
+				skin.id,
+				skin.name,
+				skin.variant
+			);
+
+			if (updatedSkin) {
+				toast.success(`Successfully updated skin: ${updatedSkin.name}`);
+				setLocalSkins(prevSkins =>
+					prevSkins.map(s => s.id === updatedSkin.id ? updatedSkin : s)
+				);
+				if (selectedLocalSkin?.id === updatedSkin.id) {
+					setSelectedLocalSkin(updatedSkin);
+				}
+				setIsEditingSkin(false);
+				setEditingSkin(null);
+			} else {
+				setLocalSkinsError("Skin not found. It may have been deleted.");
+				setEditingSkin(null); // Also exit edit mode if skin disappeared
+				setIsEditingSkin(false);
+			}
+		} catch (err) {
+			console.error("Error updating skin properties:", err);
+			setLocalSkinsError(err instanceof Error ? err.message : String(err));
+			// Keep edit mode open on error so user can retry or cancel
+		} finally {
+			setLocalSkinsLoading(false);
+		}
 	};
+
+	const addSkin = async (skin: MinecraftSkin) => {
+
+	}
 
 	const applyLocalSkin = async (skin: MinecraftSkin) => {
 		if (!activeAccount) {
@@ -167,68 +426,14 @@ export function SkinsTab() {
 		}
 	};
 
-	const startEditSkin = (skin: MinecraftSkin, event: React.MouseEvent) => {
-		event.stopPropagation(); // Prevent triggering applyLocalSkin
-		setEditingSkin(skin);
-		setEditSkinName(skin.name);
-		setEditSkinVariant(skin.variant);
-	};
-
-	const cancelEditSkin = () => {
-		setEditingSkin(null);
-	};
-
-	const saveEditSkin = async () => {
-		if (!editingSkin) return;
-		setLocalSkinsLoading(true); // Use local skins loading state for this operation
-
-		try {
-			// Use the service method
-			const updatedSkin = await MinecraftSkinService.updateSkinProperties(
-				editingSkin.id,
-				editSkinName,
-				editSkinVariant
-			);
-
-			if (updatedSkin) {
-				toast.success(`Successfully updated skin: ${updatedSkin.name}`);
-				setLocalSkins(prevSkins =>
-					prevSkins.map(s => s.id === updatedSkin.id ? updatedSkin : s)
-				);
-				if (selectedLocalSkin?.id === updatedSkin.id) {
-					setSelectedLocalSkin(updatedSkin);
-				}
-				setEditingSkin(null); // Exit edit mode on success
-			} else {
-				setLocalSkinsError("Skin not found. It may have been deleted.");
-				setEditingSkin(null); // Also exit edit mode if skin disappeared
-			}
-		} catch (err) {
-			console.error("Error updating skin properties:", err);
-			setLocalSkinsError(err instanceof Error ? err.message : String(err));
-			// Keep edit mode open on error so user can retry or cancel
-		} finally {
-			setLocalSkinsLoading(false);
-		}
-	};
-
 	return (
 		<div className="h-full flex flex-col overflow-hidden">
 			<TabHeader title="Skins" icon="pixel:user-solid" className={"flex-row"}>
 				<SearchInput
 					value={search}
 					onChange={setSearch}
-					className="w-full md:w-auto flex-grow md:flex-grow-0 text-2xl"
+					className="text-2xl"
 				/>
-				<Button
-					variant="default"
-					onClick={handleUploadSkin}
-					disabled={loading}
-					className="text-lg py-2 px-5 font-minecraft lowercase justify-self-end"
-					icon={<Icon icon="pixel:upload-solid" className="w-5 h-5"/>}
-				>
-					Upload New Skin
-				</Button>
 			</TabHeader>
 			<TabContent>
 				<div
@@ -250,7 +455,7 @@ export function SkinsTab() {
 								: (
 									<>
 										{/* Local Skins Section - Styled */}
-										<div className="space-y-5">
+										<div className="space-y-5 text-center">
 											{localSkinsLoading && !editingSkin && (
 												<p className="text-white/70 italic font-minecraft text-lg">Loading local skins...</p>
 											)}
@@ -274,69 +479,31 @@ export function SkinsTab() {
 
 											<div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
 												{filteredSkins.map((skin, index) => (
-													<div
+													<SkinPreview
 														key={skin.id}
-														className={
-															`relative group bg-black/20 backdrop-blur-md border-2 rounded-lg p-4 pt-1 pb-2 transition-all 
-														duration-200 cursor-pointer border-white/20 hover:border-white/40 hover:bg-black/30 flex-col text-center animate-slide-up-fade-in
-                            ${(loading || localSkinsLoading) && selectedLocalSkin?.id === skin.id ? 'opacity-60 pointer-events-none' : ''}`
-														}
-														style={{
-															animationDelay: `${index * 0.075}s`,
-															borderColor: selectedLocalSkin?.id === skin.id ? `${accentColor.value}80` : undefined,
-															backgroundColor: selectedLocalSkin?.id === skin.id ? `${accentColor.value}10` : undefined,
-														}}
-														onClick={() => !loading && !localSkinsLoading && applyLocalSkin(skin)}
-													>
-														<button
-															className="absolute bottom-1.5 right-1.5 z-10 p-1.5 text-white/70 rounded
-																				 opacity-0 group-hover:opacity-100 transition-opacity hover:text-white
-																				 disabled:opacity-50 disabled:pointer-events-none"
-															onClick={(e) => startEditSkin(skin, e)}
-															title="Edit skin properties"
-															disabled={loading || localSkinsLoading}
-														>
-															<Icon icon="pixel:edit-solid" className="w-4 h-4"/>
-														</button>
-
-
-														<p className="font-minecraft text-white lowercase truncate text-3xl" title={skin.name}>
-															{skin.name}
-														</p>
-
-														<div className="h-64 flex relative pt-2 pb-2">
-															<SkinViewer
-																skinUrl={`data:image/png;base64,${skin.base64_data}`}
-																width={130}
-																height={260}
-																className="mx-auto"
-															/>
-														</div>
-
-														<p className="text-white/60 font-minecraft lowercase text-2xl">
-															{skin.variant === 'slim' ? 'Slim' : 'Classic'}
-														</p>
-
-														{(loading || localSkinsLoading) && selectedLocalSkin?.id === skin.id && (
-															<div
-																className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-lg">
-																<span className="font-minecraft text-lg text-white lowercase animate-pulse">
-																	Applying...
-																</span>
-															</div>
-														)}
-													</div>
+														skin={skin}
+														index={index}
+														loading={loading}
+														localSkinsLoading={localSkinsLoading}
+														selectedLocalSkin={selectedLocalSkin}
+														onClick={applyLocalSkin}
+														onEditSkin={startEditSkin}
+													/>
 												))}
-												<div
-													className={
-														`relative group bg-black/20 backdrop-blur-md border-2 rounded-lg p-4 pt-1 pb-2 transition-all 
-														duration-200 cursor-pointer border-white/60 hover:border-white/80 hover:bg-black/30 flex-col text-center animate-slide-up-fade-in
-                          `}
-													style={{
-														animationDelay: `${(localSkins.length + 1) * 0.075}s`,
-													}}
-												>
-												</div>
+												<SkinPreview
+													skin={{
+														id: "add-skin",
+														name: "Add New Skin",
+														base64_data: "",
+														variant: "classic",
+													} as MinecraftSkin}
+													skinUrl={"/skins/add_skin.png"}
+													index={filteredSkins.length + 1}
+													loading={loading}
+													localSkinsLoading={localSkinsLoading}
+													selectedLocalSkin={selectedLocalSkin}
+													onClick={() => startEditSkin(null, undefined)}
+												/>
 											</div>
 										</div>
 									</>
@@ -344,77 +511,14 @@ export function SkinsTab() {
 				</div>
 			</TabContent>
 
-			{editingSkin && (
-				<Modal
-					title={"Edit Skin Properties"}
-					onClose={() => setEditingSkin(null)}
-					footer={
-						<div className="flex gap-3 justify-center">
-							<Button
-								variant="default"
-								onClick={saveEditSkin}
-								disabled={localSkinsLoading}
-							>
-								{localSkinsLoading ? 'Saving...' : 'Save Changes'}
-							</Button>
-							<Button
-								variant="secondary"
-								onClick={cancelEditSkin}
-								disabled={localSkinsLoading}
-							>
-								Cancel
-							</Button>
-						</div>
-					}
-				>
-					<div className="p-4 space-y-2">
-						<label
-							className="block font-minecraft text-3xl -mt-3 text-white/80 lowercase"
-						>
-							Skin Name
-							<input
-								type="text"
-								value={editSkinName}
-								onChange={(e) => setEditSkinName(e.target.value)}
-								placeholder="Enter skin name"
-								className="w-full bg-black/30 backdrop-blur-md border-2 border-white/20 px-4 py-2 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200"
-								disabled={localSkinsLoading}
-							/>
-						</label>
-						<div className={"flex"}>
-							<p className="font-minecraft text-3xl text-white/80 lowercase flex-grow">
-								Skin Variant
-							</p>
-							<div className="flex space-x-8">
-								<label className="flex items-center gap-3 cursor-pointer font-minecraft text-2xl text-white lowercase">
-									<input
-										type="radio"
-										name="editSkinVariant"
-										value="classic"
-										checked={editSkinVariant === 'classic'}
-										onChange={() => setEditSkinVariant('classic')}
-										disabled={localSkinsLoading}
-										className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
-									/>
-									Classic (Steve)
-								</label>
-								<label className="flex items-center gap-3 cursor-pointer font-minecraft text-2xl text-white lowercase">
-									<input
-										type="radio"
-										name="editSkinVariant"
-										value="slim"
-										checked={editSkinVariant === 'slim'}
-										onChange={() => setEditSkinVariant('slim')}
-										disabled={localSkinsLoading}
-										className="appearance-none w-5 h-5 rounded-full border-2 border-white/30 bg-black/20 checked:bg-blue-500 checked:border-blue-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black/30 focus:ring-blue-500 transition duration-200 cursor-pointer"
-									/>
-									Slim (Alex)
-								</label>
-							</div>
-						</div>
-
-					</div>
-				</Modal>
+			{isEditingSkin && (
+				<EditSkinModal
+					skin={editingSkin}
+					cancel={cancelEditSkin}
+					saveSkin={saveSkin}
+					addSkin={addSkin}
+					localSkinsLoading={localSkinsLoading}
+				/>
 			)}
 		</div>
 	);
