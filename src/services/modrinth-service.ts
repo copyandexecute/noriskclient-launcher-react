@@ -10,6 +10,7 @@ import type {
   ModrinthVersion,
   ModrinthCategory,
   ModrinthLoader,
+  ModrinthGameVersion,
 } from "../types/modrinth";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -111,5 +112,9 @@ export class ModrinthService {
 
   static async getModrinthLoaders(): Promise<ModrinthLoader[]> {
     return invoke<ModrinthLoader[]>("get_modrinth_loaders_command");
+  }
+
+  static async getModrinthGameVersions(): Promise<ModrinthGameVersion[]> {
+    return invoke<ModrinthGameVersion[]>("get_modrinth_game_versions_command");
   }
 }

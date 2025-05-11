@@ -246,3 +246,16 @@ pub async fn get_modrinth_loaders_command() -> Result<Vec<modrinth::ModrinthLoad
     log::info!("Successfully fetched {} loaders for frontend", loaders.len());
     Ok(loaders)
 }
+
+/// Fetches a list of all game versions from Modrinth.
+#[tauri::command]
+pub async fn get_modrinth_game_versions_command() -> Result<Vec<modrinth::ModrinthGameVersion>, CommandError> {
+    log::debug!("Received get_modrinth_game_versions_command");
+
+    let game_versions = modrinth::get_modrinth_game_versions()
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!("Successfully fetched {} game versions for frontend", game_versions.len());
+    Ok(game_versions)
+}

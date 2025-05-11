@@ -212,6 +212,14 @@ pub struct ModrinthLoader {
     pub name: String,
     pub supported_project_types: Vec<String>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthGameVersion {
+    pub version: String,       // The name/number of the game version (e.g., "1.18.1")
+    pub version_type: String,  // Type: "release", "snapshot", "alpha", "beta"
+    pub date: String,          // ISO 8601 date string
+    pub major: bool,           // Whether it's a major version
+}
 // --- End Structures for Tags/Categories ---
 
 // NEUE Struktur für den Input der Bulk-Abfrage
@@ -1101,4 +1109,51 @@ pub async fn get_modrinth_loaders() -> Result<Vec<ModrinthLoader>> {
 
     log::info!("Successfully fetched {} loaders.", loaders.len());
     Ok(loaders)
+}
+
+/// Fetches a list of all game versions from Modrinth.
+/// https://docs.modrinth.com/api/operations/versionlist/
+pub async fn get_modrinth_game_versions() -> Result<Vec<ModrinthGameVersion>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tag/game_version", MODRINTH_API_BASE_URL);
+
+    log::info!("Fetching Modrinth game versions from: {}", url);
+
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch game versions failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body from game versions endpoint".to_string());
+        log::error!(
+            "Modrinth API error fetching game versions (Status: {}): {}",
+            status,
+            error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} fetching game versions: {}",
+            status, error_text
+        )));
+    }
+
+    let game_versions = response
+        .json::<Vec<ModrinthGameVersion>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth game versions response: {}", e)))?;
+
+    log::info!("Successfully fetched {} game versions.", game_versions.len());
+    Ok(game_versions)
 }

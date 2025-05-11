@@ -241,3 +241,12 @@ export interface ModrinthLoader {
     name: string;                // Name of the loader (e.g., "fabric")
     supported_project_types: string[]; // Project types this loader is applicable to
 }
+
+export type ModrinthGameVersionType = "release" | "snapshot" | "alpha" | "beta";
+
+export interface ModrinthGameVersion {
+    version: string;                   // The name/number of the game version (e.g., "1.18.1")
+    version_type: ModrinthGameVersionType; // Type of the game version
+    date: string;                      // The date of the game version release (ISO-8601)
+    major: boolean;                    // Whether or not this is a major version
+}
