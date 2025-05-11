@@ -18,6 +18,7 @@ import {
 } from "./types/events";
 import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
 import { useCrashModalStore } from "./store/crash-modal-store";
+import {SkinsTab} from "./components/tabs/SkinsTab.tsx";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
@@ -93,7 +94,7 @@ export function App() {
       case "mods":
         return <ModrinthTab />;
       case "skins":
-        return null;
+        return <SkinsTab />;
       case "store":
         return null;
       case "news":
