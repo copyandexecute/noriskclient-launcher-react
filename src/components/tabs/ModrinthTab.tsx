@@ -23,6 +23,7 @@ export function ModrinthTab({
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedGameVersions, setSelectedGameVersions] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -68,8 +69,9 @@ export function ModrinthTab({
           </div>
           <div className="w-1/4 max-w-xs flex-shrink-0">
             <ModrinthFilters
-              projectType="modpack"
+              projectType="mod"
               onFilterChange={setSelectedCategories}
+              onGameVersionChange={setSelectedGameVersions}
             />
           </div>
         </div>
