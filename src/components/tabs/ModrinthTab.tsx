@@ -8,6 +8,7 @@ import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { Card } from "../ui/Card";
 import { useThemeStore } from "../../store/useThemeStore";
+import { ModrinthFilters } from "../modrinth/ModrinthFilters";
 
 interface ModrinthTabProps {
   profiles?: Profile[];
@@ -21,6 +22,10 @@ export function ModrinthTab({
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedGameVersions, setSelectedGameVersions] = useState<string[]>([]);
+  const [selectedLoaders, setSelectedLoaders] = useState<string[]>([]);
+  const [selectedEnvironmentOptions, setSelectedEnvironmentOptions] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -49,22 +54,33 @@ export function ModrinthTab({
   }, []);
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden p-4">
+    <div className="h-full flex flex-col overflow-hidden p-4">
       {error && <ErrorMessage message={error} />}
 
       {!profilesLoaded ? (
         <LoadingState message="Loading profiles..." />
       ) : (
-        <div className="flex-1 overflow-hidden">
-          <ModrinthSearch
-            key={`search-${refreshKey}`}
-            profiles={profiles}
-            onInstallSuccess={handleInstallSuccess}
-            className="h-full"
-          />
+        <div className="flex-1 overflow-hidden flex space-x-4">
+          <div className="flex-1 overflow-hidden">
+            <ModrinthSearch
+              key={`search-${refreshKey}`}
+              profiles={profiles}
+              onInstallSuccess={handleInstallSuccess}
+              className="h-full"
+            />
+          </div>
+          <div className="w-1/4 max-w-xs flex-shrink-0">
+            <ModrinthFilters
+              projectType="mod"
+              onFilterChange={setSelectedCategories}
+              onGameVersionChange={setSelectedGameVersions}
+              onLoaderChange={setSelectedLoaders}
+              onEnvironmentChange={setSelectedEnvironmentOptions}
+            />
+          </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 

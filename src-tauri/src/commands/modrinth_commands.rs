@@ -18,16 +18,22 @@ pub async fn search_modrinth_projects(
     limit: Option<u32>,
     offset: Option<u32>,
     sort: Option<ModrinthSortType>,
+    categories_filter: Option<Vec<String>>,
+    client_side_filter: Option<String>,
+    server_side_filter: Option<String>,
 ) -> Result<ModrinthSearchResponse, CommandError> {
     log::debug!(
-        "Received search_modrinth_projects command: query={}, project_type={:?}, version={}, loader={}, limit={:?}, offset={:?}, sort={:?}",
+        "Received search_modrinth_projects command: query={}, project_type={:?}, version={}, loader={}, limit={:?}, offset={:?}, sort={:?}, categories={:?}, client_side={:?}, server_side={:?}",
         query,
         project_type,
         game_version.as_deref().unwrap_or("None"),
         loader.as_deref().unwrap_or("None"),
         limit,
         offset,
-        sort
+        sort,
+        categories_filter,
+        client_side_filter,
+        server_side_filter
     );
 
     let result = search_projects(
@@ -38,6 +44,9 @@ pub async fn search_modrinth_projects(
         limit,
         offset,
         sort,
+        categories_filter,
+        client_side_filter,
+        server_side_filter,
     )
     .await
     .map_err(CommandError::from)?;
@@ -210,4 +219,43 @@ pub async fn check_modrinth_updates(
     log::info!("Found updates for {} mods", updates.len());
 
     Ok(updates)
+}
+
+/// Fetches a list of all categories from Modrinth.
+#[tauri::command]
+pub async fn get_modrinth_categories_command() -> Result<Vec<modrinth::ModrinthCategory>, CommandError> {
+    log::debug!("Received get_modrinth_categories_command");
+
+    let categories = modrinth::get_modrinth_categories()
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!("Successfully fetched {} categories for frontend", categories.len());
+    Ok(categories)
+}
+
+/// Fetches a list of all loaders from Modrinth.
+#[tauri::command]
+pub async fn get_modrinth_loaders_command() -> Result<Vec<modrinth::ModrinthLoader>, CommandError> {
+    log::debug!("Received get_modrinth_loaders_command");
+
+    let loaders = modrinth::get_modrinth_loaders()
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!("Successfully fetched {} loaders for frontend", loaders.len());
+    Ok(loaders)
+}
+
+/// Fetches a list of all game versions from Modrinth.
+#[tauri::command]
+pub async fn get_modrinth_game_versions_command() -> Result<Vec<modrinth::ModrinthGameVersion>, CommandError> {
+    log::debug!("Received get_modrinth_game_versions_command");
+
+    let game_versions = modrinth::get_modrinth_game_versions()
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!("Successfully fetched {} game versions for frontend", game_versions.len());
+    Ok(game_versions)
 }

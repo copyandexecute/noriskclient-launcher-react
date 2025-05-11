@@ -51,6 +51,7 @@ pub async fn get_full_log(process_id: Uuid) -> Result<String, CommandError> {
 pub async fn open_log_window<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     process_id: Uuid,
+    is_live_logs: Option<bool>,
 ) -> Result<(), CommandError> {
     let window_label = format!("log_window_{}", process_id);
 
@@ -64,10 +65,12 @@ pub async fn open_log_window<R: tauri::Runtime>(
         return Ok(());
     }
 
+    let is_live = is_live_logs.unwrap_or(false);
+    
     let window = tauri::WebviewWindowBuilder::new(
         &app,
         &window_label,
-        tauri::WebviewUrl::App(format!("log-window.html?processId={}", process_id).into()),
+        tauri::WebviewUrl::App(format!("log-window.html?processId={}&isLiveLogs={}", process_id, is_live).into()),
     )
     .title(format!("Minecraft Logs ({})", process_id))
     .inner_size(1200.0, 800.0)

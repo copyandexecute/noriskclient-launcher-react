@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { TabContent } from "../ui/TabContent";
 import { Icon } from "@iconify/react";
 import { Button } from "../ui/buttons/Button";
 import { Input } from "../ui/Input";
@@ -35,9 +34,9 @@ export function SettingsTab() {
     "general",
   );
   const contentRef = useRef<HTMLDivElement>(null);
+  const tabRef = useRef<HTMLDivElement>(null);
 
   const { accentColor } = useThemeStore();
-
   const { currentEffect, setCurrentEffect } = useBackgroundEffectStore();
 
   const backgroundOptions = [
@@ -105,6 +104,20 @@ export function SettingsTab() {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (tabRef.current) {
+      gsap.fromTo(
+        tabRef.current,
+        { opacity: 0 },
+        {
+          opacity: 1,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -287,20 +300,45 @@ export function SettingsTab() {
           >
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
+                Open Logs After Starting
+              </h5>
+            </div>
+            <ToggleSwitch
+              checked={tempConfig?.open_logs_after_starting || false}
+              onChange={(checked) =>
+                tempConfig &&
+                setTempConfig({
+                  ...tempConfig,
+                  open_logs_after_starting: checked,
+                })
+              }
+              disabled={saving}
+              size="lg"
+            />
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Concurrent Downloads
               </h5>
             </div>
-            <Input
-              type="number"
-              id="concurrent_downloads"
-              min="1"
-              max="10"
-              value={tempConfig?.concurrent_downloads || 3}
-              onChange={handleConcurrentDownloadsChange}
-              disabled={saving}
-              className="w-24"
-              icon={<Icon icon="solar:sort-by-time-bold" />}
-            />
+            <div className="flex items-center">
+              <Input
+                type="number"
+                id="concurrent_downloads"
+                min="1"
+                max="10"
+                value={tempConfig?.concurrent_downloads || 3}
+                onChange={handleConcurrentDownloadsChange}
+                disabled={saving}
+                className="w-24"
+                icon={<Icon icon="solar:sort-by-time-bold" />}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -506,126 +544,84 @@ export function SettingsTab() {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto">
-      <TabContent>
-        <div className="overflow-y-auto px-2 py-4">
-          {/* Settings Content */}
-          <div
-            className={cn(
-              "relative overflow-hidden transition-all duration-300 mb-4 rounded-md",
-              "border-2 border-b-4",
-              "bg-black/20 backdrop-blur-md",
-            )}
-            style={cardStyle}
+    <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
+      <div
+        className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 border-b-2 sticky top-0 z-10"
+        style={{
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}60`,
+          boxShadow: `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)`,
+        }}
+      >
+        <div className="flex items-center gap-3 flex-wrap">
+          <Label
+            variant={activeTab === "general" ? "default" : "ghost"}
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setActiveTab("general")}
+            icon={
+              <Icon icon="solar:settings-bold" className="w-4 h-4 text-white" />
+            }
           >
-            <div className="p-6">
-              <div className="mb-6">
-                <h2 className="text-4xl font-minecraft text-white mb-2 lowercase">
-                  Launcher Settings
-                </h2>
-                <p className="text-xl text-white/70 font-minecraft">
-                  Customize your NoRisk Launcher experience
-                </p>
-              </div>
-
-              <div className="flex mb-6 border-b border-white/10">
-                <button
-                  onClick={() => setActiveTab("general")}
-                  className={`px-4 py-3 text-2xl font-minecraft lowercase transition-colors flex items-center gap-2 ${
-                    activeTab === "general"
-                      ? "text-white border-b-2 border-[var(--accent,#4f8eff)]"
-                      : "text-white/60 hover:text-white/80"
-                  }`}
-                  style={{
-                    borderColor:
-                      activeTab === "general" ? accentColor.value : undefined,
-                  }}
-                >
-                  <Icon icon="solar:settings-bold" className="w-5 h-5" />
-                  General
-                </button>
-                <button
-                  onClick={() => setActiveTab("appearance")}
-                  className={`px-4 py-3 text-2xl font-minecraft lowercase transition-colors flex items-center gap-2 ${
-                    activeTab === "appearance"
-                      ? "text-white border-b-2 border-[var(--accent,#4f8eff)]"
-                      : "text-white/60 hover:text-white/80"
-                  }`}
-                  style={{
-                    borderColor:
-                      activeTab === "appearance"
-                        ? accentColor.value
-                        : undefined,
-                  }}
-                >
-                  <Icon icon="solar:brush-bold" className="w-5 h-5" />
-                  Appearance
-                </button>
-              </div>
-
-              <div ref={contentRef} className="mb-8">
-                {renderTabContent()}
-              </div>
-
-              {!loading && !error && config && tempConfig && (
-                <div
-                  className="sticky bottom-0 flex justify-between items-center gap-4 py-4 px-6 -mx-6 -mb-6 bg-black/50 backdrop-blur-md border-t border-white/10"
-                  style={{
-                    boxShadow: "0 -10px 15px -5px rgba(0,0,0,0.3)",
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    {saveSuccess && (
-                      <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1.5 rounded-md">
-                        <Icon
-                          icon="solar:check-circle-bold"
-                          className="w-5 h-5"
-                        />
-                        <span className="text-xl font-minecraft">
-                          Settings saved!
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={resetChanges}
-                      disabled={saving || !hasChanges}
-                      variant="secondary"
-                      icon={
-                        <Icon icon="solar:refresh-bold" className="w-6 h-6" />
-                      }
-                      size="md"
-                    >
-                      Reset
-                    </Button>
-                    <Button
-                      onClick={saveConfig}
-                      disabled={saving || !hasChanges}
-                      variant="default"
-                      icon={<Icon icon="solar:disk-bold" className="w-6 h-6" />}
-                      size="md"
-                    >
-                      {saving ? (
-                        <>
-                          <Icon
-                            icon="solar:refresh-bold"
-                            className="w-6 h-6 animate-spin"
-                          />
-                          <span>Saving...</span>
-                        </>
-                      ) : (
-                        "Save"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+            general
+          </Label>
+          <Label
+            variant={activeTab === "appearance" ? "default" : "ghost"}
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setActiveTab("appearance")}
+            icon={
+              <Icon icon="solar:brush-bold" className="w-4 h-4 text-white" />
+            }
+          >
+            appearance
+          </Label>
         </div>
-      </TabContent>
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={resetChanges}
+            disabled={saving || !hasChanges}
+            variant="secondary"
+            size="sm"
+            icon={<Icon icon="solar:refresh-bold" className="w-4 h-4" />}
+          >
+            Reset
+          </Button>
+          <Button
+            onClick={saveConfig}
+            disabled={saving || !hasChanges}
+            variant="default"
+            size="sm"
+            icon={<Icon icon="solar:disk-bold" className="w-4 h-4" />}
+          >
+            {saving ? (
+              <>
+                <Icon
+                  icon="solar:refresh-bold"
+                  className="w-4 h-4 animate-spin"
+                />
+                <span>Saving...</span>
+              </>
+            ) : (
+              "Save"
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar">
+        <div ref={contentRef}>
+          {saveSuccess && (
+            <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-4 py-3 rounded-md mb-4">
+              <Icon icon="solar:check-circle-bold" className="w-5 h-5" />
+              <span className="text-xl font-minecraft">Settings saved!</span>
+            </div>
+          )}
+
+          {renderTabContent()}
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export const BACKGROUND_EFFECTS = {
   MATRIX_RAIN: "matrix_rain",
@@ -16,9 +17,14 @@ interface BackgroundEffectState {
   setCurrentEffect: (effect: string) => void;
 }
 
-export const useBackgroundEffectStore = create<BackgroundEffectState>(
-  (set) => ({
-    currentEffect: BACKGROUND_EFFECTS.MATRIX_RAIN,
-    setCurrentEffect: (effect) => set({ currentEffect: effect }),
-  }),
+export const useBackgroundEffectStore = create<BackgroundEffectState>()(
+  persist(
+    (set) => ({
+      currentEffect: BACKGROUND_EFFECTS.MATRIX_RAIN,
+      setCurrentEffect: (effect) => set({ currentEffect: effect }),
+    }),
+    {
+      name: "norisk-background-effect-storage",
+    }
+  )
 );

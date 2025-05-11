@@ -197,6 +197,31 @@ pub struct ModrinthGalleryImage {
 
 // --- End Structures for Bulk Project Lookup ---
 
+// --- Structures for Tags/Categories ---
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthCategory {
+    pub icon: String,            // SVG icon content
+    pub name: String,            // Name of the category (e.g., "adventure")
+    pub project_type: String,    // Project type this category applies to (e.g., "mod")
+    pub header: String,          // Header for grouping (e.g., "gameplay")
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthLoader {
+    pub icon: String,
+    pub name: String,
+    pub supported_project_types: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthGameVersion {
+    pub version: String,       // The name/number of the game version (e.g., "1.18.1")
+    pub version_type: String,  // Type: "release", "snapshot", "alpha", "beta"
+    pub date: String,          // ISO 8601 date string
+    pub major: bool,           // Whether it's a major version
+}
+// --- End Structures for Tags/Categories ---
+
 // NEUE Struktur für den Input der Bulk-Abfrage
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ModrinthProjectContext {
@@ -262,6 +287,9 @@ pub async fn search_projects(
     limit: Option<u32>,
     offset: Option<u32>,
     sort: Option<ModrinthSortType>,
+    categories_filter: Option<Vec<String>>,
+    client_side_filter: Option<String>,
+    server_side_filter: Option<String>,
 ) -> Result<ModrinthSearchResponse> {
     let client = reqwest::Client::new();
     let base_url = format!("{}/search", MODRINTH_API_BASE_URL);
@@ -310,6 +338,35 @@ pub async fn search_projects(
         let loader_facet = format!("categories:{}", ld.to_lowercase());
         log::debug!("Modrinth search - Adding loader facet: {}", loader_facet);
         facets.push(loader_facet);
+    }
+
+    // Add categories filter (can be multiple)
+    if let Some(cats) = categories_filter {
+        for cat_value in cats {
+            if !cat_value.is_empty() {
+                let category_facet = format!("categories:{}", cat_value.to_lowercase()); // Assuming categories are best lowercased
+                log::debug!("Modrinth search - Adding category facet: {}", category_facet);
+                facets.push(category_facet);
+            }
+        }
+    }
+
+    // Add client_side filter
+    if let Some(cs_filter_val) = client_side_filter {
+        if !cs_filter_val.is_empty() {
+            let client_facet = format!("client_side:{}", cs_filter_val);
+            log::debug!("Modrinth search - Adding client_side facet: {}", client_facet);
+            facets.push(client_facet);
+        }
+    }
+
+    // Add server_side filter
+    if let Some(ss_filter_val) = server_side_filter {
+        if !ss_filter_val.is_empty() {
+            let server_facet = format!("server_side:{}", ss_filter_val);
+            log::debug!("Modrinth search - Adding server_side facet: {}", server_facet);
+            facets.push(server_facet);
+        }
     }
 
     // Modrinth expects facets like: [["versions:1.20.1"],["categories:fabric"]]
@@ -376,6 +433,9 @@ pub async fn search_mods(
         game_version,
         loader,
         limit,
+        None,
+        None,
+        None,
         None,
         None,
     )
@@ -955,4 +1015,145 @@ pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProje
     );
 
     Ok(projects)
+}
+
+/// Fetches a list of all categories from Modrinth.
+/// https://docs.modrinth.com/api/operations/categorylist/
+pub async fn get_modrinth_categories() -> Result<Vec<ModrinthCategory>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tag/category", MODRINTH_API_BASE_URL);
+
+    log::info!("Fetching Modrinth categories from: {}", url);
+
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch categories failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body from categories endpoint".to_string());
+        log::error!(
+            "Modrinth API error fetching categories (Status: {}): {}",
+            status,
+            error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} fetching categories: {}",
+            status, error_text
+        )));
+    }
+
+    let categories = response
+        .json::<Vec<ModrinthCategory>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth categories response: {}", e)))?;
+
+    log::info!("Successfully fetched {} categories.", categories.len());
+    Ok(categories)
+}
+
+/// Fetches a list of all loaders from Modrinth.
+/// https://docs.modrinth.com/api/operations/loaderlist/
+pub async fn get_modrinth_loaders() -> Result<Vec<ModrinthLoader>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tag/loader", MODRINTH_API_BASE_URL);
+
+    log::info!("Fetching Modrinth loaders from: {}", url);
+
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch loaders failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body from loaders endpoint".to_string());
+        log::error!(
+            "Modrinth API error fetching loaders (Status: {}): {}",
+            status,
+            error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} fetching loaders: {}",
+            status, error_text
+        )));
+    }
+
+    let loaders = response
+        .json::<Vec<ModrinthLoader>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth loaders response: {}", e)))?;
+
+    log::info!("Successfully fetched {} loaders.", loaders.len());
+    Ok(loaders)
+}
+
+/// Fetches a list of all game versions from Modrinth.
+/// https://docs.modrinth.com/api/operations/versionlist/
+pub async fn get_modrinth_game_versions() -> Result<Vec<ModrinthGameVersion>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tag/game_version", MODRINTH_API_BASE_URL);
+
+    log::info!("Fetching Modrinth game versions from: {}", url);
+
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch game versions failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body from game versions endpoint".to_string());
+        log::error!(
+            "Modrinth API error fetching game versions (Status: {}): {}",
+            status,
+            error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} fetching game versions: {}",
+            status, error_text
+        )));
+    }
+
+    let game_versions = response
+        .json::<Vec<ModrinthGameVersion>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth game versions response: {}", e)))?;
+
+    log::info!("Successfully fetched {} game versions.", game_versions.len());
+    Ok(game_versions)
 }

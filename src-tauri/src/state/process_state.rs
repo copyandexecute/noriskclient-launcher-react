@@ -25,6 +25,7 @@ use uuid::Uuid;
 const PROCESSES_FILENAME: &str = "processes.json";
 
 pub struct ProcessManager {
+    app_handle: Arc<tauri::AppHandle>,
     processes: Arc<RwLock<HashMap<Uuid, Process>>>,
     processes_file_path: PathBuf,
     save_lock: Mutex<()>,
@@ -63,7 +64,10 @@ struct Process {
 }
 
 impl ProcessManager {
-    pub async fn new(processes_file_path: PathBuf) -> Result<Self> {
+    pub async fn new(
+        processes_file_path: PathBuf,
+        app_handle: Arc<tauri::AppHandle>,
+    ) -> Result<Self> {
         log::info!(
             "Initializing ProcessManager with state file: {:?}",
             processes_file_path
@@ -75,6 +79,7 @@ impl ProcessManager {
         let processes_clone = Arc::clone(&processes);
 
         let manager = Self {
+            app_handle,
             processes: processes_clone,
             processes_file_path: processes_file_path.clone(),
             save_lock,
@@ -317,6 +322,8 @@ impl ProcessManager {
                 e
             );
         }
+
+        self.schedule_auto_open_log_window(process_id);
 
         let processes_arc_clone = Arc::clone(&self.processes);
         let state_clone_res = State::get().await;
@@ -881,6 +888,54 @@ impl ProcessManager {
     /// Checks if a profile has an ongoing launch process
     pub fn has_launching_process(&self, profile_id: Uuid) -> bool {
         self.launching_processes.contains_key(&profile_id)
+    }
+
+    // Private helper to schedule the auto-opening of the log window
+    fn schedule_auto_open_log_window(&self, process_id: Uuid) {
+        let app_handle_clone = Arc::clone(&self.app_handle);
+
+        tokio::spawn(async move {
+            match crate::state::State::get().await {
+                Ok(global_state) => {
+                    let launcher_config = global_state.config_manager.get_config().await;
+                    if launcher_config.open_logs_after_starting {
+                        log::info!(
+                            "Config: Attempting to auto-open log window for process {}",
+                            process_id
+                        );
+                        match crate::commands::process_command::open_log_window(
+                            (*app_handle_clone).clone(),
+                            process_id,
+                            Some(true),
+                        )
+                        .await
+                        {
+                            Ok(()) => log::info!(
+                                "Log window for process {} successfully auto-opened.",
+                                process_id
+                            ),
+                            Err(e) => log::error!(
+                                "Error auto-opening log window for process {}: {:?}",
+                                process_id,
+                                e
+                            ),
+                        }
+                    } else {
+                        log::debug!(
+                            "Config: Auto-open log window is disabled for process {}",
+                            process_id
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::error!(
+                        "Failed to get global state to check for auto-opening log window for process {}: {}",
+                        process_id,
+                        e
+                    );
+                }
+            }
+        });
     }
 }
 

@@ -19,6 +19,7 @@ import {
 import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
 import { useCrashModalStore } from "./store/crash-modal-store";
 import {SkinsTab} from "./components/tabs/SkinsTab.tsx";
+import { refreshNrcDataOnMount } from "./services/nrc-service";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
@@ -80,6 +81,11 @@ export function App() {
       unlisten.then(f => f());
     };
   }, [openCrashModal]);
+
+  // Effect to refresh Norisk packs and standard versions on mount
+  useEffect(() => {
+    refreshNrcDataOnMount();
+  }, []); // Empty dependency array ensures this runs only on mount
 
   const handleNavChange = (tabId: string) => {
     setActiveTab(tabId);

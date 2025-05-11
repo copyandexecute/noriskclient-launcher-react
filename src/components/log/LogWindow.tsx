@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LogViewerDisplay } from "./LogViewerDisplay";
 import * as ProcessService from "../../services/process-service";
@@ -16,6 +15,8 @@ import {
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useThemeStore } from "../../store/useThemeStore";
+import { toast } from "react-hot-toast";
 
 interface MinecraftOutputPayload {
   event_type: "minecraft_output";
@@ -37,6 +38,7 @@ export function LogWindow() {
   >(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLiveLogs, setIsLiveLogs] = useState<boolean>(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [levelFilters, setLevelFilters] = useState<Record<LogLevel, boolean>>({
@@ -57,20 +59,35 @@ export function LogWindow() {
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadCompleteRef = useRef(initialLoadComplete);
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadUrl, setUploadUrl] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("processId");
+    const liveLogsUrlParam = params.get("isLiveLogs") === "true";
+
     if (id) {
       console.log(`[LogWindow] Detected processId: ${id}`);
       setProcessId(id);
+
+      if (liveLogsUrlParam) {
+        console.log(`[LogWindow] Live logs mode detected from URL. Initializing empty log view.`);
+        setIsLiveLogs(true);
+        setIsLoading(false);
+        setParsedLogLines([]);
+        setRawLogContentForCopy(null);
+        setInitialLoadComplete(true);
+      } else {
+        setIsLiveLogs(false);
+        setParsedLogLines([]);
+        setRawLogContentForCopy(null);
+        setInitialLoadComplete(false);
+      }
     } else {
       console.error("[LogWindow] No processId found in URL parameters.");
       setError("No process ID specified.");
       setIsLoading(false);
+      setInitialLoadComplete(true);
     }
   }, []);
 
@@ -86,39 +103,51 @@ export function LogWindow() {
   }, []);
 
   useEffect(() => {
-    if (!processId) return;
-
-    const fetchInitialLogs = async () => {
-      console.log(
-        `[LogWindow] Fetching initial logs for processId: ${processId}`,
-      );
-      setIsLoading(true);
-      setError(null);
+    if (!processId) {
       setParsedLogLines([]);
       setRawLogContentForCopy(null);
-
-      try {
-        const rawContent =
-          await ProcessService.getLogContentForProcess(processId);
-        setRawLogContentForCopy(rawContent);
-        const lines = parseLogLinesFromString(rawContent);
-        setParsedLogLines(lines);
-        console.log(`[LogWindow] Loaded ${lines.length} initial log lines.`);
-      } catch (err: any) {
-        console.error("[LogWindow] Failed to fetch initial logs:", err);
-        setError(err?.message ?? "Failed to load initial logs.");
-        setParsedLogLines([]);
-      } finally {
-        setIsLoading(false);
-        setInitialLoadComplete(true);
-        if (isAutoscrollEnabled) {
-          setTimeout(scrollToBottom, 0);
-        }
+      setIsLoading(false);
+      setInitialLoadComplete(false);
+      if (logListenerRef.current) {
+        logListenerRef.current();
+        logListenerRef.current = null;
       }
-    };
+      return;
+    }
 
-    if (!initialLoadComplete) {
-      fetchInitialLogs();
+    if (isLiveLogs) {
+      console.log(`[LogWindow] Live mode is active for ${processId}. Clearing logs and skipping initial fetch.`);
+      setParsedLogLines([]);
+      setRawLogContentForCopy(null);
+      setIsLoading(false);
+      setInitialLoadComplete(true);
+    } else {
+      console.log(`[LogWindow] Non-live mode for ${processId}. Fetching initial logs.`);
+      const fetchNonLiveLogs = async () => {
+        setIsLoading(true);
+        setError(null);
+        setParsedLogLines([]);
+        setRawLogContentForCopy(null);
+        try {
+          const rawContent =
+            await ProcessService.getLogContentForProcess(processId);
+          setRawLogContentForCopy(rawContent);
+          const lines = parseLogLinesFromString(rawContent);
+          setParsedLogLines(lines);
+          console.log(`[LogWindow] Loaded ${lines.length} initial log lines.`);
+        } catch (err: any) {
+          console.error("[LogWindow] Failed to fetch initial logs:", err);
+          setError(err?.message ?? "Failed to load initial logs.");
+          setParsedLogLines([]);
+        } finally {
+          setIsLoading(false);
+          setInitialLoadComplete(true);
+          if (isAutoscrollEnabled) {
+            setTimeout(scrollToBottom, 0);
+          }
+        }
+      };
+      fetchNonLiveLogs();
     }
 
     let isSubscribed = true;
@@ -187,18 +216,22 @@ export function LogWindow() {
         logListenerRef.current = null;
       }
       setInitialLoadComplete(false);
+      setIsLoading(true);
     };
-  }, [processId, isAutoscrollEnabled, scrollToBottom]);
+  }, [processId, isLiveLogs, isAutoscrollEnabled, scrollToBottom]);
 
   useEffect(() => {
-    const filteredLines = parsedLogLines.filter((line) => {
-      const levelMatch = !line.level || levelFilters[line.level];
-      const searchMatch =
-        !searchTerm ||
-        line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
-      return levelMatch && searchMatch;
+    const linesAfterLevelFilter = parsedLogLines.filter((line) => {
+      if (!line.level) return true;
+      return levelFilters[line.level];
     });
-    setDisplayLines(filteredLines);
+
+    const linesAfterSearchFilter = linesAfterLevelFilter.filter((line) => {
+      if (!searchTerm) return true;
+      return line.raw.toLowerCase().includes(searchTerm.toLowerCase().trim());
+    });
+
+    setDisplayLines(linesAfterSearchFilter);
   }, [parsedLogLines, searchTerm, levelFilters]);
 
   useEffect(() => {
@@ -209,12 +242,9 @@ export function LogWindow() {
     };
   }, []);
 
-  const handleSearchChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchTerm(event.target.value);
-    },
-    [],
-  );
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchTerm(value);
+  }, []);
 
   const handleOpenFolderForProcess = useCallback(async () => {
     if (!processId) return;
@@ -271,6 +301,7 @@ export function LogWindow() {
 
     try {
       await writeText(filteredLogContent);
+      toast.success("Log content copied to clipboard!");
       setCopied(true);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => {
@@ -278,10 +309,11 @@ export function LogWindow() {
       }, 2000);
     } catch (err) {
       console.error("[LogWindow] Failed to copy log to clipboard:", err);
+      toast.error("Failed to copy log content.");
     }
   }, [displayLines]);
 
-  const handleOpenUploadUrl = useCallback(async (url: string | null) => {
+  const handleOpenUploadUrl = useCallback(async (url: string) => {
     if (!url) return;
     try {
       await openUrl(url);
@@ -291,54 +323,49 @@ export function LogWindow() {
     }
   }, []);
 
-  const handleUploadLogForProcess = useCallback(async () => {
+  const handleUploadLogForProcess = useCallback(async (): Promise<string> => {
     if (!rawLogContentForCopy) {
-      setError("No log content available to upload.");
-      return;
+      throw new Error("No log content available to upload.");
     }
-
     console.log(`[LogWindow] Uploading log content for process: ${processId}`);
-    setIsUploading(true);
-    setUploadUrl(null);
-    setUploadError(null);
     setError(null);
-
-    try {
-      const resultUrl = await uploadLogToMclogs(rawLogContentForCopy);
-      setUploadUrl(resultUrl);
-      console.log(`[LogWindow] Upload successful: ${resultUrl}`);
-    } catch (err: any) {
-      console.error(`[LogWindow] Error uploading log:`, err);
-      setUploadError(err?.message ?? "Failed to upload log");
-    } finally {
-      setIsUploading(false);
-    }
+    return uploadLogToMclogs(rawLogContentForCopy);
   }, [rawLogContentForCopy, processId]);
 
   return (
-    <div className="flex flex-col h-full bg-black/20 backdrop-blur-md text-white p-4 font-minecraft">
-      <LogViewerDisplay
-        isLoading={isLoading}
-        error={error}
-        displayLines={displayLines}
-        parsedLogLinesCount={parsedLogLines.length}
-        searchTerm={searchTerm}
-        levelFilters={levelFilters}
-        copied={copied}
-        onSearchChange={handleSearchChange}
-        onLevelFilterChange={handleLevelFilterChange}
-        onCopyLog={handleCopyLog}
-        logLevelsDefinition={LOG_LEVELS}
-        onOpenFolder={handleOpenFolderForProcess}
-        onUploadLog={handleUploadLogForProcess}
-        isUploading={isUploading}
-        uploadUrl={uploadUrl}
-        uploadError={uploadError}
-        onOpenUploadUrl={handleOpenUploadUrl}
-        isAutoscrollEnabled={isAutoscrollEnabled}
-        onAutoscrollChange={handleAutoscrollChange}
-        scrollableContainerRef={scrollableContainerRef}
-      />
+    <div 
+      className="flex flex-col h-full text-white font-minecraft"
+      style={{ backgroundColor: `${accentColor.value}10` }}
+    >
+      <div
+        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
+        style={{
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
+        <LogViewerDisplay
+          isLoading={isLoading}
+          error={error}
+          displayLines={displayLines}
+          parsedLogLinesCount={parsedLogLines.length}
+          searchTerm={searchTerm}
+          levelFilters={levelFilters}
+          copied={copied}
+          onSearchChange={handleSearchChange}
+          onLevelFilterChange={handleLevelFilterChange}
+          onCopyLog={handleCopyLog}
+          logLevelsDefinition={LOG_LEVELS}
+          onOpenFolder={handleOpenFolderForProcess}
+          onUploadLog={handleUploadLogForProcess}
+          onOpenUploadUrl={handleOpenUploadUrl}
+          isAutoscrollEnabled={isAutoscrollEnabled}
+          onAutoscrollChange={handleAutoscrollChange}
+          scrollableContainerRef={scrollableContainerRef}
+          isLiveLogs={isLiveLogs}
+        />
+      </div>
     </div>
   );
 }

@@ -196,7 +196,7 @@ export function ProfileDetailView({
           borderColor: `${accentColor.value}60`,
         }}
       >
-        <div className="py-1 flex items-center justify-center flex-1 overflow-x-auto scrollbar-hide gap-2">
+        <div className="py-1 flex items-center justify-start flex-1 overflow-x-auto scrollbar-hide gap-2">
           {tabs.map((tab) => (
             <Button
               key={tab.id}

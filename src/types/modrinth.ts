@@ -34,6 +34,9 @@ export type ModrinthProjectType = "mod" | "modpack" | "resourcepack" | "shader" 
 // Sort type enum matching backend
 export type ModrinthSortType = "relevance" | "downloads" | "follows" | "newest" | "updated";
 
+// New type for client/server side support
+export type ModrinthSideSupport = "required" | "optional" | "unsupported" | "unknown";
+
 export interface ModrinthVersion {
     id: string;
     project_id: string;
@@ -66,12 +69,19 @@ export interface ModrinthSearchHit {
     title: string;
     description: string;
     author: string | null;
-    icon_url: string | null;
+    categories: string[];
+    display_categories: string[];
+    client_side: ModrinthSideSupport;
+    server_side: ModrinthSideSupport;
     downloads: number;
     follows: number;
+    icon_url: string | null;
     latest_version: string | null;
+    date_created: string;
+    date_modified: string;
+    license: string;
+    gallery: string[];
     versions?: string[] | null;
-    // Add other fields if needed
 }
 
 // Add the context type for frontend use
@@ -188,8 +198,8 @@ export interface ModrinthProject {
     status: string; // e.g., "approved"
     moderator_message: ModrinthModeratorMessage | null;
     license: ModrinthLicense;
-    client_side: string; // "required", "optional", "unsupported", "unknown"
-    server_side: string; // "required", "optional", "unsupported", "unknown"
+    client_side: ModrinthSideSupport; // Updated type
+    server_side: ModrinthSideSupport; // Updated type
     downloads: number; // u64 in Rust
     followers: number; // u64 in Rust
     categories: string[];
@@ -215,4 +225,28 @@ export interface ModrinthBulkUpdateRequestBody {
     algorithm: ModrinthHashAlgorithm; // Use the specific type
     loaders: string[];     // List of mod loaders to filter by (e.g., ["fabric", "quilt"])
     game_versions: string[]; // List of game versions to filter by (e.g., ["1.20.1"])
+}
+
+// --- Modrinth Tag Types ---
+
+export interface ModrinthCategory {
+    icon: string;        // SVG icon content
+    name: string;        // Name of the category (e.g., "adventure")
+    project_type: string; // Project type this category applies to (e.g., "mod")
+    header: string;      // Header for grouping (e.g., "gameplay")
+}
+
+export interface ModrinthLoader {
+    icon: string;                // SVG icon content
+    name: string;                // Name of the loader (e.g., "fabric")
+    supported_project_types: string[]; // Project types this loader is applicable to
+}
+
+export type ModrinthGameVersionType = "release" | "snapshot" | "alpha" | "beta";
+
+export interface ModrinthGameVersion {
+    version: string;                   // The name/number of the game version (e.g., "1.18.1")
+    version_type: ModrinthGameVersionType; // Type of the game version
+    date: string;                      // The date of the game version release (ISO-8601)
+    major: boolean;                    // Whether or not this is a major version
 }

@@ -10,7 +10,8 @@ import { IconButton } from "../ui/buttons/IconButton";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
-import * as ProfileService from "../../services/profile-service";
+import { getStandardProfiles } from "../../services/profile-service";
+import { getLauncherConfig, setProfileGroupingPreference } from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
 import { ProfileImport } from "../profiles/ProfileImport";
@@ -67,14 +68,14 @@ export function ProfilesTab() {
 
   useEffect(() => {
     fetchProfiles();
-    fetchStandardProfiles();
+    fetchStandardProfilesAndCriterion();
   }, [fetchProfiles]);
 
-  const fetchStandardProfiles = async () => {
+  const fetchStandardProfilesAndCriterion = async () => {
     try {
       setLoadingStandard(true);
       setStandardError(null);
-      const result = await ProfileService.getStandardProfiles();
+      const result = await getStandardProfiles();
 
       if (result && result.profiles && Array.isArray(result.profiles)) {
         setStandardProfiles(result.profiles);
@@ -84,12 +85,24 @@ export function ProfilesTab() {
         console.warn("Unexpected format for standard profiles:", result);
         setStandardProfiles([]);
       }
-    } catch (error) {
-      console.error("Failed to fetch standard profiles:", error);
+    } catch (err) {
+      console.error("Failed to fetch standard profiles:", err);
       setStandardError("Failed to load NoRisk versions");
       setStandardProfiles([]);
     } finally {
       setLoadingStandard(false);
+    }
+
+    try {
+      const config = await getLauncherConfig();
+      if (config && config.profile_grouping_criterion) {
+        setGroupingCriterion(config.profile_grouping_criterion);
+      } else {
+        setGroupingCriterion("none");
+      }
+    } catch (err) {
+      console.error("Failed to fetch launcher config for grouping criterion:", err);
+      setGroupingCriterion("none");
     }
   };
 
@@ -204,6 +217,17 @@ export function ProfilesTab() {
     );
   };
 
+  const handleGroupingChange = async (newCriterion: string) => {
+    setGroupingCriterion(newCriterion);
+    try {
+      await setProfileGroupingPreference(newCriterion);
+      console.log("Grouping preference saved successfully."); // Optional: log success to console
+    } catch (error) {
+      console.error("Failed to save grouping preference:", error);
+      toast.error("Failed to save grouping preference.");
+    }
+  };
+
   return (
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
       {showDetailView && selectedProfile ? (
@@ -239,7 +263,7 @@ export function ProfilesTab() {
               />
               <Select
                 value={groupingCriterion}
-                onChange={setGroupingCriterion}
+                onChange={handleGroupingChange}
                 options={groupingOptions}
                 className="w-full md:w-52"
               />
