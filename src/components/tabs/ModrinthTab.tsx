@@ -9,6 +9,7 @@ import { ErrorMessage } from "../ui/ErrorMessage";
 import { Card } from "../ui/Card";
 import { useThemeStore } from "../../store/useThemeStore";
 import { ModrinthFilters } from "../modrinth/ModrinthFilters";
+import type { ModrinthProjectType } from "../../types/modrinth";
 
 interface ModrinthTabProps {
   profiles?: Profile[];
@@ -26,6 +27,7 @@ export function ModrinthTab({
   const [selectedGameVersions, setSelectedGameVersions] = useState<string[]>([]);
   const [selectedLoaders, setSelectedLoaders] = useState<string[]>([]);
   const [selectedEnvironmentOptions, setSelectedEnvironmentOptions] = useState<string[]>([]);
+  const [projectType, setProjectType] = useState<ModrinthProjectType>("mod");
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -53,6 +55,12 @@ export function ModrinthTab({
     setRefreshKey((prev) => prev + 1);
   }, []);
 
+  const handleProjectTypeChange = useCallback((type: ModrinthProjectType) => {
+    setProjectType(type);
+    // Clear filters when changing project type
+    setSelectedCategories([]);
+  }, []);
+
   return (
     <div className="h-full flex flex-col overflow-hidden p-4">
       {error && <ErrorMessage message={error} />}
@@ -67,11 +75,17 @@ export function ModrinthTab({
               profiles={profiles}
               onInstallSuccess={handleInstallSuccess}
               className="h-full"
+              initialProjectType={projectType}
+              onProjectTypeChange={handleProjectTypeChange}
+              selectedCategories={selectedCategories}
+              selectedGameVersions={selectedGameVersions}
+              selectedLoaders={selectedLoaders}
+              selectedEnvironmentOptions={selectedEnvironmentOptions}
             />
           </div>
           <div className="w-1/4 max-w-xs flex-shrink-0">
             <ModrinthFilters
-              projectType="mod"
+              projectType={projectType}
               onFilterChange={setSelectedCategories}
               onGameVersionChange={setSelectedGameVersions}
               onLoaderChange={setSelectedLoaders}

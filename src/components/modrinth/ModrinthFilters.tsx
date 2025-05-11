@@ -1,422 +1,375 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Icon } from "@iconify/react";
 import { ModrinthService } from "../../services/modrinth-service";
-import type {
-  ModrinthCategory,
-  ModrinthProjectType,
-  ModrinthGameVersion,
-  ModrinthLoader,
-} from "../../types/modrinth";
-import { LoadingState } from "../ui/LoadingState";
+import type { ModrinthCategory, ModrinthGameVersion, ModrinthLoader, ModrinthProjectType } from "../../types/modrinth";
+import { LoadingIndicator } from "../ui/LoadingIndicator";
 import { ErrorMessage } from "../ui/ErrorMessage";
-import { Input } from "../ui/Input";
+import { useThemeStore } from "../../store/useThemeStore";
+
+// Simple FilterGroup component
+const FilterGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
+  <div className="space-y-2">
+    <h3 className="font-minecraft-ten text-lg mb-1 text-white/80 uppercase tracking-wide">{title}</h3>
+    <div className="pl-2 space-y-1.5">{children}</div>
+  </div>
+);
+
+// Simple Accordion component
+const Accordion = ({ title, defaultOpen = false, children }: { title: string, defaultOpen?: boolean, children: React.ReactNode }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-4">
+      <div 
+        className="flex justify-between items-center cursor-pointer py-2 border-b border-white/10"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <h3 className="font-minecraft text-2xl text-white/80 tracking-wide lowercase select-none">{title}</h3>
+        <button>
+          <Icon icon={isOpen ? "pixel:chevron-up" : "pixel:chevron-down"} className="w-5 h-5 text-white/70" />
+        </button>
+      </div>
+      {isOpen && <div className="pt-3">{children}</div>}
+    </div>
+  );
+};
+
+// Simple CheckboxItem component
+const CheckboxItem = ({ 
+  id, 
+  label, 
+  checked, 
+  onChange 
+}: { 
+  id: string, 
+  label: string, 
+  checked: boolean, 
+  onChange: (checked: boolean) => void 
+}) => {
+  const accentColor = useThemeStore((state) => state.accentColor);
+  return (
+    <label 
+      htmlFor={id} 
+      className="flex items-center space-x-2 cursor-pointer hover:bg-white/5 px-2 py-1.5 rounded-sm transition-colors"
+    >
+      <input
+        type="checkbox"
+        id={id}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
+      />
+      <div 
+        className={`w-4 h-4 border border-white/20 flex items-center justify-center ${checked ? 'bg-white/20' : ''}`}
+        style={{ borderColor: checked ? accentColor.value : '' }}
+      >
+        {checked && <Icon icon="pixel:check" className="w-3 h-3" style={{ color: accentColor.value }} />}
+      </div>
+      <span className="text-white/70 font-minecraft-ten tracking-wider">{label}</span>
+    </label>
+  );
+};
 
 interface ModrinthFiltersProps {
   projectType: ModrinthProjectType;
-  onFilterChange?: (selectedCategories: string[]) => void;
-  onGameVersionChange?: (selectedGameVersions: string[]) => void;
-  onLoaderChange?: (selectedLoaders: string[]) => void;
-  onEnvironmentChange?: (selectedOptions: string[]) => void;
+  onFilterChange?: (categories: string[]) => void;
+  onGameVersionChange?: (versions: string[]) => void;
+  onLoaderChange?: (loaders: string[]) => void;
+  onEnvironmentChange?: (environments: string[]) => void;
 }
 
-export function ModrinthFilters({
+export const ModrinthFilters: React.FC<ModrinthFiltersProps> = ({
   projectType,
   onFilterChange,
   onGameVersionChange,
   onLoaderChange,
   onEnvironmentChange,
-}: ModrinthFiltersProps) {
-  console.log("[ModrinthFilters] projectType prop:", projectType);
-
-  const [allCategories, setAllCategories] = useState<ModrinthCategory[]>([]);
-  const [displayedCategories, setDisplayedCategories] = useState<ModrinthCategory[]>([]);
+}) => {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
-  const [errorCategories, setErrorCategories] = useState<string | null>(null);
-  const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState(false);
+  const [categories, setCategories] = useState<ModrinthCategory[]>([]);
+  const [filteredCategories, setFilteredCategories] = useState<ModrinthCategory[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  const [allGameVersions, setAllGameVersions] = useState<ModrinthGameVersion[]>([]);
   const [selectedGameVersions, setSelectedGameVersions] = useState<string[]>([]);
-  const [isLoadingGameVersions, setIsLoadingGameVersions] = useState(true);
-  const [errorGameVersions, setErrorGameVersions] = useState<string | null>(null);
-  const [isGameVersionsCollapsed, setIsGameVersionsCollapsed] = useState(false);
-  const [gameVersionSearchTerm, setGameVersionSearchTerm] = useState("");
-  const [showOnlyMainGameVersions, setShowOnlyMainGameVersions] = useState(true);
+  const [gameVersions, setGameVersions] = useState<ModrinthGameVersion[]>([]);
+  const [gameVersionsLoading, setGameVersionsLoading] = useState(false);
+  const [gameVersionsError, setGameVersionsError] = useState<string | null>(null);
 
-  const [allLoaders, setAllLoaders] = useState<ModrinthLoader[]>([]);
-  const [displayedLoaders, setDisplayedLoaders] = useState<ModrinthLoader[]>([]);
   const [selectedLoaders, setSelectedLoaders] = useState<string[]>([]);
-  const [isLoadingLoaders, setIsLoadingLoaders] = useState(true);
-  const [errorLoaders, setErrorLoaders] = useState<string | null>(null);
-  const [isLoadersCollapsed, setIsLoadersCollapsed] = useState(false);
+  const [loaders, setLoaders] = useState<ModrinthLoader[]>([]);
+  const [filteredLoaders, setFilteredLoaders] = useState<ModrinthLoader[]>([]);
+  const [loadersLoading, setLoadersLoading] = useState(false);
+  const [loadersError, setLoadersError] = useState<string | null>(null);
 
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string[]>([]);
-  const [isEnvironmentCollapsed, setIsEnvironmentCollapsed] = useState(false);
+  const [selectedEnvironments, setSelectedEnvironments] = useState<string[]>([]);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
+  // Group categories by header
+  const groupedCategories = filteredCategories.reduce((acc, category) => {
+    const header = category.header;
+    if (!acc[header]) {
+      acc[header] = [];
+    }
+    acc[header].push(category);
+    return acc;
+  }, {} as Record<string, ModrinthCategory[]>);
+
+  // Filter for only major game versions
+  const majorGameVersions = gameVersions
+    .filter(v => v.major)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Load categories
   useEffect(() => {
-    const fetchCategories = async () => {
-      setIsLoadingCategories(true);
+    const loadCategories = async () => {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+
       try {
-        const fetchedCategories = await ModrinthService.getModrinthCategories();
-        setAllCategories(fetchedCategories);
-        setErrorCategories(null);
-      } catch (err) {
-        console.error("Failed to fetch Modrinth categories:", err);
-        setErrorCategories(
-          `Failed to load categories: ${err instanceof Error ? err.message : String(err)}`,
+        const categoriesData = await ModrinthService.getModrinthCategories();
+        setCategories(categoriesData);
+      } catch (error) {
+        console.error("Failed to load categories:", error);
+        setCategoriesError(
+          `Failed to load categories: ${error instanceof Error ? error.message : String(error)}`
         );
       } finally {
-        setIsLoadingCategories(false);
+        setCategoriesLoading(false);
       }
     };
 
-    fetchCategories();
+    loadCategories();
   }, []);
 
+  // Filter categories based on projectType
   useEffect(() => {
-    if (projectType && allCategories.length > 0) {
-      const filtered = allCategories.filter((category) => {
-        return category.project_type === projectType;
-      });
-      setDisplayedCategories(filtered);
-    } else if (allCategories.length > 0) {
-      setDisplayedCategories(allCategories);
-    } else {
-      setDisplayedCategories([]);
-    }
-  }, [allCategories, projectType]);
-
-  useEffect(() => {
-    const fetchGameVersions = async () => {
-      setIsLoadingGameVersions(true);
-      try {
-        const fetchedGameVersions = await ModrinthService.getModrinthGameVersions();
-        setAllGameVersions(fetchedGameVersions);
-        setErrorGameVersions(null);
-      } catch (err) {
-        console.error("Failed to fetch Modrinth game versions:", err);
-        setErrorGameVersions(
-          `Failed to load game versions: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      } finally {
-        setIsLoadingGameVersions(false);
-      }
-    };
-
-    fetchGameVersions();
-  }, []);
-
-  const displayedGameVersions = useMemo(() => {
-    let versions = allGameVersions;
-    if (showOnlyMainGameVersions) {
-      versions = versions.filter((gv) => gv.version_type === "release");
-    }
-    if (gameVersionSearchTerm) {
-      versions = versions.filter((gv) =>
-        gv.version.toLowerCase().includes(gameVersionSearchTerm.toLowerCase()),
+    if (categories.length > 0) {
+      const filtered = categories.filter(
+        category => category.project_type === projectType
       );
-    }
-    return versions;
-  }, [allGameVersions, showOnlyMainGameVersions, gameVersionSearchTerm]);
+      setFilteredCategories(filtered);
 
+      // Clear selected categories when project type changes
+      setSelectedCategories([]);
+      if (onFilterChange) {
+        onFilterChange([]);
+      }
+    }
+  }, [categories, projectType, onFilterChange]);
+
+  // Load game versions
   useEffect(() => {
-    const fetchLoaders = async () => {
-      setIsLoadingLoaders(true);
+    const loadGameVersions = async () => {
+      setGameVersionsLoading(true);
+      setGameVersionsError(null);
+
       try {
-        const fetchedLoaders = await ModrinthService.getModrinthLoaders();
-        console.log("[ModrinthFilters] Fetched allLoaders:", fetchedLoaders);
-        setAllLoaders(fetchedLoaders);
-        setErrorLoaders(null);
-      } catch (err) {
-        console.error("Failed to fetch Modrinth loaders:", err);
-        setErrorLoaders(
-          `Failed to load loaders: ${err instanceof Error ? err.message : String(err)}`,
+        const versionsData = await ModrinthService.getModrinthGameVersions();
+        setGameVersions(versionsData);
+      } catch (error) {
+        console.error("Failed to load game versions:", error);
+        setGameVersionsError(
+          `Failed to load game versions: ${error instanceof Error ? error.message : String(error)}`
         );
       } finally {
-        setIsLoadingLoaders(false);
+        setGameVersionsLoading(false);
       }
     };
-    fetchLoaders();
+
+    loadGameVersions();
   }, []);
 
+  // Load loaders
   useEffect(() => {
-    console.log("[ModrinthFilters] Filtering loaders. projectType:", projectType, "allLoaders count:", allLoaders.length);
-    if (projectType && allLoaders.length > 0) {
-      const filtered = allLoaders.filter(
-        (loader) => loader.supported_project_types.includes(projectType)
+    const loadLoaders = async () => {
+      setLoadersLoading(true);
+      setLoadersError(null);
+
+      try {
+        const loadersData = await ModrinthService.getModrinthLoaders();
+        setLoaders(loadersData);
+      } catch (error) {
+        console.error("Failed to load loaders:", error);
+        setLoadersError(
+          `Failed to load loaders: ${error instanceof Error ? error.message : String(error)}`
+        );
+      } finally {
+        setLoadersLoading(false);
+      }
+    };
+
+    loadLoaders();
+  }, []);
+
+  // Filter loaders based on projectType
+  useEffect(() => {
+    if (loaders.length > 0) {
+      const filtered = loaders.filter(
+        loader => loader.supported_project_types.includes(projectType)
       );
-      console.log("[ModrinthFilters] Filtered loaders (with projectType):", filtered);
-      setDisplayedLoaders(filtered);
-    } else if (allLoaders.length > 0 && !projectType) {
-      const filtered = allLoaders.filter(l => l.supported_project_types.includes("project") || l.supported_project_types.length > 0);
-      console.log("[ModrinthFilters] Filtered loaders (no projectType, broad):", filtered);
-      setDisplayedLoaders(filtered);
-    } else {
-      console.log("[ModrinthFilters] No projectType or no allLoaders, setting displayedLoaders to empty.");
-      setDisplayedLoaders([]);
+      setFilteredLoaders(filtered);
+
+      // Clear selected loaders when project type changes if not compatible
+      if (projectType !== "mod" && projectType !== "modpack") {
+        setSelectedLoaders([]);
+        if (onLoaderChange) {
+          onLoaderChange([]);
+        }
+      }
     }
-  }, [allLoaders, projectType]);
+  }, [loaders, projectType, onLoaderChange]);
 
-  useEffect(() => {
-    console.log("[ModrinthFilters] displayedLoaders state updated:", displayedLoaders);
-  }, [displayedLoaders]);
+  const handleCategoryChange = useCallback((category: string, checked: boolean) => {
+    setSelectedCategories(prev => {
+      const updated = checked
+        ? [...prev, category]
+        : prev.filter(cat => cat !== category);
+      
+      if (onFilterChange) {
+        onFilterChange(updated);
+      }
+      
+      return updated;
+    });
+  }, [onFilterChange]);
 
-  const toggleCategory = (categoryName: string) => {
-    const newSelectedCategories = selectedCategories.includes(categoryName)
-      ? selectedCategories.filter((name) => name !== categoryName)
-      : [...selectedCategories, categoryName];
-    setSelectedCategories(newSelectedCategories);
-    onFilterChange?.(newSelectedCategories);
-  };
+  const handleGameVersionChange = useCallback((version: string, checked: boolean) => {
+    setSelectedGameVersions(prev => {
+      const updated = checked
+        ? [...prev, version]
+        : prev.filter(v => v !== version);
+      
+      if (onGameVersionChange) {
+        onGameVersionChange(updated);
+      }
+      
+      return updated;
+    });
+  }, [onGameVersionChange]);
 
-  const toggleGameVersion = (versionName: string) => {
-    const newSelectedGameVersions = selectedGameVersions.includes(versionName)
-      ? selectedGameVersions.filter((name) => name !== versionName)
-      : [...selectedGameVersions, versionName];
-    setSelectedGameVersions(newSelectedGameVersions);
-    onGameVersionChange?.(newSelectedGameVersions);
-  };
+  const handleLoaderChange = useCallback((loader: string, checked: boolean) => {
+    setSelectedLoaders(prev => {
+      const updated = checked
+        ? [...prev, loader]
+        : prev.filter(l => l !== loader);
+      
+      if (onLoaderChange) {
+        onLoaderChange(updated);
+      }
+      
+      return updated;
+    });
+  }, [onLoaderChange]);
 
-  const toggleLoader = (loaderName: string) => {
-    const newSelectedLoaders = selectedLoaders.includes(loaderName)
-      ? selectedLoaders.filter((name) => name !== loaderName)
-      : [...selectedLoaders, loaderName];
-    setSelectedLoaders(newSelectedLoaders);
-    onLoaderChange?.(newSelectedLoaders);
-  };
-
-  const toggleEnvironment = (option: 'client' | 'server') => {
-    const newSelectedEnvironment = selectedEnvironment.includes(option)
-      ? selectedEnvironment.filter((item) => item !== option)
-      : [...selectedEnvironment, option];
-    setSelectedEnvironment(newSelectedEnvironment);
-    onEnvironmentChange?.(newSelectedEnvironment);
-  };
+  const handleEnvironmentChange = useCallback((env: string, checked: boolean) => {
+    setSelectedEnvironments(prev => {
+      const updated = checked
+        ? [...prev, env]
+        : prev.filter(e => e !== env);
+      
+      if (onEnvironmentChange) {
+        onEnvironmentChange(updated);
+      }
+      
+      return updated;
+    });
+  }, [onEnvironmentChange]);
 
   return (
-    <div className="border border-gray-700 rounded-md p-3 bg-gray-850 flex flex-col h-full space-y-3">
-      <div>
-        <div
-          className="flex justify-between items-center cursor-pointer mb-2"
-          onClick={() => setIsCategoriesCollapsed(!isCategoriesCollapsed)}
-        >
-          <h3 className="text-lg font-semibold text-gray-200">Categories</h3>
-          <button
-            type="button"
-            className="p-1 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            aria-label={isCategoriesCollapsed ? "Expand categories" : "Collapse categories"}
-          >
-            {isCategoriesCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-          </button>
-        </div>
-
-        {!isCategoriesCollapsed && (
-          <div className="flex-1 overflow-hidden flex flex-col max-h-60">
-            {isLoadingCategories && <LoadingState message="Loading categories..." />}
-            {errorCategories && <ErrorMessage message={errorCategories} />}
-            {!isLoadingCategories && !errorCategories && displayedCategories.length === 0 && (
-              <p className="text-gray-400">
-                {projectType ? `No categories found for ${projectType}.` : "No categories found."}
-              </p>
-            )}
-            {!isLoadingCategories && !errorCategories && displayedCategories.length > 0 && (
-              <div className="flex-1 overflow-y-auto pr-2">
-                <div className="space-y-2">
-                  {displayedCategories.map((category) => (
-                    <label
-                      key={category.name}
-                      className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
-                      title={category.project_type}
-                    >
-                      <input
-                        type="checkbox"
-                        className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
-                        checked={selectedCategories.includes(category.name)}
-                        onChange={() => toggleCategory(category.name)}
-                      />
-                      <span className="text-gray-300 text-sm flex items-center">
-                        <span
-                          className="w-4 h-4 mr-2 inline-block align-middle"
-                          dangerouslySetInnerHTML={{ __html: category.icon }}
-                          title={category.name}
-                        />
-                        {category.name}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
+    <div 
+      className="h-full p-4 rounded-lg border-2 border-b-4 shadow-md overflow-y-auto custom-scrollbar"
+      style={{
+        backgroundColor: `${accentColor.value}10`,
+        borderColor: `${accentColor.value}40`,
+        borderBottomColor: `${accentColor.value}60`
+      }}
+    >
+      <h2 className="font-minecraft text-3xl mb-4 tracking-wide text-white/90 lowercase select-none">Filters</h2>
+      
+      <Accordion title="Categories" defaultOpen>
+        {categoriesLoading ? (
+          <LoadingIndicator message="Loading categories..." />
+        ) : categoriesError ? (
+          <ErrorMessage message={categoriesError} />
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(groupedCategories).map(([header, cats]) => (
+              <FilterGroup key={header} title={header}>
+                {cats.map(category => (
+                  <CheckboxItem
+                    key={category.name}
+                    id={`category-${category.name}`}
+                    label={category.name.replace(/-/g, ' ')}
+                    checked={selectedCategories.includes(category.name)}
+                    onChange={checked => handleCategoryChange(category.name, checked)}
+                  />
+                ))}
+              </FilterGroup>
+            ))}
           </div>
         )}
-      </div>
+      </Accordion>
 
-      <div>
-        <div
-          className="flex justify-between items-center cursor-pointer mb-2"
-          onClick={() => setIsGameVersionsCollapsed(!isGameVersionsCollapsed)}
-        >
-          <h3 className="text-lg font-semibold text-gray-200">Game Versions</h3>
-          <button
-            type="button"
-            className="p-1 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            aria-label={isGameVersionsCollapsed ? "Expand game versions" : "Collapse game versions"}
-          >
-            {isGameVersionsCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-          </button>
-        </div>
-
-        {!isGameVersionsCollapsed && (
-          <div className="flex flex-col space-y-2">
-            <Input
-              type="text"
-              placeholder="Search game versions..."
-              value={gameVersionSearchTerm}
-              onChange={(e) => setGameVersionSearchTerm(e.target.value)}
-              className="bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-500 text-sm rounded p-2 focus:ring-accent-500 focus:border-accent-500"
-            />
-            <div className="flex-1 overflow-hidden flex flex-col max-h-60">
-              {isLoadingGameVersions && <LoadingState message="Loading game versions..." />}
-              {errorGameVersions && <ErrorMessage message={errorGameVersions} />}
-              {!isLoadingGameVersions && !errorGameVersions && displayedGameVersions.length === 0 && (
-                <p className="text-gray-400">
-                  {gameVersionSearchTerm ? "No matching game versions found." : "No game versions found."}
-                </p>
-              )}
-              {!isLoadingGameVersions && !errorGameVersions && displayedGameVersions.length > 0 && (
-                <div className="flex-1 overflow-y-auto pr-2">
-                  <div className="space-y-2">
-                    {displayedGameVersions.map((gameVersion) => (
-                      <label
-                        key={gameVersion.version}
-                        className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
-                        title={`Type: ${gameVersion.version_type}`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
-                          checked={selectedGameVersions.includes(gameVersion.version)}
-                          onChange={() => toggleGameVersion(gameVersion.version)}
-                        />
-                        <span className="text-gray-300 text-sm">
-                          {gameVersion.version} <span className="text-xs text-gray-500">({gameVersion.version_type})</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowOnlyMainGameVersions(!showOnlyMainGameVersions)}
-              className="w-full text-sm p-2 mt-2 rounded hover:bg-gray-700 bg-gray-750 border border-gray-600 text-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-            >
-              {showOnlyMainGameVersions ? "Show All Versions" : "Show Main Releases Only"}
-            </button>
+      <Accordion title="Game Versions" defaultOpen>
+        {gameVersionsLoading ? (
+          <LoadingIndicator message="Loading versions..." />
+        ) : gameVersionsError ? (
+          <ErrorMessage message={gameVersionsError} />
+        ) : (
+          <div className="space-y-2">
+            {majorGameVersions.map(version => (
+              <CheckboxItem
+                key={version.version}
+                id={`version-${version.version}`}
+                label={version.version}
+                checked={selectedGameVersions.includes(version.version)}
+                onChange={checked => handleGameVersionChange(version.version, checked)}
+              />
+            ))}
           </div>
         )}
-      </div>
+      </Accordion>
 
-      {/* Loaders Section - Conditionally rendered */}
-      {!isLoadingLoaders && !errorLoaders && displayedLoaders.length > 0 && (
-        <div>
-          <div
-            className="flex justify-between items-center cursor-pointer mb-2"
-            onClick={() => setIsLoadersCollapsed(!isLoadersCollapsed)}
-          >
-            <h3 className="text-lg font-semibold text-gray-200">Loaders</h3>
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              aria-label={isLoadersCollapsed ? "Expand loaders" : "Collapse loaders"}
-            >
-              {isLoadersCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </button>
-          </div>
-
-          {!isLoadersCollapsed && (
-            <div className="flex-1 overflow-hidden flex flex-col max-h-60">
-              {/* No need to check isLoadingLoaders/errorLoaders again here, already checked above */}
-              {/* No need to check displayedLoaders.length === 0 again, already checked above */}
-              <div className="flex-1 overflow-y-auto pr-2">
-                <div className="space-y-2">
-                  {displayedLoaders.map((loader) => (
-                    <label
-                      key={loader.name}
-                      className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
-                      title={loader.supported_project_types.join(', ')}
-                    >
-                      <input
-                        type="checkbox"
-                        className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
-                        checked={selectedLoaders.includes(loader.name)}
-                        onChange={() => toggleLoader(loader.name)}
-                      />
-                      <span className="text-gray-300 text-sm flex items-center">
-                        <span
-                          className="w-4 h-4 mr-2 inline-block align-middle"
-                          dangerouslySetInnerHTML={{ __html: loader.icon }}
-                          title={loader.name}
-                        />
-                        {loader.name}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Environment Section - Conditionally rendered for mod or modpack */}
-      {(projectType === 'mod' || projectType === 'modpack') && (
-        <div>
-          <div
-            className="flex justify-between items-center cursor-pointer mb-2"
-            onClick={() => setIsEnvironmentCollapsed(!isEnvironmentCollapsed)}
-          >
-            <h3 className="text-lg font-semibold text-gray-200">Environment</h3>
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              aria-label={isEnvironmentCollapsed ? "Expand environment" : "Collapse environment"}
-            >
-              {isEnvironmentCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-            </button>
-          </div>
-
-          {!isEnvironmentCollapsed && (
+      {(projectType === "mod" || projectType === "modpack") && (
+        <Accordion title="Mod Loaders" defaultOpen>
+          {loadersLoading ? (
+            <LoadingIndicator message="Loading loaders..." />
+          ) : loadersError ? (
+            <ErrorMessage message={loadersError} />
+          ) : (
             <div className="space-y-2">
-              <label
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
-                  checked={selectedEnvironment.includes('client')}
-                  onChange={() => toggleEnvironment('client')}
+              {filteredLoaders.map(loader => (
+                <CheckboxItem
+                  key={loader.name}
+                  id={`loader-${loader.name}`}
+                  label={loader.name}
+                  checked={selectedLoaders.includes(loader.name)}
+                  onChange={checked => handleLoaderChange(loader.name, checked)}
                 />
-                <span className="text-gray-300 text-sm">Client-Side</span>
-              </label>
-              <label
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
-                  checked={selectedEnvironment.includes('server')}
-                  onChange={() => toggleEnvironment('server')}
-                />
-                <span className="text-gray-300 text-sm">Server-Side</span>
-              </label>
+              ))}
             </div>
           )}
-        </div>
+        </Accordion>
       )}
+
+      <Accordion title="Environment" defaultOpen>
+        <div className="space-y-2">
+          <CheckboxItem
+            id="environment-client"
+            label="Client"
+            checked={selectedEnvironments.includes("client")}
+            onChange={checked => handleEnvironmentChange("client", checked)}
+          />
+          <CheckboxItem
+            id="environment-server"
+            label="Server"
+            checked={selectedEnvironments.includes("server")}
+            onChange={checked => handleEnvironmentChange("server", checked)}
+          />
+        </div>
+      </Accordion>
     </div>
   );
-} 
+}; 

@@ -77,6 +77,11 @@ interface ModrinthSearchProps {
   selectedProfileId?: string;
   onProfileCreated?: (profileId: string) => void;
   parentTransitionActive?: boolean;
+  onProjectTypeChange?: (type: ModrinthProjectType) => void;
+  selectedCategories?: string[];
+  selectedGameVersions?: string[];
+  selectedLoaders?: string[];
+  selectedEnvironmentOptions?: string[];
 }
 
 export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
@@ -89,6 +94,11 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
   selectedProfileId = null,
   onProfileCreated,
   parentTransitionActive = false,
+  onProjectTypeChange,
+  selectedCategories = [],
+  selectedGameVersions = [],
+  selectedLoaders = [],
+  selectedEnvironmentOptions = [],
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
@@ -473,6 +483,110 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     ],
   );
 
+  const performSearch = useCallback(
+    async (resetResults = true) => {
+      if (resetResults && debouncedSearchTerm.trim() === "") return;
+
+      if (searchInProgressRef.current) {
+        return;
+      }
+
+      searchInProgressRef.current = true;
+
+      if (resetResults) {
+        setSearchLoading(true);
+        setOffset(0);
+        setHasMore(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      setSearchError(null);
+      setHitInstallStatus({});
+      const currentOffset = resetResults ? 0 : offset;
+
+      try {
+        // Use first game version if any selected, otherwise use the profile's game version
+        const gameVersionParam = selectedGameVersions.length > 0 
+          ? selectedGameVersions[0] 
+          : selectedGameVersion;
+          
+        // Use first loader if any selected, otherwise use the profile's loader
+        const loaderParam = selectedLoaders.length > 0 
+          ? selectedLoaders[0] 
+          : (requiresLoader() ? selectedLoader : undefined);
+
+        const response = await ModrinthService.searchProjects(
+          debouncedSearchTerm.trim(),
+          selectedProjectType,
+          gameVersionParam,
+          loaderParam,
+          pageSize,
+          currentOffset,
+          selectedSortType,
+          selectedCategories.length > 0 ? selectedCategories : undefined,
+          selectedEnvironmentOptions.includes("client") ? "required" : undefined,
+          selectedEnvironmentOptions.includes("server") ? "required" : undefined,
+        );
+
+        setSearchResponse(response);
+
+        if (resetResults) {
+          setSearchResults(response.hits);
+        } else {
+          setSearchResults((prev) => [...prev, ...response.hits]);
+        }
+
+        setOffset(currentOffset + response.hits.length);
+        setHasMore(
+          response.hits.length === pageSize &&
+            currentOffset + response.hits.length < response.total_hits,
+        );
+
+        if (resetResults) {
+          setSelectedProjectId(null);
+          setModVersions([]);
+          setFilteredVersions([]);
+          setVersionsError(null);
+        }
+
+        updateAllHitStatuses(response.hits);
+      } catch (err) {
+        console.error("Modrinth search failed:", err);
+        setSearchError(
+          `Search failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        if (resetResults) {
+          setSearchResults([]);
+          setSearchResponse(null);
+        }
+      } finally {
+        if (resetResults) {
+          setSearchLoading(false);
+        } else {
+          setLoadingMore(false);
+        }
+
+        searchInProgressRef.current = false;
+      }
+    },
+    [
+      debouncedSearchTerm,
+      selectedProjectType,
+      offset,
+      pageSize,
+      selectedSortType,
+      selectedGameVersion,
+      selectedLoader,
+      requiresLoader,
+      updateAllHitStatuses,
+      selectedCategories,
+      selectedGameVersions,
+      selectedLoaders,
+      selectedEnvironmentOptions,
+    ],
+  );
+
   useEffect(() => {
     if (projectId) {
       const loadProject = async () => {
@@ -496,6 +610,14 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             follows: project.followers,
             icon_url: project.icon_url,
             latest_version: project.versions[0] || null,
+            categories: project.categories || [],
+            display_categories: project.categories || [],
+            client_side: project.client_side || "unknown",
+            server_side: project.server_side || "unknown",
+            date_created: project.published || "",
+            date_modified: project.updated || "",
+            license: project.license?.id || "unknown",
+            gallery: project.gallery?.map(img => img.url) || [],
           };
 
           setSearchResults([searchHit]);
@@ -616,120 +738,49 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
     }
   };
 
-  const performSearch = useCallback(
-    async (resetResults = true) => {
-      if (resetResults && debouncedSearchTerm.trim() === "") return;
-
-      if (searchInProgressRef.current) {
-        return;
-      }
-
-      searchInProgressRef.current = true;
-
-      if (resetResults) {
-        setSearchLoading(true);
-        setOffset(0);
-        setHasMore(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      setSearchError(null);
-      setHitInstallStatus({});
-      const currentOffset = resetResults ? 0 : offset;
-
-      try {
-        const loaderParam = requiresLoader() ? selectedLoader : undefined;
-
-        const response = await ModrinthService.searchProjects(
-          debouncedSearchTerm.trim(),
-          selectedProjectType,
-          selectedGameVersion,
-          loaderParam,
-          pageSize,
-          currentOffset,
-          selectedSortType,
-        );
-
-        setSearchResponse(response);
-
-        if (resetResults) {
-          setSearchResults(response.hits);
-        } else {
-          setSearchResults((prev) => [...prev, ...response.hits]);
-        }
-
-        setOffset(currentOffset + response.hits.length);
-        setHasMore(
-          response.hits.length === pageSize &&
-            currentOffset + response.hits.length < response.total_hits,
-        );
-
-        if (resetResults) {
-          setSelectedProjectId(null);
-          setModVersions([]);
-          setFilteredVersions([]);
-          setVersionsError(null);
-        }
-
-        updateAllHitStatuses(response.hits);
-      } catch (err) {
-        console.error("Modrinth search failed:", err);
-        setSearchError(
-          `Search failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        if (resetResults) {
-          setSearchResults([]);
-          setSearchResponse(null);
-        }
-      } finally {
-        if (resetResults) {
-          setSearchLoading(false);
-        } else {
-          setLoadingMore(false);
-        }
-
-        searchInProgressRef.current = false;
-      }
-    },
-    [
-      debouncedSearchTerm,
-      selectedProjectType,
-      offset,
-      pageSize,
-      selectedSortType,
-      selectedGameVersion,
-      selectedLoader,
-      requiresLoader,
-      updateAllHitStatuses,
-    ],
-  );
-
+  // Effect to handle search with filters applied from the parent component
   useEffect(() => {
-    if (debouncedSearchTerm.trim() !== "") {
-      const doSearch = async () => {
-        if (searchInProgressRef.current) {
-          return;
-        }
+    if (projectId) {
+      // If a specific project is being viewed, filter changes from parent don't trigger a new search here.
+      return;
+    }
+
+    const filtersAreActive = 
+      selectedCategories.length > 0 || 
+      selectedGameVersions.length > 0 || 
+      selectedLoaders.length > 0 || 
+      selectedEnvironmentOptions.length > 0;
+
+    if (filtersAreActive) {
+      const searchWithAppliedFilters = async () => {
+        if (searchInProgressRef.current) return;
 
         searchInProgressRef.current = true;
         setSearchLoading(true);
         setSearchError(null);
-        setOffset(0);
-        setHasMore(true);
-        setHitInstallStatus({});
+        setOffset(0); // Reset offset for new filter search
+        setHasMore(true); // Assume more results initially
 
         try {
-          const loaderParam = requiresLoader() ? selectedLoader : undefined;
+          const gameVersionParam = selectedGameVersions.length > 0 
+            ? selectedGameVersions[0] 
+            : selectedGameVersion; // Fallback to general selectedGameVersion
+          
+          const loaderParam = selectedLoaders.length > 0 
+            ? selectedLoaders[0] 
+            : (requiresLoader() ? selectedLoader : undefined); // Fallback to general selectedLoader
 
           const response = await ModrinthService.searchProjects(
-            debouncedSearchTerm.trim(),
+            debouncedSearchTerm.trim(), // Use current search term
             selectedProjectType,
-            selectedGameVersion,
+            gameVersionParam,
             loaderParam,
             pageSize,
-            0,
+            0, // Offset is 0 for a new filtered search
             selectedSortType,
+            selectedCategories.length > 0 ? selectedCategories : undefined,
+            selectedEnvironmentOptions.includes("client") ? "required" : undefined,
+            selectedEnvironmentOptions.includes("server") ? "required" : undefined,
           );
 
           setSearchResponse(response);
@@ -737,20 +788,17 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setOffset(response.hits.length);
           setHasMore(
             response.hits.length === pageSize &&
-              response.hits.length < response.total_hits,
+              response.hits.length < response.total_hits
           );
-
           setSelectedProjectId(null);
           setModVersions([]);
           setFilteredVersions([]);
           setVersionsError(null);
-
           updateAllHitStatuses(response.hits);
         } catch (err) {
-          const searchError = err as Error;
-          console.error("Modrinth search failed:", searchError);
+          console.error("Modrinth filtered search (active filters) failed:", err);
           setSearchError(
-            `Search failed: ${searchError.message || String(searchError)}`,
+            `Search failed: ${err instanceof Error ? err.message : String(err)}`
           );
           setSearchResults([]);
           setSearchResponse(null);
@@ -759,18 +807,94 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           searchInProgressRef.current = false;
         }
       };
+      searchWithAppliedFilters();
+    } else {
+      // All filters are now empty (e.g., user cleared the last filter).
+      const searchWithClearedFilters = async () => {
+        if (searchInProgressRef.current) return;
 
-      doSearch();
+        searchInProgressRef.current = true;
+        setSearchLoading(true);
+        setSearchError(null);
+        setOffset(0); // Reset for a new search
+        setHasMore(true);
+
+        try {
+          let response;
+          if (debouncedSearchTerm.trim() !== "") {
+            // Logic similar to performSearch(true) but without categories/env filters
+            response = await ModrinthService.searchProjects(
+              debouncedSearchTerm.trim(),
+              selectedProjectType,
+              selectedGameVersion, // Use general selectedGameVersion (profile's or last search)
+              requiresLoader() ? selectedLoader : undefined, // Use general selectedLoader
+              pageSize,
+              0, // Offset is 0
+              selectedSortType,
+              undefined, // No categories as filters are cleared
+              undefined, // No client env filter
+              undefined  // No server env filter
+            );
+          } else {
+            // Logic similar to loadFeaturedContent() but specifically for cleared filters
+            response = await ModrinthService.searchProjects(
+              "", // No query for featured
+              selectedProjectType, // Current project type
+              selectedGameVersion, // General selectedGameVersion
+              requiresLoader() ? selectedLoader : undefined, // General selectedLoader
+              pageSize,
+              0, // Offset is 0
+              "downloads", // Sort by downloads for featured
+              undefined, // No categories
+              undefined, // No client env filter
+              undefined  // No server env filter
+            );
+          }
+
+          setSearchResponse(response);
+          setSearchResults(response.hits);
+          setOffset(response.hits.length);
+          setHasMore(
+            response.hits.length === pageSize &&
+            response.hits.length < response.total_hits
+          );
+          setSelectedProjectId(null);
+          setModVersions([]);
+          setFilteredVersions([]);
+          setVersionsError(null);
+          updateAllHitStatuses(response.hits);
+        } catch (err) {
+          console.error("Modrinth search (filters cleared) failed:", err);
+          setSearchError(
+            `Search failed: ${err instanceof Error ? err.message : String(err)}`
+          );
+          setSearchResults([]);
+          setSearchResponse(null);
+        } finally {
+          setSearchLoading(false);
+          searchInProgressRef.current = false;
+        }
+      };
+      searchWithClearedFilters();
     }
   }, [
+    // Primary triggers for this effect
+    selectedCategories, 
+    selectedGameVersions, 
+    selectedLoaders, 
+    selectedEnvironmentOptions,
+    projectId,
+
+    // Dependencies for the inline search logic (both branches)
     debouncedSearchTerm,
     selectedProjectType,
-    selectedSortType,
+    selectedGameVersion, // General game version state (profile's or last search)
+    selectedLoader,      // General loader state (profile's or last search)
     pageSize,
-    selectedGameVersion,
-    selectedLoader,
-    requiresLoader,
-    updateAllHitStatuses,
+    selectedSortType,
+    requiresLoader,      // Stable callback
+    updateAllHitStatuses, // Stable callback
+    // searchInProgressRef is a ref, state setters (setSearchLoading, etc.) are stable
   ]);
 
   useEffect(() => {
@@ -854,6 +978,10 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       }, 800);
 
       setSelectedProjectType(newType);
+      
+      if (onProjectTypeChange) {
+        onProjectTypeChange(newType);
+      }
 
       if (newType !== "mod" && newType !== "modpack") {
         setSelectedLoader(undefined);
@@ -928,6 +1056,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
       selectedLoader,
       loadFeaturedContent,
       updateAllHitStatuses,
+      onProjectTypeChange,
     ],
   );
 
