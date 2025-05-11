@@ -16,6 +16,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useThemeStore } from "../../store/useThemeStore";
+import { toast } from "react-hot-toast";
 
 interface MinecraftOutputPayload {
   event_type: "minecraft_output";
@@ -269,6 +270,7 @@ export function LogWindow() {
 
     try {
       await writeText(filteredLogContent);
+      toast.success("Log content copied to clipboard!");
       setCopied(true);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => {
@@ -276,6 +278,7 @@ export function LogWindow() {
       }, 2000);
     } catch (err) {
       console.error("[LogWindow] Failed to copy log to clipboard:", err);
+      toast.error("Failed to copy log content.");
     }
   }, [displayLines]);
 

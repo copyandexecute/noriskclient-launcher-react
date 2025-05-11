@@ -16,6 +16,7 @@ import {
 } from "../../../services/log-service";
 import { LogViewerDisplay } from "../../log/LogViewerDisplay";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { toast } from "react-hot-toast";
 
 interface LogsTabProps {
   profile: Profile;
@@ -186,6 +187,7 @@ export function LogsTab({ profile }: LogsTabProps) {
 
     try {
       await writeText(filteredLogContent);
+      toast.success("Log content copied to clipboard!");
       setCopied(true);
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => {
@@ -193,6 +195,7 @@ export function LogsTab({ profile }: LogsTabProps) {
       }, 2000);
     } catch (err) {
       console.error("[LogsTab] Failed to copy log to clipboard:", err);
+      toast.error("Failed to copy log content.");
     }
   }, [displayLines]);
 
