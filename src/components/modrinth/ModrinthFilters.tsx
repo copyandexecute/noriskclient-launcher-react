@@ -18,6 +18,7 @@ interface ModrinthFiltersProps {
   onFilterChange?: (selectedCategories: string[]) => void;
   onGameVersionChange?: (selectedGameVersions: string[]) => void;
   onLoaderChange?: (selectedLoaders: string[]) => void;
+  onEnvironmentChange?: (selectedOptions: string[]) => void;
 }
 
 export function ModrinthFilters({
@@ -25,6 +26,7 @@ export function ModrinthFilters({
   onFilterChange,
   onGameVersionChange,
   onLoaderChange,
+  onEnvironmentChange,
 }: ModrinthFiltersProps) {
   console.log("[ModrinthFilters] projectType prop:", projectType);
 
@@ -49,6 +51,9 @@ export function ModrinthFilters({
   const [isLoadingLoaders, setIsLoadingLoaders] = useState(true);
   const [errorLoaders, setErrorLoaders] = useState<string | null>(null);
   const [isLoadersCollapsed, setIsLoadersCollapsed] = useState(false);
+
+  const [selectedEnvironment, setSelectedEnvironment] = useState<string[]>([]);
+  const [isEnvironmentCollapsed, setIsEnvironmentCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -180,6 +185,14 @@ export function ModrinthFilters({
       : [...selectedLoaders, loaderName];
     setSelectedLoaders(newSelectedLoaders);
     onLoaderChange?.(newSelectedLoaders);
+  };
+
+  const toggleEnvironment = (option: 'client' | 'server') => {
+    const newSelectedEnvironment = selectedEnvironment.includes(option)
+      ? selectedEnvironment.filter((item) => item !== option)
+      : [...selectedEnvironment, option];
+    setSelectedEnvironment(newSelectedEnvironment);
+    onEnvironmentChange?.(newSelectedEnvironment);
   };
 
   return (
@@ -354,6 +367,52 @@ export function ModrinthFilters({
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Environment Section - Conditionally rendered for mod or modpack */}
+      {(projectType === 'mod' || projectType === 'modpack') && (
+        <div>
+          <div
+            className="flex justify-between items-center cursor-pointer mb-2"
+            onClick={() => setIsEnvironmentCollapsed(!isEnvironmentCollapsed)}
+          >
+            <h3 className="text-lg font-semibold text-gray-200">Environment</h3>
+            <button
+              type="button"
+              className="p-1 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              aria-label={isEnvironmentCollapsed ? "Expand environment" : "Collapse environment"}
+            >
+              {isEnvironmentCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+            </button>
+          </div>
+
+          {!isEnvironmentCollapsed && (
+            <div className="space-y-2">
+              <label
+                className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
+                  checked={selectedEnvironment.includes('client')}
+                  onChange={() => toggleEnvironment('client')}
+                />
+                <span className="text-gray-300 text-sm">Client-Side</span>
+              </label>
+              <label
+                className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
+                  checked={selectedEnvironment.includes('server')}
+                  onChange={() => toggleEnvironment('server')}
+                />
+                <span className="text-gray-300 text-sm">Server-Side</span>
+              </label>
             </div>
           )}
         </div>

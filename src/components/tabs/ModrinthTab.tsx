@@ -25,6 +25,7 @@ export function ModrinthTab({
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedGameVersions, setSelectedGameVersions] = useState<string[]>([]);
   const [selectedLoaders, setSelectedLoaders] = useState<string[]>([]);
+  const [selectedEnvironmentOptions, setSelectedEnvironmentOptions] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -74,6 +75,7 @@ export function ModrinthTab({
               onFilterChange={setSelectedCategories}
               onGameVersionChange={setSelectedGameVersions}
               onLoaderChange={setSelectedLoaders}
+              onEnvironmentChange={setSelectedEnvironmentOptions}
             />
           </div>
         </div>
