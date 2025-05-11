@@ -300,6 +300,29 @@ export function SettingsTab() {
           >
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
+                Open Logs After Starting
+              </h5>
+            </div>
+            <ToggleSwitch
+              checked={tempConfig?.open_logs_after_starting || false}
+              onChange={(checked) =>
+                tempConfig &&
+                setTempConfig({
+                  ...tempConfig,
+                  open_logs_after_starting: checked,
+                })
+              }
+              disabled={saving}
+              size="lg"
+            />
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Concurrent Downloads
               </h5>
             </div>
