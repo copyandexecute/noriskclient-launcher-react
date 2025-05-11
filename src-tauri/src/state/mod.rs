@@ -8,4 +8,3 @@ pub mod profile_state;
 pub mod skin_state;
 pub mod state_manager;
 pub use state_manager::State;
-pub mod xml_log_parser;
