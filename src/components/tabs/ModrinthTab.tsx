@@ -24,6 +24,7 @@ export function ModrinthTab({
   const accentColor = useThemeStore((state) => state.accentColor);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedGameVersions, setSelectedGameVersions] = useState<string[]>([]);
+  const [selectedLoaders, setSelectedLoaders] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -72,6 +73,7 @@ export function ModrinthTab({
               projectType="mod"
               onFilterChange={setSelectedCategories}
               onGameVersionChange={setSelectedGameVersions}
+              onLoaderChange={setSelectedLoaders}
             />
           </div>
         </div>

@@ -7,6 +7,7 @@ import type {
   ModrinthCategory,
   ModrinthProjectType,
   ModrinthGameVersion,
+  ModrinthLoader,
 } from "../../types/modrinth";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
@@ -16,13 +17,17 @@ interface ModrinthFiltersProps {
   projectType: ModrinthProjectType;
   onFilterChange?: (selectedCategories: string[]) => void;
   onGameVersionChange?: (selectedGameVersions: string[]) => void;
+  onLoaderChange?: (selectedLoaders: string[]) => void;
 }
 
 export function ModrinthFilters({
   projectType,
   onFilterChange,
   onGameVersionChange,
+  onLoaderChange,
 }: ModrinthFiltersProps) {
+  console.log("[ModrinthFilters] projectType prop:", projectType);
+
   const [allCategories, setAllCategories] = useState<ModrinthCategory[]>([]);
   const [displayedCategories, setDisplayedCategories] = useState<ModrinthCategory[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -37,6 +42,13 @@ export function ModrinthFilters({
   const [isGameVersionsCollapsed, setIsGameVersionsCollapsed] = useState(false);
   const [gameVersionSearchTerm, setGameVersionSearchTerm] = useState("");
   const [showOnlyMainGameVersions, setShowOnlyMainGameVersions] = useState(true);
+
+  const [allLoaders, setAllLoaders] = useState<ModrinthLoader[]>([]);
+  const [displayedLoaders, setDisplayedLoaders] = useState<ModrinthLoader[]>([]);
+  const [selectedLoaders, setSelectedLoaders] = useState<string[]>([]);
+  const [isLoadingLoaders, setIsLoadingLoaders] = useState(true);
+  const [errorLoaders, setErrorLoaders] = useState<string | null>(null);
+  const [isLoadersCollapsed, setIsLoadersCollapsed] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -104,6 +116,48 @@ export function ModrinthFilters({
     return versions;
   }, [allGameVersions, showOnlyMainGameVersions, gameVersionSearchTerm]);
 
+  useEffect(() => {
+    const fetchLoaders = async () => {
+      setIsLoadingLoaders(true);
+      try {
+        const fetchedLoaders = await ModrinthService.getModrinthLoaders();
+        console.log("[ModrinthFilters] Fetched allLoaders:", fetchedLoaders);
+        setAllLoaders(fetchedLoaders);
+        setErrorLoaders(null);
+      } catch (err) {
+        console.error("Failed to fetch Modrinth loaders:", err);
+        setErrorLoaders(
+          `Failed to load loaders: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      } finally {
+        setIsLoadingLoaders(false);
+      }
+    };
+    fetchLoaders();
+  }, []);
+
+  useEffect(() => {
+    console.log("[ModrinthFilters] Filtering loaders. projectType:", projectType, "allLoaders count:", allLoaders.length);
+    if (projectType && allLoaders.length > 0) {
+      const filtered = allLoaders.filter(
+        (loader) => loader.supported_project_types.includes(projectType)
+      );
+      console.log("[ModrinthFilters] Filtered loaders (with projectType):", filtered);
+      setDisplayedLoaders(filtered);
+    } else if (allLoaders.length > 0 && !projectType) {
+      const filtered = allLoaders.filter(l => l.supported_project_types.includes("project") || l.supported_project_types.length > 0);
+      console.log("[ModrinthFilters] Filtered loaders (no projectType, broad):", filtered);
+      setDisplayedLoaders(filtered);
+    } else {
+      console.log("[ModrinthFilters] No projectType or no allLoaders, setting displayedLoaders to empty.");
+      setDisplayedLoaders([]);
+    }
+  }, [allLoaders, projectType]);
+
+  useEffect(() => {
+    console.log("[ModrinthFilters] displayedLoaders state updated:", displayedLoaders);
+  }, [displayedLoaders]);
+
   const toggleCategory = (categoryName: string) => {
     const newSelectedCategories = selectedCategories.includes(categoryName)
       ? selectedCategories.filter((name) => name !== categoryName)
@@ -118,6 +172,14 @@ export function ModrinthFilters({
       : [...selectedGameVersions, versionName];
     setSelectedGameVersions(newSelectedGameVersions);
     onGameVersionChange?.(newSelectedGameVersions);
+  };
+
+  const toggleLoader = (loaderName: string) => {
+    const newSelectedLoaders = selectedLoaders.includes(loaderName)
+      ? selectedLoaders.filter((name) => name !== loaderName)
+      : [...selectedLoaders, loaderName];
+    setSelectedLoaders(newSelectedLoaders);
+    onLoaderChange?.(newSelectedLoaders);
   };
 
   return (
@@ -244,6 +306,58 @@ export function ModrinthFilters({
           </div>
         )}
       </div>
+
+      {/* Loaders Section - Conditionally rendered */}
+      {!isLoadingLoaders && !errorLoaders && displayedLoaders.length > 0 && (
+        <div>
+          <div
+            className="flex justify-between items-center cursor-pointer mb-2"
+            onClick={() => setIsLoadersCollapsed(!isLoadersCollapsed)}
+          >
+            <h3 className="text-lg font-semibold text-gray-200">Loaders</h3>
+            <button
+              type="button"
+              className="p-1 rounded hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              aria-label={isLoadersCollapsed ? "Expand loaders" : "Collapse loaders"}
+            >
+              {isLoadersCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+            </button>
+          </div>
+
+          {!isLoadersCollapsed && (
+            <div className="flex-1 overflow-hidden flex flex-col max-h-60">
+              {/* No need to check isLoadingLoaders/errorLoaders again here, already checked above */}
+              {/* No need to check displayedLoaders.length === 0 again, already checked above */}
+              <div className="flex-1 overflow-y-auto pr-2">
+                <div className="space-y-2">
+                  {displayedLoaders.map((loader) => (
+                    <label
+                      key={loader.name}
+                      className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-700 transition-colors cursor-pointer"
+                      title={loader.supported_project_types.join(', ')}
+                    >
+                      <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 text-accent-500 border-gray-600 rounded bg-gray-700 focus:ring-accent-500"
+                        checked={selectedLoaders.includes(loader.name)}
+                        onChange={() => toggleLoader(loader.name)}
+                      />
+                      <span className="text-gray-300 text-sm flex items-center">
+                        <span
+                          className="w-4 h-4 mr-2 inline-block align-middle"
+                          dangerouslySetInnerHTML={{ __html: loader.icon }}
+                          title={loader.name}
+                        />
+                        {loader.name}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 } 
