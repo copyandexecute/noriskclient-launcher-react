@@ -11,6 +11,7 @@ interface SkinViewerProps {
   className?: string;
   autoRotate?: boolean;
   username?: string;
+  enableZoom?: boolean;
 }
 
 export function SkinViewer({
@@ -19,6 +20,7 @@ export function SkinViewer({
   height = 400,
   className,
   autoRotate = true,
+  enableZoom = true,
 }: SkinViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewerRef = useRef<skinview3d.SkinViewer | null>(null);
@@ -37,6 +39,7 @@ export function SkinViewer({
 
     skinViewer.camera.position.set(10, 0, 40);
     skinViewer.camera.lookAt(0, 0, 0);
+    skinViewer.controls.enableZoom = enableZoom;
 
     return () => {
       if (viewerRef.current) {
