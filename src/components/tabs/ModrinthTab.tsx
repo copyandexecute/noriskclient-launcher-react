@@ -8,6 +8,7 @@ import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { Card } from "../ui/Card";
 import { useThemeStore } from "../../store/useThemeStore";
+import { ModrinthFilters } from "../modrinth/ModrinthFilters";
 
 interface ModrinthTabProps {
   profiles?: Profile[];
@@ -21,6 +22,7 @@ export function ModrinthTab({
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   useEffect(() => {
     const loadProfiles = async () => {
@@ -55,13 +57,21 @@ export function ModrinthTab({
       {!profilesLoaded ? (
         <LoadingState message="Loading profiles..." />
       ) : (
-        <div className="flex-1 overflow-hidden">
-          <ModrinthSearch
-            key={`search-${refreshKey}`}
-            profiles={profiles}
-            onInstallSuccess={handleInstallSuccess}
-            className="h-full"
-          />
+        <div className="flex-1 overflow-hidden flex space-x-4">
+          <div className="flex-1 overflow-hidden">
+            <ModrinthSearch
+              key={`search-${refreshKey}`}
+              profiles={profiles}
+              onInstallSuccess={handleInstallSuccess}
+              className="h-full"
+            />
+          </div>
+          <div className="w-1/4 max-w-xs flex-shrink-0">
+            <ModrinthFilters
+              projectType="modpack"
+              onFilterChange={setSelectedCategories}
+            />
+          </div>
         </div>
       )}
     </div>
