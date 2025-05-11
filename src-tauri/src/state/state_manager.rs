@@ -44,7 +44,7 @@ impl State {
                     )
                     .await?,
                     event_state: EventState::new(Some(app.clone())),
-                    process_manager: ProcessManager::new(default_processes_path()).await?,
+                    process_manager: ProcessManager::new(default_processes_path(), app.clone()).await?,
                     minecraft_account_manager_v2: MinecraftAuthStore::new().await?,
                     norisk_pack_manager: NoriskPackManager::new(default_norisk_packs_path())
                         .await?,

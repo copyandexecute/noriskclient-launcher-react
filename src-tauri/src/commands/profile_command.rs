@@ -21,7 +21,7 @@ use crate::utils::{
 };
 use chrono::Utc;
 use log::{error, info, warn};
-use noriskclient_launcher_v3_lib::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use sanitize_filename::sanitize;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
