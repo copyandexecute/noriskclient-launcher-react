@@ -15,6 +15,7 @@ import {
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface MinecraftOutputPayload {
   event_type: "minecraft_output";
@@ -59,6 +60,7 @@ export function LogWindow() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadUrl, setUploadUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -315,29 +317,38 @@ export function LogWindow() {
   }, [rawLogContentForCopy, processId]);
 
   return (
-    <div className="flex flex-col h-full bg-black/20 backdrop-blur-md text-white p-4 font-minecraft">
-      <LogViewerDisplay
-        isLoading={isLoading}
-        error={error}
-        displayLines={displayLines}
-        parsedLogLinesCount={parsedLogLines.length}
-        searchTerm={searchTerm}
-        levelFilters={levelFilters}
-        copied={copied}
-        onSearchChange={handleSearchChange}
-        onLevelFilterChange={handleLevelFilterChange}
-        onCopyLog={handleCopyLog}
-        logLevelsDefinition={LOG_LEVELS}
-        onOpenFolder={handleOpenFolderForProcess}
-        onUploadLog={handleUploadLogForProcess}
-        isUploading={isUploading}
-        uploadUrl={uploadUrl}
-        uploadError={uploadError}
-        onOpenUploadUrl={handleOpenUploadUrl}
-        isAutoscrollEnabled={isAutoscrollEnabled}
-        onAutoscrollChange={handleAutoscrollChange}
-        scrollableContainerRef={scrollableContainerRef}
-      />
+    <div className="flex flex-col h-full bg-black/20 backdrop-blur-md text-white font-minecraft">
+      <div
+        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
+        style={{
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
+        <LogViewerDisplay
+          isLoading={isLoading}
+          error={error}
+          displayLines={displayLines}
+          parsedLogLinesCount={parsedLogLines.length}
+          searchTerm={searchTerm}
+          levelFilters={levelFilters}
+          copied={copied}
+          onSearchChange={handleSearchChange}
+          onLevelFilterChange={handleLevelFilterChange}
+          onCopyLog={handleCopyLog}
+          logLevelsDefinition={LOG_LEVELS}
+          onOpenFolder={handleOpenFolderForProcess}
+          onUploadLog={handleUploadLogForProcess}
+          isUploading={isUploading}
+          uploadUrl={uploadUrl}
+          uploadError={uploadError}
+          onOpenUploadUrl={handleOpenUploadUrl}
+          isAutoscrollEnabled={isAutoscrollEnabled}
+          onAutoscrollChange={handleAutoscrollChange}
+          scrollableContainerRef={scrollableContainerRef}
+        />
+      </div>
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   uploadLogToMclogs,
 } from "../../../services/log-service";
 import { LogViewerDisplay } from "../../log/LogViewerDisplay";
+import { useThemeStore } from "../../../store/useThemeStore";
 
 interface LogsTabProps {
   profile: Profile;
@@ -56,6 +57,7 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   const [displayLines, setDisplayLines] = useState<ParsedLogLine[]>([]);
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -257,7 +259,14 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   return (
     <div className="h-full select-none p-4 flex flex-col text-white">
-      <div className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg">
+      <div
+        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
+        style={{
+          borderColor: `${accentColor.value}40`,
+          borderBottomColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}10`,
+        }}
+      >
         <LogViewerDisplay
           isLoading={isLoadingList || isLoadingContent}
           error={errorList || errorContent}
