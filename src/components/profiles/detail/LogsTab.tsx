@@ -51,10 +51,6 @@ export function LogsTab({ profile }: LogsTabProps) {
   const [copied, setCopied] = useState(false);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadUrl, setUploadUrl] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
   const [displayLines, setDisplayLines] = useState<ParsedLogLine[]>([]);
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -72,9 +68,6 @@ export function LogsTab({ profile }: LogsTabProps) {
       setRawLogContentForCopy(null);
       setErrorContent(null);
       setSearchTerm("");
-      setUploadUrl(null);
-      setUploadError(null);
-      setCopied(false);
 
       try {
         const paths = await getProfileLogFiles(profile.id);
@@ -113,9 +106,6 @@ export function LogsTab({ profile }: LogsTabProps) {
       setParsedLogLines([]);
       setRawLogContentForCopy(null);
       setErrorContent(null);
-      setUploadUrl(null);
-      setUploadError(null);
-      setCopied(false);
       setSearchTerm("");
       setIsLoadingContent(false);
       return;
@@ -127,9 +117,6 @@ export function LogsTab({ profile }: LogsTabProps) {
       setErrorContent(null);
       setParsedLogLines([]);
       setRawLogContentForCopy(null);
-      setUploadUrl(null);
-      setUploadError(null);
-      setCopied(false);
 
       try {
         const rawContent = await getLogFileContent(selectedLogPath);
@@ -209,24 +196,12 @@ export function LogsTab({ profile }: LogsTabProps) {
     }
   }, [displayLines]);
 
-  const handleUploadLog = useCallback(async () => {
-    if (!rawLogContentForCopy || !selectedLogPath) return;
-
-    setIsUploading(true);
-    setUploadUrl(null);
-    setUploadError(null);
-
-    try {
-      console.log(`[LogsTab] Uploading log: ${getFilename(selectedLogPath)}`);
-      const resultUrl = await uploadLogToMclogs(rawLogContentForCopy);
-      setUploadUrl(resultUrl);
-      console.log(`[LogsTab] Upload successful: ${resultUrl}`);
-    } catch (err: any) {
-      console.error(`[LogsTab] Error uploading log:`, err);
-      setUploadError(err?.message ?? "Failed to upload log");
-    } finally {
-      setIsUploading(false);
+  const handleUploadLog = useCallback(async (): Promise<string> => {
+    if (!rawLogContentForCopy || !selectedLogPath) {
+      throw new Error("No log content available to upload or no log file selected.");
     }
+    console.log(`[LogsTab] Uploading log: ${getFilename(selectedLogPath)}`);
+    return uploadLogToMclogs(rawLogContentForCopy);
   }, [rawLogContentForCopy, selectedLogPath]);
 
   const handleOpenLogsFolder = useCallback(async () => {
@@ -278,17 +253,14 @@ export function LogsTab({ profile }: LogsTabProps) {
           onSearchChange={handleSearchChange}
           onLevelFilterChange={handleLevelFilterChange}
           onCopyLog={handleCopyLog}
-          logLevelsDefinition={LOG_LEVELS}
-          scrollableContainerRef={scrollableContainerRef}
-          onOpenFolder={handleOpenLogsFolder}
           onUploadLog={handleUploadLog}
-          isUploading={isUploading}
-          uploadUrl={uploadUrl}
-          uploadError={uploadError}
+          onOpenFolder={handleOpenLogsFolder}
           onOpenUploadUrl={handleOpenUrl}
           logFiles={logFiles}
           selectedLogPath={selectedLogPath}
           onLogSelect={handleLogSelect}
+          logLevelsDefinition={LOG_LEVELS}
+          scrollableContainerRef={scrollableContainerRef}
         />
       </div>
     </div>

@@ -57,9 +57,6 @@ export function LogWindow() {
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadCompleteRef = useRef(initialLoadComplete);
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadUrl, setUploadUrl] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
@@ -292,28 +289,13 @@ export function LogWindow() {
     }
   }, []);
 
-  const handleUploadLogForProcess = useCallback(async () => {
+  const handleUploadLogForProcess = useCallback(async (): Promise<string> => {
     if (!rawLogContentForCopy) {
-      setError("No log content available to upload.");
-      return;
+      throw new Error("No log content available to upload.");
     }
-
     console.log(`[LogWindow] Uploading log content for process: ${processId}`);
-    setIsUploading(true);
-    setUploadUrl(null);
-    setUploadError(null);
     setError(null);
-
-    try {
-      const resultUrl = await uploadLogToMclogs(rawLogContentForCopy);
-      setUploadUrl(resultUrl);
-      console.log(`[LogWindow] Upload successful: ${resultUrl}`);
-    } catch (err: any) {
-      console.error(`[LogWindow] Error uploading log:`, err);
-      setUploadError(err?.message ?? "Failed to upload log");
-    } finally {
-      setIsUploading(false);
-    }
+    return uploadLogToMclogs(rawLogContentForCopy);
   }, [rawLogContentForCopy, processId]);
 
   return (
@@ -340,9 +322,6 @@ export function LogWindow() {
           logLevelsDefinition={LOG_LEVELS}
           onOpenFolder={handleOpenFolderForProcess}
           onUploadLog={handleUploadLogForProcess}
-          isUploading={isUploading}
-          uploadUrl={uploadUrl}
-          uploadError={uploadError}
           onOpenUploadUrl={handleOpenUploadUrl}
           isAutoscrollEnabled={isAutoscrollEnabled}
           onAutoscrollChange={handleAutoscrollChange}

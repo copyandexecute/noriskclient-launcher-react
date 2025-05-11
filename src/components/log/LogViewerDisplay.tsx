@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Icon } from "@iconify/react";
 import type { LogLevel, ParsedLogLine } from "../../services/log-service";
 import { Button } from "../ui/buttons/Button";
@@ -8,6 +8,8 @@ import { IconButton } from "../ui/buttons/IconButton";
 import { SearchInput } from "../ui/SearchInput";
 import { Select } from "../ui/Select";
 import { useThemeStore } from "../../store/useThemeStore";
+import { toast } from "react-hot-toast";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 interface LogViewerDisplayProps {
   // Required props
@@ -28,8 +30,7 @@ interface LogViewerDisplayProps {
   isAutoscrollEnabled?: boolean;
   onAutoscrollChange?: (enabled: boolean) => void;
   onOpenFolder?: () => void;
-  onUploadLog?: () => void;
-  isUploading?: boolean;
+  onUploadLog?: () => Promise<string>;
   uploadUrl?: string | null;
   uploadError?: string | null;
   onOpenUploadUrl?: (url: string) => void;
@@ -77,7 +78,6 @@ export function LogViewerDisplay({
   scrollableContainerRef,
   onOpenFolder,
   onUploadLog,
-  isUploading,
   uploadUrl,
   uploadError,
   onOpenUploadUrl,
@@ -86,6 +86,7 @@ export function LogViewerDisplay({
   onLogSelect,
 }: LogViewerDisplayProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
 
   const getLevelButtonStyle = (level: LogLevel) => {
     if (!levelFilters[level]) {
@@ -204,18 +205,56 @@ export function LogViewerDisplay({
 
             {onUploadLog && (
               <IconButton
-                onClick={onUploadLog}
-                disabled={isLoading || isUploading || parsedLogLinesCount === 0}
+                onClick={async () => {
+                  if (isSubmittingUpload) return;
+                  if (onUploadLog) {
+                    setIsSubmittingUpload(true);
+                    try {
+                      const url = await onUploadLog();
+                      let clipboardSuccess = false;
+                      try {
+                        await writeText(url);
+                        clipboardSuccess = true;
+                      } catch (copyError) {
+                        console.error("Failed to copy URL to clipboard:", copyError);
+                      }
+
+                      const successMessage = clipboardSuccess
+                        ? "Link copied! Click to open."
+                        : "Log uploaded (copy failed)! Click to open.";
+
+                      toast.success(
+                        (t) => (
+                          <span
+                            onClick={() => {
+                              if (url && onOpenUploadUrl) onOpenUploadUrl(url);
+                              toast.dismiss(t.id);
+                            }}
+                            className="cursor-pointer hover:underline"
+                          >
+                            {successMessage}
+                          </span>
+                        ),
+                        { duration: 5000 }
+                      );
+                    } catch (err: any) {
+                      toast.error(`Upload failed: ${err.toString()}`);
+                    } finally {
+                      setIsSubmittingUpload(false);
+                    }
+                  }
+                }}
+                disabled={isLoading || parsedLogLinesCount === 0 || isSubmittingUpload}
                 variant="secondary"
                 size="sm"
                 icon={
                   <Icon
                     icon={
-                      isUploading
+                      isSubmittingUpload
                         ? "solar:refresh-circle-bold"
                         : "solar:upload-bold"
                     }
-                    className={isUploading ? "animate-spin" : ""}
+                    className={isSubmittingUpload ? "animate-spin" : ""}
                   />
                 }
               />
@@ -309,15 +348,22 @@ export function LogViewerDisplay({
 
         <div className="flex items-center gap-3">
           {isAutoscrollEnabled !== undefined && onAutoscrollChange && (
-            <label className="flex items-center gap-2 cursor-pointer text-white/70 hover:text-white font-minecraft text-xl">
+            <div className="flex items-center">
               <input
                 type="checkbox"
+                id="autoscroll-checkbox"
                 checked={isAutoscrollEnabled}
                 onChange={(e) => onAutoscrollChange(e.target.checked)}
-                className="w-4 h-4 accent-blue-500"
+                className="w-4 h-4 rounded bg-transparent border-white/30 focus:ring-offset-0 focus:ring-0 text-accent-500"
+                style={{ color: accentColor.value }}
               />
-              autoscroll
-            </label>
+              <label
+                htmlFor="autoscroll-checkbox"
+                className="ml-2 text-sm text-white/70 lowercase"
+              >
+                Autoscroll
+              </label>
+            </div>
           )}
 
           {logFiles.length > 0 && onLogSelect && (
@@ -342,50 +388,20 @@ export function LogViewerDisplay({
               />
             </div>
           )}
+
+          <div className="flex items-center gap-4 text-xs text-white/50">
+            {/* Removed isSubmittingUpload && (
+              <div className="flex items-center">
+                <Icon
+                  icon="solar:refresh-circle-bold"
+                  className="w-4 h-4 mr-1 animate-spin"
+                />
+                Uploading log...
+              </div>
+            )} */}
+          </div>
         </div>
       </div>
-
-      {uploadUrl && onOpenUploadUrl && (
-        <div
-          className="mt-4 flex items-center gap-2 p-3 rounded-lg"
-          style={{
-            backgroundColor: `${accentColor.value}20`,
-            borderColor: `${accentColor.value}40`,
-          }}
-        >
-          <span className="text-white/70 font-minecraft text-xl">
-            Log uploaded:
-          </span>
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              if (onOpenUploadUrl) onOpenUploadUrl(uploadUrl);
-            }}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-green-400 hover:text-green-300 underline text-xl font-minecraft"
-            title={`Open ${uploadUrl}`}
-          >
-            {uploadUrl}
-          </a>
-        </div>
-      )}
-
-      {uploadError && (
-        <div className="mt-4 flex items-center gap-2 bg-red-900/30 border-2 border-red-700/50 p-3 rounded-lg">
-          <Icon
-            icon="solar:danger-triangle-bold"
-            className="w-5 h-5 text-red-400"
-          />
-          <span
-            className="text-red-400 text-xl font-minecraft"
-            title={uploadError}
-          >
-            Upload Failed: {uploadError}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
