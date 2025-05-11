@@ -302,7 +302,10 @@ export function LogWindow() {
   }, [rawLogContentForCopy, processId]);
 
   return (
-    <div className="flex flex-col h-full bg-black/20 backdrop-blur-md text-white font-minecraft">
+    <div 
+      className="flex flex-col h-full text-white font-minecraft"
+      style={{ backgroundColor: `${accentColor.value}10` }}
+    >
       <div
         className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
         style={{

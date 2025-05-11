@@ -10,6 +10,7 @@ import { Select } from "../ui/Select";
 import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { Checkbox } from "../ui/Checkbox";
 
 interface LogViewerDisplayProps {
   // Required props
@@ -348,22 +349,13 @@ export function LogViewerDisplay({
 
         <div className="flex items-center gap-3">
           {isAutoscrollEnabled !== undefined && onAutoscrollChange && (
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="autoscroll-checkbox"
-                checked={isAutoscrollEnabled}
-                onChange={(e) => onAutoscrollChange(e.target.checked)}
-                className="w-4 h-4 rounded bg-transparent border-white/30 focus:ring-offset-0 focus:ring-0 text-accent-500"
-                style={{ color: accentColor.value }}
-              />
-              <label
-                htmlFor="autoscroll-checkbox"
-                className="ml-2 text-sm text-white/70 lowercase"
-              >
-                Autoscroll
-              </label>
-            </div>
+            <Checkbox
+              id="autoscroll-checkbox"
+              checked={isAutoscrollEnabled}
+              onChange={(e) => onAutoscrollChange(e.target.checked)}
+              label="Autoscroll"
+              size="sm"
+            />
           )}
 
           {logFiles.length > 0 && onLogSelect && (
