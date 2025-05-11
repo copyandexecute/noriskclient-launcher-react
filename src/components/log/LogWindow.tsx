@@ -402,6 +402,7 @@ export function LogWindow() {
           isAutoscrollEnabled={isAutoscrollEnabled}
           onAutoscrollChange={handleAutoscrollChange}
           scrollableContainerRef={scrollableContainerRef}
+          isLiveContext={isLiveLogs}
         />
       </div>
     </div>

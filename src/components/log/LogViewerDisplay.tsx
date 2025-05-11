@@ -38,6 +38,7 @@ interface LogViewerDisplayProps {
   logFiles?: string[];
   selectedLogPath?: string | null;
   onLogSelect?: (value: string) => void;
+  isLiveContext?: boolean;
 }
 
 function getFilename(path: string | null): string {
@@ -83,6 +84,7 @@ export function LogViewerDisplay({
   logFiles = [],
   selectedLogPath = null,
   onLogSelect,
+  isLiveContext,
 }: LogViewerDisplayProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
@@ -137,7 +139,7 @@ export function LogViewerDisplay({
     );
   }
 
-  if (parsedLogLinesCount === 0) {
+  if (!isLiveContext && parsedLogLinesCount === 0) {
     return (
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center">
