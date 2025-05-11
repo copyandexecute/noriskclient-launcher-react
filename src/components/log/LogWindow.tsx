@@ -38,6 +38,7 @@ export function LogWindow() {
   >(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLiveLogs, setIsLiveLogs] = useState<boolean>(false);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [levelFilters, setLevelFilters] = useState<Record<LogLevel, boolean>>({
@@ -63,9 +64,18 @@ export function LogWindow() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("processId");
+    const liveLogs = params.get("isLiveLogs") === "true";
+    
     if (id) {
       console.log(`[LogWindow] Detected processId: ${id}`);
       setProcessId(id);
+      
+      if (liveLogs) {
+        console.log(`[LogWindow] Live logs mode detected, skipping initial log fetch`);
+        setIsLiveLogs(true);
+        setIsLoading(false);
+        setInitialLoadComplete(true);
+      }
     } else {
       console.error("[LogWindow] No processId found in URL parameters.");
       setError("No process ID specified.");
@@ -117,7 +127,12 @@ export function LogWindow() {
     };
 
     if (!initialLoadComplete) {
-      fetchInitialLogs();
+      if (isLiveLogs) {
+        console.log(`[LogWindow] Skipping initial log fetch due to live logs mode`);
+        setInitialLoadComplete(true);
+      } else {
+        fetchInitialLogs();
+      }
     }
 
     let isSubscribed = true;

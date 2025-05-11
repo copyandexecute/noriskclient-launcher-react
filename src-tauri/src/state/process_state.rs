@@ -906,6 +906,7 @@ impl ProcessManager {
                         match crate::commands::process_command::open_log_window(
                             (*app_handle_clone).clone(),
                             process_id,
+                            Some(true),
                         )
                         .await
                         {
