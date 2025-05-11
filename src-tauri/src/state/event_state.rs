@@ -25,6 +25,8 @@ pub enum EventType {
     SyncingMods,
     LaunchingMinecraft,
     MinecraftOutput,
+    MinecraftStdout,
+    MinecraftStderr,
     AccountLogin,
     AccountRefresh,
     AccountLogout,
@@ -33,6 +35,7 @@ pub enum EventType {
     MinecraftProcessExited,
     Error,
     LaunchSuccessful,
+    MinecraftXmlLogEntry,
 }
 
 #[derive(Serialize, Clone)]

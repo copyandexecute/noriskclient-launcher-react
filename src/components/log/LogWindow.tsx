@@ -17,6 +17,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
+import { EventType, type MinecraftXmlLogEntryPayload } from "../../types/events";
 
 interface MinecraftOutputPayload {
   event_type: "minecraft_output";
@@ -144,15 +145,67 @@ export function LogWindow() {
             if (!isSubscribed || !initialLoadCompleteRef.current) return;
 
             const payload = event.payload;
-            if (
-              payload.event_type === "minecraft_output" &&
-              payload.target_id === processId
-            ) {
-              const rawLine = payload.message;
-              const newParsedLines = parseLogLinesFromString(rawLine);
 
+            if (payload.target_id !== processId) {
+              // console.trace(`[LogWindow] Ignoring event for different target: ${payload.target_id}, current: ${processId}`);
+              return;
+            }
+
+            let linesToAdd: ParsedLogLine[] = [];
+            let rawLineForCopy: string | null = null; // To accumulate raw lines for copy-pasting if needed
+
+            if (isLiveLogs) {
+              if (payload.event_type === EventType.MinecraftXmlLogEntry) {
+                try {
+                  const xmlEntry = JSON.parse(payload.message) as MinecraftXmlLogEntryPayload;
+                  const newId = parsedLogLines.length; // Use current length for unique ID
+
+                  linesToAdd.push({
+                    id: newId,
+                    raw: xmlEntry.raw_xml || `[XML Log] ${xmlEntry.message}`, // Fallback for raw line
+                    timestamp: xmlEntry.timestamp,
+                    thread: xmlEntry.thread_name,
+                    level: xmlEntry.level.toUpperCase() as LogLevel, // Ensure uppercase for LogLevel type
+                    text: xmlEntry.message,
+                  });
+                  rawLineForCopy = xmlEntry.raw_xml || xmlEntry.message;
+                  console.log("[LogWindow] Parsed XML Log Entry:", xmlEntry);
+                } catch (e) {
+                  console.error("[LogWindow] Failed to parse MinecraftXmlLogEntryPayload:", e, payload.message);
+                  // Optionally, add the raw message as an unparsed line
+                  // linesToAdd.push(parseLogLinesFromString(`[ERROR Parsing XML Entry] ${payload.message}`, parsedLogLines.length));
+                }
+              }
+              // In live logs mode, we now prioritize MinecraftXmlLogEntry.
+              // We might still want to see raw stdout/stderr if the XML parser in backend fails to emit an XML entry for some lines.
+              // For now, MinecraftStdout/Stderr events are no longer directly creating visible lines here
+              // as the backend XmlLogParser is expected to handle them or they are non-XML.
+              // If backend emits non-XML lines via a different event (e.g. MinecraftOutput again, or a new one), handle here.
+               else if (
+                 payload.event_type === EventType.MinecraftStdout ||
+                 payload.event_type === EventType.MinecraftStderr
+               ) {
+                 // These are now processed by the backend parser.
+                 // If the backend parser decides to FORWARD some raw lines under these event types,
+                 // (e.g. if they are not XML), then we might want to parse them here.
+                 // But the current backend parser design tries to emit MinecraftXmlLogEntry for XML,
+                 // and implicitly drops non-XML lines it can't form into a block.
+                 // console.log(`[LogWindow] Received raw ${payload.event_type}, expecting backend to parse as XML or handle as non-XML.`);
+                 return; // Or parse as raw if backend might send non-XML this way
+               } else if (payload.event_type === EventType.MinecraftOutput) {
+                 // console.log("[LogWindow] Live mode: Ignoring MinecraftOutput event, relying on Stdout/Stderr pipes via backend parser.");
+                 return;
+               }
+            } else {
+              if (payload.event_type === EventType.MinecraftOutput) {
+                rawLineForCopy = payload.message;
+                linesToAdd = parseLogLinesFromString(rawLineForCopy, parsedLogLines.length);
+              }
+            }
+
+            if (linesToAdd.length > 0) {
               setParsedLogLines((prevLines) => {
-                const updatedLines = [...prevLines, ...newParsedLines];
+                const updatedLines = [...prevLines, ...linesToAdd];
                 if (updatedLines.length > MAX_LOG_LINES) {
                   return updatedLines.slice(
                     updatedLines.length - MAX_LOG_LINES,
@@ -161,9 +214,11 @@ export function LogWindow() {
                 return updatedLines;
               });
 
-              setRawLogContentForCopy((prevRaw) =>
-                prevRaw ? prevRaw + "\n" + rawLine : rawLine,
-              );
+              if (rawLineForCopy) {
+                setRawLogContentForCopy((prevRaw) =>
+                  prevRaw ? prevRaw + "\n" + rawLineForCopy : rawLineForCopy,
+                );
+              }
 
               if (isAutoscrollEnabled) {
                 setTimeout(scrollToBottom, 0);

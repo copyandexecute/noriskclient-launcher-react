@@ -21,6 +21,10 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration};
 use uuid::Uuid;
+use std::process::Stdio;
+use tokio::process::ChildStdout;
+use tokio::process::ChildStderr;
+use crate::state::xml_log_parser::XmlLogParser;
 
 const PROCESSES_FILENAME: &str = "processes.json";
 
@@ -235,6 +239,9 @@ impl ProcessManager {
     ) -> Result<Uuid> {
         log::info!("Attempting to start process for profile {}", profile_id);
 
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
         #[cfg(unix)]
         {
             // Potentially unnecessary if handled by dropping Child, but kept for safety
@@ -260,6 +267,16 @@ impl ProcessManager {
                 e
             );
             AppError::ProcessSpawnFailed(e.to_string())
+        })?;
+
+        let child_stdout = child.stdout.take().ok_or_else(|| {
+            log::error!("Failed to capture stdout from spawned process.");
+            AppError::ProcessSpawnFailed("Could not capture stdout".to_string())
+        })?;
+
+        let child_stderr = child.stderr.take().ok_or_else(|| {
+            log::error!("Failed to capture stderr from spawned process.");
+            AppError::ProcessSpawnFailed("Could not capture stderr".to_string())
         })?;
 
         let pid = child.id().ok_or_else(|| {
@@ -441,6 +458,38 @@ impl ProcessManager {
 
             log::debug!("Monitor task finished for process {}", process_id);
         });
+
+        // Get EventState for the pipe reader tasks
+        match State::get().await {
+            Ok(state_instance) => {
+                // Create Arc<EventState> from a clone of state_instance.event_state
+                let event_state_for_stdout_arc = Arc::new(state_instance.event_state.clone());
+                let event_state_for_stderr_arc = Arc::new(state_instance.event_state.clone());
+                let xml_parser_for_stdout = XmlLogParser::new();
+                let xml_parser_for_stderr = XmlLogParser::new();
+
+                // Spawn tasks for reading stdout and stderr
+                Self::spawn_pipe_reader_task(
+                    child_stdout,
+                    process_id,
+                    xml_parser_for_stdout,
+                    event_state_for_stdout_arc, // Pass the new Arc
+                );
+                Self::spawn_pipe_reader_task(
+                    child_stderr,
+                    process_id,
+                    xml_parser_for_stderr,
+                    event_state_for_stderr_arc, // Pass the new Arc
+                );
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to get global state for EventState to spawn pipe readers for process {}: {}. Stdout/Stderr will not be captured.", 
+                    process_id, 
+                    e
+                );
+            }
+        }
 
         Ok(process_id)
     }
@@ -935,6 +984,71 @@ impl ProcessManager {
                     );
                 }
             }
+        });
+    }
+
+    // New private helper function to spawn a task for reading a pipe (stdout/stderr)
+    fn spawn_pipe_reader_task<T: tokio::io::AsyncRead + Unpin + Send + 'static>(
+        pipe: T,
+        process_id: Uuid,
+        mut xml_parser: XmlLogParser,
+        event_state_clone: Arc<EventState>,
+    ) {
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(pipe);
+            let mut line_buffer = String::new();
+            log::debug!(
+                "Pipe reader task started for process {} with dedicated XML parser.",
+                process_id
+            );
+
+            loop {
+                match reader.read_line(&mut line_buffer).await {
+                    Ok(0) => { // Pipe closed (EOF)
+                        log::debug!(
+                            "Pipe for process {} closed. Reader task finishing.",
+                            process_id
+                        );
+                        // Process any remaining buffer in the parser before exiting
+                        if !line_buffer.is_empty() { // Should be empty if read_line returned 0, but just in case
+                            xml_parser.process_line(line_buffer.clone(), process_id, &event_state_clone).await;
+                            line_buffer.clear(); 
+                        }
+                        // Also explicitly process any final remnants in the parser's internal buffer
+                        // This requires process_line to handle empty input string if buffer has content,
+                        // or a new method like `flush_buffer` on XmlLogParser.
+                        // For now, we assume process_line with last (potentially empty) line_buffer is enough.
+                        // A more robust `flush` would be better on XmlLogParser if it can have partial data.
+                        xml_parser.process_line(String::new(), process_id, &event_state_clone).await; // Send empty to signal flush possibility
+
+                        break;
+                    }
+                    Ok(_bytes_read) => {
+                        let current_line = line_buffer.trim_end().to_string(); // Process the line as is
+                        if !current_line.is_empty() {
+                            log::trace!(
+                                "Pipe for {} received line: '{}'",
+                                process_id,
+                                current_line
+                            );
+                            xml_parser.process_line(current_line, process_id, &event_state_clone).await;
+                        }
+                        line_buffer.clear();
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Error reading from pipe for process {}: {}. Reader task finishing.",
+                            process_id,
+                            e
+                        );
+                        break;
+                    }
+                }
+            }
+            log::debug!(
+                "Pipe reader task finished for process {}",
+                process_id
+            );
         });
     }
 }

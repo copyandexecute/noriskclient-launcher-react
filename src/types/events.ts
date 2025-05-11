@@ -24,6 +24,9 @@ export enum EventType {
   MinecraftProcessExited = "minecraft_process_exited",
   Error = "error",
   LaunchSuccessful = "launch_successful",
+  MinecraftStdout = "minecraft_stdout",
+  MinecraftStderr = "minecraft_stderr",
+  MinecraftXmlLogEntry = "minecraft_xml_log_entry",
 }
 
 export interface EventPayload {
@@ -33,6 +36,7 @@ export interface EventPayload {
   message: string;
   progress: number | null;
   error: string | null;
+  success: boolean;
 }
 
 export interface MinecraftProcessExitedPayload {
@@ -40,4 +44,13 @@ export interface MinecraftProcessExitedPayload {
   process_id: string;
   exit_code: number | null;
   success: boolean;
+}
+
+export interface MinecraftXmlLogEntryPayload {
+  process_id: string;
+  timestamp: string;
+  thread_name: string;
+  level: string;
+  message: string;
+  raw_xml?: string;
 }
