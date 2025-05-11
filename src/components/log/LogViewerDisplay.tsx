@@ -79,8 +79,6 @@ export function LogViewerDisplay({
   scrollableContainerRef,
   onOpenFolder,
   onUploadLog,
-  uploadUrl,
-  uploadError,
   onOpenUploadUrl,
   logFiles = [],
   selectedLogPath = null,
@@ -294,7 +292,7 @@ export function LogViewerDisplay({
             </div>
           </div>
         ) : (
-          <div className="p-4 bg-black/60 font-mono text-sm whitespace-pre-wrap">
+          <div className="min-h-full p-4 bg-black/60 font-mono text-sm whitespace-pre-wrap">
             {displayLines.map((line) => (
               <div key={line.id} className="flex flex-nowrap items-start mb-1">
                 {line.timestamp ? (
