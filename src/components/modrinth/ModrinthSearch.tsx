@@ -453,15 +453,16 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           "downloads",
         );
 
+        const hitsArray = Array.isArray(response?.hits) ? response.hits : [];
         setSearchResponse(response);
-        setSearchResults(response.hits);
-        setOffset(response.hits.length);
+        setSearchResults(hitsArray);
+        setOffset(hitsArray.length);
         setHasMore(
-          response.hits.length === pageSize &&
-            response.hits.length < response.total_hits,
+          hitsArray.length === pageSize &&
+            hitsArray.length < response.total_hits,
         );
 
-        updateAllHitStatuses(response.hits);
+        updateAllHitStatuses(hitsArray);
       } catch (err) {
         console.error("Failed to load featured content:", err);
         setSearchError(
@@ -529,18 +530,13 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           selectedEnvironmentOptions.includes("server") ? "required" : undefined,
         );
 
+        const hitsArray = Array.isArray(response?.hits) ? response.hits : [];
         setSearchResponse(response);
-
-        if (resetResults) {
-          setSearchResults(response.hits);
-        } else {
-          setSearchResults((prev) => [...prev, ...response.hits]);
-        }
-
-        setOffset(currentOffset + response.hits.length);
+        setSearchResults(hitsArray);
+        setOffset(hitsArray.length);
         setHasMore(
-          response.hits.length === pageSize &&
-            currentOffset + response.hits.length < response.total_hits,
+          hitsArray.length === pageSize &&
+            hitsArray.length < response.total_hits,
         );
 
         if (resetResults) {
@@ -550,7 +546,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setVersionsError(null);
         }
 
-        updateAllHitStatuses(response.hits);
+        updateAllHitStatuses(hitsArray);
       } catch (err) {
         console.error("Modrinth search failed:", err);
         setSearchError(
@@ -783,18 +779,19 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             selectedEnvironmentOptions.includes("server") ? "required" : undefined,
           );
 
+          const hitsArray = Array.isArray(response?.hits) ? response.hits : [];
           setSearchResponse(response);
-          setSearchResults(response.hits);
-          setOffset(response.hits.length);
+          setSearchResults(hitsArray);
+          setOffset(hitsArray.length);
           setHasMore(
-            response.hits.length === pageSize &&
-              response.hits.length < response.total_hits
+            hitsArray.length === pageSize &&
+              hitsArray.length < response.total_hits
           );
           setSelectedProjectId(null);
           setModVersions([]);
           setFilteredVersions([]);
           setVersionsError(null);
-          updateAllHitStatuses(response.hits);
+          updateAllHitStatuses(hitsArray);
         } catch (err) {
           console.error("Modrinth filtered search (active filters) failed:", err);
           setSearchError(
@@ -851,18 +848,19 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             );
           }
 
+          const hitsArrayCleared = Array.isArray(response?.hits) ? response.hits : [];
           setSearchResponse(response);
-          setSearchResults(response.hits);
-          setOffset(response.hits.length);
+          setSearchResults(hitsArrayCleared);
+          setOffset(hitsArrayCleared.length);
           setHasMore(
-            response.hits.length === pageSize &&
-            response.hits.length < response.total_hits
+            hitsArrayCleared.length === pageSize &&
+            hitsArrayCleared.length < response.total_hits
           );
           setSelectedProjectId(null);
           setModVersions([]);
           setFilteredVersions([]);
           setVersionsError(null);
-          updateAllHitStatuses(response.hits);
+          updateAllHitStatuses(hitsArrayCleared);
         } catch (err) {
           console.error("Modrinth search (filters cleared) failed:", err);
           setSearchError(
@@ -1015,12 +1013,13 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
               selectedSortType,
             );
 
+            const hitsArray = Array.isArray(response?.hits) ? response.hits : [];
             setSearchResponse(response);
-            setSearchResults(response.hits);
-            setOffset(response.hits.length);
+            setSearchResults(hitsArray);
+            setOffset(hitsArray.length);
             setHasMore(
-              response.hits.length === pageSize &&
-                response.hits.length < response.total_hits,
+              hitsArray.length === pageSize &&
+                hitsArray.length < response.total_hits,
             );
 
             setSelectedProjectId(null);
@@ -1028,7 +1027,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             setFilteredVersions([]);
             setVersionsError(null);
 
-            updateAllHitStatuses(response.hits);
+            updateAllHitStatuses(hitsArray);
           } catch (err) {
             console.error("Modrinth search failed:", err);
             setSearchError(
@@ -1090,12 +1089,13 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
             newSort,
           );
 
+          const hitsArray = Array.isArray(response?.hits) ? response.hits : [];
           setSearchResponse(response);
-          setSearchResults(response.hits);
-          setOffset(response.hits.length);
+          setSearchResults(hitsArray);
+          setOffset(hitsArray.length);
           setHasMore(
-            response.hits.length === pageSize &&
-              response.hits.length < response.total_hits,
+            hitsArray.length === pageSize &&
+              hitsArray.length < response.total_hits,
           );
 
           setSelectedProjectId(null);
@@ -1103,7 +1103,7 @@ export const ModrinthSearch: React.FC<ModrinthSearchProps> = ({
           setFilteredVersions([]);
           setVersionsError(null);
 
-          updateAllHitStatuses(response.hits);
+          updateAllHitStatuses(hitsArray);
         } catch (err) {
           console.error("Modrinth search failed:", err);
           setSearchError(
