@@ -2,11 +2,11 @@ name: Build and Release
 
 on:
   push:
-    tags:
-      - "v*"
     branches:
-      - staging
-  workflow_dispatch: {}
+      - '**' # Build on push to any branch
+    tags:
+      - "v*"  # Release on v* tags
+  workflow_dispatch: {} # Allow manual dispatch
 
 jobs:
   # --- JOB 1: Build & Rename --- 
