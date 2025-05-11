@@ -64,22 +64,30 @@ export function LogWindow() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("processId");
-    const liveLogs = params.get("isLiveLogs") === "true";
-    
+    const liveLogsUrlParam = params.get("isLiveLogs") === "true";
+
     if (id) {
       console.log(`[LogWindow] Detected processId: ${id}`);
       setProcessId(id);
-      
-      if (liveLogs) {
-        console.log(`[LogWindow] Live logs mode detected, skipping initial log fetch`);
+
+      if (liveLogsUrlParam) {
+        console.log(`[LogWindow] Live logs mode detected from URL. Initializing empty log view.`);
         setIsLiveLogs(true);
         setIsLoading(false);
+        setParsedLogLines([]);
+        setRawLogContentForCopy(null);
         setInitialLoadComplete(true);
+      } else {
+        setIsLiveLogs(false);
+        setParsedLogLines([]);
+        setRawLogContentForCopy(null);
+        setInitialLoadComplete(false);
       }
     } else {
       console.error("[LogWindow] No processId found in URL parameters.");
       setError("No process ID specified.");
       setIsLoading(false);
+      setInitialLoadComplete(true);
     }
   }, []);
 
@@ -95,44 +103,51 @@ export function LogWindow() {
   }, []);
 
   useEffect(() => {
-    if (!processId) return;
-
-    const fetchInitialLogs = async () => {
-      console.log(
-        `[LogWindow] Fetching initial logs for processId: ${processId}`,
-      );
-      setIsLoading(true);
-      setError(null);
+    if (!processId) {
       setParsedLogLines([]);
       setRawLogContentForCopy(null);
+      setIsLoading(false);
+      setInitialLoadComplete(false);
+      if (logListenerRef.current) {
+        logListenerRef.current();
+        logListenerRef.current = null;
+      }
+      return;
+    }
 
-      try {
-        const rawContent =
-          await ProcessService.getLogContentForProcess(processId);
-        setRawLogContentForCopy(rawContent);
-        const lines = parseLogLinesFromString(rawContent);
-        setParsedLogLines(lines);
-        console.log(`[LogWindow] Loaded ${lines.length} initial log lines.`);
-      } catch (err: any) {
-        console.error("[LogWindow] Failed to fetch initial logs:", err);
-        setError(err?.message ?? "Failed to load initial logs.");
+    if (isLiveLogs) {
+      console.log(`[LogWindow] Live mode is active for ${processId}. Clearing logs and skipping initial fetch.`);
+      setParsedLogLines([]);
+      setRawLogContentForCopy(null);
+      setIsLoading(false);
+      setInitialLoadComplete(true);
+    } else {
+      console.log(`[LogWindow] Non-live mode for ${processId}. Fetching initial logs.`);
+      const fetchNonLiveLogs = async () => {
+        setIsLoading(true);
+        setError(null);
         setParsedLogLines([]);
-      } finally {
-        setIsLoading(false);
-        setInitialLoadComplete(true);
-        if (isAutoscrollEnabled) {
-          setTimeout(scrollToBottom, 0);
+        setRawLogContentForCopy(null);
+        try {
+          const rawContent =
+            await ProcessService.getLogContentForProcess(processId);
+          setRawLogContentForCopy(rawContent);
+          const lines = parseLogLinesFromString(rawContent);
+          setParsedLogLines(lines);
+          console.log(`[LogWindow] Loaded ${lines.length} initial log lines.`);
+        } catch (err: any) {
+          console.error("[LogWindow] Failed to fetch initial logs:", err);
+          setError(err?.message ?? "Failed to load initial logs.");
+          setParsedLogLines([]);
+        } finally {
+          setIsLoading(false);
+          setInitialLoadComplete(true);
+          if (isAutoscrollEnabled) {
+            setTimeout(scrollToBottom, 0);
+          }
         }
-      }
-    };
-
-    if (!initialLoadComplete) {
-      if (isLiveLogs) {
-        console.log(`[LogWindow] Skipping initial log fetch due to live logs mode`);
-        setInitialLoadComplete(true);
-      } else {
-        fetchInitialLogs();
-      }
+      };
+      fetchNonLiveLogs();
     }
 
     let isSubscribed = true;
@@ -200,8 +215,10 @@ export function LogWindow() {
         logListenerRef.current();
         logListenerRef.current = null;
       }
+      setInitialLoadComplete(false);
+      setIsLoading(true);
     };
-  }, [processId, isAutoscrollEnabled, scrollToBottom, initialLoadComplete, isLiveLogs]);
+  }, [processId, isLiveLogs, isAutoscrollEnabled, scrollToBottom]);
 
   useEffect(() => {
     const linesAfterLevelFilter = parsedLogLines.filter((line) => {
@@ -346,6 +363,7 @@ export function LogWindow() {
           isAutoscrollEnabled={isAutoscrollEnabled}
           onAutoscrollChange={handleAutoscrollChange}
           scrollableContainerRef={scrollableContainerRef}
+          isLiveLogs={isLiveLogs}
         />
       </div>
     </div>

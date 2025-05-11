@@ -26,6 +26,7 @@ interface LogViewerDisplayProps {
   onCopyLog: () => void;
   logLevelsDefinition: readonly LogLevel[];
   scrollableContainerRef?: React.RefObject<HTMLDivElement>;
+  isLiveLogs?: boolean;
   
   // Optional props
   isAutoscrollEnabled?: boolean;
@@ -74,6 +75,7 @@ export function LogViewerDisplay({
   onLevelFilterChange,
   onCopyLog,
   logLevelsDefinition,
+  isLiveLogs,
   isAutoscrollEnabled,
   onAutoscrollChange,
   scrollableContainerRef,
@@ -137,7 +139,7 @@ export function LogViewerDisplay({
     );
   }
 
-  if (parsedLogLinesCount === 0) {
+  if (!(isLiveLogs && parsedLogLinesCount === 0) && parsedLogLinesCount === 0) {
     return (
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="text-center">
