@@ -226,3 +226,12 @@ export interface ModrinthBulkUpdateRequestBody {
     loaders: string[];     // List of mod loaders to filter by (e.g., ["fabric", "quilt"])
     game_versions: string[]; // List of game versions to filter by (e.g., ["1.20.1"])
 }
+
+// --- Modrinth Tag Types ---
+
+export interface ModrinthCategory {
+    icon: string;        // SVG icon content
+    name: string;        // Name of the category (e.g., "adventure")
+    project_type: string; // Project type this category applies to (e.g., "mod")
+    header: string;      // Header for grouping (e.g., "gameplay")
+}

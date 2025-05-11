@@ -197,6 +197,16 @@ pub struct ModrinthGalleryImage {
 
 // --- End Structures for Bulk Project Lookup ---
 
+// --- Structures for Tags/Categories ---
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ModrinthCategory {
+    pub icon: String,            // SVG icon content
+    pub name: String,            // Name of the category (e.g., "adventure")
+    pub project_type: String,    // Project type this category applies to (e.g., "mod")
+    pub header: String,          // Header for grouping (e.g., "gameplay")
+}
+// --- End Structures for Tags/Categories ---
+
 // NEUE Struktur für den Input der Bulk-Abfrage
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ModrinthProjectContext {
@@ -990,4 +1000,51 @@ pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProje
     );
 
     Ok(projects)
+}
+
+/// Fetches a list of all categories from Modrinth.
+/// https://docs.modrinth.com/api/operations/categorylist/
+pub async fn get_modrinth_categories() -> Result<Vec<ModrinthCategory>> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tag/category", MODRINTH_API_BASE_URL);
+
+    log::info!("Fetching Modrinth categories from: {}", url);
+
+    let response = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            format!(
+                "NoRiskClient-Launcher/{} (contact@noriskclient.de)",
+                env!("CARGO_PKG_VERSION")
+            ),
+        )
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch categories failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Failed to read error body from categories endpoint".to_string());
+        log::error!(
+            "Modrinth API error fetching categories (Status: {}): {}",
+            status,
+            error_text
+        );
+        return Err(AppError::Other(format!(
+            "Modrinth API returned error {} fetching categories: {}",
+            status, error_text
+        )));
+    }
+
+    let categories = response
+        .json::<Vec<ModrinthCategory>>()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth categories response: {}", e)))?;
+
+    log::info!("Successfully fetched {} categories.", categories.len());
+    Ok(categories)
 }

@@ -8,6 +8,7 @@ import type {
   ModrinthSearchResponse,
   ModrinthSortType,
   ModrinthVersion,
+  ModrinthCategory,
 } from "../types/modrinth";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -20,9 +21,9 @@ export class ModrinthService {
     limit = 20,
     offset = 0,
     sort?: ModrinthSortType,
-    categories?: string[],
-    clientSide?: string,
-    serverSide?: string,
+    categoriesFilter?: string[],
+    clientSideFilter?: string,
+    serverSideFilter?: string,
   ): Promise<ModrinthSearchResponse> {
     return invoke<ModrinthSearchResponse>("search_modrinth_projects", {
       query,
@@ -32,9 +33,9 @@ export class ModrinthService {
       limit,
       offset,
       sort,
-      categories_filter: categories,
-      client_side_filter: clientSide,
-      server_side_filter: serverSide,
+      categoriesFilter,
+      clientSideFilter,
+      serverSideFilter,
     });
   }
 
@@ -101,5 +102,9 @@ export class ModrinthService {
       fileName,
       downloadUrl,
     });
+  }
+
+  static async getModrinthCategories(): Promise<ModrinthCategory[]> {
+    return invoke<ModrinthCategory[]>("get_modrinth_categories_command");
   }
 }

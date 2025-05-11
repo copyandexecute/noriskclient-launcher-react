@@ -220,3 +220,16 @@ pub async fn check_modrinth_updates(
 
     Ok(updates)
 }
+
+/// Fetches a list of all categories from Modrinth.
+#[tauri::command]
+pub async fn get_modrinth_categories_command() -> Result<Vec<modrinth::ModrinthCategory>, CommandError> {
+    log::debug!("Received get_modrinth_categories_command");
+
+    let categories = modrinth::get_modrinth_categories()
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!("Successfully fetched {} categories for frontend", categories.len());
+    Ok(categories)
+}
