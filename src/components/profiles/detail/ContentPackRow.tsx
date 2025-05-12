@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { ToggleSwitch } from "../../ui/ToggleSwitch";
 import type { ModrinthVersion } from "../../../types/modrinth";
@@ -11,6 +11,7 @@ import { useThemeStore } from "../../../store/useThemeStore";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Checkbox } from "../../ui/Checkbox";
 import { Button } from "../../ui/buttons/Button";
+import { gsap } from "gsap";
 
 interface ContentPack {
   id?: string;
@@ -71,6 +72,22 @@ export function ContentPackRow({
   const [localIcon, setLocalIcon] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (rowRef.current) {
+      gsap.fromTo(
+        rowRef.current,
+        { opacity: 0, x: -10 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.3,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
 
   const extractFileName = (path?: string): string => {
     if (!path) return "Unknown file";
@@ -164,6 +181,7 @@ export function ContentPackRow({
 
   return (
     <div
+      ref={rowRef}
       className={cn(
         "flex items-center py-3 px-4 border-b transition-colors",
         isSelected ? "bg-white/10" : "hover:bg-white/5",
@@ -183,10 +201,9 @@ export function ContentPackRow({
       </div>
 
       <div className="flex items-center gap-3 flex-1 min-w-0 px-3">
-        {/* 3D Image Frame */}
         <div className="relative w-12 h-12 flex-shrink-0">
           <div
-            className="absolute inset-0 border-2 border-b-4 overflow-hidden"
+            className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
             style={{
               backgroundColor: `${accentColor.value}15`,
               borderColor: `${accentColor.value}30`,

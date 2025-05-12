@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { ModrinthSearch } from "../../modrinth/ModrinthSearch";
 import type { Profile } from "../../../types/profile";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { Icon } from "@iconify/react";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface BrowseTabProps {
   profile: Profile;
@@ -19,6 +22,22 @@ export function BrowseTab({
   parentTransitionActive,
 }: BrowseTabProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current && !parentTransitionActive) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [parentTransitionActive]);
 
   const getProjectType = () => {
     switch (initialContentType) {
@@ -68,23 +87,17 @@ export function BrowseTab({
   if (!profile || !profile.id) {
     return (
       <div className="h-full flex flex-col p-4 gap-6">
-        <div
-          className="rounded-lg border-2 border-b-4 p-4 flex items-center gap-2"
-          style={{
-            backgroundColor: `rgba(220, 38, 38, 0.1)`,
-            borderColor: `rgba(220, 38, 38, 0.3)`,
-            borderBottomColor: `rgba(220, 38, 38, 0.5)`,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(220, 38, 38, 0.1)`,
-          }}
-        >
-          <Icon
-            icon="solar:danger-triangle-bold"
-            className="w-5 h-5 text-red-400"
-          />
-          <span className="text-white font-minecraft text-lg">
-            No profile selected. Please select a profile first.
-          </span>
-        </div>
+        <Card variant="flat" className="p-4 border-red-500">
+          <div className="flex items-center gap-2">
+            <Icon
+              icon="solar:danger-triangle-bold"
+              className="w-5 h-5 text-red-400"
+            />
+            <span className="text-white font-minecraft text-lg">
+              No profile selected. Please select a profile first.
+            </span>
+          </div>
+        </Card>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <Icon
@@ -104,7 +117,7 @@ export function BrowseTab({
   }
 
   return (
-    <div className="h-full flex flex-col p-4 gap-6">
+    <div ref={containerRef} className="h-full flex flex-col p-4 gap-6">
       <div className="flex-1 overflow-hidden">
         <ModrinthSearch
           profiles={[profile]}

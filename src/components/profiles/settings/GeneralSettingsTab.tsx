@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@iconify/react";
@@ -9,6 +9,8 @@ import { StatusMessage } from "../../ui/StatusMessage";
 import { Button } from "../../ui/buttons/Button";
 import { Input } from "../../ui/Input";
 import { Select } from "../../ui/Select";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface GeneralSettingsTabProps {
   profile: Profile;
@@ -39,6 +41,48 @@ export function GeneralSettingsTab({
   const [error, setError] = useState<string | null>(null);
   const [cloneSuccess, setCloneSuccess] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const tabRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tabRef.current) {
+      gsap.fromTo(
+        tabRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.4, ease: "power2.out" },
+      );
+    }
+
+    if (formRef.current) {
+      gsap.fromTo(
+        formRef.current.children,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.1,
+          ease: "power2.out",
+          delay: 0.2,
+        },
+      );
+    }
+
+    if (actionsRef.current) {
+      gsap.fromTo(
+        actionsRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+          delay: 0.4,
+        },
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const loadNoriskPacks = async () => {
@@ -67,6 +111,21 @@ export function GeneralSettingsTab({
       onDelete();
     } else {
       setConfirmDelete(true);
+
+      if (actionsRef.current) {
+        const deleteButton =
+          actionsRef.current.querySelector("button:last-child");
+        if (deleteButton) {
+          gsap.to(deleteButton, {
+            scale: 1.05,
+            duration: 0.3,
+            repeat: 3,
+            yoyo: true,
+            ease: "power2.inOut",
+          });
+        }
+      }
+
       setTimeout(() => setConfirmDelete(false), 10000);
     }
   };
@@ -105,11 +164,11 @@ export function GeneralSettingsTab({
   );
 
   return (
-    <div className="space-y-6 select-none">
+    <div ref={tabRef} className="space-y-6 select-none">
       {error && <StatusMessage type="error" message={error} />}
       {cloneSuccess && <StatusMessage type="success" message={cloneSuccess} />}
 
-      <div className="space-y-6">
+      <div ref={formRef} className="space-y-6">
         <div>
           <label className="block text-3xl font-minecraft text-white mb-2 lowercase">
             profile name
@@ -162,15 +221,7 @@ export function GeneralSettingsTab({
         </div>
       </div>
 
-      <div
-        className="mt-6 p-4 rounded-lg border-2 border-b-4"
-        style={{
-          backgroundColor: `${accentColor.value}10`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card ref={actionsRef} variant="default" className="mt-6 p-4">
         <div className="flex flex-wrap gap-4">
           <div className="flex-1 min-w-[250px]">
             <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
@@ -240,7 +291,7 @@ export function GeneralSettingsTab({
             </Button>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

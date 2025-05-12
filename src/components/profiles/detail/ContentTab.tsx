@@ -1,16 +1,18 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModsTab } from "./ModsTab";
 import type { Profile } from "../../../types/profile";
 import { Button } from "../../ui/buttons/Button";
 import { Icon } from "@iconify/react";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { ShaderPacksTab } from "./ShaderPacksTab";
-import { ResourcePacksTab } from "./ResourcePacksTab.tsx";
-import { DataPacksTab } from "./DataPacksTab.tsx";
-import { NoRiskModsTab } from "./NoRiskModsTab.tsx";
+import { ResourcePacksTab } from "./ResourcePacksTab";
+import { DataPacksTab } from "./DataPacksTab";
+import { NoRiskModsTab } from "./NoRiskModsTab";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface ContentTabProps {
   profile: Profile;
@@ -28,6 +30,52 @@ type ContentType =
 export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
   const [contentType, setContentType] = useState<ContentType>("mods");
   const accentColor = useThemeStore((state) => state.accentColor);
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tabsRef.current) {
+      gsap.fromTo(
+        tabsRef.current,
+        { opacity: 0, y: -10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (contentRef.current) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+          delay: 0.1,
+        },
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, scale: 0.98 },
+        {
+          opacity: 1,
+          scale: 1,
+          duration: 0.3,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [contentType]);
 
   const handleRefresh = () => {
     if (onRefresh) {
@@ -75,14 +123,11 @@ export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
   ];
 
   return (
-    <div className="h-full p-2 flex flex-col">
-      <div
-        className="flex-shrink-0 mb-5 p-2 rounded-lg border-2 border-b-4 shadow-md overflow-x-auto scrollbar-hide"
-        style={{
-          backgroundColor: `${accentColor.value}20`,
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-        }}
+    <div className="h-full p-4 flex flex-col gap-4">
+      <Card
+        ref={tabsRef}
+        variant="flat"
+        className="flex-shrink-0 p-2 overflow-x-auto scrollbar-hide"
       >
         <div className="flex gap-2">
           {tabs.map((tab) => (
@@ -101,15 +146,12 @@ export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
             </Button>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div
-        className="flex-1 min-h-0 overflow-hidden rounded-lg shadow-lg"
-        style={{
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          backgroundColor: `${accentColor.value}10`,
-        }}
+      <Card
+        ref={contentRef}
+        variant="default"
+        className="flex-1 min-h-0 overflow-hidden"
       >
         <div className={contentType === "mods" ? "block h-full" : "hidden"}>
           <ModsTab
@@ -154,7 +196,7 @@ export function ContentTab({ profile, onRefresh, onBrowse }: ContentTabProps) {
             isActive={contentType === "norisk"}
           />
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

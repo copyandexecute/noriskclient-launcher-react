@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import type { MinecraftVersion } from "../../../types/minecraft";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { VersionSelector } from "./VersionSelector";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 type VersionType = "release" | "snapshot" | "old-beta" | "old-alpha";
 
@@ -26,6 +28,37 @@ export function VersionStep({
     [],
   );
   const accentColor = useThemeStore((state) => state.accentColor);
+  const selectorCardRef = useRef<HTMLDivElement>(null);
+  const summaryCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectorCardRef.current) {
+      gsap.fromTo(
+        selectorCardRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (summaryCardRef.current && profile.game_version) {
+      gsap.fromTo(
+        summaryCardRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+          delay: 0.1,
+        },
+      );
+    }
+  }, [profile.game_version]);
 
   useEffect(() => {
     const filtered = minecraftVersions.filter((v) => {
@@ -63,15 +96,7 @@ export function VersionStep({
         </p>
       </div>
 
-      <div
-        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card ref={selectorCardRef} variant="default" className="p-6 space-y-6">
         <VersionSelector
           selectedVersion={profile.game_version || ""}
           onVersionSelect={handleVersionChange}
@@ -79,17 +104,13 @@ export function VersionStep({
           onVersionTypeSelect={setSelectedVersionType}
           versions={filteredVersions.map((v) => v.id)}
         />
-      </div>
+      </Card>
 
       {profile.game_version && (
-        <div
-          className="p-6 rounded-lg border-2 border-b-4 flex items-center gap-4"
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
+        <Card
+          ref={summaryCardRef}
+          variant="default"
+          className="p-6 flex items-center gap-4"
         >
           <div
             className="w-12 h-12 flex items-center justify-center rounded-md"
@@ -116,7 +137,7 @@ export function VersionStep({
                     : "legacy alpha version"}
             </div>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

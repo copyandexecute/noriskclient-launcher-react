@@ -13,6 +13,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { gsap } from "gsap";
+import { Card } from "../ui/Card";
 
 function TabTransitionLoader() {
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -108,7 +109,6 @@ export function ProfileDetailView({
 
   const handleBrowseContent = (contentType: string) => {
     setBrowseContentType(contentType);
-
     handleTabChange("browse");
   };
 
@@ -142,26 +142,21 @@ export function ProfileDetailView({
 
   const tabs = profile.is_standard_version
     ? [
-        { id: "worlds", label: "Worlds", icon: "pixel:globe" },
-        { id: "logs", label: "Logs", icon: "pixel:file-text" },
+        { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+        { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
       ]
     : [
-        { id: "content", label: "Content", icon: "pixel:grid-solid" },
-        { id: "browse", label: "Browse", icon: "pixel:search-solid" },
-        { id: "worlds", label: "Worlds", icon: "pixel:globe" },
-        { id: "logs", label: "Logs", icon: "pixel:code-solid" },
+        { id: "content", label: "Content", icon: "solar:widget-bold" },
+        { id: "browse", label: "Browse", icon: "solar:search-bold" },
+        { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+        { id: "logs", label: "Logs", icon: "solar:code-bold" },
       ];
 
   return (
-    <div
+    <Card
       ref={containerRef}
-      className="h-full flex flex-col overflow-hidden rounded-lg border-2 border-b-4 shadow-xl"
-      style={{
-        backgroundColor: `${accentColor.value}15`,
-        borderColor: `${accentColor.value}60`,
-        borderBottomColor: accentColor.value,
-        boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 12px 20px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30`,
-      }}
+      className="h-full flex flex-col overflow-hidden"
+      variant="elevated"
     >
       <div
         className="flex items-center px-4 py-2 border-b-2"
@@ -178,7 +173,7 @@ export function ProfileDetailView({
               borderColor: `${accentColor.value}80`,
             }}
           >
-            <Icon icon="pixel:cube" className="w-5 h-5 text-white" />
+            <Icon icon="solar:cube-bold" className="w-5 h-5 text-white" />
           </div>
           <div className="font-minecraft text-xl text-white truncate">
             {profile.name || profile.id}
@@ -216,9 +211,9 @@ export function ProfileDetailView({
           <IconButton
             icon={
               isRefreshing ? (
-                <Icon icon="pixel:spinner-solid" className="animate-spin" />
+                <Icon icon="solar:refresh-bold" className="animate-spin" />
               ) : (
-                <Icon icon="pixel:refresh" />
+                <Icon icon="solar:refresh-bold" />
               )
             }
             onClick={handleRefresh}
@@ -230,7 +225,7 @@ export function ProfileDetailView({
 
           {!profile.is_standard_version && (
             <IconButton
-              icon={<Icon icon="pixel:cog-solid" />}
+              icon={<Icon icon="solar:settings-bold" />}
               onClick={onEdit}
               title="Edit profile"
               size="sm"
@@ -242,7 +237,7 @@ export function ProfileDetailView({
             variant="secondary"
             size="sm"
             onClick={onClose}
-            icon={<Icon icon="pixel:arrow-left" />}
+            icon={<Icon icon="solar:arrow-left-bold" />}
             iconPosition="left"
           >
             Back
@@ -279,6 +274,6 @@ export function ProfileDetailView({
           {activeTab === "logs" && <LogsTab profile={currentProfile} />}
         </div>
       </TabContent>
-    </div>
+    </Card>
   );
 }

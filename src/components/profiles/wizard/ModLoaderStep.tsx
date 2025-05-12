@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { ModLoader, Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { Select } from "../../ui/Select";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
+import { cn } from "../../../lib/utils";
 
 interface ModLoaderStepProps {
   profile: Partial<Profile>;
@@ -33,6 +36,56 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
     neoforge: false,
   });
   const accentColor = useThemeStore((state) => state.accentColor);
+  const loaderCardRef = useRef<HTMLDivElement>(null);
+  const versionCardRef = useRef<HTMLDivElement>(null);
+  const summaryCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (loaderCardRef.current) {
+      gsap.fromTo(
+        loaderCardRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (profile.loader !== "vanilla" && versionCardRef.current) {
+      gsap.fromTo(
+        versionCardRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (
+      profile.loader !== "vanilla" &&
+      profile.loader_version &&
+      summaryCardRef.current
+    ) {
+      gsap.fromTo(
+        summaryCardRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [profile.loader, profile.loader_version]);
 
   const checkCompatibility = async () => {
     if (!profile.game_version) return;
@@ -199,15 +252,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
         </p>
       </div>
 
-      <div
-        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card ref={loaderCardRef} variant="default" className="p-6 space-y-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <ModLoaderCard
             name="vanilla"
@@ -254,18 +299,10 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
             description="Modern fork of Forge"
           />
         </div>
-      </div>
+      </Card>
 
       {profile.loader !== "vanilla" && (
-        <div
-          className="p-6 rounded-lg border-2 border-b-4 space-y-6"
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
-        >
+        <Card ref={versionCardRef} variant="default" className="p-6 space-y-6">
           <div>
             <label className="block text-2xl font-minecraft text-white mb-4 lowercase">{`${profile.loader} version`}</label>
             {loading ? (
@@ -296,18 +333,14 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
               />
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       {profile.loader !== "vanilla" && profile.loader_version && (
-        <div
-          className="p-6 rounded-lg border-2 border-b-4 flex items-center gap-4"
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
+        <Card
+          ref={summaryCardRef}
+          variant="default"
+          className="p-6 flex items-center gap-4"
         >
           <div
             className="w-12 h-12 flex items-center justify-center rounded-md overflow-hidden"
@@ -335,7 +368,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
               for minecraft {profile.game_version}
             </div>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
@@ -359,16 +392,33 @@ function ModLoaderCard({
   description,
 }: ModLoaderCardProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const cardRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (cardRef.current && isSelected) {
+      gsap.fromTo(
+        cardRef.current,
+        { scale: 0.95 },
+        {
+          scale: 1,
+          duration: 0.3,
+          ease: "elastic.out(1.2, 0.4)",
+        },
+      );
+    }
+  }, [isSelected]);
 
   return (
     <button
-      className={`p-4 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200 ${
+      ref={cardRef}
+      className={cn(
+        "p-4 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200",
         isSelected
           ? "bg-white/20 text-white border-white/50"
           : isCompatible
             ? "bg-black/20 text-white/70 border-white/20 hover:bg-black/30 hover:text-white"
-            : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed"
-      }`}
+            : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed",
+      )}
       style={{
         borderBottomColor: isSelected ? accentColor.value : "transparent",
       }}

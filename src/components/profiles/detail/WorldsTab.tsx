@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Icon } from "@iconify/react";
 import motdParser from "@sfirew/minecraft-motd-parser";
@@ -8,6 +8,8 @@ import { Button } from "../../ui/buttons/Button";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Select } from "../../ui/Select";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 // --- Import Real Types ---
 import type {
@@ -16,26 +18,18 @@ import type {
   WorldInfo,
 } from "../../../types/minecraft";
 import type { Profile } from "../../../types/profile";
-// --- End Imports ---
-// --- Import Utils ---
-import { timeAgo } from "../../../utils/time-utils"; // Import from util file
-// --- End Utils ---
-// --- Import World Service ---
-// Import the specific helper functions
+import { timeAgo } from "../../../utils/time-utils";
 import * as WorldService from "../../../services/world-service";
 import {
   getDifficultyString,
   getGameModeString,
 } from "../../../services/world-service";
-// --- End Service Import ---
 
-// Assume notificationStore exists globally or imported
 const notificationStore = {
   success: (msg: string) => console.log(`[SUCCESS] ${msg}`),
   error: (msg: string) => console.error(`[ERROR] ${msg}`),
 };
 
-// --- Component Props ---
 interface WorldsTabProps {
   profile: Profile | null;
   onLaunchRequest?: (params: {
@@ -45,7 +39,6 @@ interface WorldsTabProps {
   }) => void;
 }
 
-// Define combined item type with discriminator
 type DisplayItem =
   | (WorldInfo & { type: "world" })
   | (ServerInfo & { type: "server" });
@@ -74,7 +67,67 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
   const [sortOrder, setSortOrder] = useState<"recent" | "name">("recent");
   const accentColor = useThemeStore((state) => state.accentColor);
 
-  // --- Helper Functions ---
+  const containerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0 },
+        {
+          opacity: 1,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (headerRef.current) {
+      gsap.fromTo(
+        headerRef.current,
+        { opacity: 0, y: -10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          delay: 0.1,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (contentRef.current) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, scale: 0.98 },
+        {
+          opacity: 1,
+          scale: 1,
+          duration: 0.4,
+          delay: 0.2,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (footerRef.current) {
+      gsap.fromTo(
+        footerRef.current,
+        { opacity: 0, y: 10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          delay: 0.3,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
+
   const getWorldDisplayName = useCallback((world: WorldInfo): string => {
     return world.display_name || world.folder_name;
   }, []);
@@ -128,17 +181,13 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
       }
       try {
         return JSON.stringify(motd);
-      } catch (e) {
-        /* ignore */
-      }
+      } catch (e) {}
       return '<span class="text-red-400">Invalid MOTD format</span>';
     }
   }, []);
 
-  // --- Data Loading and Processing --- //
   const updateDisplayItems = useCallback(
     (currentWorlds: WorldInfo[], currentServers: ServerInfo[]) => {
-      // Add the 'type' discriminator here
       const typedWorlds: DisplayItem[] = currentWorlds.map((w) => ({
         ...w,
         type: "world",
@@ -150,7 +199,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
 
       let filteredItems: DisplayItem[] = [];
 
-      // Filter based on active tab
       if (activeTab === "all") {
         filteredItems = [...typedWorlds, ...typedServers];
       } else if (activeTab === "worlds") {
@@ -159,19 +207,17 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
         filteredItems = [...typedServers];
       }
 
-      // Sort items
       filteredItems.sort((a, b) => {
         if (sortOrder === "recent") {
           if (a.type === "world" && b.type === "world") {
             return (b.last_played ?? 0) - (a.last_played ?? 0);
           } else if (a.type === "world" && b.type === "server") {
-            return -1; // Worlds first
+            return -1;
           } else if (a.type === "server" && b.type === "world") {
-            return 1; // Worlds first
+            return 1;
           }
         }
 
-        // Default to name sorting
         const nameA =
           a.type === "world"
             ? getWorldDisplayName(a).toLowerCase()
@@ -196,9 +242,8 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     const currentPinging = new Set<string>(
       relevantServers.map((s) => s.address!),
     );
-    setPingingServers(currentPinging); // Set all as pinging initially
+    setPingingServers(currentPinging);
     setServerPings((prev) => {
-      // Clear previous pings for servers being pinged
       const next = { ...prev };
       relevantServers.forEach((s) => {
         if (s.address) delete next[s.address];
@@ -209,13 +254,11 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     const promises = relevantServers.map(async (server) => {
       const address = server.address!;
       try {
-        // Use service function
         const pingResult = await WorldService.pingMinecraftServer(address);
         setServerPings((prev) => ({ ...prev, [address]: pingResult }));
       } catch (err) {
         console.error(`[WorldsTab] Failed to ping ${address}:`, err);
         const errorMsg = err instanceof Error ? err.message : String(err);
-        // Create a full ServerPingInfo object for the error state
         const errorResult: ServerPingInfo = {
           error: errorMsg,
           description: null,
@@ -260,7 +303,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
 
     try {
       const [worldsResult, serversResult] = await Promise.allSettled([
-        // Use service functions
         WorldService.getWorldsForProfile(currentProfileId),
         WorldService.getServersForProfile(currentProfileId),
       ]);
@@ -308,7 +350,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     loadData();
   }, [loadData]);
 
-  // Update display items when tab or sort order changes
   useEffect(() => {
     if (profile?.id) {
       const currentWorlds: WorldInfo[] = [];
@@ -317,7 +358,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     }
   }, [activeTab, sortOrder, profile?.id, updateDisplayItems]);
 
-  // --- Actions --- //
   const handleLaunch = useCallback(
     (item: DisplayItem) => {
       const currentProfileId = profile?.id;
@@ -355,7 +395,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
       console.log(`Deleting world: ${world.folder_name}`);
       setDeleteLoading((prev) => ({ ...prev, [world.folder_name]: true }));
       try {
-        // Use service function
         await WorldService.deleteWorld(currentProfileId, world.folder_name);
         notificationStore.success(
           `World "${getWorldDisplayName(world)}" deleted.`,
@@ -375,18 +414,14 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     [profile?.id, getWorldDisplayName, loadData],
   );
 
-  // --- Render --- //
   return (
-    <div className="h-full select-none p-4 flex flex-col text-white">
-      <div
-        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
-        style={{
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          backgroundColor: `${accentColor.value}10`,
-        }}
-      >
+    <div
+      ref={containerRef}
+      className="h-full select-none p-4 flex flex-col text-white"
+    >
+      <Card variant="default" className="h-full flex flex-col overflow-hidden">
         <div
+          ref={headerRef}
           className="border-b-2 py-3 px-4 flex items-center justify-between"
           style={{
             backgroundColor: `${accentColor.value}20`,
@@ -462,7 +497,10 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+        <div
+          ref={contentRef}
+          className="flex-1 overflow-y-auto custom-scrollbar min-h-0"
+        >
           {loading ? (
             <div className="flex items-center justify-center h-32 text-white/70 text-2xl">
               <Icon
@@ -494,7 +532,6 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                     : false;
                 const hasPingError = !!pingInfo?.error;
                 const worldIconSrc = isWorld ? getWorldIconSrc(item) : null;
-                // Pass item directly if needed, or specific props based on type guard
                 const serverIconSrc = !isWorld ? getServerIconSrc(item) : null;
                 const itemDisplayName = isWorld
                   ? getWorldDisplayName(item)
@@ -717,6 +754,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
         </div>
 
         <div
+          ref={footerRef}
           className="border-t-2 py-3 px-4 flex justify-between items-center"
           style={{
             backgroundColor: `${accentColor.value}20`,
@@ -754,7 +792,7 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
             )}
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

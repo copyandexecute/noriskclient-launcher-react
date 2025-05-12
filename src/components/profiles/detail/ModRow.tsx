@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../../lib/utils";
 import type { Mod } from "../../../types/profile";
@@ -10,7 +10,8 @@ import type { ModrinthVersion } from "../../../types/modrinth";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Checkbox } from "../../ui/Checkbox";
-import { Button } from "../../ui/buttons/Button.tsx";
+import { Button } from "../../ui/buttons/Button";
+import { gsap } from "gsap";
 
 interface ModRowProps {
   mod: Mod;
@@ -39,6 +40,22 @@ export function ModRow({
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (rowRef.current) {
+      gsap.fromTo(
+        rowRef.current,
+        { opacity: 0, x: -10 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.3,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const fetchModIcon = async () => {
@@ -113,6 +130,7 @@ export function ModRow({
 
   return (
     <div
+      ref={rowRef}
       className={cn(
         "flex items-center py-4 px-4 border-b transition-colors",
         isSelected

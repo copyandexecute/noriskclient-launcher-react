@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -12,6 +12,7 @@ import { EmptyState } from "../../ui/EmptyState";
 import { ToggleSwitch } from "../../ui/ToggleSwitch";
 import { Checkbox } from "../../ui/Checkbox";
 import { Button } from "../../ui/buttons/Button";
+import { Card } from "../../ui/Card";
 import {
   getNoriskPacks,
   getNoriskPacksResolved,
@@ -22,6 +23,8 @@ import type { NoriskModpacksConfig } from "../../../types/noriskPacks";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { Logo } from "../../ui/Logo";
 import { Label } from "../../ui/Label";
+import { gsap } from "gsap";
+import { ErrorMessage } from "../../ui/ErrorMessage";
 
 interface NoRiskMod {
   id: string;
@@ -59,6 +62,22 @@ export function NoRiskModsTab({
   const [unlistenFn, setUnlistenFn] = useState<(() => void) | undefined>();
   const [refreshing, setRefreshing] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current && isActive) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isActive]);
 
   useEffect(() => {
     const setupEventListeners = async () => {
@@ -412,16 +431,8 @@ export function NoRiskModsTab({
     : false;
 
   return (
-    <div className="h-full flex flex-col select-none gap-6">
-      <div
-        className="rounded-lg border-2 border-b-4 p-4"
-        style={{
-          backgroundColor: `${accentColor.value}10`,
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 12px 20px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30`,
-        }}
-      >
+    <div ref={containerRef} className="h-full flex flex-col select-none gap-6">
+      <Card className="p-4">
         <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
           <div className="w-full md:w-1/3">
             <SearchInput
@@ -460,27 +471,19 @@ export function NoRiskModsTab({
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {error && (
-        <div
-          className="rounded-lg border-2 border-b-4 p-3 flex items-center gap-2"
-          style={{
-            backgroundColor: `rgba(220, 38, 38, 0.1)`,
-            borderColor: `rgba(220, 38, 38, 0.3)`,
-            borderBottomColor: `rgba(220, 38, 38, 0.5)`,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(220, 38, 38, 0.1)`,
-          }}
-        >
+        <Card variant="elevated" className="p-3 flex items-center gap-2">
           <Icon
             icon="solar:danger-triangle-bold"
             className="w-5 h-5 text-red-400"
           />
           <span className="text-white font-minecraft text-lg">{error}</span>
-        </div>
+        </Card>
       )}
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <Card className="flex-1 min-h-0 overflow-hidden">
         {!profile.selected_norisk_pack_id ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -495,6 +498,8 @@ export function NoRiskModsTab({
           </div>
         ) : isLoading ? (
           <LoadingState message="loading norisk mods..." />
+        ) : error ? (
+          <ErrorMessage message={error} />
         ) : (
           <ContentTable
             headers={[
@@ -547,7 +552,7 @@ export function NoRiskModsTab({
             )}
           </ContentTable>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -569,12 +574,33 @@ function NoRiskModRow({
 }: NoRiskModRowProps) {
   const [isHovered, setIsHovered] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (rowRef.current) {
+      gsap.fromTo(
+        rowRef.current,
+        { opacity: 0, x: -10 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.3,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
 
   return (
     <div
+      ref={rowRef}
       className={cn(
         "flex items-center py-3 px-4 border-b transition-colors",
-        isSelected ? "bg-white/10" : "hover:bg-white/5",
+        isSelected
+          ? "bg-white/10"
+          : isHovered
+            ? "bg-white/5"
+            : "bg-transparent",
       )}
       style={{
         borderColor: `${accentColor.value}15`,
@@ -594,7 +620,7 @@ function NoRiskModRow({
         {/* 3D Image Frame */}
         <div className="relative w-12 h-12 flex-shrink-0">
           <div
-            className="absolute inset-0 border-2 border-b-4 overflow-hidden"
+            className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
             style={{
               backgroundColor: `${accentColor.value}15`,
               borderColor: `${accentColor.value}30`,

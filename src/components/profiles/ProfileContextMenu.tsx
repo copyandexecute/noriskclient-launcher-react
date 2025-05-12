@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useEffect, useState, forwardRef, ForwardedRef } from "react";
+import {
+  type ForwardedRef,
+  forwardRef,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { useThemeStore } from "../../store/useThemeStore";
 import { createPortal } from "react-dom";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
+import { gsap } from "gsap";
 
 interface ProfileContextMenuProps {
   profile: Profile;
@@ -16,111 +23,153 @@ interface ProfileContextMenuProps {
   onDelete: (profileId: string, profileName: string) => void;
   onDuplicate: () => void;
   onOpenFolder: () => void;
-  // Add other actions here, e.g., onEdit, onClone
 }
 
-export const ProfileContextMenu = forwardRef<HTMLDivElement, ProfileContextMenuProps>(
-  function ProfileContextMenuComponent(
-    {
-      profile,
-      visible,
-      x,
-      y,
-      onClose,
-      onDelete,
-      onDuplicate,
-      onOpenFolder,
-    },
-    ref: ForwardedRef<HTMLDivElement>
-  ) {
-    const accentColor = useThemeStore((state) => state.accentColor);
-    const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
-    const { confirm, confirmDialog } = useConfirmDialog();
+export const ProfileContextMenu = forwardRef<
+  HTMLDivElement,
+  ProfileContextMenuProps
+>(function ProfileContextMenuComponent(
+  { profile, visible, x, y, onClose, onDelete, onDuplicate, onOpenFolder },
+  ref: ForwardedRef<HTMLDivElement>,
+) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+  const { confirm, confirmDialog } = useConfirmDialog();
+  const menuRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-      setPortalNode(document.body);
-    }, []);
+  useEffect(() => {
+    setPortalNode(document.body);
+  }, []);
 
-    if (!visible || !portalNode) {
-      return null;
+  useEffect(() => {
+    if (visible && menuRef.current) {
+      gsap.fromTo(
+        menuRef.current,
+        {
+          opacity: 0,
+          scale: 0.95,
+          y: -10,
+        },
+        {
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          duration: 0.2,
+          ease: "power2.out",
+        },
+      );
     }
+  }, [visible]);
 
-    const handleAction = (action: () => void) => {
-      console.log("[ContextMenu] handleAction called");
+  if (!visible || !portalNode) {
+    return null;
+  }
+
+  const handleAction = (action: () => void) => {
+    console.log("[ContextMenu] handleAction called");
+
+    if (menuRef.current) {
+      gsap.to(menuRef.current, {
+        opacity: 0,
+        scale: 0.95,
+        y: -5,
+        duration: 0.15,
+        ease: "power2.in",
+        onComplete: () => {
+          action();
+          onClose();
+        },
+      });
+    } else {
       action();
       onClose();
-    };
+    }
+  };
 
-    const menuContent = (
-      <div
-        ref={ref}
-        className="fixed z-[9999] rounded-md shadow-xl border-2 border-b-4 overflow-hidden"
-        style={{
-          top: y,
-          left: x,
-          backgroundColor: accentColor.value + "20",
-          borderColor: accentColor.value + "90",
-          borderBottomColor: accentColor.value,
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          boxShadow:
-            "0 8px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05)",
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <ul className="py-1">
-          {!profile.is_standard_version && (
-            <li
-              className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
-              onClick={() => {
-                console.log("[ContextMenu] Delete item clicked - will call handleAction");
-                handleAction(() => onDelete(profile.id, profile.name));
-              }}
-            >
-              <Icon
-                icon="solar:trash-bin-trash-bold"
-                className="w-5 h-5 text-red-400"
-              />
-              <span className="font-minecraft text-xl lowercase text-red-400">
-                Delete Profile
-              </span>
-            </li>
-          )}
-          {/* Duplicate Action */}
+  const menuContent = (
+    <div
+      ref={(node) => {
+        if (ref) {
+          if (typeof ref === "function") {
+            ref(node);
+          } else {
+            ref.current = node;
+          }
+        }
+        menuRef.current = node;
+      }}
+      className="fixed z-[9999] rounded-md shadow-xl border-2 border-b-4 overflow-hidden"
+      style={{
+        top: y,
+        left: x,
+        backgroundColor: accentColor.value + "20",
+        borderColor: accentColor.value + "90",
+        borderBottomColor: accentColor.value,
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        boxShadow:
+          "0 8px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.05)",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span
+        className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+        style={{ backgroundColor: `${accentColor.value}80` }}
+      />
+
+      <ul className="py-1">
+        {!profile.is_standard_version && (
           <li
             className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
             onClick={() => {
-              console.log("[ContextMenu] Duplicate item clicked");
-              handleAction(onDuplicate);
+              console.log(
+                "[ContextMenu] Delete item clicked - will call handleAction",
+              );
+              handleAction(() => onDelete(profile.id, profile.name));
             }}
           >
-            <Icon icon="solar:copy-bold" className="w-5 h-5 text-blue-400" />
-            <span className="font-minecraft text-xl lowercase text-blue-400">
-              Duplicate Profile
+            <Icon
+              icon="solar:trash-bin-trash-bold"
+              className="w-5 h-5 text-red-400"
+            />
+            <span className="font-minecraft text-xl lowercase text-red-400">
+              Delete Profile
             </span>
           </li>
-          {/* Open Folder Action */}
-          <li
-            className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
-            onClick={() => {
-              console.log("[ContextMenu] Open Folder item clicked");
-              handleAction(onOpenFolder);
-            }}
-          >
-            <Icon icon="solar:folder-with-files-bold" className="w-5 h-5 text-green-400" />
-            <span className="font-minecraft text-xl lowercase text-green-400">
-              Open Profile Folder
-            </span>
-          </li>
-          {/* Add other menu items here */}
-        </ul>
-        {/* Ensure the confirmDialog from useConfirmDialog is rendered here */}
-        {confirmDialog}
-      </div>
-    );
+        )}
+        <li
+          className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
+          onClick={() => {
+            console.log("[ContextMenu] Duplicate item clicked");
+            handleAction(onDuplicate);
+          }}
+        >
+          <Icon icon="solar:copy-bold" className="w-5 h-5 text-blue-400" />
+          <span className="font-minecraft text-xl lowercase text-blue-400">
+            Duplicate Profile
+          </span>
+        </li>
+        <li
+          className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
+          onClick={() => {
+            console.log("[ContextMenu] Open Folder item clicked");
+            handleAction(onOpenFolder);
+          }}
+        >
+          <Icon
+            icon="solar:folder-with-files-bold"
+            className="w-5 h-5 text-green-400"
+          />
+          <span className="font-minecraft text-xl lowercase text-green-400">
+            Open Profile Folder
+          </span>
+        </li>
+      </ul>
+      {confirmDialog}
+    </div>
+  );
 
-    return createPortal(menuContent, portalNode);
-  }
-);
+  return createPortal(menuContent, portalNode);
+});
 
-ProfileContextMenu.displayName = "ProfileContextMenu"; 
+ProfileContextMenu.displayName = "ProfileContextMenu";

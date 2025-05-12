@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModRow } from "./ModRow";
 import type { Mod, Profile } from "../../../types/profile";
 import * as ProfileService from "../../../services/profile-service";
@@ -17,7 +17,9 @@ import type {
 import { useThemeStore } from "../../../store/useThemeStore";
 import { ContentTable } from "../../ui/ContentTable";
 import { Button } from "../../ui/buttons/Button";
-import { ErrorMessage } from "../../ui/ErrorMessage.tsx";
+import { ErrorMessage } from "../../ui/ErrorMessage";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface ModsTabProps {
   profile: Profile;
@@ -33,7 +35,11 @@ interface ModSourceModrinth {
   file_hash_sha1?: string;
 }
 
-export function ModsTab({ profile, onRefresh }: ModsTabProps) {
+export function ModsTab({
+  profile,
+  onRefresh,
+  isActive = false,
+}: ModsTabProps) {
   const [mods, setMods] = useState<Mod[]>(profile.mods || []);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +55,23 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updatingMods, setUpdatingMods] = useState<Set<string>>(new Set());
   const accentColor = useThemeStore((state) => state.accentColor);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (containerRef.current && isActive) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isActive]);
 
   const handleUpdateMod = async (mod: Mod, updateVersion: ModrinthVersion) => {
     if (
@@ -375,16 +398,8 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
   ).length;
 
   return (
-    <div className="h-full flex flex-col select-none gap-6">
-      <div
-        className="rounded-lg border-2 border-b-4 p-4"
-        style={{
-          backgroundColor: `${accentColor.value}10`,
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 12px 20px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30`,
-        }}
-      >
+    <div ref={containerRef} className="h-full flex flex-col select-none gap-6">
+      <Card className="p-4">
         <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
           <div className="w-full md:w-1/3">
             <SearchInput
@@ -438,18 +453,10 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {updateError && (
-        <div
-          className="rounded-lg border-2 border-b-4 p-3 flex items-center gap-2"
-          style={{
-            backgroundColor: `rgba(220, 38, 38, 0.1)`,
-            borderColor: `rgba(220, 38, 38, 0.3)`,
-            borderBottomColor: `rgba(220, 38, 38, 0.5)`,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(220, 38, 38, 0.1)`,
-          }}
-        >
+        <Card variant="elevated" className="p-3 flex items-center gap-2">
           <Icon
             icon="solar:danger-triangle-bold"
             className="w-5 h-5 text-red-400"
@@ -457,10 +464,10 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
           <span className="text-white font-minecraft text-lg">
             Error checking for updates: {updateError}
           </span>
-        </div>
+        </Card>
       )}
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <Card className="flex-1 min-h-0 overflow-hidden">
         {isLoading ? (
           <LoadingState message="loading mods..." />
         ) : error ? (
@@ -533,7 +540,7 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
             )}
           </ContentTable>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

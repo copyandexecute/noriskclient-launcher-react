@@ -17,9 +17,13 @@ import {
 import { LogViewerDisplay } from "../../log/LogViewerDisplay";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { toast } from "react-hot-toast";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface LogsTabProps {
   profile: Profile;
+  isActive?: boolean;
+  onRefresh?: () => void;
 }
 
 function getFilename(path: string | null): string {
@@ -27,7 +31,11 @@ function getFilename(path: string | null): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
-export function LogsTab({ profile }: LogsTabProps) {
+export function LogsTab({
+  profile,
+  isActive = false,
+  onRefresh,
+}: LogsTabProps) {
   const [logFiles, setLogFiles] = useState<string[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [errorList, setErrorList] = useState<string | null>(null);
@@ -55,6 +63,22 @@ export function LogsTab({ profile }: LogsTabProps) {
   const [displayLines, setDisplayLines] = useState<ParsedLogLine[]>([]);
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isActive && containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isActive]);
 
   useEffect(() => {
     if (!profile?.id) return;
@@ -91,6 +115,8 @@ export function LogsTab({ profile }: LogsTabProps) {
         } else {
           setSelectedLogPath(null);
         }
+
+        if (onRefresh) onRefresh();
       } catch (err: any) {
         console.error("[LogsTab] Error fetching log files:", err);
         setErrorList(err?.message ?? "Failed to load log files");
@@ -100,7 +126,7 @@ export function LogsTab({ profile }: LogsTabProps) {
     };
 
     loadFiles();
-  }, [profile?.id]);
+  }, [profile?.id, onRefresh]);
 
   useEffect(() => {
     if (!selectedLogPath) {
@@ -201,7 +227,9 @@ export function LogsTab({ profile }: LogsTabProps) {
 
   const handleUploadLog = useCallback(async (): Promise<string> => {
     if (!rawLogContentForCopy || !selectedLogPath) {
-      throw new Error("No log content available to upload or no log file selected.");
+      throw new Error(
+        "No log content available to upload or no log file selected.",
+      );
     }
     console.log(`[LogsTab] Uploading log: ${getFilename(selectedLogPath)}`);
     return uploadLogToMclogs(rawLogContentForCopy);
@@ -236,15 +264,8 @@ export function LogsTab({ profile }: LogsTabProps) {
   }, []);
 
   return (
-    <div className="h-full select-none p-4 flex flex-col text-white">
-      <div
-        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
-        style={{
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          backgroundColor: `${accentColor.value}10`,
-        }}
-      >
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      <Card className="h-full flex flex-col overflow-hidden">
         <LogViewerDisplay
           isLoading={isLoadingList || isLoadingContent}
           error={errorList || errorContent}
@@ -265,7 +286,7 @@ export function LogsTab({ profile }: LogsTabProps) {
           logLevelsDefinition={LOG_LEVELS}
           scrollableContainerRef={scrollableContainerRef}
         />
-      </div>
+      </Card>
     </div>
   );
 }

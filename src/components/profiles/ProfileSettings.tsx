@@ -17,6 +17,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { Input } from "../ui/Input";
 import { Checkbox } from "../ui/Checkbox";
 import { toast } from "react-hot-toast";
+import { Card } from "../ui/Card";
 
 interface ProfileSettingsProps {
   profile: Profile;
@@ -40,6 +41,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const [systemRam, setSystemRam] = useState<number>(8192);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
@@ -59,6 +61,16 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       );
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (sidebarRef.current) {
+      gsap.fromTo(
+        sidebarRef.current,
+        { opacity: 0, x: -20 },
+        { opacity: 1, x: 0, duration: 0.4, ease: "power2.out" },
+      );
+    }
+  }, []);
 
   useEffect(() => {
     setError(null);
@@ -108,21 +120,18 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
 
       const deletePromise = deleteProfile(profile.id);
 
-      toast.promise(
-        deletePromise,
-        {
-          loading: `Deleting profile '${profile.name}'...`,
-          success: () => {
-            onClose();
-            return `Profile '${profile.name}' deleted successfully!`;
-          },
-          error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            setError(`Failed to delete profile: ${errorMessage}`);
-            return `Failed to delete profile: ${errorMessage}`;
-          },
-        }
-      );
+      toast.promise(deletePromise, {
+        loading: `Deleting profile '${profile.name}'...`,
+        success: () => {
+          onClose();
+          return `Profile '${profile.name}' deleted successfully!`;
+        },
+        error: (err) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          setError(`Failed to delete profile: ${errorMessage}`);
+          return `Failed to delete profile: ${errorMessage}`;
+        },
+      });
     } catch (err) {
       console.error("Error during delete initiation:", err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -212,15 +221,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         </p>
       </div>
 
-      <div
-        className="space-y-4 p-5 rounded-lg border-2 border-b-4"
-        style={{
-          backgroundColor: `${accentColor.value}10`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card variant="default" className="p-5 space-y-4">
         <div className="space-y-2">
           <label
             htmlFor="exportFilename"
@@ -258,7 +259,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             className="text-2xl"
           />
         </div>
-      </div>
+      </Card>
 
       <div className="flex flex-wrap gap-4 pt-4">
         <Button
@@ -399,6 +400,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     >
       <div className="flex flex-1 h-[500px] overflow-hidden">
         <div
+          ref={sidebarRef}
           className="w-64 border-r-2 overflow-y-auto custom-scrollbar"
           style={{
             borderColor: `${accentColor.value}40`,
@@ -407,23 +409,17 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           }}
         >
           <div className="p-4">
-            <div
-              className="text-xl font-minecraft text-white mb-6 lowercase p-3 rounded-md border-2 border-b-4"
-              style={{
-                backgroundColor: `${accentColor.value}30`,
-                borderColor: `${accentColor.value}60`,
-                borderBottomColor: accentColor.value,
-                boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-              }}
-            >
+            <Card variant="default" className="mb-6 p-3">
               <div className="flex items-center gap-2">
                 <Icon
                   icon="solar:settings-bold"
                   className="w-5 h-5 text-white"
                 />
-                <span>profile settings</span>
+                <span className="text-xl font-minecraft text-white lowercase">
+                  profile settings
+                </span>
               </div>
-            </div>
+            </Card>
 
             <div className="space-y-3">
               {tabConfig.map((tab) => {
@@ -448,7 +444,22 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
                         ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
                         : "none",
                     }}
-                    onClick={() => setActiveTab(tab.id as SettingsTab)}
+                    onClick={() => {
+                      if (activeTab !== tab.id) {
+                        if (contentRef.current) {
+                          gsap.to(contentRef.current, {
+                            opacity: 0,
+                            y: 20,
+                            duration: 0.2,
+                            ease: "power2.in",
+                            onComplete: () =>
+                              setActiveTab(tab.id as SettingsTab),
+                          });
+                        } else {
+                          setActiveTab(tab.id as SettingsTab);
+                        }
+                      }
+                    }}
                   >
                     <div
                       className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 border-2"

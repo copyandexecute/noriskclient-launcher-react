@@ -22,6 +22,7 @@ import { VersionStep } from "./wizard/VersionStep";
 import { ModLoaderStep } from "./wizard/ModLoaderStep";
 import { WizardSummary } from "./wizard/WizardSummary";
 import { toast } from "react-hot-toast";
+import { Card } from "../ui/Card";
 
 interface ProfileWizardProps {
   onClose: () => void;
@@ -206,32 +207,42 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
       return createdProfile;
     };
 
-    toast.promise(
-      creationPromise(),
-      {
+    toast
+      .promise(creationPromise(), {
         loading: "Creating profile...",
-        success: (createdProf) => `Profile '${createdProf.name}' created successfully!`,
-        error: (err) => `Failed to create profile: ${err instanceof Error ? err.message : String(err)}`,
-      }
-    ).catch((err) => {
-      setError(`Failed to create profile: ${err instanceof Error ? err.message : String(err)}`);
-      console.error("Failed to create profile (toast.promise catch):", err);
-    }).finally(() => {
-      setCreating(false);
-    });
+        success: (createdProf) =>
+          `Profile '${createdProf.name}' created successfully!`,
+        error: (err) =>
+          `Failed to create profile: ${err instanceof Error ? err.message : String(err)}`,
+      })
+      .catch((err) => {
+        setError(
+          `Failed to create profile: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        console.error("Failed to create profile (toast.promise catch):", err);
+      })
+      .finally(() => {
+        setCreating(false);
+      });
   };
 
   const renderStepContent = () => {
     if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center h-full p-8">
-          <div className="w-16 h-16 mb-4 animate-spin">
-            <Icon icon="solar:refresh-bold" className="w-16 h-16 text-white" />
+        <Card
+          variant="default"
+          className="flex flex-col items-center justify-center h-full p-8"
+        >
+          <div className="w-16 h-16 mb-4">
+            <Icon
+              icon="solar:refresh-bold"
+              className="w-16 h-16 text-white animate-spin"
+            />
           </div>
           <p className="text-2xl font-minecraft text-white lowercase">
             loading...
           </p>
-        </div>
+        </Card>
       );
     }
 
