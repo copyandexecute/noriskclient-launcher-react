@@ -789,6 +789,98 @@ export function ModrinthSearchV2({
     }
   };
 
+  // New function to install directly to the selected profile without opening a modal
+  const handleDirectInstall = async (project: ModrinthSearchHit, version: ModrinthVersion) => {
+    // Check if we have a selected profile
+    if (!selectedProfile) {
+      // If no profile is selected, fall back to the regular installation modal
+      openInstallModal(project, version);
+      return;
+    }
+
+    const profileId = selectedProfile.id;
+    const profileName = selectedProfile.name;
+    
+    try {
+      await toast.promise(
+        // Promise-returning async function
+        async () => {
+          // Find primary file to download
+          const primaryFile = version.files.find(file => file.primary) || version.files[0];
+          
+          if (!primaryFile) {
+            throw new Error("No download file available");
+          }
+
+          // Choose the right installation method based on project type
+          if (project.project_type === 'mod' || project.project_type === 'modpack') {
+            // Use mod-specific API for mods and modpacks
+            await ProfileService.addModrinthModToProfile(
+              profileId,
+              project.project_id,
+              version.id,
+              primaryFile.filename,
+              primaryFile.url,
+              primaryFile.hashes?.sha1 || undefined,
+              project.title,
+              version.version_number,
+              version.loaders,
+              version.game_versions
+            );
+          } else {
+            // Use content API for resourcepacks, shaders, and datapacks
+            await ProfileService.addModrinthContentToProfile(
+              profileId,
+              project.project_id,
+              version.id,
+              primaryFile.filename,
+              primaryFile.url,
+              primaryFile.hashes?.sha1 || null,
+              project.title,
+              version.version_number,
+              project.project_type
+            );
+          }
+          
+          // Update installedProjects state to show as installed in the UI
+          setInstalledProjects(prev => ({
+            ...prev,
+            [project.project_id]: {
+              is_installed: true,
+              is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false
+            }
+          }));
+          
+          // Update installedVersions state to show this version as installed
+          setInstalledVersions(prev => ({
+            ...prev,
+            [version.id]: {
+              is_installed: true,
+              is_included_in_norisk_pack: prev[version.id]?.is_included_in_norisk_pack || false
+            }
+          }));
+          
+          // Refresh installation status for displayed versions
+          if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
+            await checkDisplayedVersionsStatus(
+              project.project_id, 
+              expandedVersions[project.project_id] as ModrinthVersion[],
+              0,
+              (numDisplayedVersions[project.project_id] || initialDisplayCount)
+            );
+          }
+        },
+        {
+          loading: `Installing ${project.title} to ${profileName}...`,
+          success: `Successfully installed ${project.title} to ${profileName}`,
+          error: (err) => `Failed to install: ${err instanceof Error ? err.message : String(err.message)}`
+        }
+      );
+    } catch (error) {
+      console.error("Direct install error:", error);
+    }
+  };
+
   // Find the selected profile when the component mounts or selectedProfileId changes
   useEffect(() => {
     if (selectedProfileId && internalProfiles.length > 0) {
@@ -1502,7 +1594,7 @@ export function ModrinthSearchV2({
                 onToggleVersionDropdown={toggleVersionDropdown}
                 onCloseAllVersionDropdowns={closeAllVersionDropdowns}
                 onLoadMoreVersions={loadMoreProjectVersions}
-                onInstallVersionClick={openInstallModal}
+                onInstallVersionClick={handleDirectInstall}
                 onHoverVersion={setHoveredVersionId}
               />
             );
