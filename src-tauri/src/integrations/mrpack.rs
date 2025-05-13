@@ -6,6 +6,7 @@ use crate::state::profile_state::{
 use crate::state::state_manager::State;
 use async_zip::tokio::read::seek::ZipFileReader;
 use chrono::Utc;
+use futures::future::try_join_all;
 use log::{debug, error, info, warn};
 use reqwest::Client;
 use sanitize_filename::sanitize;
@@ -18,7 +19,9 @@ use tokio::fs;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
+use tokio::io::AsyncReadExt;
 use uuid::Uuid;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 /// Represents the overall structure of a modrinth.index.json file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -291,7 +294,7 @@ pub async fn resolve_manifest_files(manifest: &ModrinthIndex) -> Result<Vec<Mod>
                 let mod_source = ModSource::Modrinth {
                     project_id: version_info.project_id.clone(),
                     version_id: version_info.id.clone(),
-                    file_name: file_details.filename.clone(), 
+                    file_name: file_details.filename.clone(),
                     download_url: original_file_info.downloads.first().cloned().unwrap_or_else(|| {
                          warn!("Missing download URL in manifest for file: {}. Using API URL as fallback.", original_file_info.path);
                          file_details.url.clone()
@@ -335,17 +338,17 @@ pub async fn resolve_manifest_files(manifest: &ModrinthIndex) -> Result<Vec<Mod>
     Ok(mods_to_add)
 }
 
-/// Extracts files from the "overrides" directory within a .mrpack archive
-/// into the specified target profile directory, strictly following the extract_data_folder pattern.
+/// Extracts files from the "overrides" or "client-overrides" directory within a .mrpack archive
+/// into the specified target profile directory, using concurrent streaming operations.
 pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Result<()> {
     info!(
-        "Extracting overrides for profile '{}' from {:?}",
+        "Extracting overrides for profile '{}' from {:?} using concurrent streaming...",
         profile.name, pack_path
     );
-    // Get the state manager instance
-    let state_manager = State::get().await?;
-    // Use the new method that takes the profile directly
-    let target_dir = state_manager
+    let state = State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
+    let target_dir = state
         .profile_manager
         .calculate_instance_path_for_profile(profile)?;
     info!("Target profile directory calculated as: {:?}", target_dir);
@@ -364,131 +367,170 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
         })?;
     }
 
-    // Open the file and wrap in BufReader
-    let file = File::open(pack_path).await.map_err(|e| {
-        error!("Failed to open mrpack file {:?}: {}", pack_path, e);
+    // We need to read the central directory once to know about all files.
+    // This initial open is just to get the list of entries and their metadata.
+    let initial_file_for_listing = File::open(pack_path).await.map_err(|e| {
+        error!("Failed to open mrpack file for listing {:?}: {}", pack_path, e);
         AppError::Io(e)
     })?;
-    let mut buf_reader = BufReader::new(file);
-
-    // Initialize ZipFileReader
-    let mut zip = ZipFileReader::with_tokio(&mut buf_reader)
+    let mut initial_buf_reader = BufReader::new(initial_file_for_listing);
+    let mut zip_lister = ZipFileReader::with_tokio(&mut initial_buf_reader)
         .await
         .map_err(|e| {
-            error!("Failed to read mrpack as ZIP: {}", e);
-            AppError::Other(format!("Failed to read mrpack zip: {}", e))
+            error!("Failed to read mrpack as ZIP for listing: {}", e);
+            AppError::Other(format!("Failed to read mrpack zip for listing: {}", e))
         })?;
 
-    // Get length once
-    let num_entries = zip.file().entries().len();
-    info!("Found {} entries in the zip archive.", num_entries);
+    let num_entries = zip_lister.file().entries().len();
+    info!(
+        "Found {} entries in the zip archive. Preparing concurrent streaming for overrides...",
+        num_entries
+    );
+
+    let mut extraction_tasks = Vec::new();
 
     for index in 0..num_entries {
-        // --- Start of immutable borrow scope ---
-        let entry = match zip.file().entries().get(index) {
-            Some(e) => e,
-            None => {
-                // This should ideally not happen if index is valid
-                error!("Failed to get zip entry metadata for index {}", index);
-                continue;
-            }
-        };
-        let original_file_name = match entry.filename().as_str() {
-            Ok(s) => s,
-            Err(_) => {
-                error!("Non UTF-8 filename at index {}", index);
-                continue;
-            }
-        };
+        let entry_filename_str;
+        let is_entry_dir;
+        let entry_uncompressed_size; 
+        {
+            // Borrow zip_lister here to get entry metadata
+            let entry = match zip_lister.file().entries().get(index) {
+                Some(e) => e,
+                None => {
+                    error!("Failed to get zip entry metadata for index {} during listing", index);
+                    continue;
+                }
+            };
+            entry_filename_str = match entry.filename().as_str() {
+                Ok(s) => s.to_string(),
+                Err(_) => {
+                    error!("Non UTF-8 filename at index {} during listing", index);
+                    continue;
+                }
+            };
+            is_entry_dir = entry.dir().unwrap_or_else(|_err| {
+                warn!("Failed to determine if '{}' is a directory from entry, falling back to path check.", entry_filename_str);
+                entry_filename_str.ends_with('/')
+            });
+            entry_uncompressed_size = entry.uncompressed_size(); // Keep as u64 for consistency with API
+        }
 
-        // Extract all needed metadata *now*
-        let is_override = original_file_name.starts_with("overrides/");
-        let is_directory = original_file_name.ends_with('/');
-        // Get size only if needed (i.e., it's a file)
-        let uncompressed_size = if is_override && !is_directory {
-            entry.uncompressed_size() as usize
-        } else {
-            0 // Default value, won't be used if it's a directory
-        };
-        // Clone the filename string to own it
-        let owned_filename = original_file_name.to_string();
-        // --- End of immutable borrow scope ---
+        let (is_override_type, path_prefix_to_strip) =
+            if entry_filename_str.starts_with("overrides/") {
+                (true, "overrides/")
+            } else if entry_filename_str.starts_with("client-overrides/") {
+                (true, "client-overrides/")
+            } else {
+                (false, "")
+            };
 
-        // Now use the owned/copied metadata
-        if is_override {
-            let relative_path_in_overrides = match owned_filename.strip_prefix("overrides/") {
-                Some(p) if !p.is_empty() => p,
+        if is_override_type {
+            let relative_path_in_archive = match entry_filename_str.strip_prefix(path_prefix_to_strip) {
+                Some(p) if !p.is_empty() => sanitize_filename::sanitize(p),
                 _ => continue,
             };
-            let final_dest_path = target_dir.join(relative_path_in_overrides);
+            let final_dest_path = target_dir.join(relative_path_in_archive);
+            
+            // Clone necessary data for the task
+            let task_pack_path = pack_path.to_path_buf();
+            let task_io_semaphore = io_semaphore.clone();
+            let task_final_dest_path = final_dest_path.clone();
+            // 'index' is the original index of the entry in the ZIP central directory
+            let original_entry_index = index; 
 
-            if is_directory {
-                // Directory Creation
-                if !final_dest_path.exists() {
-                    info!("Creating directory: {:?}", final_dest_path);
-                    fs::create_dir_all(&final_dest_path).await.map_err(|e| {
-                        error!("Failed to create directory {:?}: {}", final_dest_path, e);
-                        AppError::Io(e)
+            if is_entry_dir {
+                // Directory creation can also be part of the task, or done upfront.
+                // For simplicity here, let's make it part of the task to ensure parent dirs exist for files.
+                extraction_tasks.push(tokio::spawn(async move {
+                    let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                        error!("Failed to acquire semaphore permit for creating dir {}: {}", task_final_dest_path.display(), e);
+                        AppError::Other(format!("Semaphore error for dir {}: {}", task_final_dest_path.display(),e))
                     })?;
-                }
-            } else {
-                // File Extraction
-                info!(
-                    "Extracting override file: '{}' -> {:?}",
-                    owned_filename, final_dest_path
-                );
-                if let Some(parent) = final_dest_path.parent() {
-                    if !fs::try_exists(parent).await? {
-                        info!("Creating parent directory: {:?}", parent);
-                        fs::create_dir_all(parent).await.map_err(|e| {
-                            error!("Failed to create parent directory {:?}: {}", parent, e);
+
+                    if !task_final_dest_path.exists() {
+                        debug!("Creating directory (from override task): {:?}", task_final_dest_path);
+                        fs::create_dir_all(&task_final_dest_path).await.map_err(|e| {
+                            error!("Failed to create directory {:?} in task: {}", task_final_dest_path, e);
                             AppError::Io(e)
                         })?;
                     }
-                }
+                    Ok::<(), AppError>(())
+                }));
+            } else {
+                info!(
+                    "Queueing concurrent streaming for override file: '{}' -> {:?} (Size: {} bytes)",
+                    entry_filename_str, final_dest_path, entry_uncompressed_size
+                );
 
-                // Get reader MUTABLY (should work now as 'entry' ref is out of scope)
-                let mut entry_reader = zip.reader_with_entry(index).await.map_err(|e| {
-                    error!(
-                        "Failed to get reader for zip entry '{}': {}",
-                        owned_filename, e
-                    );
-                    AppError::Other(format!("Failed to read zip entry {}: {}", index, e))
-                })?;
-                let mut writer = fs::File::create(&final_dest_path).await.map_err(|e| {
-                    error!(
-                        "Failed to create destination file {:?}: {}",
-                        final_dest_path, e
-                    );
-                    AppError::Io(e)
-                })?;
-
-                // Read/Write using the extracted 'uncompressed_size'
-                let mut buffer = Vec::with_capacity(uncompressed_size);
-                entry_reader
-                    .read_to_end_checked(&mut buffer)
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            "Failed to read zip entry content '{}': {}",
-                            owned_filename, e
-                        );
-                        AppError::Other(format!(
-                            "Failed to read zip entry content (checked): {}",
-                            e
-                        ))
+                extraction_tasks.push(tokio::spawn(async move {
+                    let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                         error!("Failed to acquire semaphore permit for '{}': {}", task_final_dest_path.display(), e);
+                         AppError::Other(format!("Semaphore error for '{}': {}",task_final_dest_path.display(), e))
                     })?;
-                writer.write_all(&buffer).await.map_err(|e| {
-                    error!("Failed to write content to {:?}: {}", final_dest_path, e);
-                    AppError::Io(e)
-                })?;
-                info!("Successfully extracted to: {}", final_dest_path.display());
+
+                    // Create parent directories if they don't exist
+                    if let Some(parent) = task_final_dest_path.parent() {
+                        if !parent.exists() { 
+                            fs::create_dir_all(parent).await.map_err(|e| {
+                                error!("Task: Failed to create parent directory {:?} for override: {}", parent, e);
+                                AppError::Io(e)
+                            })?;
+                        }
+                    }
+
+                    // Each task opens the file and creates its own ZipFileReader
+                    let task_file = File::open(&task_pack_path).await.map_err(|e|{
+                        error!("Task: Failed to open mrpack file {:?}: {}", task_pack_path, e);
+                        AppError::Io(e)
+                    })?;
+                    let mut task_buf_reader = BufReader::new(task_file);
+                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader).await.map_err(|e|{
+                        error!("Task: Failed to read mrpack as ZIP for '{}': {}", task_final_dest_path.display(), e);
+                        AppError::Other(format!("Task: ZIP read error for {}: {}", task_final_dest_path.display(), e))
+                    })?;
+                    
+                    let entry_reader_futures = task_zip_reader.reader_without_entry(original_entry_index).await.map_err(|e| {
+                        error!(
+                            "Task: Failed to get entry reader for '{}' (index {}): {}",
+                            task_final_dest_path.display(), original_entry_index, e
+                        );
+                        AppError::Other(format!("Task: Entry reader error for {}: {}", task_final_dest_path.display(), e))
+                    })?;
+                    let mut entry_reader_tokio = entry_reader_futures.compat();
+
+                    let mut file_writer = fs::File::create(&task_final_dest_path).await.map_err(|e| {
+                        error!("Task: Failed to create destination file {:?} for override: {}", task_final_dest_path, e);
+                        AppError::Io(e)
+                    })?;
+
+                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
+                        error!(
+                            "Task: Failed to stream content for '{}' to {:?}: {}",
+                            task_final_dest_path.display(), task_final_dest_path, e // Corrected filename to display path
+                        );
+                        AppError::Io(e)
+                    })?;
+                    
+                    debug!("Task: Successfully streamed {} bytes for override: {}", bytes_copied, task_final_dest_path.display());
+                    Ok::<(), AppError>(())
+                }));
             }
         }
     }
 
+    // Wait for all extraction tasks to complete
+    let results = try_join_all(extraction_tasks).await.map_err(|e| {
+        error!("Error joining override extraction tasks: {}", e);
+        AppError::Other(format!("One or more override extraction tasks panicked: {}", e))
+    })?;
+
+    for result in results {
+        result?; // Propagate any AppError returned by a task
+    }
+
     info!(
-        "Finished extracting overrides for profile '{}'.",
+        "Finished all concurrent streaming tasks for overrides for profile '{}'.",
         profile.name
     );
     Ok(())
