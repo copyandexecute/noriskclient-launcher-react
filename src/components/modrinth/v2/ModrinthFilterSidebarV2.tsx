@@ -143,7 +143,7 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
   return (
     <div 
       className={cn(
-        "filters-sidebar w-1/4 max-w-xs flex-shrink-0 overflow-y-auto p-1 h-full", 
+        "filters-sidebar w-1/4 max-w-[15rem] flex-shrink-0 overflow-y-auto p-1 h-full", 
         "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
       )}
     >
