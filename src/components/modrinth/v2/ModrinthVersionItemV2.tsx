@@ -18,6 +18,7 @@ interface ModrinthVersionItemV2Props {
   onMouseEnter: (id: string) => void;
   onMouseLeave: () => void;
   onInstallClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
 }
 
 export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
@@ -29,7 +30,33 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
   onMouseEnter,
   onMouseLeave,
   onInstallClick,
+  onInstallModpackVersionAsProfileClick,
 }) => {
+  const isModpack = project.project_type === 'modpack';
+
+  const handleButtonClick = () => {
+    if (isModpack && onInstallModpackVersionAsProfileClick) {
+      onInstallModpackVersionAsProfileClick(project, version);
+    } else if (!isModpack) {
+      onInstallClick(project, version);
+    } else {
+      // Fallback for modpack if specific handler is not provided (should not happen ideally)
+      console.warn("onInstallModpackVersionAsProfileClick is not defined for modpack version item");
+      onInstallClick(project, version); 
+    }
+  };
+
+  let buttonText = versionStatus?.is_installed ? "Installed" : "Install";
+  let buttonVariant: "default" | "success" = versionStatus?.is_installed ? "default" : "success";
+
+  if (isModpack && !versionStatus?.is_installed) {
+    buttonText = "Install";
+    buttonVariant = "success"; 
+  }
+  // If it's a modpack and IS installed, the generic "Installed" (disabled) state is probably fine.
+  // The definition of `versionStatus.is_installed` for a modpack might need to be considered carefully.
+  // For now, we assume it correctly reflects if this *specific version* was used to create a profile.
+
   return (
     // --- Version Item Card --- 
     <div 
@@ -100,14 +127,14 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
           </div>
           {/* Install Button (fixed width, on the right) */} 
           <Button 
-            onClick={() => onInstallClick(project, version)}
+            onClick={handleButtonClick}
             size="xs"
-            shadowDepth="short" // Added short shadow depth
-            variant={versionStatus?.is_installed ? "default" : "success"} // default(accent) when installed, success(green) otherwise
+            shadowDepth="short"
+            variant={buttonVariant}
             disabled={versionStatus?.is_installed}
             className="min-w-[80px] justify-center flex-shrink-0" 
           >
-            {versionStatus?.is_installed ? "Installed" : "Install"}
+            {buttonText}
           </Button>
         </div>
         {/* Removed the separate bottom row div */} 

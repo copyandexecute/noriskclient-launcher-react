@@ -46,6 +46,8 @@ export interface ModrinthProjectCardV2Props extends VersionListPassthroughProps 
   accentColor: AccentColor;
   installStatus: InstallStatus | null;
   onQuickInstallClick: (project: ModrinthSearchHit) => void;
+  onInstallModpackAsProfileClick?: (project: ModrinthSearchHit) => void;
+  onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onToggleVersionsClick: (projectId: string) => void;
   isExpanded: boolean;
   isLoadingVersions: boolean;
@@ -56,6 +58,8 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
   accentColor,
   installStatus,
   onQuickInstallClick,
+  onInstallModpackAsProfileClick,
+  onInstallModpackVersionAsProfileClick,
   onToggleVersionsClick,
   isExpanded,
   isLoadingVersions,
@@ -194,17 +198,39 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
                 </span>
             </div>
             <div className="flex items-center space-x-1 w-full mt-auto">
-                <Button
-                onClick={(e) => { e.stopPropagation(); onQuickInstallClick(hit); }}
-                size="xs"
-                variant="success"
-                shadowDepth="short"
-                icon={<Icon icon="solar:download-minimalistic-bold" className="w-3.5 h-3.5" />}
-                iconPosition="left"
-                className="min-w-0 flex-grow"
-                >
-                Quick Install
-                </Button>
+                {hit.project_type === 'modpack' ? (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onInstallModpackAsProfileClick) {
+                        onInstallModpackAsProfileClick(hit);
+                      } else {
+                        console.warn("onInstallModpackAsProfileClick is not defined for modpack");
+                        onQuickInstallClick(hit); 
+                      }
+                    }}
+                    size="xs"
+                    variant="success"
+                    className="min-w-0 flex-grow"
+                    shadowDepth="short"
+                    icon={<Icon icon="solar:download-minimalistic-bold" className="h-4 w-4" />}
+                    iconPosition="left"
+                  >
+                    Quick Install
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={(e) => { e.stopPropagation(); onQuickInstallClick(hit); }}
+                    size="xs"
+                    variant="success"
+                    className="min-w-0 flex-grow"
+                    shadowDepth="short"
+                    icon={<Icon icon="solar:download-minimalistic-bold" className="h-4 w-4" />}
+                    iconPosition="left"
+                  >
+                    Quick Install
+                  </Button>
+                )}
                 <IconButton
                 onClick={(e) => { e.stopPropagation(); onToggleVersionsClick(hit.project_id); }}
                 size="xs"
@@ -251,6 +277,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
           onCloseAllDropdowns={onCloseAllVersionDropdowns}
           onLoadMore={onLoadMoreVersions}
           onInstallClick={onInstallVersionClick}
+          onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
           onHoverVersion={onHoverVersion}
         />
       )}

@@ -55,7 +55,7 @@ interface UIDynamicFilterGroup {
 }
 
 export function ModrinthSearchV2({
-  profiles,
+  profiles: initialProfiles,
   onInstallSuccess,
   className = '',
   selectedProfileId,
@@ -139,6 +139,12 @@ export function ModrinthSearchV2({
     is_installed: boolean,
     is_included_in_norisk_pack: boolean
   }>>({});
+
+  // Internal state for profiles, synced with the prop
+  const [internalProfiles, setInternalProfiles] = useState<Profile[]>(initialProfiles);
+  useEffect(() => {
+    setInternalProfiles(initialProfiles);
+  }, [initialProfiles]);
 
   const currentSelectedCategories = useMemo(() => {
     return selectedCategoriesByProjectType[projectType] || [];
@@ -308,23 +314,34 @@ export function ModrinthSearchV2({
   // Simplified handleCategoryToggle - all category groups are multi-select
   const handleCategoryToggle = (categoryName: string) => {
     const currentSelectionsForActiveType = selectedCategoriesByProjectType[projectType] || [];
-    const isCurrentlySelected = currentSelectionsForActiveType.includes(categoryName);
+    const wasPreviouslySelected = currentSelectionsForActiveType.includes(categoryName);
 
     setSelectedCategoriesByProjectType(prevGlobalSelections => {
-      const updatedSelectionsForCurrentType = isCurrentlySelected
+      const updatedSelectionsForCurrentType = wasPreviouslySelected
         ? currentSelectionsForActiveType.filter(c => c !== categoryName)
         : [...currentSelectionsForActiveType, categoryName];
       
       const newGlobalSelections = { ...prevGlobalSelections, [projectType]: updatedSelectionsForCurrentType };
 
-      if (!isCurrentlySelected) { // Category was just added
-        for (const otherPT of ALL_MODRINTH_PROJECT_TYPES) {
-          if (otherPT === projectType) continue; 
+      // Synchronize with other project types
+      for (const otherPT of ALL_MODRINTH_PROJECT_TYPES) {
+        if (otherPT === projectType) continue; // Skip the currently active type
+
+        const selectionsForOtherPT = newGlobalSelections[otherPT] || [];
+        
+        if (wasPreviouslySelected) {
+          // Category was REMOVED from the active project type
+          // So, remove it from other project types as well if it was selected there
+          if (selectionsForOtherPT.includes(categoryName)) {
+            newGlobalSelections[otherPT] = selectionsForOtherPT.filter(c => c !== categoryName);
+          }
+        } else {
+          // Category was ADDED to the active project type
+          // Add it to other project types if the category is defined for them and not already present
           const categoryDefinitionForOtherPT = allCategoriesData.find(
             catDef => catDef.name === categoryName && catDef.project_type === otherPT
           );
           if (categoryDefinitionForOtherPT) {
-            const selectionsForOtherPT = newGlobalSelections[otherPT] || [];
             if (!selectionsForOtherPT.includes(categoryName)) {
               newGlobalSelections[otherPT] = [...selectionsForOtherPT, categoryName];
             }
@@ -345,22 +362,32 @@ export function ModrinthSearchV2({
 
   const handleLoaderToggle = (loaderName: string) => {
     const currentSelectionsForActiveType = selectedLoadersByProjectType[projectType] || [];
-    const isCurrentlySelected = currentSelectionsForActiveType.includes(loaderName);
+    const wasPreviouslySelected = currentSelectionsForActiveType.includes(loaderName);
 
     setSelectedLoadersByProjectType(prevGlobalSelections => {
-      const updatedSelectionsForCurrentType = isCurrentlySelected
+      const updatedSelectionsForCurrentType = wasPreviouslySelected
         ? currentSelectionsForActiveType.filter(l => l !== loaderName)
         : [...currentSelectionsForActiveType, loaderName];
       
       const newGlobalSelections = { ...prevGlobalSelections, [projectType]: updatedSelectionsForCurrentType };
 
-      if (!isCurrentlySelected) { // Loader was just added
-        for (const otherPT of ALL_MODRINTH_PROJECT_TYPES) {
-          if (otherPT === projectType) continue;
+      // Synchronize with other project types
+      for (const otherPT of ALL_MODRINTH_PROJECT_TYPES) {
+        if (otherPT === projectType) continue; // Skip the currently active type
 
-          const loaderDefinition = allLoadersData.find(ldrDef => ldrDef.name === loaderName);
+        const selectionsForOtherPT = newGlobalSelections[otherPT] || [];
+        const loaderDefinition = allLoadersData.find(ldrDef => ldrDef.name === loaderName);
+
+        if (wasPreviouslySelected) {
+          // Loader was REMOVED from the active project type
+          // So, remove it from other project types as well if it was selected there
+          if (selectionsForOtherPT.includes(loaderName)) {
+            newGlobalSelections[otherPT] = selectionsForOtherPT.filter(l => l !== loaderName);
+          }
+        } else {
+          // Loader was ADDED to the active project type
+          // Add it to other supported project types if not already present
           if (loaderDefinition && loaderDefinition.supported_project_types.includes(otherPT)) {
-            const selectionsForOtherPT = newGlobalSelections[otherPT] || [];
             if (!selectionsForOtherPT.includes(loaderName)) {
               newGlobalSelections[otherPT] = [...selectionsForOtherPT, loaderName];
             }
@@ -647,7 +674,7 @@ export function ModrinthSearchV2({
 
       console.log(version);
       
-      for (const profile of profiles) {
+      for (const profile of internalProfiles) {
         // Check if content is already installed in this profile
         const status = await ProfileService.isContentInstalled({
           profile_id: profile.id,
@@ -731,7 +758,7 @@ export function ModrinthSearchV2({
         );
       }
 
-      toast.success(`Successfully installed ${selectedProject.title} to ${profiles.find(p => p.id === profileId)?.name}`);
+      toast.success(`Successfully installed ${selectedProject.title} to ${internalProfiles.find(p => p.id === profileId)?.name}`);
       
       // Mark this profile as installed
       setInstallStatus(prev => ({ ...prev, [profileId]: true }));
@@ -764,23 +791,23 @@ export function ModrinthSearchV2({
 
   // Find the selected profile when the component mounts or selectedProfileId changes
   useEffect(() => {
-    if (selectedProfileId && profiles.length > 0) {
-      const profile = profiles.find(p => p.id === selectedProfileId);
+    if (selectedProfileId && internalProfiles.length > 0) {
+      const profile = internalProfiles.find(p => p.id === selectedProfileId);
       if (profile) {
         setSelectedProfile(profile);
       }
     } else if (selectedProfileId === '') {
       // Explicit empty selection - set to null
       setSelectedProfile(null);
-    } else if (profiles.length > 0 && !selectedProfile && selectedProfileId !== '' && selectedProfileId !== undefined) {
+    } else if (internalProfiles.length > 0 && !selectedProfile && selectedProfileId !== '' && selectedProfileId !== undefined) {
       // Auto-select first profile ONLY if:
       // - We have profiles
       // - No profile is currently selected
       // - No empty selection was requested (selectedProfileId !== '')
       // - selectedProfileId is not undefined (meaning it was explicitly passed as a prop)
-      setSelectedProfile(profiles[0]);
+      setSelectedProfile(internalProfiles[0]);
     }
-  }, [selectedProfileId, profiles, selectedProfile]);
+  }, [selectedProfileId, internalProfiles, selectedProfile]);
 
   // Reset profile selection if explicit empty option was requested
   useEffect(() => {
@@ -849,7 +876,7 @@ export function ModrinthSearchV2({
       // Check installation status for each profile
       const statuses: Record<string, boolean> = {};
       
-      for (const profile of profiles) {
+      for (const profile of internalProfiles) {
         // Find the best version for this profile
         const bestVersion = findBestVersionForProfile(profile, sortedVersions);
         
@@ -933,7 +960,7 @@ export function ModrinthSearchV2({
       return;
     }
 
-    const profile = profiles.find(p => p.id === profileId);
+    const profile = internalProfiles.find(p => p.id === profileId);
     if (!profile) {
       toast.error("Profile not found");
       return;
@@ -1158,6 +1185,134 @@ export function ModrinthSearchV2({
     }));
   };
 
+  const handleInstallModpackAsProfile = async (project: ModrinthSearchHit) => {
+    if (project.project_type !== 'modpack') {
+      // This case should ideally be handled by a different function like quickInstall for non-modpacks.
+      // However, if it's called, ensure onInstallSuccess is still triggered for them.
+      toast.error("This handler is primarily for modpacks. For other types, behavior might differ.");
+      if (onInstallSuccess) {
+        onInstallSuccess();
+      }
+      return;
+    }
+
+    const toastId = toast.loading(`Fetching latest version for ${project.title}...`);
+
+    try {
+      let latestVersion: ModrinthVersion | null = null;
+      if (project.latest_version) {
+        const versions = await ModrinthService.getModVersions(project.project_id);
+        latestVersion = versions.find(v => v.version_number === project.latest_version || v.id === project.latest_version) || versions[0];
+        if (!latestVersion && versions.length > 0) {
+          latestVersion = versions.sort((a,b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime())[0];
+        }
+      }
+      if (!latestVersion) {
+        const allVersions = await ModrinthService.getModVersions(project.project_id);
+        if (allVersions && allVersions.length > 0) {
+          latestVersion = allVersions.sort((a, b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime())[0];
+        } else { throw new Error("No versions found for this modpack."); }
+      }
+      if (!latestVersion || !latestVersion.files || latestVersion.files.length === 0) { throw new Error("Latest version has no files."); }
+      const primaryFile = latestVersion.files.find(f => f.primary) || latestVersion.files[0];
+      if (!primaryFile) { throw new Error("No primary file found for the latest version."); }
+
+      toast.loading(`Installing ${project.title} as new profile...`, { id: toastId });
+      const newProfileId = await ModrinthService.downloadAndInstallModpack(
+        project.project_id,
+        latestVersion.id,
+        primaryFile.filename, 
+        primaryFile.url
+      );
+      toast.success(
+        (t) => (
+          <div className="flex flex-col">
+            <span>Successfully installed {project.title} as a new profile!</span>
+            <span className="text-xs text-gray-400">Profile ID: {newProfileId}</span>
+            {/* TODO: Maybe add a button to switch to this profile or open its settings */}
+          </div>
+        ),
+        { id: toastId, duration: 6000 }
+      );
+
+      try {
+        const updatedProfiles = await ProfileService.listProfiles();
+        setInternalProfiles(updatedProfiles);
+      } catch (profileError) {
+        console.error("Failed to refresh profiles list internally:", profileError);
+      }
+      
+      // Conditionally call onInstallSuccess
+      if (project.project_type !== 'modpack' && onInstallSuccess) {
+        onInstallSuccess();
+      }
+      // For modpacks, onInstallSuccess is intentionally skipped to prevent page reload,
+      // as internalProfiles state is updated directly.
+
+    } catch (err: any) {
+      console.error("Failed to install modpack as profile:", err);
+      toast.error(`Error installing ${project.title}: ${err.message || 'Unknown error'}`, { id: toastId });
+    }
+  };
+
+  const handleInstallModpackVersionAsProfile = async (project: ModrinthSearchHit, version: ModrinthVersion) => {
+    if (project.project_type !== 'modpack') {
+       // This case should ideally be handled by a different function.
+      // Ensure onInstallSuccess is still triggered for them if this path is taken.
+      toast.error("This handler is primarily for modpack versions. For other types, behavior might differ.");
+      if (onInstallSuccess) {
+        onInstallSuccess();
+      }
+      return;
+    }
+    if (!version || !version.files || version.files.length === 0) {
+      toast.error("Selected version has no files.");
+      return;
+    }
+
+    const primaryFile = version.files.find(f => f.primary) || version.files[0];
+    if (!primaryFile) { 
+        toast.error("No primary file found for the selected version."); 
+        return; 
+    }
+    const toastId = toast.loading(`Installing ${project.title} (version ${version.version_number}) as new profile...`);
+
+    try {
+      const newProfileId = await ModrinthService.downloadAndInstallModpack(
+        project.project_id,
+        version.id,
+        primaryFile.filename, 
+        primaryFile.url
+      );
+      toast.success(
+        (t) => (
+          <div className="flex flex-col">
+            <span>Successfully installed {project.title} (v{version.version_number}) as a new profile!</span>
+            <span className="text-xs text-gray-400">Profile ID: {newProfileId}</span>
+          </div>
+        ),
+        { id: toastId, duration: 6000 }
+      );
+
+      try {
+        const updatedProfiles = await ProfileService.listProfiles();
+        setInternalProfiles(updatedProfiles);
+      } catch (profileError) {
+        console.error("Failed to refresh profiles list internally:", profileError);
+      }
+
+      // Conditionally call onInstallSuccess
+      if (project.project_type !== 'modpack' && onInstallSuccess) {
+        onInstallSuccess();
+      }
+      // For modpacks, onInstallSuccess is intentionally skipped.
+
+    } catch (err: any) {
+      console.error("Failed to install modpack version as profile:", err);
+      toast.error(`Error installing ${project.title}: ${err.message || 'Unknown error'}`, { id: toastId });
+    }
+  };
+
   return (
     // Overall container: now flex-row to place left content and sidebar side-by-side
     <div className={`modrinth-search-v2 flex flex-row h-full gap-3 ${className}`}> {/* Added gap-3 */} 
@@ -1170,7 +1325,7 @@ export function ModrinthSearchV2({
           projectType={projectType}
           onProjectTypeChange={handleProjectTypeChange}
           allProjectTypes={ALL_MODRINTH_PROJECT_TYPES} // Pass the constant
-          profiles={profiles}
+          profiles={internalProfiles}
           selectedProfile={selectedProfile}
           onSelectedProfileChange={(profile) => {
             if (profile === null) {
@@ -1228,6 +1383,8 @@ export function ModrinthSearchV2({
                 accentColor={accentColor}
                 installStatus={currentProjectInstallStatus}
                 onQuickInstallClick={quickInstall}
+                onInstallModpackAsProfileClick={handleInstallModpackAsProfile}
+                onInstallModpackVersionAsProfileClick={handleInstallModpackVersionAsProfile}
                 onToggleVersionsClick={toggleProjectVersions}
                 isExpanded={Array.isArray(projectVersions) && projectVersions.length > 0}
                 isLoadingVersions={projectVersions === 'loading'}
@@ -1302,7 +1459,7 @@ export function ModrinthSearchV2({
         versions={quickInstallVersions}
         isLoading={quickInstallLoading}
         error={quickInstallError}
-        profiles={profiles}
+        profiles={internalProfiles}
         selectedProfileId={selectedProfile?.id}
         installStatus={installStatus}
         installingProfiles={installing}
@@ -1311,18 +1468,20 @@ export function ModrinthSearchV2({
       />
 
       {/* Detailed Installation Modal - Now using the extracted component */}
-      <ModrinthInstallModalV2
-        isOpen={installModalOpen}
-        onClose={closeInstallModal}
-        project={selectedProject}
-        version={selectedVersion}
-        profiles={profiles}
-        selectedProfileId={selectedProfile?.id}
-        isLoadingStatus={loadingStatus}
-        installStatus={installStatus}
-        installingProfiles={installing}
-        onInstallToProfile={installToProfile}
-      />
+      {selectedProject && selectedVersion && installModalOpen && (
+        <ModrinthInstallModalV2
+          isOpen={installModalOpen}
+          onClose={closeInstallModal}
+          project={selectedProject}
+          version={selectedVersion}
+          profiles={internalProfiles}
+          selectedProfileId={selectedProfile?.id}
+          isLoadingStatus={loadingStatus}
+          installStatus={installStatus}
+          installingProfiles={installing}
+          onInstallToProfile={installToProfile}
+        />
+      )}
     </div>
   );
 } 

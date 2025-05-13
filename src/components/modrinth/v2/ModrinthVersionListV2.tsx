@@ -61,6 +61,7 @@ interface ModrinthVersionListV2Props {
   onCloseAllDropdowns: (projectId: string) => void;
   onLoadMore: (projectId: string) => void;
   onInstallClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onHoverVersion: (id: string | null) => void;
 }
 
@@ -86,6 +87,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
   onCloseAllDropdowns,
   onLoadMore,
   onInstallClick,
+  onInstallModpackVersionAsProfileClick,
   onHoverVersion,
 }) => {
   // --- Helper function to get filtered versions (moved from parent) ---
@@ -465,9 +467,10 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
                 versionStatus={versionStatus}
                 accentColor={accentColor}
                 isHovered={isVersionHovered}
-                onMouseEnter={() => onHoverVersion(version.id)} // Use the passed callback
-                onMouseLeave={() => onHoverVersion(null)} // Use the passed callback
+                onMouseEnter={() => onHoverVersion(version.id)}
+                onMouseLeave={() => onHoverVersion(null)}
                 onInstallClick={onInstallClick}
+                onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
               />
             );
           })}

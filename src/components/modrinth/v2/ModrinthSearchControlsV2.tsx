@@ -81,7 +81,6 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
         ))}
       </div>
 
-        {/*
       <div className="flex items-center space-x-2 mb-2">
         <label className="text-white text-sm whitespace-nowrap">For Profile:</label>
         <select 
@@ -105,7 +104,6 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
           ))}
         </select>
       </div>
-        */}
     
 
       <div className="flex items-center space-x-2 mb-2">

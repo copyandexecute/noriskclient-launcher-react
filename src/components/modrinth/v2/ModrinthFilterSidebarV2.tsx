@@ -130,6 +130,16 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
   filterServerRequired,
   onServerRequiredToggle,
 }) => {
+  // Extract the 'Categories' group if it exists
+  const categoriesGroup = dynamicFilterGroups.find(
+    group => group.headerValue.toLowerCase() === 'categories'
+  );
+
+  // Filter out the 'Categories' group from the main list to avoid rendering it twice
+  const otherDynamicGroups = dynamicFilterGroups.filter(
+    group => group.headerValue.toLowerCase() !== 'categories'
+  );
+
   return (
     <div 
       className={cn(
@@ -183,6 +193,42 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
           </div>
         </AccordionItem>
 
+        {/* Render Categories group here if it exists */}
+        {categoriesGroup && (
+          <AccordionItem key={categoriesGroup.headerValue} title={categoriesGroup.accordionTitle} defaultOpen={true}>
+            <div className="max-h-60 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"> 
+              {categoriesGroup.options.length > 0 ? categoriesGroup.options.map(cat => {
+                const isChecked = currentSelectedCategories.includes(cat.name);
+                return (
+                  <button 
+                    key={cat.name} 
+                    onClick={() => onCategoryToggle(cat.name)}
+                    className={cn(
+                      "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
+                      "hover:bg-white/10 active:bg-white/5",
+                      isChecked ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
+                    )}
+                    style={{ color: isChecked ? accentColor.value : undefined }}
+                  >
+                    <span className="flex items-center flex-grow text-left"> 
+                       {cat.icon && (
+                         <span 
+                           className="w-4 h-4 mr-1.5 flex-shrink-0" 
+                           dangerouslySetInnerHTML={{ __html: cat.icon }}
+                         />
+                       )}
+                      {cat.name}
+                    </span>
+                    {isChecked && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
+                  </button>
+                );
+               }) : (
+                <p className="text-xs text-gray-500 italic p-1 text-center">No options for {categoriesGroup.accordionTitle}.</p>
+              )}
+            </div>
+          </AccordionItem>
+        )}
+
         <AccordionItem title="Loader" defaultOpen={true}>
           <div className="max-h-40 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {availableLoaders.map(loader => {
@@ -216,8 +262,9 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
           </div>
         </AccordionItem>
 
-        {dynamicFilterGroups.map(group => (
-          <AccordionItem key={group.headerValue} title={group.accordionTitle} defaultOpen={group.headerValue.toLowerCase() === 'categories'}>
+        {/* Render other dynamic groups here */}
+        {otherDynamicGroups.map(group => (
+          <AccordionItem key={group.headerValue} title={group.accordionTitle} defaultOpen={group.headerValue.toLowerCase() === 'categories' /* This defaultOpen might need adjustment if categories is handled separately */}>
             <div className="max-h-60 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"> 
               {group.options.length > 0 ? group.options.map(cat => {
                 const isChecked = currentSelectedCategories.includes(cat.name);
