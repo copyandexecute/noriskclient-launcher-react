@@ -1313,6 +1313,104 @@ export function ModrinthSearchV2({
     }
   };
 
+  const handleInstallToNewProfile = async (
+    profileName: string,
+    project: ModrinthSearchHit,
+    version: ModrinthVersion,
+    sourceProfileIdToCopy?: string | null // Parameter for copying
+  ): Promise<void> => {
+
+    const installationPromise = async () => {
+      let newProfileId: string;
+      let operationDescription = "Creating profile"; // Default description
+      let successMessageDetail = `Successfully created profile '${profileName}'`;
+
+      if (sourceProfileIdToCopy) {
+        const sourceProfile = internalProfiles.find(p => p.id === sourceProfileIdToCopy);
+        const sourceProfileName = sourceProfile ? sourceProfile.name : "source profile";
+        operationDescription = `Copying profile from '${sourceProfileName}' to '${profileName}'`;
+        
+        newProfileId = await ProfileService.copyProfile({
+          source_profile_id: sourceProfileIdToCopy,
+          new_profile_name: profileName,
+        });
+        successMessageDetail = `Successfully copied profile '${profileName}' from '${sourceProfileName}'`;
+
+      } else {
+        const gameVersion = version.game_versions[0] || 'unknown';
+        let loader = 'vanilla';
+        if (project.project_type === 'mod' || project.project_type === 'modpack') {
+          loader = version.loaders[0] || 'vanilla';
+        }
+        newProfileId = await ProfileService.createProfile({
+          name: profileName,
+          game_version: gameVersion,
+          loader: loader,
+        });
+      }
+
+      // Common part: Install content to the new/copied profile
+      const primaryFile = version.files.find((f) => f.primary) || version.files[0];
+      if (!primaryFile) {
+        throw new Error("No primary file found for the selected version.");
+      }
+
+      if (project.project_type === 'mod' || project.project_type === 'modpack') {
+        await ProfileService.addModrinthModToProfile(
+          newProfileId,
+          project.project_id,
+          version.id,
+          primaryFile.filename,
+          primaryFile.url,
+          primaryFile.hashes?.sha1 || undefined,
+          project.title,
+          version.version_number,
+          version.loaders,
+          version.game_versions
+        );
+      } else {
+        await ProfileService.addModrinthContentToProfile(
+          newProfileId,
+          project.project_id,
+          version.id,
+          primaryFile.filename,
+          primaryFile.url,
+          primaryFile.hashes?.sha1 || null,
+          project.title,
+          version.version_number,
+          project.project_type
+        );
+      }
+      return { successMessageDetail, projectTitle: project.title, versionNumber: version.version_number };
+    };
+
+    try {
+      // Determine the correct loading message based on whether we are copying
+      const loadingMessage = sourceProfileIdToCopy
+        ? `Copying profile '${profileName}' and installing ${project.title}...` 
+        : `Creating profile '${profileName}' and installing ${project.title}...`;
+
+      await toast.promise(
+        installationPromise(),
+        {
+          loading: loadingMessage,
+          success: (data) => `${data.successMessageDetail} and installed ${data.projectTitle} v${data.versionNumber}!`,
+          error: (err) => `Operation failed: ${err.message || 'Unknown error'}`,
+        },
+        {
+          // success: { duration: 6000 }, // Optional: make success toast stay longer
+        }
+      );
+
+      const updatedProfiles = await ProfileService.listProfiles();
+      setInternalProfiles(updatedProfiles);
+
+    } catch (err: any) {
+      console.error("Failed to create/copy profile and install content:", err);
+      throw err; 
+    }
+  };
+
   return (
     // Overall container: now flex-row to place left content and sidebar side-by-side
     <div className={`modrinth-search-v2 flex flex-row h-full gap-3 ${className}`}> {/* Added gap-3 */} 
@@ -1465,6 +1563,7 @@ export function ModrinthSearchV2({
         installingProfiles={installing}
         onInstallToProfile={quickInstallToProfile}
         findBestVersionForProfile={findBestVersionForProfile}
+        onInstallToNewProfile={handleInstallToNewProfile}
       />
 
       {/* Detailed Installation Modal - Now using the extracted component */}
@@ -1480,6 +1579,7 @@ export function ModrinthSearchV2({
           installStatus={installStatus}
           installingProfiles={installing}
           onInstallToProfile={installToProfile}
+          onInstallToNewProfile={handleInstallToNewProfile}
         />
       )}
     </div>

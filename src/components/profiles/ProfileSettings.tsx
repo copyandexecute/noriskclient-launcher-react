@@ -117,7 +117,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             return `Profile '${profile.name}' deleted successfully!`;
           },
           error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : String(err);
+            const errorMessage = err instanceof Error ? err.message : String(err.message);
             setError(`Failed to delete profile: ${errorMessage}`);
             return `Failed to delete profile: ${errorMessage}`;
           },

@@ -82,7 +82,7 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
       </div>
 
       <div className="flex items-center space-x-2 mb-2">
-        <label className="text-white text-sm whitespace-nowrap">For Profile:</label>
+        <label className="text-white text-sm whitespace-nowrap">DEBUG SELECT:</label>
         <select 
           value={selectedProfile?.id || ''}
           onChange={(e) => {

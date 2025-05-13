@@ -212,7 +212,7 @@ export function ProfilesTab() {
           fetchProfiles(); // Refresh profiles list on success
           return `Profile '${profileName}' deleted successfully!`;
         },
-        error: (err) => `Failed to delete profile: ${err instanceof Error ? err.message : String(err)}`,
+        error: (err) => `Failed to delete profile: ${err instanceof Error ? err.message : String(err.message)}`,
       }
     );
   };
