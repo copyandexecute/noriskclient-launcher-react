@@ -941,6 +941,99 @@ export function ModrinthSearchV2({
 
   // Function to handle quick install
   const quickInstall = async (project: ModrinthSearchHit) => {
+    // Check if a profile is selected - if yes, install directly
+    if (selectedProfile) {
+      try {
+        await toast.promise(
+          async () => {
+            // Fetch versions for this project
+            const versions = await ModrinthService.getModVersions(project.project_id);
+            
+            if (versions.length === 0) {
+              throw new Error('No versions found for this project');
+            }
+            
+            // Sort versions by date (newest first)
+            const sortedVersions = versions.sort((a, b) => 
+              new Date(b.date_published).getTime() - new Date(a.date_published).getTime()
+            );
+            
+            // Find the best version for this profile
+            const bestVersion = findBestVersionForProfile(selectedProfile, sortedVersions);
+            if (!bestVersion) {
+              throw new Error(`No compatible version found for ${selectedProfile.name}`);
+            }
+            
+            // Find primary file for the best version
+            const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
+            if (!primaryFile) {
+              throw new Error("No download file available");
+            }
+            
+            // Choose the right installation method based on project type
+            if (project.project_type === 'mod' || project.project_type === 'modpack') {
+              // Use mod-specific API for mods and modpacks
+              await ProfileService.addModrinthModToProfile(
+                selectedProfile.id,
+                project.project_id,
+                bestVersion.id,
+                primaryFile.filename,
+                primaryFile.url,
+                primaryFile.hashes?.sha1 || undefined,
+                project.title,
+                bestVersion.version_number,
+                bestVersion.loaders,
+                bestVersion.game_versions
+              );
+            } else {
+              // Use content API for resourcepacks, shaders, and datapacks
+              await ProfileService.addModrinthContentToProfile(
+                selectedProfile.id,
+                project.project_id,
+                bestVersion.id,
+                primaryFile.filename,
+                primaryFile.url,
+                primaryFile.hashes?.sha1 || null,
+                project.title,
+                bestVersion.version_number,
+                project.project_type
+              );
+            }
+            
+            // Update installedProjects state to show as installed in the UI
+            setInstalledProjects(prev => ({
+              ...prev,
+              [project.project_id]: {
+                is_installed: true,
+                is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false
+              }
+            }));
+            
+            // Update installedVersions state to show this version as installed
+            setInstalledVersions(prev => ({
+              ...prev,
+              [bestVersion.id]: {
+                is_installed: true,
+                is_included_in_norisk_pack: prev[bestVersion.id]?.is_included_in_norisk_pack || false
+              }
+            }));
+            
+            return { version: bestVersion.version_number };
+          },
+          {
+            loading: `Finding best version and installing ${project.title} to ${selectedProfile.name}...`,
+            success: (data) => `Successfully installed ${project.title} v${data.version} to ${selectedProfile.name}`,
+            error: (err) => `Failed to install: ${err instanceof Error ? err.message : String(err.message)}`
+          }
+        );
+        return; // Skip opening modal after direct installation
+      } catch (error) {
+        console.error("Direct quick install error:", error);
+        // Continue to modal if direct installation fails
+      }
+    }
+    
+    // If no profile is selected or direct install failed, open the modal as before
     setQuickInstallProject(project);
     setQuickInstallModalOpen(true);
     setQuickInstallLoading(true);
