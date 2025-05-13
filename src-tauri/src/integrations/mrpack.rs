@@ -367,8 +367,6 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
         })?;
     }
 
-    // We need to read the central directory once to know about all files.
-    // This initial open is just to get the list of entries and their metadata.
     let initial_file_for_listing = File::open(pack_path).await.map_err(|e| {
         error!("Failed to open mrpack file for listing {:?}: {}", pack_path, e);
         AppError::Io(e)
@@ -394,7 +392,6 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
         let is_entry_dir;
         let entry_uncompressed_size; 
         {
-            // Borrow zip_lister here to get entry metadata
             let entry = match zip_lister.file().entries().get(index) {
                 Some(e) => e,
                 None => {
@@ -413,7 +410,7 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                 warn!("Failed to determine if '{}' is a directory from entry, falling back to path check.", entry_filename_str);
                 entry_filename_str.ends_with('/')
             });
-            entry_uncompressed_size = entry.uncompressed_size(); // Keep as u64 for consistency with API
+            entry_uncompressed_size = entry.uncompressed_size();
         }
 
         let (is_override_type, path_prefix_to_strip) =
@@ -426,22 +423,51 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
             };
 
         if is_override_type {
-            let relative_path_in_archive = match entry_filename_str.strip_prefix(path_prefix_to_strip) {
-                Some(p) if !p.is_empty() => sanitize_filename::sanitize(p),
-                _ => continue,
+            let path_after_prefix = match entry_filename_str.strip_prefix(path_prefix_to_strip) {
+                Some(p_str) if !p_str.is_empty() => p_str,
+                _ => continue, // Skip if path after prefix is empty (e.g. just "overrides/")
             };
-            let final_dest_path = target_dir.join(relative_path_in_archive);
+
+            // Sanitize each component of the path to prevent directory traversal and invalid names
+            let sanitized_relative_path = PathBuf::from(path_after_prefix)
+                .components()
+                .filter_map(|comp| match comp {
+                    // Sanitize normal path components (filenames/directory names)
+                    std::path::Component::Normal(os_str) => {
+                        let sanitized_comp = sanitize_filename::sanitize(os_str.to_string_lossy().as_ref());
+                        // Ensure sanitized component is not empty (e.g. if original was just "..")
+                        if sanitized_comp.is_empty() {
+                            None
+                        } else {
+                            Some(sanitized_comp)
+                        }
+                    }
+                    // Disallow ParentDir components to prevent trivial directory traversal
+                    std::path::Component::ParentDir => {
+                        warn!("Parent directory component '..' found and removed in override path: {}", path_after_prefix);
+                        None 
+                    }
+                    // Ignore CurDir, RootDir, Prefix as they shouldn't be in relative archive paths or are handled by join
+                    std::path::Component::CurDir => None, 
+                    std::path::Component::RootDir => None, // Should not appear in relative paths
+                    std::path::Component::Prefix(_) => None, // Should not appear in relative paths
+                })
+                .collect::<PathBuf>();
             
-            // Clone necessary data for the task
+            // If sanitization results in an empty path (e.g., path was only ".." or similar), skip it.
+            if sanitized_relative_path.as_os_str().is_empty() {
+                 warn!("Skipping empty sanitized relative path for override entry: {} (original relative: {})", entry_filename_str, path_after_prefix);
+                continue;
+            }
+
+            let final_dest_path = target_dir.join(sanitized_relative_path);
+            
             let task_pack_path = pack_path.to_path_buf();
             let task_io_semaphore = io_semaphore.clone();
             let task_final_dest_path = final_dest_path.clone();
-            // 'index' is the original index of the entry in the ZIP central directory
             let original_entry_index = index; 
 
             if is_entry_dir {
-                // Directory creation can also be part of the task, or done upfront.
-                // For simplicity here, let's make it part of the task to ensure parent dirs exist for files.
                 extraction_tasks.push(tokio::spawn(async move {
                     let _permit = task_io_semaphore.acquire().await.map_err(|e| {
                         error!("Failed to acquire semaphore permit for creating dir {}: {}", task_final_dest_path.display(), e);
@@ -469,7 +495,6 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                          AppError::Other(format!("Semaphore error for '{}': {}",task_final_dest_path.display(), e))
                     })?;
 
-                    // Create parent directories if they don't exist
                     if let Some(parent) = task_final_dest_path.parent() {
                         if !parent.exists() { 
                             fs::create_dir_all(parent).await.map_err(|e| {
@@ -479,7 +504,6 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                         }
                     }
 
-                    // Each task opens the file and creates its own ZipFileReader
                     let task_file = File::open(&task_pack_path).await.map_err(|e|{
                         error!("Task: Failed to open mrpack file {:?}: {}", task_pack_path, e);
                         AppError::Io(e)
@@ -507,7 +531,7 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                     let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
                         error!(
                             "Task: Failed to stream content for '{}' to {:?}: {}",
-                            task_final_dest_path.display(), task_final_dest_path, e // Corrected filename to display path
+                            task_final_dest_path.display(), task_final_dest_path, e
                         );
                         AppError::Io(e)
                     })?;
@@ -526,7 +550,7 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
     })?;
 
     for result in results {
-        result?; // Propagate any AppError returned by a task
+        result?; 
     }
 
     info!(

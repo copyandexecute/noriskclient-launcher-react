@@ -315,16 +315,43 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
 
         // Only process the "overrides/" directory for .noriskpack files
         if entry_filename_str.starts_with("overrides/") {
-            let relative_path_in_archive = match entry_filename_str.strip_prefix("overrides/") {
-                Some(p) if !p.is_empty() => sanitize(p), // Sanitize the relative path part
-                _ => continue, // Skip if path is empty after prefix (e.g. "overrides/")
+            let path_after_strip_str = match entry_filename_str.strip_prefix("overrides/") {
+                Some(p_str) if !p_str.is_empty() => p_str,
+                _ => continue, // Skip if path after prefix is empty (e.g. just "overrides/")
             };
-            // Skip if the sanitized path is empty (e.g. if original was "overrides/../something")
-            if relative_path_in_archive.is_empty() {
-                warn!("Skipping empty sanitized path for override: {}", entry_filename_str);
+
+            // Sanitize each component of the path to prevent directory traversal and invalid names
+            let sanitized_relative_path_buf = PathBuf::from(path_after_strip_str)
+                .components()
+                .filter_map(|comp| match comp {
+                    std::path::Component::Normal(os_str) => {
+                        let sanitized_comp = sanitize_filename::sanitize(os_str.to_string_lossy().as_ref());
+                        if sanitized_comp.is_empty() {
+                            None
+                        } else {
+                            Some(sanitized_comp)
+                        }
+                    }
+                    std::path::Component::ParentDir => {
+                        warn!("Parent directory component '..' found and removed in noriskpack override path: {}", path_after_strip_str);
+                        None 
+                    }
+                    std::path::Component::CurDir => None,
+                    std::path::Component::RootDir => None,
+                    std::path::Component::Prefix(_) => None,
+                })
+                .collect::<PathBuf>();
+
+            // If sanitization results in an empty path (e.g., path was only ".." or similar), skip it.
+            if sanitized_relative_path_buf.as_os_str().is_empty() {
+                warn!(
+                    "Skipping empty sanitized relative path for noriskpack override entry: {} (original relative: {})",
+                    entry_filename_str, path_after_strip_str
+                );
                 continue;
             }
-            let final_dest_path = target_dir.join(relative_path_in_archive);
+            
+            let final_dest_path = target_dir.join(sanitized_relative_path_buf);
             
             let task_pack_path = pack_path.clone(); // PathBuf is cheap to clone
             let task_io_semaphore = io_semaphore.clone();
