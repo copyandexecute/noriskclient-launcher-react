@@ -8,7 +8,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { Dropdown } from "./dropdown/Dropdown";
 import { DropdownItem } from "./dropdown/DropdownItem";
 
-interface SelectOption {
+export interface SelectOption {
   value: string;
   label: string;
   icon?: React.ReactNode;

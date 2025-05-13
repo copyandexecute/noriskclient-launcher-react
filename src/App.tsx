@@ -7,7 +7,8 @@ import { ThemeInitializer } from "./components/ThemeInitializer";
 import { ScrollbarProvider } from "./components/ui/ScrollbarProvider";
 import { NewsSection } from "./components/news/NewsSection";
 import { ProfilesTab } from "./components/tabs/ProfilesTab.tsx";
-import ModrinthTab from "./components/tabs/ModrinthTab.tsx";
+// import ModrinthTab from "./components/tabs/ModrinthTab.tsx"; // Ensure this line is removed or commented out
+import ModrinthTabV2 from "./components/tabs/ModrinthTabV2.tsx";
 import { GlobalToaster } from "./components/ui/GlobalToaster";
 import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
 import { toast } from 'react-hot-toast';
@@ -19,6 +20,9 @@ import {
 import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
 import { useCrashModalStore } from "./store/crash-modal-store";
 import { refreshNrcDataOnMount } from "./services/nrc-service";
+import { SettingsProvider } from "./contexts/SettingsContext";
+import { NewsTab } from "./components/tabs/NewsTab.tsx";
+import { Sidebar } from "./components/layout/Sidebar";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
@@ -97,13 +101,13 @@ export function App() {
       case "profiles":
         return <ProfilesTab />;
       case "mods":
-        return <ModrinthTab />;
+        return <ModrinthTabV2 />;
       case "skins":
         return null;
       case "store":
         return null;
       case "news":
-        return <NewsSection />;
+        return <NewsTab />;
       case "settings":
         return <SettingsTab />;
       default:
