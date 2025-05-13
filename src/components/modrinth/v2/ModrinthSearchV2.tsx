@@ -270,7 +270,7 @@ export function ModrinthSearchV2({
       }
     } catch (err) {
       console.error("Failed to search Modrinth projects:", err);
-      setError(`Failed to search Modrinth: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`${err.message}`);
       if (newSearch) {
         setSearchResults([]);
         setTotalHits(0);
