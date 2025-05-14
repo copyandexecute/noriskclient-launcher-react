@@ -9,3 +9,4 @@ pub mod nrc_commands;
 pub mod path_commands;
 pub mod process_command;
 pub mod profile_command;
+pub mod content_command;
