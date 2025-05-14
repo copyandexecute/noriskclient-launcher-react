@@ -553,6 +553,7 @@ export function ModrinthSearchV2({
             is_specific_version_in_pack: false,
             is_enabled: null,
             found_item_details: null,
+            norisk_pack_item_details: null,
           };
           continue;
         }
@@ -577,6 +578,7 @@ export function ModrinthSearchV2({
           is_specific_version_in_pack: statusFromService.is_specific_version_in_pack,
           is_enabled: statusFromService.is_enabled !== undefined ? statusFromService.is_enabled : null, // Handle undefined
           found_item_details: statusFromService.found_item_details || null, // Handle undefined
+          norisk_pack_item_details: statusFromService.norisk_pack_item_details || null,
         };
 
       } catch (error) {
@@ -587,6 +589,7 @@ export function ModrinthSearchV2({
           is_specific_version_in_pack: false,
           is_enabled: null,
           found_item_details: null,
+          norisk_pack_item_details: null,
         };
       }
     }
@@ -1635,6 +1638,7 @@ export function ModrinthSearchV2({
               is_specific_version_in_pack: prev[version.id]?.is_specific_version_in_pack || false,
               is_enabled: null, // Not applicable for uninstalled items
               found_item_details: null, // Clear details for uninstalled items
+              norisk_pack_item_details: prev[version.id]?.norisk_pack_item_details || null, // Keep NoRisk Pack info
             }
           }));
           
@@ -1672,6 +1676,7 @@ export function ModrinthSearchV2({
                 is_specific_version_in_pack: prev[project.project_id]?.is_specific_version_in_pack || false,
                 is_enabled: null,
                 found_item_details: null,
+                norisk_pack_item_details: prev[project.project_id]?.norisk_pack_item_details || null, // Keep NoRisk Pack info
               }
             }));
           }
@@ -1791,6 +1796,7 @@ export function ModrinthSearchV2({
     is_specific_version_in_pack: false,
     is_enabled: null,
     found_item_details: null,
+    norisk_pack_item_details: null,
   };
 
   const getStatusForNewInstall = (
@@ -1801,6 +1807,7 @@ export function ModrinthSearchV2({
     is_specific_version_in_pack: existingPreviousStatus?.is_specific_version_in_pack || false,
     is_enabled: true, 
     found_item_details: existingPreviousStatus?.found_item_details || null,
+    norisk_pack_item_details: existingPreviousStatus?.norisk_pack_item_details || null,
   });
 
   return (

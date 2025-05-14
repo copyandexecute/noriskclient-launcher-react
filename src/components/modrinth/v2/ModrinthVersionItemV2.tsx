@@ -63,6 +63,21 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
   };
 
   const handleToggleEnableButtonClick = () => {
+    // Check if this is a NoRisk Pack item
+    if (versionStatus?.norisk_pack_item_details?.norisk_mod_identifier) {
+      if (onToggleEnableClick && !isModpack && selectedProfileId) {
+        onToggleEnableClick(
+          selectedProfileId, 
+          project, 
+          version, 
+          !versionStatus.is_enabled, 
+          /* sha1Hash */ '' // Not needed for NoRisk Pack items
+        );
+      }
+      return;
+    }
+    
+    // Handle regular toggle for normal mods
     const primaryFile = version.files.find(f => f.primary) || version.files[0];
     if (onToggleEnableClick && !isModpack && selectedProfileId && versionStatus?.is_installed && primaryFile?.hashes?.sha1 && typeof versionStatus.is_enabled === 'boolean') {
       onToggleEnableClick(selectedProfileId, project, version, !versionStatus.is_enabled, primaryFile.hashes.sha1);
@@ -161,7 +176,7 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
               </TagBadge>
             )}
             {selectedProfileId && versionStatus?.is_included_in_norisk_pack && (
-              <TagBadge variant="info" className="flex-shrink-0">
+              <TagBadge variant={versionStatus?.norisk_pack_item_details?.is_enabled === false ? "inactive" : "info"} className="flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 In NoRisk Pack
               </TagBadge>
@@ -178,7 +193,10 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
           </div>
           {/* Install/Delete Button Group (fixed width, on the right) */} 
           <div className="flex gap-1 flex-shrink-0"> {/* Wrapper for buttons */}
-            {selectedProfileId && versionStatus?.is_installed && !isModpack && typeof versionStatus.is_enabled === 'boolean' && onToggleEnableClick && (
+            {/* Enable/Disable button for both regular mods and NoRisk Pack items */}
+            {selectedProfileId && 
+              ((versionStatus?.is_installed && !isModpack && typeof versionStatus.is_enabled === 'boolean' && onToggleEnableClick) || 
+               (versionStatus?.is_included_in_norisk_pack && versionStatus?.norisk_pack_item_details && onToggleEnableClick)) && (
               <Button
                 onClick={handleToggleEnableButtonClick}
                 size="xs"
