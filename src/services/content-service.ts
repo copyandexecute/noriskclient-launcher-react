@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { UninstallContentPayload, ToggleContentPayload } from '../types/content';
+import type { UninstallContentPayload, ToggleContentPayload, InstallContentPayload } from '../types/content';
 
 /**
  * Uninstalls content from a specified profile based on the provided payload.
@@ -51,6 +51,34 @@ export async function toggleContentFromProfile(
       error
     );
     // Consider toast: toast.error(`Failed to update content state: ${error}`);
+    throw error;
+  }
+}
+
+/**
+ * Installs content into a specified profile based on the provided payload.
+ *
+ * @param payload - The details of the content to install.
+ * @returns A promise that resolves if the installation request is successful, or rejects with an error.
+ */
+export async function installContentToProfile(
+  payload: InstallContentPayload,
+): Promise<void> {
+  try {
+    await invoke<void>('install_content_to_profile', { payload });
+    console.log(
+      `Successfully requested content installation for profile ${payload.profile_id}, type: ${payload.content_type}, name: ${payload.content_name || payload.file_name} with criteria:`, 
+      payload
+    );
+    // Consider toast: toast.success("Content installation initiated.");
+  } catch (error) {
+    console.error(
+      `Error installing content for profile ${payload.profile_id}, type: ${payload.content_type}, name: ${payload.content_name || payload.file_name} with criteria:`, 
+      payload, 
+      '\nError:', 
+      error
+    );
+    // Consider toast: toast.error(`Failed to install content: ${error}`);
     throw error;
   }
 } 

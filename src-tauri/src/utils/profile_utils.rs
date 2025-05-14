@@ -22,10 +22,12 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 /// Represents the type of content to be installed
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ContentType {
     ResourcePack,
     ShaderPack,
     DataPack,
+    Mod,
 }
 
 impl From<ModrinthProjectType> for ContentType {
@@ -172,6 +174,12 @@ async fn get_content_directory(profile: &Profile, content_type: &ContentType) ->
         ContentType::ResourcePack => resourcepack_utils::get_resourcepacks_dir(profile).await,
         ContentType::ShaderPack => shaderpack_utils::get_shaderpacks_dir(profile).await,
         ContentType::DataPack => datapack_utils::get_datapacks_dir(profile).await,
+        ContentType::Mod => {
+            // For mods, the target directory is the 'mods' folder within the profile's instance path.
+            let state = State::get().await?;
+            let instance_path = state.profile_manager.calculate_instance_path_for_profile(profile)?;
+            Ok(instance_path.join("mods"))
+        }
     }
 }
 
@@ -181,6 +189,7 @@ fn content_type_to_string(content_type: &ContentType) -> &'static str {
         ContentType::ResourcePack => "Resource Pack",
         ContentType::ShaderPack => "Shader Pack",
         ContentType::DataPack => "Data Pack",
+        ContentType::Mod => "Mod",
     }
 }
 

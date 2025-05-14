@@ -21,4 +21,33 @@ export interface ToggleContentPayload {
   enabled: boolean;   // The desired new enabled state
   // Future: content_identifier (e.g., could be sha1, mod_id, filename)
   // Future: content_type?: 'mod' | 'resourcepack' | 'shaderpack' | 'datapack';
+}
+
+/**
+ * Enum for content types, mirroring Rust's `profile_utils::ContentType`.
+ * Used in InstallContentPayload.
+ */
+export enum ContentType {
+  Mod = "Mod",
+  ResourcePack = "ResourcePack",
+  ShaderPack = "ShaderPack",
+  DataPack = "DataPack",
+}
+
+/**
+ * Payload for installing content into a profile.
+ * Mirrors the Rust struct `InstallContentPayload` in `content_command.rs`.
+ */
+export interface InstallContentPayload {
+  profile_id: string; // UUID
+  project_id: string;
+  version_id: string;
+  file_name: string;
+  download_url: string;
+  file_hash_sha1?: string;
+  content_name?: string;
+  version_number?: string;
+  content_type: ContentType; // Using the ContentType enum
+  loaders?: string[];
+  game_versions?: string[];
 } 

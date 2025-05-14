@@ -8,7 +8,23 @@ use crate::error::{AppError, CommandError};
 use crate::state::profile_state::ModSource;
 use crate::state::state_manager::State as AppStateManager;
 use crate::utils::hash_utils; // For calculate_sha1
-use crate::utils::{shaderpack_utils, resourcepack_utils, datapack_utils}; // Added utils
+use crate::utils::{shaderpack_utils, resourcepack_utils, datapack_utils, profile_utils};
+
+// Updated InstallContentPayload struct
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InstallContentPayload {
+    profile_id: Uuid,
+    project_id: String,
+    version_id: String,
+    file_name: String,
+    download_url: String,
+    file_hash_sha1: Option<String>,
+    content_name: Option<String>,       // Used as mod_name for mods
+    version_number: Option<String>,
+    content_type: profile_utils::ContentType, // Use ContentType from profile_utils
+    loaders: Option<Vec<String>>,             // Added loaders
+    game_versions: Option<Vec<String>>,       // Added game_versions
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UninstallContentPayload {
@@ -409,5 +425,79 @@ pub async fn uninstall_content_from_profile(
         Err(CommandError::from(AppError::Other(
             "No valid uninstallation criteria provided.".to_string(),
         )))
+    }
+}
+
+#[tauri::command]
+pub async fn install_content_to_profile(payload: InstallContentPayload) -> Result<(), CommandError> {
+    log::info!(
+        "Executing install_content_to_profile for profile {} with content type {:?}",
+        payload.profile_id,
+        payload.content_type
+    );
+
+    match payload.content_type {
+        profile_utils::ContentType::Mod => {
+            log::info!("Attempting to install mod using profile_command::add_modrinth_mod_to_profile");
+            crate::commands::profile_command::add_modrinth_mod_to_profile(
+                payload.profile_id,
+                payload.project_id,
+                payload.version_id,
+                payload.file_name,
+                payload.download_url,
+                payload.file_hash_sha1,
+                payload.content_name, // Maps to mod_name
+                payload.version_number,
+                payload.loaders,      // Pass loaders
+                payload.game_versions // Pass game_versions
+            )
+            .await
+        }
+        profile_utils::ContentType::ResourcePack => {
+            profile_utils::add_modrinth_content_to_profile(
+                payload.profile_id,
+                payload.project_id,
+                payload.version_id,
+                payload.file_name,
+                payload.download_url,
+                payload.file_hash_sha1,
+                payload.content_name,
+                payload.version_number,
+                profile_utils::ContentType::ResourcePack,
+            )
+            .await
+            .map_err(CommandError::from)
+        }
+        profile_utils::ContentType::ShaderPack => {
+            profile_utils::add_modrinth_content_to_profile(
+                payload.profile_id,
+                payload.project_id,
+                payload.version_id,
+                payload.file_name,
+                payload.download_url,
+                payload.file_hash_sha1,
+                payload.content_name,
+                payload.version_number,
+                profile_utils::ContentType::ShaderPack,
+            )
+            .await
+            .map_err(CommandError::from)
+        }
+        profile_utils::ContentType::DataPack => {
+            profile_utils::add_modrinth_content_to_profile(
+                payload.profile_id,
+                payload.project_id,
+                payload.version_id,
+                payload.file_name,
+                payload.download_url,
+                payload.file_hash_sha1,
+                payload.content_name,
+                payload.version_number,
+                profile_utils::ContentType::DataPack,
+            )
+            .await
+            .map_err(CommandError::from)
+        }
+        // No default needed as ContentType from profile_utils is an enum and all variants are handled
     }
 } 
