@@ -934,8 +934,10 @@ export function ModrinthSearchV2({
   const [quickInstallModalOpen, setQuickInstallModalOpen] = useState(false);
   const [quickInstallProject, setQuickInstallProject] = useState<ModrinthSearchHit | null>(null);
   const [quickInstallVersions, setQuickInstallVersions] = useState<ModrinthVersion[] | null>(null);
-  const [quickInstallLoading, setQuickInstallLoading] = useState(false);
+  const [quickInstallLoading, setQuickInstallLoading] = useState(false); // Loading for fetching versions for modal
   const [quickInstallError, setQuickInstallError] = useState<string | null>(null);
+  const [quickInstallingProjects, setQuickInstallingProjects] = useState<Record<string, boolean>>({}); // New state for card button loading
+  const [installingModpackAsProfile, setInstallingModpackAsProfile] = useState<Record<string, boolean>>({}); // New state for modpack install loading
 
   // Helper function to map Modrinth project type to our ContentType enum
   function mapModrinthProjectTypeToNrContentType(projectType: ModrinthProjectType): NrContentType | null {
@@ -963,6 +965,7 @@ export function ModrinthSearchV2({
   const quickInstall = async (project: ModrinthSearchHit) => {
     // Check if a profile is selected - if yes, install directly
     if (selectedProfile) {
+      setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: true })); // Start loading for this project
       try {
         await toast.promise(
           async () => {
@@ -1044,6 +1047,8 @@ export function ModrinthSearchV2({
       } catch (error) {
         console.error("Direct quick install error:", error);
         // Continue to modal if direct installation fails
+      } finally {
+        setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false })); // Stop loading for this project
       }
     }
     
@@ -1369,15 +1374,13 @@ export function ModrinthSearchV2({
 
   const handleInstallModpackAsProfile = async (project: ModrinthSearchHit) => {
     if (project.project_type !== 'modpack') {
-      // This case should ideally be handled by a different function like quickInstall for non-modpacks.
-      // However, if it's called, ensure onInstallSuccess is still triggered for them.
       toast.error("This handler is primarily for modpacks. For other types, behavior might differ.");
       if (onInstallSuccess) {
         onInstallSuccess();
       }
       return;
     }
-
+    setInstallingModpackAsProfile(prev => ({ ...prev, [project.project_id]: true })); // Start loading
     const toastId = toast.loading(`Fetching latest version for ${project.title}...`);
 
     try {
@@ -1434,6 +1437,8 @@ export function ModrinthSearchV2({
     } catch (err: any) {
       console.error("Failed to install modpack as profile:", err);
       toast.error(`Error installing ${project.title}: ${err.message || 'Unknown error'}`, { id: toastId });
+    } finally {
+      setInstallingModpackAsProfile(prev => ({ ...prev, [project.project_id]: false })); // Stop loading
     }
   };
 
@@ -1921,6 +1926,8 @@ export function ModrinthSearchV2({
                 hit={hit}
                 accentColor={accentColor}
                 installStatus={currentProjectInstallStatus}
+                isQuickInstalling={quickInstallingProjects[hit.project_id] || false} // Pass loading state
+                isInstallingModpackAsProfile={installingModpackAsProfile[hit.project_id] || false} // Pass new loading state
                 onQuickInstallClick={quickInstall}
                 onInstallModpackAsProfileClick={handleInstallModpackAsProfile}
                 onInstallModpackVersionAsProfileClick={handleInstallModpackVersionAsProfile}

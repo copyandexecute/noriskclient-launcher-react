@@ -44,18 +44,42 @@ export interface ModrinthProjectCardV2Props extends VersionListPassthroughProps 
   hit: ModrinthSearchHit;
   accentColor: AccentColor;
   installStatus: ContentInstallStatus | null;
+  isQuickInstalling?: boolean;
+  isInstallingModpackAsProfile?: boolean;
   onQuickInstallClick: (project: ModrinthSearchHit) => void;
   onInstallModpackAsProfileClick?: (project: ModrinthSearchHit) => void;
   onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onToggleVersionsClick: (projectId: string) => void;
   isExpanded: boolean;
   isLoadingVersions: boolean;
+  projectVersions: ModrinthVersion[] | null | 'loading';
+  displayedCount: number;
+  versionDropdownUIState: { showAllGameVersions: boolean; gameVersionSearchTerm: string; };
+  openVersionDropdowns: { type: boolean; gameVersion: boolean; loader: boolean };
+  installedVersions: Record<string, ContentInstallStatus | null>;
+  selectedProfile: Profile | null;
+  hoveredVersionId: string | null;
+  gameVersionsData: ModrinthGameVersion[];
+  showAllGameVersionsSidebar: boolean;
+  selectedGameVersionsSidebar: string[];
+  onVersionFilterChange: (projectId: string, filterType: 'gameVersions' | 'loaders' | 'versionType', value: string | string[]) => void;
+  onVersionUiStateChange: (projectId: string, field: 'showAllGameVersions' | 'gameVersionSearchTerm', value: boolean | string) => void;
+  onToggleVersionDropdown: (projectId: string, dropdownType: 'type' | 'gameVersion' | 'loader') => void;
+  onCloseAllVersionDropdowns: (projectId: string) => void;
+  onLoadMoreVersions: (projectId: string) => void;
+  onInstallVersionClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onHoverVersion: (versionId: string | null) => void;
+  selectedProfileId?: string | null;
+  onDeleteVersionClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onToggleEnableClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion, newEnabledState: boolean, sha1Hash: string) => void;
 }
 
 export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
   hit,
   accentColor,
   installStatus,
+  isQuickInstalling,
+  isInstallingModpackAsProfile,
   onQuickInstallClick,
   onInstallModpackAsProfileClick,
   onInstallModpackVersionAsProfileClick,
@@ -212,25 +236,45 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
                       }
                     }}
                     size="xs"
-                    variant="success"
+                    variant={isInstallingModpackAsProfile ? "secondary" : "success"}
                     className="min-w-0 flex-grow"
                     shadowDepth="short"
-                    icon={<Icon icon="solar:download-minimalistic-bold" className="h-4 w-4" />}
+                    icon={
+                      isInstallingModpackAsProfile ? (
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <Icon icon="solar:download-minimalistic-bold" className="h-4 w-4" />
+                      )
+                    }
                     iconPosition="left"
+                    disabled={isInstallingModpackAsProfile || isQuickInstalling}
                   >
-                    Quick Install
+                    {isInstallingModpackAsProfile ? "Installing..." : "Quick Install"}
                   </Button>
                 ) : (
                   <Button
                     onClick={(e) => { e.stopPropagation(); onQuickInstallClick(hit); }}
                     size="xs"
-                    variant="success"
+                    variant={isQuickInstalling ? "secondary" : "success"}
                     className="min-w-0 flex-grow"
                     shadowDepth="short"
-                    icon={<Icon icon="solar:download-minimalistic-bold" className="h-4 w-4" />}
+                    icon={
+                      isQuickInstalling ? (
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <Icon icon="solar:download-minimalistic-bold" className="h-4 w-4" />
+                      )
+                    }
                     iconPosition="left"
+                    disabled={isQuickInstalling}
                   >
-                    Quick Install
+                    {isQuickInstalling ? "Installing..." : "Quick Install"}
                   </Button>
                 )}
                 <IconButton
