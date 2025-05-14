@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
@@ -10,6 +10,8 @@ import { Input } from "../../ui/Input";
 import { TextArea } from "../../ui/TextArea";
 import { Select } from "../../ui/Select";
 import { RangeSlider } from "../../ui/RangeSlider";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface GeneralStepProps {
   profile: Partial<Profile>;
@@ -37,8 +39,25 @@ export function GeneralStep({
     profile.settings?.memory?.max || 4096,
   );
   const accentColor = useThemeStore((state) => state.accentColor);
+  const detailsCardRef = useRef<HTMLDivElement>(null);
+  const settingsCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Animate cards on mount
+    if (detailsCardRef.current && settingsCardRef.current) {
+      gsap.fromTo(
+        [detailsCardRef.current, settingsCardRef.current],
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.1,
+          ease: "power2.out",
+        },
+      );
+    }
+
     const loadNoriskPacks = async () => {
       try {
         setLoading(true);
@@ -100,15 +119,7 @@ export function GeneralStep({
         </p>
       </div>
 
-      <div
-        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card ref={detailsCardRef} variant="default" className="p-6 space-y-6">
         <div>
           <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
             profile name <span className="text-red-400">*</span>
@@ -146,17 +157,9 @@ export function GeneralStep({
             icon={<Icon icon="solar:folder-bold" className="w-5 h-5" />}
           />
         </div>
-      </div>
+      </Card>
 
-      <div
-        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card ref={settingsCardRef} variant="default" className="p-6 space-y-6">
         <div>
           <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
             maximum ram: {memoryMaxMb} mb ({(memoryMaxMb / 1024).toFixed(1)} gb)
@@ -210,22 +213,16 @@ export function GeneralStep({
               />
               {profile.selected_norisk_pack_id &&
                 noriskPacks[profile.selected_norisk_pack_id] && (
-                  <div
-                    className="mt-4 p-4 rounded-md border-2"
-                    style={{
-                      backgroundColor: `${accentColor.value}20`,
-                      borderColor: `${accentColor.value}40`,
-                    }}
-                  >
+                  <Card variant="flat" className="mt-4 p-4">
                     <p className="text-xl text-white/80 font-minecraft tracking-wide">
                       {noriskPacks[profile.selected_norisk_pack_id].description}
                     </p>
-                  </div>
+                  </Card>
                 )}
             </>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

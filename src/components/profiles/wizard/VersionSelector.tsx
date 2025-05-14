@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Icon } from "@iconify/react";
+import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { SearchInput } from "../../ui/SearchInput";
 import { Label } from "../../ui/Label";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
+import { cn } from "../../../lib/utils";
 
 type VersionType = "release" | "snapshot" | "old-beta" | "old-alpha";
 
@@ -25,6 +27,39 @@ export function VersionSelector({
 }: VersionSelectorProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const [searchQuery, setSearchQuery] = useState("");
+  const typeButtonsRef = useRef<HTMLDivElement>(null);
+  const versionsGridRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeButtonsRef.current) {
+      gsap.fromTo(
+        typeButtonsRef.current.children,
+        { opacity: 0, y: 10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.3,
+          stagger: 0.05,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    if (versionsGridRef.current) {
+      gsap.fromTo(
+        versionsGridRef.current,
+        { opacity: 0.5, y: 10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.3,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [selectedVersionType, searchQuery]);
 
   const filteredVersions = versions.filter((version) =>
     searchQuery
@@ -39,7 +74,7 @@ export function VersionSelector({
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             version type
           </h3>
-          <div className="flex flex-wrap">
+          <div ref={typeButtonsRef} className="flex flex-wrap">
             {["release", "snapshot", "old-beta", "old-alpha"].map((type) => (
               <Label
                 key={type}
@@ -68,77 +103,77 @@ export function VersionSelector({
           </div>
 
           <div className="flex-1 relative">
-            <div
-              className="max-h-48 overflow-y-auto custom-scrollbar rounded-lg border-2 border-b-4"
-              style={{
-                backgroundColor: `${accentColor.value}10`,
-                borderColor: `${accentColor.value}60`,
-                borderBottomColor: accentColor.value,
-              }}
+            <Card
+              variant="flat"
+              className="max-h-48 overflow-y-auto custom-scrollbar"
             >
               {filteredVersions.length === 0 ? (
                 <div className="p-4 text-2xl text-white/70 text-center select-none">
                   no versions found matching your search
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3">
+                <div
+                  ref={versionsGridRef}
+                  className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3"
+                >
                   {filteredVersions.map((version) => (
-                    <Label
+                    <VersionButton
                       key={version}
-                      variant={
-                        selectedVersion === version ? "default" : "ghost"
-                      }
-                      size="md"
-                      className="cursor-pointer text-center text-xl"
+                      version={version}
+                      isSelected={selectedVersion === version}
                       onClick={() => onVersionSelect(version)}
-                    >
-                      {version}
-                    </Label>
+                    />
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
         </div>
       </div>
-
-      {selectedVersion && (
-        <div
-          className="p-4 rounded-lg border-2 border-b-4 flex items-center gap-4"
-          style={{
-            backgroundColor: `${accentColor.value}10`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
-        >
-          <div
-            className="w-12 h-12 flex items-center justify-center rounded-md"
-            style={{
-              backgroundColor: `${accentColor.value}30`,
-              borderWidth: "2px",
-              borderStyle: "solid",
-              borderColor: `${accentColor.value}60`,
-            }}
-          >
-            <Icon icon="solar:widget-bold" className="w-7 h-7 text-white" />
-          </div>
-          <div>
-            <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
-              selected: minecraft {selectedVersion}
-            </div>
-            <div className="text-lg text-white/70 tracking-wide lowercase">
-              {selectedVersionType === "release"
-                ? "stable release"
-                : selectedVersionType === "snapshot"
-                  ? "experimental snapshot"
-                  : selectedVersionType === "old-beta"
-                    ? "legacy beta version"
-                    : "legacy alpha version"}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
+  );
+}
+
+interface VersionButtonProps {
+  version: string;
+  isSelected: boolean;
+  onClick: () => void;
+}
+
+function VersionButton({ version, isSelected, onClick }: VersionButtonProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (buttonRef.current && isSelected) {
+      gsap.fromTo(
+        buttonRef.current,
+        { scale: 0.95 },
+        {
+          scale: 1,
+          duration: 0.3,
+          ease: "elastic.out(1.2, 0.4)",
+        },
+      );
+    }
+  }, [isSelected]);
+
+  return (
+    <button
+      ref={buttonRef}
+      className={cn(
+        "py-3 px-4 font-minecraft text-xl text-center lowercase tracking-wide rounded-md transition-all duration-200",
+        isSelected
+          ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+          : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white hover:border-white/30",
+      )}
+      onClick={onClick}
+      style={{
+        borderBottomWidth: "4px",
+        borderBottomColor: isSelected ? accentColor.value : "transparent",
+      }}
+    >
+      {version}
+    </button>
   );
 }

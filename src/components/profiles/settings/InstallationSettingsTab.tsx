@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import type { MinecraftVersion } from "../../../types/minecraft";
@@ -10,6 +10,9 @@ import { useThemeStore } from "../../../store/useThemeStore";
 import { SearchInput } from "../../ui/SearchInput";
 import { Label } from "../../ui/Label";
 import { Select } from "../../ui/Select";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
+import { cn } from "../../../lib/utils";
 
 interface InstallationSettingsTabProps {
   profile: Profile;
@@ -20,6 +23,7 @@ interface InstallationSettingsTabProps {
 type VersionType = "release" | "snapshot" | "old-beta" | "old-alpha";
 
 export function InstallationSettingsTab({
+  profile,
   editedProfile,
   updateProfile,
 }: InstallationSettingsTabProps) {
@@ -35,6 +39,76 @@ export function InstallationSettingsTab({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const accentColor = useThemeStore((state) => state.accentColor);
+  const tabRef = useRef<HTMLDivElement>(null);
+  const currentInstallRef = useRef<HTMLDivElement>(null);
+  const versionTypesRef = useRef<HTMLDivElement>(null);
+  const versionsRef = useRef<HTMLDivElement>(null);
+  const platformsRef = useRef<HTMLDivElement>(null);
+  const loaderVersionRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [previousLoader, setPreviousLoader] = useState<string>(
+    editedProfile.loader || "vanilla",
+  );
+
+  useEffect(() => {
+    const findScrollContainer = () => {
+      let element: HTMLDivElement | null = tabRef.current;
+      while (element) {
+        const overflowY = window.getComputedStyle(element).overflowY;
+        if (overflowY === "auto" || overflowY === "scroll") {
+          return element;
+        }
+        element = element.parentElement as HTMLDivElement | null;
+      }
+      return null;
+    };
+
+    if (tabRef.current) {
+      scrollContainerRef.current = findScrollContainer();
+    }
+  }, []);
+
+  useEffect(() => {
+    const currentLoader = editedProfile.loader || "vanilla";
+
+    if (previousLoader !== currentLoader) {
+      if (currentLoader !== "vanilla" && loaderVersionRef.current) {
+        scrollToLoaderVersion();
+      }
+
+      setPreviousLoader(currentLoader);
+    }
+  }, [editedProfile.loader]);
+
+  useEffect(() => {
+    if (tabRef.current) {
+      gsap.fromTo(
+        tabRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.4, ease: "power2.out" },
+      );
+    }
+
+    const elements = [
+      currentInstallRef.current,
+      versionTypesRef.current,
+      versionsRef.current,
+      platformsRef.current,
+    ].filter(Boolean);
+
+    gsap.fromTo(
+      elements,
+      { opacity: 0, y: 20 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.4,
+        stagger: 0.1,
+        ease: "power2.out",
+        delay: 0.2,
+      },
+    );
+  }, []);
 
   useEffect(() => {
     async function fetchMinecraftVersions() {
@@ -170,23 +244,74 @@ export function InstallationSettingsTab({
     return v1.patch >= v2.patch;
   }
 
+  const handleVersionTypeClick = (type: VersionType) => {
+    if (selectedVersionType !== type) {
+      setSelectedVersionType(type);
+
+      if (versionsRef.current) {
+        gsap.fromTo(
+          versionsRef.current,
+          { opacity: 0.5, y: 10 },
+          { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
+        );
+      }
+    }
+  };
+
+  const scrollToPlatforms = () => {
+    if (platformsRef.current && scrollContainerRef.current) {
+      const platformsRect = platformsRef.current.getBoundingClientRect();
+      const containerRect = scrollContainerRef.current.getBoundingClientRect();
+
+      const scrollTarget =
+        platformsRef.current.offsetTop -
+        containerRect.height / 2 +
+        platformsRect.height / 2;
+
+      gsap.to(scrollContainerRef.current, {
+        scrollTop: scrollTarget,
+        duration: 0.5,
+        ease: "power2.inOut",
+        delay: 0.1,
+      });
+    }
+  };
+
+  const scrollToLoaderVersion = () => {
+    if (loaderVersionRef.current && scrollContainerRef.current) {
+      setTimeout(() => {
+        const loaderVersionTop =
+          loaderVersionRef.current.getBoundingClientRect().top;
+        const containerTop =
+          scrollContainerRef.current.getBoundingClientRect().top;
+
+        const relativePosition = loaderVersionTop - containerTop;
+
+        const currentScroll = scrollContainerRef.current.scrollTop;
+
+        const newScrollPosition = currentScroll + relativePosition - 50;
+
+        gsap.to(scrollContainerRef.current, {
+          scrollTop: newScrollPosition,
+          duration: 0.5,
+          ease: "power2.inOut",
+        });
+      }, 100);
+    }
+  };
+
   return (
-    <div className="space-y-6 select-none">
+    <div ref={tabRef} className="space-y-6 select-none">
       {error && <StatusMessage type="error" message={error} />}
 
-      <div className="space-y-4">
+      <div ref={currentInstallRef} className="space-y-4">
         <div>
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             currently installed
           </h3>
-          <div
-            className="p-4 rounded-lg border-2 border-b-4 flex items-center justify-between"
-            style={{
-              backgroundColor: `${accentColor.value}10`,
-              borderColor: `${accentColor.value}60`,
-              borderBottomColor: accentColor.value,
-              boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-            }}
+          <Card
+            variant="default"
+            className="p-4 flex items-center justify-between"
           >
             <div className="flex items-center gap-4">
               <div
@@ -211,11 +336,11 @@ export function InstallationSettingsTab({
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div ref={versionTypesRef} className="space-y-4">
         <div>
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             version type
@@ -227,7 +352,7 @@ export function InstallationSettingsTab({
                 variant={selectedVersionType === type ? "default" : "ghost"}
                 size="md"
                 className="cursor-pointer mr-2 mb-2 text-xl"
-                onClick={() => setSelectedVersionType(type as VersionType)}
+                onClick={() => handleVersionTypeClick(type as VersionType)}
               >
                 {type}
               </Label>
@@ -235,7 +360,7 @@ export function InstallationSettingsTab({
           </div>
         </div>
 
-        <div>
+        <div ref={versionsRef}>
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             game version
           </h3>
@@ -250,14 +375,7 @@ export function InstallationSettingsTab({
 
           <div className="flex-1 relative">
             {isLoadingVersions ? (
-              <div
-                className="p-4 text-white/70 text-center rounded-lg border-2 border-b-4"
-                style={{
-                  backgroundColor: `${accentColor.value}10`,
-                  borderColor: `${accentColor.value}60`,
-                  borderBottomColor: accentColor.value,
-                }}
-              >
+              <Card variant="default" className="p-4 text-white/70 text-center">
                 <div className="flex items-center justify-center">
                   <Icon
                     icon="solar:refresh-bold"
@@ -267,15 +385,11 @@ export function InstallationSettingsTab({
                     loading versions...
                   </span>
                 </div>
-              </div>
+              </Card>
             ) : (
-              <div
-                className="max-h-48 overflow-y-auto custom-scrollbar rounded-lg border-2 border-b-4"
-                style={{
-                  backgroundColor: `${accentColor.value}10`,
-                  borderColor: `${accentColor.value}60`,
-                  borderBottomColor: accentColor.value,
-                }}
+              <Card
+                variant="default"
+                className="max-h-48 overflow-y-auto custom-scrollbar"
               >
                 {filteredVersions.length === 0 ? (
                   <div className="p-4 text-2xl text-white/70 text-center select-none">
@@ -309,6 +423,21 @@ export function InstallationSettingsTab({
                               ? editedProfile.loader_version
                               : null,
                           });
+
+                          if (platformsRef.current) {
+                            gsap.fromTo(
+                              platformsRef.current,
+                              { opacity: 0.5, y: 10 },
+                              {
+                                opacity: 1,
+                                y: 0,
+                                duration: 0.3,
+                                ease: "power2.out",
+                              },
+                            );
+                          }
+
+                          scrollToPlatforms();
                         }}
                       >
                         {version}
@@ -316,13 +445,13 @@ export function InstallationSettingsTab({
                     ))}
                   </div>
                 )}
-              </div>
+              </Card>
             )}
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
+      <div ref={platformsRef} className="space-y-4">
         <div>
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             platform
@@ -339,28 +468,51 @@ export function InstallationSettingsTab({
                 loader.name,
                 editedProfile.game_version,
               );
+              const isSelected = editedProfile.loader === loader.name;
+
               return (
                 <button
                   key={loader.name}
-                  className={`p-3 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200 ${
-                    editedProfile.loader === loader.name
+                  className={cn(
+                    "p-3 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200",
+                    `platform-${loader.name}`,
+                    isSelected
                       ? "bg-white/20 text-white border-white/50"
                       : isCompatible
                         ? "bg-black/20 text-white/70 border-white/20 hover:bg-black/30 hover:text-white"
-                        : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed"
-                  }`}
+                        : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed",
+                  )}
                   style={{
-                    borderBottomColor:
-                      editedProfile.loader === loader.name
-                        ? accentColor.value
-                        : "transparent",
+                    borderBottomColor: isSelected
+                      ? accentColor.value
+                      : "transparent",
                   }}
                   onClick={() => {
-                    if (isCompatible) {
+                    if (isCompatible && !isSelected) {
+                      gsap.fromTo(
+                        `.platform-${loader.name}`,
+                        { scale: 0.95 },
+                        {
+                          scale: 1,
+                          duration: 0.3,
+                          ease: "elastic.out(1.2, 0.4)",
+                        },
+                      );
+
+                      const wasVanilla = editedProfile.loader === "vanilla";
+                      const willBeVanilla = loader.name === "vanilla";
+
                       updateProfile({
                         loader: loader.name as Profile["loader"],
                         loader_version: null,
                       });
+                      if (
+                        !wasVanilla &&
+                        !willBeVanilla &&
+                        loaderVersionRef.current
+                      ) {
+                        scrollToLoaderVersion();
+                      }
                     }
                   }}
                   disabled={!isCompatible}
@@ -386,17 +538,10 @@ export function InstallationSettingsTab({
         </div>
 
         {editedProfile.loader !== "vanilla" && (
-          <div>
+          <div ref={loaderVersionRef}>
             <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">{`${editedProfile.loader} version`}</h3>
             {isLoadingLoaderVersions ? (
-              <div
-                className="p-4 text-white/70 text-center rounded-lg border-2 border-b-4"
-                style={{
-                  backgroundColor: `${accentColor.value}10`,
-                  borderColor: `${accentColor.value}60`,
-                  borderBottomColor: accentColor.value,
-                }}
-              >
+              <Card variant="default" className="p-4 text-white/70 text-center">
                 <div className="flex items-center justify-center">
                   <Icon
                     icon="solar:refresh-bold"
@@ -406,7 +551,7 @@ export function InstallationSettingsTab({
                     loading {editedProfile.loader} versions...
                   </span>
                 </div>
-              </div>
+              </Card>
             ) : loaderVersions.length > 0 ? (
               <Select
                 value={editedProfile.loader_version || ""}
@@ -421,17 +566,13 @@ export function InstallationSettingsTab({
                 className="text-2xl py-3"
               />
             ) : (
-              <div
-                className="p-4 text-2xl text-white/70 text-center rounded-lg border-2 border-b-4 select-none"
-                style={{
-                  backgroundColor: `${accentColor.value}10`,
-                  borderColor: `${accentColor.value}60`,
-                  borderBottomColor: accentColor.value,
-                }}
+              <Card
+                variant="default"
+                className="p-4 text-2xl text-white/70 text-center select-none"
               >
                 no {editedProfile.loader} versions available for minecraft{" "}
                 {editedProfile.game_version}
-              </div>
+              </Card>
             )}
           </div>
         )}

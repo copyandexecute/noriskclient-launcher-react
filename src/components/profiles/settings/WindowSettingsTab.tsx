@@ -1,10 +1,13 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Profile } from "../../../types/profile";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { Checkbox } from "../../ui/Checkbox";
 import { Label } from "../../ui/Label";
 import { Input } from "../../ui/Input";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface WindowSettingsTabProps {
   editedProfile: Profile;
@@ -16,6 +19,33 @@ export function WindowSettingsTab({
   updateProfile,
 }: WindowSettingsTabProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const tabRef = useRef<HTMLDivElement>(null);
+  const resolutionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tabRef.current) {
+      gsap.fromTo(
+        tabRef.current,
+        { opacity: 0 },
+        { opacity: 1, duration: 0.4, ease: "power2.out" },
+      );
+    }
+
+    if (resolutionRef.current) {
+      gsap.fromTo(
+        resolutionRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+          delay: 0.2,
+        },
+      );
+    }
+  }, []);
+
   const resolutionPresets = [
     { width: 1280, height: 720, label: "720p" },
     { width: 1920, height: 1080, label: "1080p" },
@@ -40,8 +70,22 @@ export function WindowSettingsTab({
     updateProfile({ settings: newSettings });
   };
 
+  const handlePresetClick = (preset: { width: number; height: number }) => {
+    gsap.fromTo(
+      `.preset-${preset.width}x${preset.height}`,
+      { scale: 0.95 },
+      {
+        scale: 1,
+        duration: 0.3,
+        ease: "elastic.out(1.2, 0.4)",
+      },
+    );
+
+    handleResolutionChange(preset.width, preset.height);
+  };
+
   return (
-    <div className="space-y-6 select-none">
+    <div ref={tabRef} className="space-y-6 select-none">
       <div>
         <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
           window settings
@@ -51,20 +95,12 @@ export function WindowSettingsTab({
         </p>
       </div>
 
-      <div className="space-y-4">
+      <div ref={resolutionRef} className="space-y-4">
         <div>
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             resolution
           </h3>
-          <div
-            className="p-4 rounded-lg border-2 border-b-4"
-            style={{
-              backgroundColor: `${accentColor.value}10`,
-              borderColor: `${accentColor.value}60`,
-              borderBottomColor: accentColor.value,
-              boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-            }}
-          >
+          <Card variant="default" className="p-4">
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xl text-white/70 font-minecraft mb-2 lowercase tracking-wide select-none">
@@ -118,10 +154,8 @@ export function WindowSettingsTab({
                       : "ghost"
                   }
                   size="md"
-                  className="cursor-pointer text-xl"
-                  onClick={() =>
-                    handleResolutionChange(preset.width, preset.height)
-                  }
+                  className={`cursor-pointer text-xl preset-${preset.width}x${preset.height}`}
+                  onClick={() => handlePresetClick(preset)}
                 >
                   {preset.label}
                 </Label>
@@ -134,7 +168,7 @@ export function WindowSettingsTab({
               label="fullscreen"
               className="text-2xl"
             />
-          </div>
+          </Card>
         </div>
       </div>
     </div>

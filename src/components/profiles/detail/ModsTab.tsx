@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModRow } from "./ModRow";
 import type { Mod, Profile } from "../../../types/profile";
 import * as ProfileService from "../../../services/profile-service";
@@ -17,12 +17,15 @@ import type {
 import { useThemeStore } from "../../../store/useThemeStore";
 import { ContentTable } from "../../ui/ContentTable";
 import { Button } from "../../ui/buttons/Button";
-import { ErrorMessage } from "../../ui/ErrorMessage.tsx";
+import { ErrorMessage } from "../../ui/ErrorMessage";
+import { gsap } from "gsap";
 
 interface ModsTabProps {
   profile: Profile;
   onRefresh?: () => void;
   isActive?: boolean;
+  searchQuery?: string;
+  onBrowse?: (contentType: string) => void;
 }
 
 interface ModSourceModrinth {
@@ -33,11 +36,16 @@ interface ModSourceModrinth {
   file_hash_sha1?: string;
 }
 
-export function ModsTab({ profile, onRefresh }: ModsTabProps) {
+export function ModsTab({
+  profile,
+  onRefresh,
+  isActive = false,
+  searchQuery = "",
+}: ModsTabProps) {
   const [mods, setMods] = useState<Mod[]>(profile.mods || []);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "enabled" | "version">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +57,30 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updatingMods, setUpdatingMods] = useState<Set<string>>(new Set());
   const accentColor = useThemeStore((state) => state.accentColor);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use parent's search query if provided
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (containerRef.current && isActive) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isActive]);
 
   const handleUpdateMod = async (mod: Mod, updateVersion: ModrinthVersion) => {
     if (
@@ -108,6 +140,29 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
         newSet.delete(mod.id);
         return newSet;
       });
+    }
+  };
+
+  const handleUpdateAllMods = async () => {
+    const modsToUpdate = mods.filter((mod) => {
+      if (
+        mod.source?.type !== "modrinth" ||
+        !(mod.source as ModSourceModrinth).file_hash_sha1
+      ) {
+        return false;
+      }
+      const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+      return hash in modUpdates;
+    });
+
+    if (modsToUpdate.length === 0) return;
+
+    for (const mod of modsToUpdate) {
+      const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+      const updateVersion = modUpdates[hash];
+      if (updateVersion) {
+        await handleUpdateMod(mod, updateVersion);
+      }
     }
   };
 
@@ -308,18 +363,6 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     }
   };
 
-  const handleImportLocalMods = async () => {
-    try {
-      await ProfileService.importLocalMods(profile.id);
-      fetchMods();
-    } catch (error) {
-      console.error("Failed to import local mods:", error);
-      setError(
-        `Failed to import local mods: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  };
-
   const handleSort = (criteria: string) => {
     if (sortBy === criteria) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -341,10 +384,14 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     return hash in modUpdates ? modUpdates[hash] : null;
   };
 
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+
   const filteredMods = mods.filter((mod) => {
     const matchesSearch =
-      mod.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mod.id.toLowerCase().includes(searchQuery.toLowerCase());
+      mod.display_name
+        ?.toLowerCase()
+        .includes(effectiveSearchQuery.toLowerCase()) ||
+      mod.id.toLowerCase().includes(effectiveSearchQuery.toLowerCase());
 
     return matchesSearch;
   });
@@ -375,38 +422,32 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
   ).length;
 
   return (
-    <div className="h-full flex flex-col select-none gap-6">
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      {/* Action bar with transparent styling */}
       <div
-        className="rounded-lg border-2 border-b-4 p-4"
+        className="flex items-center justify-between mb-4 p-3 rounded-lg border backdrop-blur-sm"
         style={{
           backgroundColor: `${accentColor.value}10`,
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 12px 20px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30`,
+          borderColor: `${accentColor.value}30`,
         }}
       >
-        <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+        {/* Only show search if parent isn't providing it */}
+        {!searchQuery && (
           <div className="w-full md:w-1/3">
             <SearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
+              value={localSearchQuery}
+              onChange={setLocalSearchQuery}
               placeholder="search mods..."
             />
           </div>
+        )}
 
-          <div className="flex items-center gap-4 justify-between md:justify-between w-full md:w-auto">
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            {/* Update All button */}
+            {modsWithUpdates > 0 && (
               <Button
-                variant="secondary"
-                size="sm"
-                icon={<Icon icon="solar:upload-bold" />}
-                onClick={handleImportLocalMods}
-              >
-                import
-              </Button>
-
-              <Button
-                variant="secondary"
+                variant="success"
                 size="sm"
                 icon={
                   checkingUpdates ? (
@@ -415,39 +456,50 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
                     <Icon icon="solar:arrow-up-bold" />
                   )
                 }
-                onClick={handleCheckUpdates}
+                onClick={handleUpdateAllMods}
                 disabled={checkingUpdates}
               >
-                check updates
-                {modsWithUpdates > 0 && (
-                  <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm font-sans ml-1">
-                    {modsWithUpdates}
-                  </span>
-                )}
+                update all ({modsWithUpdates})
               </Button>
+            )}
 
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={
+                checkingUpdates ? (
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:arrow-up-bold" />
+                )
+              }
+              onClick={handleCheckUpdates}
+              disabled={checkingUpdates}
+            >
+              check updates
+            </Button>
+
+            {/* Delete button only shown when mods are selected */}
+            {selectedMods.size > 0 && (
               <Button
                 variant="destructive"
                 size="sm"
                 icon={<Icon icon="solar:trash-bin-trash-bold" />}
                 onClick={handleDeleteSelected}
-                disabled={selectedMods.size === 0}
               >
-                delete {selectedMods.size > 0 && `(${selectedMods.size})`}
+                delete ({selectedMods.size})
               </Button>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
       {updateError && (
         <div
-          className="rounded-lg border-2 border-b-4 p-3 flex items-center gap-2"
+          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
           style={{
             backgroundColor: `rgba(220, 38, 38, 0.1)`,
             borderColor: `rgba(220, 38, 38, 0.3)`,
-            borderBottomColor: `rgba(220, 38, 38, 0.5)`,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), inset 0 1px 0 rgba(220, 38, 38, 0.1)`,
           }}
         >
           <Icon
@@ -460,7 +512,13 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
         </div>
       )}
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
+      >
         {isLoading ? (
           <LoadingState message="loading mods..." />
         ) : error ? (
@@ -505,7 +563,7 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
             enabledCount={filteredMods.filter((m) => m.enabled).length}
             onSelectAll={handleSelectAll}
             contentType="mod"
-            searchQuery={searchQuery}
+            searchQuery={effectiveSearchQuery}
           >
             {sortedMods.length > 0 ? (
               sortedMods.map((mod) => (
@@ -525,10 +583,11 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
               <EmptyState
                 icon="solar:widget-bold"
                 message={
-                  searchQuery
+                  effectiveSearchQuery
                     ? "no mods match your search"
                     : "no mods installed"
                 }
+                description="Drag and drop mod files here to install"
               />
             )}
           </ContentTable>

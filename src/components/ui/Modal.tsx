@@ -1,12 +1,12 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
-import { IconButton } from "./buttons/IconButton";
+import { IconButton } from "./buttons/IconButton.tsx";
 
 interface ModalProps {
   title: string;
@@ -33,13 +33,18 @@ export function Modal({
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
     const backdrop = modalRef.current;
     const content = contentRef.current;
+    const header = headerRef.current;
+    const closeButton = closeButtonRef.current;
 
-    if (backdrop && content) {
+    if (backdrop && content && header) {
       gsap.fromTo(
         backdrop,
         { opacity: 0 },
@@ -52,18 +57,45 @@ export function Modal({
 
       gsap.fromTo(
         content,
-        { y: -50, opacity: 0 },
+        { y: -50, opacity: 0, scale: 0.95 },
         {
           y: 0,
           opacity: 1,
+          scale: 1,
           duration: 0.4,
           ease: "back.out(1.2)",
         },
       );
+
+      gsap.fromTo(
+        header,
+        { opacity: 0, y: -20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.5,
+          delay: 0.1,
+          ease: "power2.out",
+        },
+      );
+
+      if (closeButton) {
+        gsap.fromTo(
+          closeButton,
+          { opacity: 0, rotate: -90 },
+          {
+            opacity: 1,
+            rotate: 0,
+            duration: 0.4,
+            delay: 0.2,
+            ease: "back.out(1.7)",
+          },
+        );
+      }
     }
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isClosing) {
         handleClose();
       }
     };
@@ -75,6 +107,9 @@ export function Modal({
   }, []);
 
   const handleClose = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+
     const backdrop = modalRef.current;
     const content = contentRef.current;
 
@@ -88,6 +123,7 @@ export function Modal({
       gsap.to(content, {
         y: -30,
         opacity: 0,
+        scale: 0.95,
         duration: 0.3,
         ease: "back.in(1.2)",
         onComplete: onClose,
@@ -98,7 +134,7 @@ export function Modal({
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (closeOnClickOutside && e.target === modalRef.current) {
+    if (closeOnClickOutside && e.target === modalRef.current && !isClosing) {
       e.stopPropagation();
       handleClose();
     }
@@ -143,6 +179,7 @@ export function Modal({
         />
 
         <div
+          ref={headerRef}
           className="flex items-center justify-between px-6 py-4 border-b-2"
           style={{
             borderColor: `${accentColor.value}60`,
@@ -165,6 +202,7 @@ export function Modal({
           <div className="flex items-center space-x-2">
             {headerActions}
             <IconButton
+              ref={closeButtonRef as any}
               icon={
                 <Icon
                   icon="solar:close-square-bold"

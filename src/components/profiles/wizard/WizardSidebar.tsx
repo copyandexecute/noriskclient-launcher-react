@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { Icon } from "@iconify/react";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface WizardSidebarProps {
   currentStep: number;
@@ -21,9 +24,57 @@ export function WizardSidebar({
   isStepValid,
 }: WizardSidebarProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const stepsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (sidebarRef.current) {
+      gsap.fromTo(
+        sidebarRef.current,
+        { opacity: 0, x: -20 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (headerRef.current) {
+      gsap.fromTo(
+        headerRef.current,
+        { opacity: 0, y: -10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          delay: 0.1,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (stepsRef.current) {
+      gsap.fromTo(
+        stepsRef.current.children,
+        { opacity: 0, x: -10 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.3,
+          stagger: 0.1,
+          delay: 0.2,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
 
   return (
     <div
+      ref={sidebarRef}
       className="w-64 border-r-2 overflow-y-auto custom-scrollbar"
       style={{
         borderColor: `${accentColor.value}40`,
@@ -32,25 +83,19 @@ export function WizardSidebar({
       }}
     >
       <div className="p-4">
-        <div
-          className="text-xl font-minecraft text-white mb-6 lowercase p-3 rounded-md border-2 border-b-4"
-          style={{
-            backgroundColor: `${accentColor.value}30`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
-        >
+        <Card ref={headerRef} variant="default" className="mb-6 p-3">
           <div className="flex items-center gap-2">
             <Icon
               icon="solar:magic-stick-bold"
               className="w-5 h-5 text-white"
             />
-            <span>profile creation</span>
+            <span className="text-xl font-minecraft text-white lowercase">
+              profile creation
+            </span>
           </div>
-        </div>
+        </Card>
 
-        <div className="space-y-3">
+        <div ref={stepsRef} className="space-y-3">
           {Array.from({ length: totalSteps }).map((_, index) => {
             const stepNumber = index + 1;
             const isActive = currentStep === stepNumber;

@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
 
 interface WizardSummaryProps {
   profile: Partial<Profile>;
@@ -11,6 +14,29 @@ interface WizardSummaryProps {
 
 export function WizardSummary({ profile, error }: WizardSummaryProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const profileCardRef = useRef<HTMLDivElement>(null);
+  const detailsGridRef = useRef<HTMLDivElement>(null);
+  const infoCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const elements = [
+      profileCardRef.current,
+      detailsGridRef.current,
+      infoCardRef.current,
+    ].filter(Boolean);
+
+    gsap.fromTo(
+      elements,
+      { opacity: 0, y: 20 },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.4,
+        stagger: 0.1,
+        ease: "power2.out",
+      },
+    );
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -24,20 +50,15 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg border-2 border-red-500 bg-red-500/20 text-red-400 font-minecraft text-xl">
-          {error}
-        </div>
+        <Card
+          variant="flat"
+          className="p-4 border-2 border-red-500 bg-red-500/20"
+        >
+          <p className="text-red-400 font-minecraft text-xl">{error}</p>
+        </Card>
       )}
 
-      <div
-        className="p-6 rounded-lg border-2 border-b-4 space-y-6"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
-      >
+      <Card ref={profileCardRef} variant="default" className="p-6 space-y-6">
         <div className="flex items-center gap-4">
           <div
             className="w-16 h-16 flex items-center justify-center rounded-md"
@@ -68,18 +89,13 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div
-          className="p-6 rounded-lg border-2 border-b-4"
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
-        >
+      <div
+        ref={detailsGridRef}
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+      >
+        <Card variant="default" className="p-6">
           <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
             minecraft version
           </h3>
@@ -99,17 +115,9 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
               minecraft {profile.game_version}
             </div>
           </div>
-        </div>
+        </Card>
 
-        <div
-          className="p-6 rounded-lg border-2 border-b-4"
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
-        >
+        <Card variant="default" className="p-6">
           <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
             mod loader
           </h3>
@@ -138,17 +146,9 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
                 : `${profile.loader} ${profile.loader_version || ""}`}
             </div>
           </div>
-        </div>
+        </Card>
 
-        <div
-          className="p-6 rounded-lg border-2 border-b-4"
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
-        >
+        <Card variant="default" className="p-6">
           <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
             memory allocation
           </h3>
@@ -172,18 +172,10 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
               {(profile.settings?.memory?.max || 0) / 1024} GB)
             </div>
           </div>
-        </div>
+        </Card>
 
         {profile.selected_norisk_pack_id && (
-          <div
-            className="p-6 rounded-lg border-2 border-b-4"
-            style={{
-              backgroundColor: `${accentColor.value}15`,
-              borderColor: `${accentColor.value}60`,
-              borderBottomColor: accentColor.value,
-              boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-            }}
-          >
+          <Card variant="default" className="p-6">
             <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
               norisk client pack
             </h3>
@@ -203,18 +195,14 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
                 {profile.selected_norisk_pack_id}
               </div>
             </div>
-          </div>
+          </Card>
         )}
       </div>
 
-      <div
-        className="p-6 rounded-lg border-2 border-b-4 flex items-center gap-4"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        }}
+      <Card
+        ref={infoCardRef}
+        variant="default"
+        className="p-6 flex items-center gap-4"
       >
         <div
           className="w-12 h-12 flex items-center justify-center rounded-full"
@@ -231,7 +219,7 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
           Click "Create Profile" to finish and create your new Minecraft
           profile.
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

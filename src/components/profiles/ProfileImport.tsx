@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/buttons/Button";
 import { StatusMessage } from "../ui/StatusMessage";
 import { useThemeStore } from "../../store/useThemeStore";
+import { Card } from "../ui/Card";
+import { gsap } from "gsap";
 
 interface ProfileImportProps {
   onClose: () => void;
@@ -21,6 +23,39 @@ export function ProfileImport({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const formatItemsRef = useRef<HTMLUListElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+
+    if (formatItemsRef.current) {
+      const items = formatItemsRef.current.children;
+      gsap.fromTo(
+        items,
+        { opacity: 0, x: -20 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.3,
+          stagger: 0.1,
+          ease: "power2.out",
+          delay: 0.2,
+        },
+      );
+    }
+  }, []);
 
   const handleImport = async () => {
     try {
@@ -77,7 +112,7 @@ export function ProfileImport({
       width="lg"
       footer={renderFooter()}
     >
-      <div className="p-6">
+      <div className="p-6" ref={contentRef}>
         {error && <StatusMessage type="error" message={error} />}
         {success && <StatusMessage type="success" message={success} />}
 
@@ -92,19 +127,14 @@ export function ProfileImport({
             </p>
           </div>
 
-          <div
-            className="backdrop-blur-md border-2 border-b-4 p-5 rounded-md"
-            style={{
-              backgroundColor: `${accentColor.value}15`,
-              borderColor: `${accentColor.value}60`,
-              borderBottomColor: accentColor.value,
-              boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-            }}
-          >
+          <Card className="p-5">
             <h3 className="text-2xl text-white font-minecraft mb-4 select-none lowercase">
               supported formats:
             </h3>
-            <ul className="text-xl text-white/80 space-y-4 select-none font-minecraft">
+            <ul
+              className="text-xl text-white/80 space-y-4 select-none font-minecraft"
+              ref={formatItemsRef}
+            >
               <li className="flex items-center">
                 <div
                   className="w-10 h-10 rounded-md flex items-center justify-center mr-4"
@@ -140,7 +170,7 @@ export function ProfileImport({
                 <span>.noriskpack (NoRisk Launcher)</span>
               </li>
             </ul>
-          </div>
+          </Card>
         </div>
       </div>
     </Modal>

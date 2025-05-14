@@ -15,6 +15,9 @@ interface RangeSliderProps {
   minLabel?: string;
   maxLabel?: string;
   disabled?: boolean;
+  showValue?: boolean;
+  size?: "sm" | "md" | "lg";
+  className?: string;
 }
 
 export function RangeSlider({
@@ -27,6 +30,9 @@ export function RangeSlider({
   minLabel,
   maxLabel,
   disabled = false,
+  showValue = true,
+  size = "md",
+  className,
 }: RangeSliderProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const [isHovered, setIsHovered] = useState(false);
@@ -35,6 +41,25 @@ export function RangeSlider({
   const trackRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
+  const valueDisplayRef = useRef<HTMLDivElement>(null);
+
+  const sizeConfig = {
+    sm: {
+      track: "h-4",
+      thumb: "h-6 w-6",
+      text: "text-sm",
+    },
+    md: {
+      track: "h-6",
+      thumb: "h-8 w-8",
+      text: "text-base",
+    },
+    lg: {
+      track: "h-8",
+      thumb: "h-10 w-10",
+      text: "text-lg",
+    },
+  };
 
   useEffect(() => {
     if (sliderRef.current) {
@@ -51,17 +76,28 @@ export function RangeSlider({
     }
   }, []);
 
-  // Calculate percentage directly from value
   const percentage = ((value - min) / (max - min)) * 100;
 
-  // Update both progress bar and thumb position simultaneously
   useEffect(() => {
     if (progressRef.current && thumbRef.current) {
-      // Update without animation to prevent delay
       progressRef.current.style.width = `${percentage}%`;
-      thumbRef.current.style.left = `calc(${percentage}% - 16px)`;
+
+      const thumbSize = size === "sm" ? 6 : size === "lg" ? 10 : 8;
+      const thumbOffset = thumbSize / 2;
+
+      thumbRef.current.style.left = `calc(${percentage}% - ${thumbOffset}px)`;
+
+      if (valueDisplayRef.current) {
+        gsap.to(valueDisplayRef.current, {
+          scale: 1.1,
+          duration: 0.1,
+          yoyo: true,
+          repeat: 1,
+          ease: "power2.inOut",
+        });
+      }
     }
-  }, [percentage]);
+  }, [percentage, size]);
 
   const handleMouseEnter = () => {
     if (disabled) return;
@@ -71,6 +107,14 @@ export function RangeSlider({
       gsap.to(thumbRef.current, {
         scale: 1.1,
         boxShadow: "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)",
+        duration: 0.2,
+        ease: "power2.out",
+      });
+    }
+
+    if (trackRef.current) {
+      gsap.to(trackRef.current, {
+        boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -85,6 +129,14 @@ export function RangeSlider({
       gsap.to(thumbRef.current, {
         scale: 1,
         boxShadow: "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)",
+        duration: 0.2,
+        ease: "power2.out",
+      });
+    }
+
+    if (trackRef.current) {
+      gsap.to(trackRef.current, {
+        boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -133,50 +185,80 @@ export function RangeSlider({
   return (
     <div
       ref={sliderRef}
-      className={cn("relative", disabled && "opacity-50 cursor-not-allowed")}
+      className={cn(
+        "relative",
+        disabled && "opacity-50 cursor-not-allowed",
+        className,
+      )}
     >
       {valueLabel && (
         <div className="text-center mb-3">
-          <span className="text-xl text-white font-minecraft lowercase tracking-wide">
+          <span
+            className={cn(
+              "text-white font-minecraft lowercase tracking-wide",
+              sizeConfig[size].text,
+            )}
+          >
             {valueLabel}
           </span>
         </div>
       )}
 
       <div className="mb-4">
-        <div className="flex justify-between mb-2">
-          {minLabel && (
-            <span className="text-lg text-white/70 font-minecraft lowercase">
-              {minLabel}
+        {showValue && (
+          <div className="flex justify-between mb-2">
+            {minLabel && (
+              <span
+                className={cn(
+                  "text-white/70 font-minecraft lowercase",
+                  sizeConfig[size].text,
+                )}
+              >
+                {minLabel}
+              </span>
+            )}
+            <span
+              ref={valueDisplayRef}
+              className={cn(
+                "text-white font-minecraft lowercase",
+                sizeConfig[size].text,
+              )}
+            >
+              {value}
             </span>
-          )}
-          <span className="text-xl text-white font-minecraft lowercase">
-            {value}
-          </span>
-          {maxLabel && (
-            <span className="text-lg text-white/70 font-minecraft lowercase">
-              {maxLabel}
-            </span>
-          )}
-        </div>
+            {maxLabel && (
+              <span
+                className={cn(
+                  "text-white/70 font-minecraft lowercase",
+                  sizeConfig[size].text,
+                )}
+              >
+                {maxLabel}
+              </span>
+            )}
+          </div>
+        )}
 
         <div
           className={cn(
-            "relative h-6 rounded-md overflow-hidden backdrop-blur-md transition-colors duration-200",
+            "relative rounded-md overflow-hidden backdrop-blur-md transition-colors duration-200",
             "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
             "focus-within:ring-2 focus-within:ring-white/30 focus-within:ring-offset-1 focus-within:ring-offset-black/20",
+            sizeConfig[size].track,
           )}
           style={{
             backgroundColor: `${accentColor.value}15`,
             borderColor: `${accentColor.value}40`,
             borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            boxShadow: isHovered
+              ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`
+              : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           }}
           ref={trackRef}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <div
+          <span
             className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
             style={{
               backgroundColor: `${accentColor.value}80`,
@@ -196,21 +278,20 @@ export function RangeSlider({
           <div
             ref={thumbRef}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 h-8 w-8 rounded-full",
+              "absolute top-1/2 -translate-y-1/2 rounded-full",
               "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
               "flex items-center justify-center",
+              sizeConfig[size].thumb,
             )}
             style={{
-              left: `calc(${percentage}% - 16px)`,
               backgroundColor: `${accentColor.value}50`,
               borderColor: `${accentColor.value}80`,
               borderBottomColor: accentColor.value,
               boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
-              transform: `translateY(-50%) scale(${isDragging ? 0.95 : isHovered ? 1.1 : 1})`,
             }}
           >
             <div
-              className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
+              className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300 rounded-full"
               style={{ opacity: isHovered ? 0.5 : 0 }}
             />
           </div>

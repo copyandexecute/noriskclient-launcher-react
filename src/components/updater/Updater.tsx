@@ -1,8 +1,25 @@
-import React, { useEffect, useRef, useState } from "react";
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Icon } from "@iconify/react";
+import { useThemeStore } from "../../store/useThemeStore";
+import {
+  BACKGROUND_EFFECTS,
+  useBackgroundEffectStore,
+} from "../../store/background-effect-store";
+import { cn } from "../../lib/utils";
+import { gsap } from "gsap";
+import { Button } from "../ui/buttons/Button";
+import AccentGrid from "../effects/AccentGrid";
+import AccentParticles from "../effects/AccentParticles";
+import AccentWaves from "../effects/AccentWaves";
+import AccentVoxels from "../effects/AccentVoxels";
+import AccentLightning from "../effects/AccentLightning";
+import AccentLiquidChrome from "../effects/AccentLiquidChrome";
+import MatrixRainEffect from "../effects/MatrixRainEffect";
 
-// Define the structure of the event payload
 interface UpdaterStatusPayload {
   message: string;
   status:
@@ -14,45 +31,51 @@ interface UpdaterStatusPayload {
     | "error"
     | "finished"
     | "close";
-  progress?: number; // Optional progress percentage (0-100)
-  total?: number; // Optional total size for download
-  chunk?: number; // Optional chunk size for download
+  progress?: number;
+  total?: number;
+  chunk?: number;
 }
 
-// Helper component to inject global styles, now including keyframes
-const GlobalStyles = () => (
-  <style>{`
-    /* Define the pulse animation */
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); } /* Slightly larger */
-      100% { transform: scale(1); }
-    }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background-color: rgba(30, 30, 30, 0.9);
-      height: 100%;
-      width: 100%;
-    }
-    #root {
-       height: 100%;
-       width: 100%;
-    }
-  `}</style>
-);
-
-const Updater: React.FC = () => {
+export default function Updater() {
   const [statusMessage, setStatusMessage] = useState<string>("Initializing...");
   const [progress, setProgress] = useState<number | null>(null);
-  const [isAnimating, setIsAnimating] = useState<boolean>(false); // State for animation
+  const [status, setStatus] =
+    useState<UpdaterStatusPayload["status"]>("checking");
+  const [isThemeLoaded, setIsThemeLoaded] = useState(false);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const appWindow = getCurrentWindow();
   const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const accentColor = useThemeStore((state) => state.accentColor);
+
+  const currentEffect = useBackgroundEffectStore(
+    (state) => state.currentEffect,
+  );
+
   useEffect(() => {
-    // Clear any existing timer when the component mounts or dependencies change
+    const checkThemeLoaded = () => {
+      if (accentColor && accentColor.value) {
+        setIsThemeLoaded(true);
+        return;
+      }
+      setTimeout(checkThemeLoaded, 50);
+    };
+    checkThemeLoaded();
+  }, [accentColor]);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20, scale: 0.95 },
+        { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: "back.out(1.2)" },
+      );
+    }
+  }, []);
+
+  useEffect(() => {
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
@@ -61,55 +84,55 @@ const Updater: React.FC = () => {
     const unlistenPromise = listen<UpdaterStatusPayload>(
       "updater_status",
       (event) => {
-        console.log("Updater Status Event:", event.payload);
-        const { message, status, progress: eventProgress } = event.payload;
+        const {
+          message,
+          status: newStatus,
+          progress: eventProgress,
+        } = event.payload;
 
-        // Always clear previous close timer when a new event arrives
         if (closeTimerRef.current) {
           clearTimeout(closeTimerRef.current);
           closeTimerRef.current = null;
         }
 
         setStatusMessage(message);
-        setProgress(null);
-        setIsAnimating(false); // Reset animation by default
+        setStatus(newStatus);
 
-        switch (status) {
-          case "checking":
-          case "pending":
-          case "downloading":
-          case "installing":
-            setIsAnimating(true); // Start animation for active states
-            if (
-              status === "downloading" &&
-              typeof eventProgress === "number" &&
-              eventProgress >= 0 &&
-              eventProgress <= 100
-            ) {
-              setProgress(eventProgress);
-              setStatusMessage(`Downloading... ${eventProgress}%`);
-            }
-            break;
-          // Cases for uptodate, finished, error, close remain the same, animation stops (setIsAnimating(false) above)
+        if (
+          newStatus === "downloading" &&
+          typeof eventProgress === "number" &&
+          eventProgress >= 0 &&
+          eventProgress <= 100
+        ) {
+          setProgress(eventProgress);
+          setStatusMessage(`Downloading... ${eventProgress}%`);
+
+          if (progressRef.current) {
+            gsap.to(progressRef.current, {
+              width: `${eventProgress}%`,
+              duration: 0.3,
+              ease: "power1.out",
+            });
+          }
+        } else {
+          setProgress(null);
+        }
+
+        switch (newStatus) {
           case "uptodate":
           case "finished":
+            appWindow
+              .close()
+              .catch((err: Error) =>
+                console.error(
+                  "Failed to close updater window on completion:",
+                  err,
+                ),
+              );
+            break;
           case "error":
-            // Set a timer to close the window after a delay
-            closeTimerRef.current = setTimeout(() => {
-              appWindow
-                .close()
-                .catch((err: Error) =>
-                  console.error("Failed to auto-close updater window:", err),
-                );
-              closeTimerRef.current = null; // Clear ref after execution
-            }, 3000); // 3 seconds delay
             break;
           case "close":
-            // Close immediately, clear timer just in case
-            if (closeTimerRef.current) {
-              clearTimeout(closeTimerRef.current);
-              closeTimerRef.current = null;
-            }
             appWindow
               .close()
               .catch((err: Error) =>
@@ -124,103 +147,208 @@ const Updater: React.FC = () => {
     );
 
     return () => {
-      // Ensure unlisten is handled properly
       unlistenPromise
         .then((f) => f())
         .catch((err: Error) =>
           console.error("Failed to unlisten updater events:", err),
         );
-      // Clear timer on component unmount
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
     };
-  }, [appWindow]); // Add appWindow to dependency array
+  }, [appWindow]);
 
-  // Combine base logo style with animation style if animating
-  const logoStyle = isAnimating
-    ? { ...styles.logo, ...styles.logoAnimating }
-    : styles.logo;
+  const getStatusIcon = () => {
+    switch (status) {
+      case "checking":
+        return (
+          <Icon icon="solar:refresh-bold" className="w-5 h-5 animate-spin" />
+        );
+      case "downloading":
+        return <Icon icon="solar:download-bold" className="w-5 h-5" />;
+      case "installing":
+        return <Icon icon="solar:box-bold" className="w-5 h-5" />;
+      case "uptodate":
+      case "finished":
+        return <Icon icon="solar:check-circle-bold" className="w-5 h-5" />;
+      case "error":
+        return <Icon icon="solar:danger-triangle-bold" className="w-5 h-5" />;
+      default:
+        return <Icon icon="solar:info-circle-bold" className="w-5 h-5" />;
+    }
+  };
+
+  const handleManualClose = () => {
+    appWindow
+      .close()
+      .catch((err: Error) =>
+        console.error("Failed to close updater window:", err),
+      );
+  };
+
+  const renderBackgroundEffect = () => {
+    switch (currentEffect) {
+      case BACKGROUND_EFFECTS.ACCENT_PARTICLES:
+        return <AccentParticles opacity={0.1} />;
+      case BACKGROUND_EFFECTS.ACCENT_WAVES:
+        return <AccentWaves opacity={0.1} />;
+      case BACKGROUND_EFFECTS.ACCENT_VOXELS:
+        return <AccentVoxels opacity={0.1} />;
+      case BACKGROUND_EFFECTS.ACCENT_LIGHTNING:
+        return <AccentLightning opacity={0.1} />;
+      case BACKGROUND_EFFECTS.ACCENT_LIQUID_CHROME:
+        return <AccentLiquidChrome opacity={0.1} />;
+      case BACKGROUND_EFFECTS.MATRIX_RAIN:
+        return <MatrixRainEffect opacity={0.1} />;
+      case BACKGROUND_EFFECTS.ACCENT_GRID:
+      default:
+        return <AccentGrid opacity={0.1} />;
+    }
+  };
+
+  if (!isThemeLoaded) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-black">
+        <div className="animate-pulse text-white text-2xl font-minecraft">
+          Loading theme...
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <GlobalStyles /> {/* Inject global styles */}
-      <div style={styles.container}>
-        {/* Add the logo image */}
-        <img src="/logo.png" alt="NoRiskClient Logo" style={logoStyle} />
-        <h4 style={styles.title}>NoRiskClient Updater</h4>
-        <p style={styles.status}>{statusMessage}</p>
-        {progress !== null && (
-          <div style={styles.progressBarContainer}>
-            <div style={{ ...styles.progressBar, width: `${progress}%` }}></div>
-          </div>
+    <div className="relative h-screen w-screen overflow-hidden bg-black/80 backdrop-blur-md flex items-center justify-center">
+      {renderBackgroundEffect()}
+
+      <div
+        ref={containerRef}
+        className={cn(
+          "relative flex flex-col items-center justify-between text-center",
+          "border-2 border-b-4 shadow-2xl rounded-lg",
+          "w-screen h-screen",
         )}
-        {/* Optional: Add a manual close buttons if needed */}
-        {/* <buttons onClick={() => appWindow.close()}>Close</buttons> */}
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}80`,
+          borderBottomColor: accentColor.value,
+          boxShadow: `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+        }}
+      >
+        <span
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+          style={{ backgroundColor: `${accentColor.value}80` }}
+        />
+
+        <div className="w-full pt-8" />
+
+        <div className="flex-1 w-full flex flex-col items-center justify-center px-8 gap-12">
+          <div className="flex flex-col items-center">
+            <img
+              ref={logoRef}
+              src="/logo.png"
+              alt="NoRiskClient Logo"
+              className="w-40 h-40 object-contain mb-2"
+            />
+            <p className="text-xl font-minecraft text-white/70 lowercase">
+              Updater
+            </p>
+          </div>
+
+          <div className="flex items-center justify-center mb-6">
+            {status === "uptodate" || status === "finished" ? (
+              <div
+                className={cn(
+                  "flex items-center justify-center gap-3 py-2 px-6",
+                  "border-2 border-b-4 rounded-md",
+                )}
+                style={{
+                  backgroundColor: `${accentColor.value}30`,
+                  borderColor: `${accentColor.value}80`,
+                  borderBottomColor: accentColor.value,
+                }}
+              >
+                <Icon
+                  icon="solar:check-circle-bold"
+                  className="w-6 h-6 text-green-400"
+                />
+                <span className="font-minecraft text-2xl text-white">
+                  Update Complete
+                </span>
+              </div>
+            ) : status === "error" ? (
+              <div
+                className={cn(
+                  "flex items-center justify-center gap-3 py-2 px-6",
+                  "border-2 border-b-4 rounded-md",
+                )}
+                style={{
+                  backgroundColor: "#ef444430",
+                  borderColor: "#ef444480",
+                  borderBottomColor: "#ef4444",
+                }}
+              >
+                <Icon
+                  icon="solar:danger-triangle-bold"
+                  className="w-6 h-6 text-red-400"
+                />
+                <span className="font-minecraft text-2xl text-white">
+                  {statusMessage}
+                </span>
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  "flex items-center justify-center gap-3 py-2 px-6",
+                  "border-2 border-b-4 rounded-md",
+                )}
+                style={{
+                  backgroundColor: `${accentColor.value}30`,
+                  borderColor: `${accentColor.value}80`,
+                  borderBottomColor: accentColor.value,
+                }}
+              >
+                {getStatusIcon()}
+                <span className="font-minecraft text-2xl text-white">
+                  {statusMessage}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {progress !== null && (
+            <div
+              className="w-3/4 h-3 rounded-md overflow-hidden mb-6 border-2"
+              style={{
+                backgroundColor: `${accentColor.value}15`,
+                borderColor: `${accentColor.value}50`,
+              }}
+            >
+              <div
+                ref={progressRef}
+                className="h-full rounded-sm"
+                style={{
+                  width: `${progress}%`,
+                  backgroundColor: accentColor.value,
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="w-full p-8 flex justify-center">
+          {status === "error" && (
+            <Button
+              variant="destructive"
+              size="md"
+              onClick={handleManualClose}
+              icon={<Icon icon="solar:close-circle-bold" className="w-5 h-5" />}
+            >
+              Close
+            </Button>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
-};
-
-// Basic inline styles for simplicity
-const styles: { [key: string]: React.CSSProperties } = {
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100%", // Changed from 100vh to 100% to respect parent (body)
-    width: "100%", // Ensure container fills the body
-    padding: "15px",
-    boxSizing: "border-box",
-    fontFamily: "sans-serif",
-    // Background color is now set globally on body,
-    // but keep it here in case GlobalStyles fails or for potential overrides
-    backgroundColor: "rgba(30, 30, 30, 0.9)",
-    borderRadius: "8px", // Rounded corners if decorations are false
-    color: "#eee",
-    textAlign: "center",
-  },
-  // Add styles for the logo
-  logo: {
-    width: "160px", // Increased size
-    height: "auto",
-    marginBottom: "15px", // Space below the logo
-    // Base transition for smooth start/stop (optional)
-    transition: "transform 0.3s ease-in-out",
-  },
-  // Style containing the animation properties
-  logoAnimating: {
-    animationName: "pulse",
-    animationDuration: "2s",
-    animationIterationCount: "infinite",
-    animationTimingFunction: "ease-in-out",
-  },
-  title: {
-    margin: "0 0 10px 0",
-    fontSize: "1.1em",
-    fontWeight: 600,
-  },
-  status: {
-    margin: "5px 0",
-    fontSize: "0.9em",
-    minHeight: "1.2em", // Prevent layout shift
-  },
-  progressBarContainer: {
-    width: "80%",
-    height: "8px",
-    backgroundColor: "#555",
-    borderRadius: "4px",
-    overflow: "hidden",
-    marginTop: "10px",
-  },
-  progressBar: {
-    height: "100%",
-    backgroundColor: "#4CAF50", // Green progress
-    borderRadius: "4px",
-    transition: "width 0.2s ease-in-out",
-  },
-};
-
-export default Updater;
+}

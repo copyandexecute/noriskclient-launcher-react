@@ -1,22 +1,25 @@
 "use client";
 
 import type React from "react";
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
+import { gsap } from "gsap";
 
-// @ts-ignore
 export interface CheckboxProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "size"> {
   label?: string;
   description?: string;
-  size?: "sm" | "md" | "lg";
+  customSize?: "sm" | "md" | "lg";
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
-  ({ className, label, description, size, ...props }, ref) => {
+  ({ className, label, description, customSize = "md", ...props }, ref) => {
     const accentColor = useThemeStore((state) => state.accentColor);
+    const checkboxRef = useRef<HTMLDivElement>(null);
+    const labelRef = useRef<HTMLLabelElement>(null);
+    const [isHovered, setIsHovered] = useState(false);
 
     const sizeClasses = {
       sm: "w-4 h-4",
@@ -24,44 +27,128 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       lg: "w-6 h-6",
     };
 
+    useEffect(() => {
+      if (labelRef.current) {
+        gsap.fromTo(
+          labelRef.current,
+          { scale: 0.95, opacity: 0 },
+          {
+            scale: 1,
+            opacity: 1,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
+      }
+    }, []);
+
+    const handleMouseEnter = () => {
+      if (props.disabled) return;
+      setIsHovered(true);
+
+      if (checkboxRef.current) {
+        gsap.to(checkboxRef.current, {
+          y: -2,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.25), 0 6px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
+    };
+
+    const handleMouseLeave = () => {
+      if (props.disabled) return;
+      setIsHovered(false);
+
+      if (checkboxRef.current) {
+        gsap.to(checkboxRef.current, {
+          y: 0,
+          boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (props.disabled) return;
+
+      if (checkboxRef.current) {
+        gsap.to(checkboxRef.current, {
+          scale: 0.9,
+          duration: 0.1,
+          ease: "power2.out",
+          onComplete: () => {
+            gsap.to(checkboxRef.current, {
+              scale: 1,
+              duration: 0.2,
+              ease: "elastic.out(1.2, 0.4)",
+            });
+          },
+        });
+      }
+
+      if (props.onChange) {
+        props.onChange(e);
+      }
+    };
+
     return (
       <label
+        ref={labelRef}
         className={cn(
           "flex items-start gap-3 cursor-pointer",
           props.disabled && "opacity-50 cursor-not-allowed",
           className,
         )}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div className="relative flex-shrink-0 mt-1">
           <input
             type="checkbox"
             ref={ref}
-            className={cn("sr-only", sizeClasses[size || "md"])}
+            className="sr-only"
+            onChange={handleChange}
             {...props}
           />
           <div
+            ref={checkboxRef}
             className={cn(
               "w-6 h-6 rounded-sm transition-all duration-200",
               "border-2 border-b-3 flex items-center justify-center",
+              "overflow-hidden",
             )}
             style={{
               backgroundColor: props.checked
-                ? `${accentColor.value}80`
-                : `${accentColor.value}20`,
+                ? `${accentColor.value}${isHovered ? "90" : "80"}`
+                : `${accentColor.value}${isHovered ? "30" : "20"}`,
               borderColor: props.checked
                 ? `${accentColor.value}`
-                : `${accentColor.value}60`,
+                : `${accentColor.value}${isHovered ? "70" : "60"}`,
               borderBottomColor: props.checked
                 ? accentColor.dark
-                : `${accentColor.value}80`,
-              boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+                : `${accentColor.value}${isHovered ? "90" : "80"}`,
+              boxShadow: isHovered
+                ? `0 4px 0 rgba(0,0,0,0.25), 0 6px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
+                : `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+              transform:
+                isHovered && !props.disabled
+                  ? "translateY(-2px)"
+                  : "translateY(0)",
             }}
           >
             {props.checked && (
               <Icon icon="solar:check-bold" className="w-4 h-4 text-white" />
             )}
+
+            <span
+              className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
+              style={{ opacity: isHovered ? 0.5 : 0 }}
+            />
           </div>
         </div>
+
         {(label || description) && (
           <div className="flex flex-col">
             {label && (

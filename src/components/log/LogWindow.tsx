@@ -17,6 +17,9 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
+import { Card } from "../ui/Card";
+import { gsap } from "gsap";
+import { cn } from "../../lib/utils";
 
 interface MinecraftOutputPayload {
   event_type: "minecraft_output";
@@ -58,8 +61,19 @@ export function LogWindow() {
   const [isAutoscrollEnabled, setIsAutoscrollEnabled] = useState<boolean>(true);
   const scrollableContainerRef = useRef<HTMLDivElement>(null);
   const initialLoadCompleteRef = useRef(initialLoadComplete);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const accentColor = useThemeStore((state) => state.accentColor);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" },
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -71,7 +85,9 @@ export function LogWindow() {
       setProcessId(id);
 
       if (liveLogsUrlParam) {
-        console.log(`[LogWindow] Live logs mode detected from URL. Initializing empty log view.`);
+        console.log(
+          `[LogWindow] Live logs mode detected from URL. Initializing empty log view.`,
+        );
         setIsLiveLogs(true);
         setIsLoading(false);
         setParsedLogLines([]);
@@ -116,13 +132,17 @@ export function LogWindow() {
     }
 
     if (isLiveLogs) {
-      console.log(`[LogWindow] Live mode is active for ${processId}. Clearing logs and skipping initial fetch.`);
+      console.log(
+        `[LogWindow] Live mode is active for ${processId}. Clearing logs and skipping initial fetch.`,
+      );
       setParsedLogLines([]);
       setRawLogContentForCopy(null);
       setIsLoading(false);
       setInitialLoadComplete(true);
     } else {
-      console.log(`[LogWindow] Non-live mode for ${processId}. Fetching initial logs.`);
+      console.log(
+        `[LogWindow] Non-live mode for ${processId}. Fetching initial logs.`,
+      );
       const fetchNonLiveLogs = async () => {
         setIsLoading(true);
         setError(null);
@@ -333,18 +353,15 @@ export function LogWindow() {
   }, [rawLogContentForCopy, processId]);
 
   return (
-    <div 
-      className="flex flex-col h-full text-white font-minecraft"
+    <div
+      ref={containerRef}
+      className={cn(
+        "flex flex-col h-full text-white font-minecraft p-4",
+        "transition-colors duration-300",
+      )}
       style={{ backgroundColor: `${accentColor.value}10` }}
     >
-      <div
-        className="border-2 border-b-4 rounded-lg h-full flex flex-col overflow-hidden shadow-lg"
-        style={{
-          borderColor: `${accentColor.value}40`,
-          borderBottomColor: `${accentColor.value}60`,
-          backgroundColor: `${accentColor.value}10`,
-        }}
-      >
+      <Card className="h-full flex flex-col overflow-hidden">
         <LogViewerDisplay
           isLoading={isLoading}
           error={error}
@@ -365,7 +382,7 @@ export function LogWindow() {
           scrollableContainerRef={scrollableContainerRef}
           isLiveLogs={isLiveLogs}
         />
-      </div>
+      </Card>
     </div>
   );
 }

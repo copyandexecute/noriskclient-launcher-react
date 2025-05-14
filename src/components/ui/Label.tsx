@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
 import { useThemeStore } from "../../store/useThemeStore";
@@ -37,6 +37,7 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
   ) => {
     const labelRef = useRef<HTMLDivElement>(null);
     const accentColor = useThemeStore((state) => state.accentColor);
+    const [isHovered, setIsHovered] = useState(false);
 
     const mergedRef = (node: HTMLDivElement) => {
       if (ref) {
@@ -63,6 +64,32 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
         );
       }
     }, [withAnimation]);
+
+    const handleMouseEnter = () => {
+      setIsHovered(true);
+
+      if (labelRef.current && variant !== "ghost") {
+        gsap.to(labelRef.current, {
+          y: -2,
+          boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${getVariantColors().light}40, inset 0 0 0 1px ${getVariantColors().main}20`,
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
+    };
+
+    const handleMouseLeave = () => {
+      setIsHovered(false);
+
+      if (labelRef.current && variant !== "ghost") {
+        gsap.to(labelRef.current, {
+          y: 0,
+          boxShadow: `0 6px 0 rgba(0,0,0,0.3), 0 8px 12px rgba(0,0,0,0.35), inset 0 1px 0 ${getVariantColors().light}40, inset 0 0 0 1px ${getVariantColors().main}20`,
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
+    };
 
     const getVariantColors = () => {
       switch (variant) {
@@ -144,25 +171,36 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
           "rounded-md text-white tracking-wider",
           "inline-flex items-center justify-center",
           "text-shadow-sm",
-
           variant !== "ghost" &&
             "border-2 border-b-4 shadow-[0_6px_0_rgba(0,0,0,0.3),0_8px_12px_rgba(0,0,0,0.35)]",
-
           sizeStyles[size],
-
           className,
         )}
         style={{
           backgroundColor:
-            variant === "ghost" ? "transparent" : `${colors.main}30`,
-          borderColor: variant === "ghost" ? "transparent" : `${colors.main}80`,
+            variant === "ghost"
+              ? "transparent"
+              : `${colors.main}${isHovered ? "40" : "30"}`,
+          borderColor:
+            variant === "ghost"
+              ? "transparent"
+              : `${colors.main}${isHovered ? "90" : "80"}`,
           borderBottomColor: variant === "ghost" ? "transparent" : colors.dark,
           boxShadow:
             variant === "ghost"
               ? "none"
-              : `0 6px 0 rgba(0,0,0,0.3), 0 8px 12px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`,
+              : isHovered
+                ? `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
+                : `0 6px 0 rgba(0,0,0,0.3), 0 8px 12px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`,
           color: colors.text,
+          transform:
+            isHovered && variant !== "ghost"
+              ? "translateY(-2px)"
+              : "translateY(0)",
+          filter: isHovered ? "brightness(1.1)" : "brightness(1)",
         }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         {...props}
       >
         {variant !== "ghost" && (
@@ -185,14 +223,20 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
           </>
         )}
 
-        <span className="absolute inset-0 opacity-20 bg-gradient-radial from-white/20 via-transparent to-transparent" />
+        <span
+          className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
+          style={{ opacity: isHovered ? 0.5 : 0.2 }}
+        />
 
         {icon && iconPosition === "left" && (
           <span
             className={cn(
-              "flex items-center justify-center mr-1.5",
+              "flex items-center justify-center mr-1.5 transition-transform duration-200",
               iconSizes[size],
             )}
+            style={{
+              transform: isHovered ? "scale(1.1)" : "scale(1)",
+            }}
           >
             {icon}
           </span>
@@ -201,9 +245,12 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
         {icon && iconPosition === "right" && (
           <span
             className={cn(
-              "flex items-center justify-center ml-1.5",
+              "flex items-center justify-center ml-1.5 transition-transform duration-200",
               iconSizes[size],
             )}
+            style={{
+              transform: isHovered ? "scale(1.1)" : "scale(1)",
+            }}
           >
             {icon}
           </span>
