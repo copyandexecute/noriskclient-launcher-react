@@ -63,6 +63,8 @@ interface ModrinthVersionListV2Props {
   onInstallClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onHoverVersion: (id: string | null) => void;
+  selectedProfileId?: string | null;
+  onDeleteClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
 }
 
 // --- Component Implementation ---
@@ -89,6 +91,8 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
   onInstallClick,
   onInstallModpackVersionAsProfileClick,
   onHoverVersion,
+  selectedProfileId,
+  onDeleteClick,
 }) => {
   // --- Helper function to get filtered versions (moved from parent) ---
   const getFilteredVersions = (
@@ -471,6 +475,8 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
                 onMouseLeave={() => onHoverVersion(null)}
                 onInstallClick={onInstallClick}
                 onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
+                selectedProfileId={selectedProfileId}
+                onDeleteClick={onDeleteClick}
               />
             );
           })}

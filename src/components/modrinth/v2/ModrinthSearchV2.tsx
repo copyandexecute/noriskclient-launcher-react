@@ -35,7 +35,13 @@ import { ModrinthSearchControlsV2 } from './ModrinthSearchControlsV2'; // Import
 
 // Import new service and types
 import { installContentToProfile } from '../../../services/content-service';
-import { ContentType as NrContentType, type InstallContentPayload } from '../../../types/content'; // Renamed ContentType to NrContentType to avoid conflict if ModrinthProjectType is also named ContentType
+import { ContentType as NrContentType, type InstallContentPayload, type UninstallContentPayload } from '../../../types/content'; // Renamed ContentType to NrContentType to avoid conflict if ModrinthProjectType is also named ContentType
+
+// Use existing uninstall service and type
+import { uninstallContentFromProfile } from '../../../services/content-service';
+
+// Placeholder for the new service function and payload type
+// import { removeContentFromProfile, type RemoveContentPayload } from '../../../services/content-service';
 
 // Profile type can remain generic for now or be imported if a specific type exists
 type Profile = any;
@@ -148,7 +154,14 @@ export function ModrinthSearchV2({
   const [internalProfiles, setInternalProfiles] = useState<Profile[]>(initialProfiles);
   useEffect(() => {
     setInternalProfiles(initialProfiles);
-  }, [initialProfiles]);
+    // If a selectedProfileId is passed as a prop, find and set it.
+    if (selectedProfileId && initialProfiles.length > 0) {
+      const initiallySelectedProfile = initialProfiles.find(p => p.id === selectedProfileId);
+      if (initiallySelectedProfile) {
+        setSelectedProfile(initiallySelectedProfile);
+      }
+    }
+  }, [initialProfiles, selectedProfileId]);
 
   const currentSelectedCategories = useMemo(() => {
     return selectedCategoriesByProjectType[projectType] || [];
@@ -1617,6 +1630,113 @@ export function ModrinthSearchV2({
     }
   };
 
+  // Function to handle deleting a version from a profile
+  const handleDeleteVersionFromProfile = async (
+    profileId: string,
+    project: ModrinthSearchHit,
+    version: ModrinthVersion
+  ) => {
+    const profileName = internalProfiles.find(p => p.id === profileId)?.name || profileId;
+    // const confirmation = window.confirm(
+    //   `Are you sure you want to delete ${project.title} (${version.version_number}) from profile "${profileName}"?`
+    // );
+
+    // if (!confirmation) {
+    //   toast("Deletion cancelled.", { icon: 'ℹ️' });
+    //   return;
+    // }
+
+    const primaryFile = version.files.find(file => file.primary) || version.files[0];
+    if (!primaryFile) {
+      toast.error("No primary file found for the version. Cannot determine details for deletion.");
+      return;
+    }
+
+    // mappedContentType is not directly part of UninstallContentPayload but might be useful for logging or future backend logic
+    // const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
+    // if (!mappedContentType) {
+    //   return;
+    // }
+
+    const payload: UninstallContentPayload = {
+      profile_id: profileId,
+      sha1_hash: primaryFile.hashes?.sha1 || undefined, // Use undefined if not present, as per existing type
+      // Future fields like mod_id_to_remove, filename_to_remove, content_type_to_scan are not used here yet.
+      // We are relying on sha1_hash for Modrinth content.
+    };
+
+    if (!payload.sha1_hash) {
+      toast.error("SHA1 hash is missing for this version. Cannot proceed with deletion.");
+      console.error("Deletion failed: SHA1 hash missing for", project.title, version.version_number, primaryFile);
+      return;
+    }
+
+    console.log("Attempting to remove content with payload:", payload);
+
+    const removePromise = uninstallContentFromProfile(payload);
+
+    await toast.promise(
+      removePromise,
+      {
+        loading: `Removing ${project.title} (${version.version_number}) from ${profileName}...`,
+        success: (data: any) => {
+          setInstalledVersions(prev => ({
+            ...prev,
+            [version.id]: { ...prev[version.id], is_installed: false },
+          }));
+          // Update installStatus for modals if they are open and showing this item
+          if (installModalOpen && selectedProject?.project_id === project.project_id && selectedVersion?.id === version.id) {
+            setInstallStatus(prev => ({ ...prev, [profileId]: false }));
+          }
+          if (quickInstallModalOpen && quickInstallProject?.project_id === project.project_id) {
+             setInstallStatus(prev => ({ ...prev, [profileId]: false })); // General update
+          }
+
+          // Re-check overall project installation status - Temporarily commented out
+          // console.log("TODO: Implement or uncomment checkInstallationStatus() or similar logic to update installedProjects state");
+          // checkInstallationStatus(); 
+          
+          /*
+          // The more complex logic for updating installedProjects is commented out for now
+          // to resolve linter errors and will be addressed later.
+          const otherVersionsOfProjectInstalled = Object.values(installedVersions).some(
+            (status, index) => {
+              const versionEntry = Object.entries(installedVersions)[index];
+              const versionIdFromFile = versionEntry[0];
+              let projectForVersionId: string | null = null;
+              searchResults.forEach(p => {
+                if (p.versions?.includes(versionIdFromFile)) { 
+                    projectForVersionId = p.project_id;
+                }
+              });
+              if(!projectForVersionId && expandedVersions[project.project_id] && Array.isArray(expandedVersions[project.project_id])){
+                const projVersions = expandedVersions[project.project_id] as ModrinthVersion[];
+                if(projVersions.find(v => v.id === versionIdFromFile)){
+                    projectForVersionId = project.project_id;
+                }
+              }
+              return projectForVersionId === project.project_id && status.is_installed;
+            }
+          );
+
+          if (!otherVersionsOfProjectInstalled) {
+            setInstalledProjects(prev => ({
+              ...prev,
+              [project.project_id]: { ...prev[project.project_id], is_installed: false },
+            }));
+          }
+          */
+
+          if (onInstallSuccess) { // Re-using onInstallSuccess for general UI refresh
+            onInstallSuccess();
+          }
+          return `Successfully removed ${project.title} (${version.version_number}) from ${profileName}`;
+        },
+        error: (err) => `Failed to remove: ${err.message || String(err)}`,
+      }
+    );
+  };
+
   return (
     // Overall container: now flex-row to place left content and sidebar side-by-side
     <div className={`modrinth-search-v2 flex flex-row h-full gap-3 ${className}`}> {/* Added gap-3 */} 
@@ -1699,6 +1819,7 @@ export function ModrinthSearchV2({
                 openVersionDropdowns={currentOpenVersionDropdowns}
                 installedVersions={installedVersions}
                 selectedProfile={selectedProfile}
+                selectedProfileId={selectedProfile?.id}
                 hoveredVersionId={hoveredVersionId}
                 gameVersionsData={gameVersionsData}
                 showAllGameVersionsSidebar={showAllGameVersionsSidebar}
@@ -1708,8 +1829,9 @@ export function ModrinthSearchV2({
                 onToggleVersionDropdown={toggleVersionDropdown}
                 onCloseAllVersionDropdowns={closeAllVersionDropdowns}
                 onLoadMoreVersions={loadMoreProjectVersions}
-                onInstallVersionClick={handleDirectInstall}
+                onInstallVersionClick={openInstallModal}
                 onHoverVersion={setHoveredVersionId}
+                onDeleteVersionClick={handleDeleteVersionFromProfile}
               />
             );
           })}

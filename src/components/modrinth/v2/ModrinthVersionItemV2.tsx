@@ -18,7 +18,9 @@ interface ModrinthVersionItemV2Props {
   onMouseEnter: (id: string) => void;
   onMouseLeave: () => void;
   onInstallClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onDeleteClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  selectedProfileId?: string | null;
 }
 
 export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
@@ -30,7 +32,9 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
   onMouseEnter,
   onMouseLeave,
   onInstallClick,
+  onDeleteClick,
   onInstallModpackVersionAsProfileClick,
+  selectedProfileId,
 }) => {
   const isModpack = project.project_type === 'modpack';
 
@@ -43,6 +47,15 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
       // Fallback for modpack if specific handler is not provided (should not happen ideally)
       console.warn("onInstallModpackVersionAsProfileClick is not defined for modpack version item");
       onInstallClick(project, version); 
+    }
+  };
+
+  const handleDeleteButtonClick = () => {
+    if (onDeleteClick && !isModpack && selectedProfileId) {
+      onDeleteClick(selectedProfileId, project, version);
+    } else {
+      // Log a warning if delete is attempted without a profileId, though the button shouldn't render
+      console.warn("Delete action called without a selectedProfileId or onDeleteClick handler missing/isModpack");
     }
   };
 
@@ -125,17 +138,30 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
               <TagBadge key={`loader-${version.id}-${loader}`} variant="default">{loader}</TagBadge>
             ))}
           </div>
-          {/* Install Button (fixed width, on the right) */} 
-          <Button 
-            onClick={handleButtonClick}
-            size="xs"
-            shadowDepth="short"
-            variant={buttonVariant}
-            disabled={versionStatus?.is_installed}
-            className="min-w-[80px] justify-center flex-shrink-0" 
-          >
-            {buttonText}
-          </Button>
+          {/* Install/Delete Button Group (fixed width, on the right) */} 
+          <div className="flex gap-1 flex-shrink-0"> {/* Wrapper for buttons */}
+            {versionStatus?.is_installed && !isModpack && onDeleteClick && selectedProfileId && (
+              <Button
+                onClick={handleDeleteButtonClick}
+                size="xs"
+                shadowDepth="short"
+                variant="destructive"
+                className="min-w-[80px] justify-center"
+              >
+                Delete
+              </Button>
+            )}
+            <Button 
+              onClick={handleButtonClick}
+              size="xs"
+              shadowDepth="short"
+              variant={buttonVariant}
+              disabled={versionStatus?.is_installed}
+              className="min-w-[80px] justify-center" 
+            >
+              {buttonText}
+            </Button>
+          </div>
         </div>
         {/* Removed the separate bottom row div */} 
       </div>

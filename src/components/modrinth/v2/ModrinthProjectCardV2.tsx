@@ -39,6 +39,8 @@ interface VersionListPassthroughProps {
   onLoadMoreVersions: (projectId: string) => void;
   onInstallVersionClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onHoverVersion: (versionId: string | null) => void;
+  selectedProfileId?: string | null;
+  onDeleteVersionClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
 }
 
 export interface ModrinthProjectCardV2Props extends VersionListPassthroughProps {
@@ -81,6 +83,8 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
   onLoadMoreVersions,
   onInstallVersionClick,
   onHoverVersion,
+  selectedProfileId,
+  onDeleteVersionClick,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -266,11 +270,12 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
           openDropdowns={openVersionDropdowns}
           installedVersions={installedVersions}
           selectedProfile={selectedProfile}
-          accentColor={accentColor}
+          selectedProfileId={selectedProfileId}
           hoveredVersionId={hoveredVersionId}
           gameVersionsData={gameVersionsData}
           showAllGameVersionsSidebar={showAllGameVersionsSidebar}
           selectedGameVersionsSidebar={selectedGameVersionsSidebar}
+          accentColor={accentColor}
           onFilterChange={onVersionFilterChange}
           onUiStateChange={onVersionUiStateChange}
           onToggleDropdown={onToggleVersionDropdown}
@@ -279,6 +284,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
           onInstallClick={onInstallVersionClick}
           onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
           onHoverVersion={onHoverVersion}
+          onDeleteClick={onDeleteVersionClick}
         />
       )}
     </div>
