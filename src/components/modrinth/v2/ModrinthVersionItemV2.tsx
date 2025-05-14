@@ -98,20 +98,30 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
   let buttonVariant: "default" | "success" = "success";
   let buttonDisabled = false;
 
-  // Only show installation status if a profile is selected
   if (selectedProfileId) {
-    if (versionStatus?.is_installed) {
-      buttonText = "Install";
-      buttonVariant = "success";
+    // Precedence:
+    // 1. If it's part of a NoRisk Pack (and not a modpack itself) -> "In Pack", disabled.
+    // 2. Else if it's already installed (and not a modpack) -> "Installed", disabled. (Button is likely hidden by outer conditional anyway)
+    // 3. Else if it's a modpack that's not installed -> "Install", enabled.
+    // 4. Else (not in pack, not installed, not a modpack needing special handling) -> "Install", enabled.
+
+    if (versionStatus?.is_included_in_norisk_pack && !isModpack) {
+      buttonText = "In Pack";
+      buttonVariant = "default";
       buttonDisabled = true;
-    }
-    
-    if (isModpack && !versionStatus?.is_installed) {
-      buttonText = "Install";
+    } else if (versionStatus?.is_installed && !isModpack) {
+      buttonText = "Installed"; // More descriptive if it were to be shown
+      buttonDisabled = true;
+    } else if (isModpack && !versionStatus?.is_installed) {
+      buttonText = "Install"; // Could be "Install Profile"
       buttonVariant = "success";
       buttonDisabled = false;
     }
+    // If none of the above, defaults are: buttonText = "Install", buttonVariant = "success", buttonDisabled = false
+    // This covers non-modpacks that are not installed and not in a NoRisk pack.
   }
+  // If no profile is selected, buttonText="Install", buttonVariant="success", buttonDisabled=false by default.
+  // This allows installing modpacks as new profiles or mods via a modal.
 
   return (
     // --- Version Item Card --- 
@@ -176,7 +186,7 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
               </TagBadge>
             )}
             {selectedProfileId && versionStatus?.is_included_in_norisk_pack && (
-              <TagBadge variant={versionStatus?.norisk_pack_item_details?.is_enabled === false ? "inactive" : "info"} className="flex-shrink-0">
+              <TagBadge variant={versionStatus?.is_enabled ? "info" : "inactive"} className="flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 In NoRisk Pack
               </TagBadge>
