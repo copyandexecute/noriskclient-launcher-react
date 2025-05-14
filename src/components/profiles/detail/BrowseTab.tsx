@@ -7,6 +7,7 @@ import { useThemeStore } from "../../../store/useThemeStore";
 import { Icon } from "@iconify/react";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
+import { ModrinthSearchV2 } from "../../modrinth/v2/ModrinthSearchV2";
 
 interface BrowseTabProps {
   profile: Profile;
@@ -119,13 +120,11 @@ export function BrowseTab({
   return (
     <div ref={containerRef} className="h-full flex flex-col p-4 gap-6">
       <div className="flex-1 overflow-hidden">
-        <ModrinthSearch
+        <ModrinthSearchV2
           profiles={[profile]}
           selectedProfileId={profile.id}
-          initialProjectType={getProjectType()}
           onInstallSuccess={onRefresh}
           className="h-full"
-          parentTransitionActive={parentTransitionActive}
         />
       </div>
     </div>
