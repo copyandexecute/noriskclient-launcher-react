@@ -12,7 +12,6 @@ import { EmptyState } from "../../ui/EmptyState";
 import { ToggleSwitch } from "../../ui/ToggleSwitch";
 import { Checkbox } from "../../ui/Checkbox";
 import { Button } from "../../ui/buttons/Button";
-import { Card } from "../../ui/Card";
 import {
   getNoriskPacks,
   getNoriskPacksResolved,
@@ -40,17 +39,19 @@ interface NoRiskModsTabProps {
   profile: Profile;
   onRefresh?: () => void;
   isActive?: boolean;
+  searchQuery?: string;
 }
 
 export function NoRiskModsTab({
   profile,
   onRefresh,
   isActive = false,
+  searchQuery = "",
 }: NoRiskModsTabProps) {
   const [noriskMods, setNoriskMods] = useState<NoRiskMod[]>([]);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "enabled" | "version">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,13 @@ export function NoRiskModsTab({
   const [refreshing, setRefreshing] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use parent's search query if provided
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     if (containerRef.current && isActive) {
@@ -396,10 +404,14 @@ export function NoRiskModsTab({
     }
   };
 
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+
   const filteredMods = noriskMods.filter(
     (mod) =>
-      mod.display_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mod.id.toLowerCase().includes(searchQuery.toLowerCase()),
+      mod.display_name
+        .toLowerCase()
+        .includes(effectiveSearchQuery.toLowerCase()) ||
+      mod.id.toLowerCase().includes(effectiveSearchQuery.toLowerCase()),
   );
 
   const sortedMods = [...filteredMods].sort((a, b) => {
@@ -431,59 +443,79 @@ export function NoRiskModsTab({
     : false;
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col select-none gap-6">
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      {/* Action bar with transparent styling */}
+      <div
+        className="flex items-center justify-between mb-4 p-3 rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}30`,
+        }}
+      >
+        {/* Only show search if parent isn't providing it */}
+        {!searchQuery && (
           <div className="w-full md:w-1/3">
             <SearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
+              value={localSearchQuery}
+              onChange={setLocalSearchQuery}
               placeholder="search norisk mods..."
             />
           </div>
+        )}
 
-          <div className="flex items-center gap-4 justify-between md:justify-between w-full md:w-auto">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={
-                  refreshing ? (
-                    <Icon icon="solar:refresh-bold" className="animate-spin" />
-                  ) : (
-                    <Icon icon="solar:refresh-bold" />
-                  )
-                }
-                onClick={handleRefresh}
-                disabled={refreshing}
-              >
-                refresh
-              </Button>
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={
+                refreshing ? (
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:refresh-bold" />
+                )
+              }
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              refresh
+            </Button>
 
-              <Label size="sm" className="ml-2">
-                pack: <span className="text-white">{currentPackName}</span>
-                {isExperimental && (
-                  <span className="ml-2 text-yellow-400 text-sm">
-                    (experimental)
-                  </span>
-                )}
-              </Label>
-            </div>
+            <Label size="sm" className="ml-2">
+              pack: <span className="text-white">{currentPackName}</span>
+              {isExperimental && (
+                <span className="ml-2 text-yellow-400 text-sm">
+                  (experimental)
+                </span>
+              )}
+            </Label>
           </div>
         </div>
-      </Card>
+      </div>
 
       {error && (
-        <Card variant="elevated" className="p-3 flex items-center gap-2">
+        <div
+          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
+          style={{
+            backgroundColor: `rgba(220, 38, 38, 0.1)`,
+            borderColor: `rgba(220, 38, 38, 0.3)`,
+          }}
+        >
           <Icon
             icon="solar:danger-triangle-bold"
             className="w-5 h-5 text-red-400"
           />
           <span className="text-white font-minecraft text-lg">{error}</span>
-        </Card>
+        </div>
       )}
 
-      <Card className="flex-1 min-h-0 overflow-hidden">
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
+      >
         {!profile.selected_norisk_pack_id ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -527,7 +559,7 @@ export function NoRiskModsTab({
             enabledCount={filteredMods.filter((m) => m.enabled).length}
             onSelectAll={handleSelectAll}
             contentType="norisk mod"
-            searchQuery={searchQuery}
+            searchQuery={effectiveSearchQuery}
           >
             {sortedMods.length > 0 ? (
               sortedMods.map((mod) => (
@@ -544,15 +576,16 @@ export function NoRiskModsTab({
               <EmptyState
                 icon="solar:shield-bold"
                 message={
-                  searchQuery
+                  effectiveSearchQuery
                     ? "no mods match your search"
                     : "no norisk mods available"
                 }
+                description="NoRisk mods are automatically managed by the launcher"
               />
             )}
           </ContentTable>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

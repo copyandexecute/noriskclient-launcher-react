@@ -10,8 +10,7 @@
     "frontendDist": "../dist"
   },
   "plugins": {
-    "minecraft_auth": {
-    },
+    "minecraft_auth": {},
     "updater": {
       "active": true,
       "endpoints": [],
@@ -27,12 +26,13 @@
         "title": "NoRiskClient",
         "width": 1280,
         "height": 800,
-        "minWidth": 930,
-        "minHeight": 700,
+        "minWidth": 1280,
+        "minHeight": 800,
         "decorations": false,
         "transparent": true,
         "center": true,
-        "visible": false
+        "visible": false,
+        "shadow": false
       }
     ],
     "security": {
@@ -41,29 +41,15 @@
         "enable": true,
         "scope": {
           "requireLiteralLeadingDot": false,
-          "allow": [
-            "**/*"
-          ]
+          "allow": ["**/*"]
         }
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "app", 
-      "dmg", 
-      "deb", 
-      "appimage", 
-      "nsis"
-    ],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
+    "targets": ["app", "dmg", "deb", "appimage", "nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "createUpdaterArtifacts": true
   }
 }

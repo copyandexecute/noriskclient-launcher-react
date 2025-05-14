@@ -8,7 +8,9 @@ import { Button } from "../../ui/buttons/Button";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Select } from "../../ui/Select";
 import { useThemeStore } from "../../../store/useThemeStore";
-import { Card } from "../../ui/Card";
+import { SearchInput } from "../../ui/SearchInput";
+import { LoadingState } from "../../ui/LoadingState";
+import { EmptyState } from "../../ui/EmptyState";
 import { gsap } from "gsap";
 
 // --- Import Real Types ---
@@ -31,7 +33,10 @@ const notificationStore = {
 };
 
 interface WorldsTabProps {
-  profile: Profile | null;
+  profile: Profile;
+  onRefresh?: () => void;
+  isActive?: boolean;
+  searchQuery?: string;
   onLaunchRequest?: (params: {
     profileId: string;
     quickPlaySingleplayer?: string;
@@ -43,9 +48,15 @@ type DisplayItem =
   | (WorldInfo & { type: "world" })
   | (ServerInfo & { type: "server" });
 
-export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
+export function WorldsTab({
+  profile,
+  onRefresh,
+  isActive = false,
+  searchQuery = "",
+  onLaunchRequest,
+}: WorldsTabProps) {
   // --- State ---
-  const [, setWorlds] = useState<WorldInfo[]>([]);
+  const [worlds, setWorlds] = useState<WorldInfo[]>([]);
   const [servers, setServers] = useState<ServerInfo[]>([]);
   const [displayItems, setDisplayItems] = useState<DisplayItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,71 +73,35 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     {},
   );
   const [activeTab, setActiveTab] = useState<"all" | "worlds" | "servers">(
-    "all",
+    "servers",
   );
   const [sortOrder, setSortOrder] = useState<"recent" | "name">("recent");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const accentColor = useThemeStore((state) => state.accentColor);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const footerRef = useRef<HTMLDivElement>(null);
+
+  // Use parent's search query if provided
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && isActive) {
       gsap.fromTo(
         containerRef.current,
-        { opacity: 0 },
-        {
-          opacity: 1,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (headerRef.current) {
-      gsap.fromTo(
-        headerRef.current,
-        { opacity: 0, y: -10 },
+        { opacity: 0, y: 20 },
         {
           opacity: 1,
           y: 0,
           duration: 0.4,
-          delay: 0.1,
           ease: "power2.out",
         },
       );
     }
-
-    if (contentRef.current) {
-      gsap.fromTo(
-        contentRef.current,
-        { opacity: 0, scale: 0.98 },
-        {
-          opacity: 1,
-          scale: 1,
-          duration: 0.4,
-          delay: 0.2,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (footerRef.current) {
-      gsap.fromTo(
-        footerRef.current,
-        { opacity: 0, y: 10 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          delay: 0.3,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, []);
+  }, [isActive]);
 
   const getWorldDisplayName = useCallback((world: WorldInfo): string => {
     return world.display_name || world.folder_name;
@@ -207,6 +182,18 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
         filteredItems = [...typedServers];
       }
 
+      // Apply search filter
+      const effectiveSearchQuery = searchQuery || localSearchQuery;
+      if (effectiveSearchQuery) {
+        filteredItems = filteredItems.filter((item) => {
+          const name =
+            item.type === "world"
+              ? getWorldDisplayName(item).toLowerCase()
+              : getServerDisplayName(item).toLowerCase();
+          return name.includes(effectiveSearchQuery.toLowerCase());
+        });
+      }
+
       filteredItems.sort((a, b) => {
         if (sortOrder === "recent") {
           if (a.type === "world" && b.type === "world") {
@@ -231,7 +218,14 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
 
       setDisplayItems(filteredItems);
     },
-    [getServerDisplayName, getWorldDisplayName, activeTab, sortOrder],
+    [
+      getServerDisplayName,
+      getWorldDisplayName,
+      activeTab,
+      sortOrder,
+      searchQuery,
+      localSearchQuery,
+    ],
   );
 
   const pingAllServers = useCallback(async (serversToPing: ServerInfo[]) => {
@@ -352,11 +346,18 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
 
   useEffect(() => {
     if (profile?.id) {
-      const currentWorlds: WorldInfo[] = [];
-      const currentServers: ServerInfo[] = [];
-      updateDisplayItems(currentWorlds, currentServers);
+      updateDisplayItems(worlds, servers);
     }
-  }, [activeTab, sortOrder, profile?.id, updateDisplayItems]);
+  }, [
+    activeTab,
+    sortOrder,
+    profile?.id,
+    updateDisplayItems,
+    worlds,
+    servers,
+    searchQuery,
+    localSearchQuery,
+  ]);
 
   const handleLaunch = useCallback(
     (item: DisplayItem) => {
@@ -414,49 +415,38 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
     [profile?.id, getWorldDisplayName, loadData],
   );
 
-  return (
-    <div
-      ref={containerRef}
-      className="h-full select-none p-4 flex flex-col text-white"
-    >
-      <Card variant="default" className="h-full flex flex-col overflow-hidden">
-        <div
-          ref={headerRef}
-          className="border-b-2 py-3 px-4 flex items-center justify-between"
-          style={{
-            backgroundColor: `${accentColor.value}20`,
-            borderColor: `${accentColor.value}40`,
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setActiveTab("all")}
-              variant={activeTab === "all" ? "default" : "ghost"}
-              size="md"
-            >
-              All
-            </Button>
-            <Button
-              onClick={() => setActiveTab("worlds")}
-              variant={activeTab === "worlds" ? "default" : "ghost"}
-              size="md"
-              icon={<Icon icon="solar:planet-bold" />}
-              iconPosition="left"
-            >
-              Worlds
-            </Button>
-            <Button
-              onClick={() => setActiveTab("servers")}
-              variant={activeTab === "servers" ? "default" : "ghost"}
-              size="md"
-              icon={<Icon icon="solar:server-bold" />}
-              iconPosition="left"
-            >
-              Servers
-            </Button>
-          </div>
+  const handleRefresh = () => {
+    loadData();
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
 
-          <div className="flex items-center gap-3">
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+
+  return (
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      {/* Action bar with transparent styling */}
+      <div
+        className="flex items-center justify-between mb-4 p-3 rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}30`,
+        }}
+      >
+        {/* Only show search if parent isn't providing it */}
+        {!searchQuery && (
+          <div className="w-full md:w-1/3">
+            <SearchInput
+              value={localSearchQuery}
+              onChange={setLocalSearchQuery}
+              placeholder={`search ${activeTab === "all" ? "worlds & servers" : activeTab}...`}
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
             <Select
               value={sortOrder}
               onChange={(value) => setSortOrder(value as "recent" | "name")}
@@ -468,56 +458,106 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
             />
 
             <Button
-              onClick={() => pingAllServers(servers)}
+              variant="secondary"
+              size="sm"
+              icon={<Icon icon="solar:filter-bold" />}
+              onClick={() =>
+                setActiveTab(
+                  activeTab === "all"
+                    ? "servers"
+                    : activeTab === "servers"
+                      ? "worlds"
+                      : "all",
+                )
+              }
+            >
+              {activeTab === "all"
+                ? "All"
+                : activeTab === "servers"
+                  ? "Servers"
+                  : "Worlds"}
+            </Button>
+
+            <Button
+              onClick={() => {
+                if (activeTab === "servers" || activeTab === "all") {
+                  pingAllServers(servers);
+                } else {
+                  handleRefresh();
+                }
+              }}
               disabled={
-                pingingServers.size > 0 ||
-                servers.filter((s) => s.address).length === 0
+                (activeTab === "servers" || activeTab === "all") &&
+                (pingingServers.size > 0 ||
+                  servers.filter((s) => s.address).length === 0)
               }
               variant="secondary"
-              size="md"
+              size="sm"
               icon={
                 pingingServers.size > 0 ? (
-                  <Icon
-                    icon="solar:refresh-circle-bold-duotone"
-                    className="animate-spin"
-                  />
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
                 ) : (
                   <Icon icon="solar:refresh-bold" />
                 )
               }
-              iconPosition="left"
-              title={
-                servers.filter((s) => s.address).length === 0
-                  ? "No servers to ping"
-                  : "Refresh server status"
-              }
             >
-              Refresh
+              refresh
             </Button>
           </div>
         </div>
+      </div>
 
+      {error && (
         <div
-          ref={contentRef}
-          className="flex-1 overflow-y-auto custom-scrollbar min-h-0"
+          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
+          style={{
+            backgroundColor: `rgba(220, 38, 38, 0.1)`,
+            borderColor: `rgba(220, 38, 38, 0.3)`,
+          }}
         >
-          {loading ? (
-            <div className="flex items-center justify-center h-32 text-white/70 text-2xl">
-              <Icon
-                icon="solar:refresh-circle-bold-duotone"
-                className="w-8 h-8 animate-spin mr-3"
-              />{" "}
-              Loading...
-            </div>
-          ) : error ? (
-            <div className="p-6 bg-red-900/50 border-2 border-red-700 text-red-300 text-2xl rounded-lg m-4">
-              Error: {error}
-            </div>
-          ) : displayItems.length === 0 ? (
-            <div className="text-center py-16 text-white/50 font-minecraft text-3xl lowercase">
-              No worlds or servers found
-            </div>
-          ) : (
+          <Icon
+            icon="solar:danger-triangle-bold"
+            className="w-5 h-5 text-red-400"
+          />
+          <span className="text-white font-minecraft text-lg">{error}</span>
+        </div>
+      )}
+
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
+      >
+        {loading ? (
+          <LoadingState
+            message={`loading ${activeTab === "all" ? "worlds & servers" : activeTab}...`}
+          />
+        ) : displayItems.length === 0 ? (
+          <EmptyState
+            icon={
+              activeTab === "worlds"
+                ? "solar:planet-bold"
+                : activeTab === "servers"
+                  ? "solar:server-bold"
+                  : "solar:planet-bold"
+            }
+            message={
+              effectiveSearchQuery
+                ? `no ${activeTab === "all" ? "worlds or servers" : activeTab} match your search`
+                : `no ${activeTab === "all" ? "worlds or servers" : activeTab} found`
+            }
+            description={
+              activeTab === "servers"
+                ? "Add servers in the Minecraft game menu"
+                : activeTab === "worlds"
+                  ? "Create a new world in Minecraft"
+                  : "Create worlds or add servers in Minecraft"
+            }
+          />
+        ) : (
+          <div className="h-full overflow-y-auto custom-scrollbar">
             <ul className="divide-y divide-white/10">
               {displayItems.map((item) => {
                 const isWorld = item.type === "world";
@@ -542,35 +582,57 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                     key={key}
                     className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors"
                   >
-                    <div
-                      className="w-16 h-16 flex items-center justify-center flex-shrink-0 overflow-hidden rounded-md border-2"
-                      style={{ borderColor: `${accentColor.value}40` }}
-                    >
-                      {isWorld ? (
-                        worldIconSrc ? (
+                    {/* 3D Image Frame */}
+                    <div className="relative w-16 h-16 flex-shrink-0">
+                      <div
+                        className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
+                        style={{
+                          backgroundColor: `${accentColor.value}15`,
+                          borderColor: `${accentColor.value}30`,
+                          borderBottomColor: `${accentColor.value}50`,
+                          boxShadow: `0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20`,
+                        }}
+                      >
+                        {isWorld ? (
+                          worldIconSrc ? (
+                            <img
+                              src={worldIconSrc || "/placeholder.svg"}
+                              alt=""
+                              className="w-full h-full object-cover image-pixelated"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Icon
+                                icon="solar:planet-bold"
+                                className="w-10 h-10 text-white/50"
+                              />
+                            </div>
+                          )
+                        ) : serverIconSrc ? (
                           <img
-                            src={worldIconSrc || "/placeholder.svg"}
+                            src={serverIconSrc || "/placeholder.svg"}
                             alt=""
                             className="w-full h-full object-cover image-pixelated"
+                            loading="lazy"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display =
+                                "none";
+                            }}
                           />
                         ) : (
-                          <Icon
-                            icon="solar:planet-bold"
-                            className="w-10 h-10 text-white/50"
-                          />
-                        )
-                      ) : serverIconSrc ? (
-                        <img
-                          src={serverIconSrc || "/placeholder.svg"}
-                          alt=""
-                          className="w-full h-full object-cover image-pixelated"
-                        />
-                      ) : (
-                        <Icon
-                          icon="solar:server-bold"
-                          className="w-10 h-10 text-white/50"
-                        />
-                      )}
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Icon
+                              icon="solar:server-bold"
+                              className="w-10 h-10 text-white/50"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex-grow min-w-0">
@@ -750,49 +812,9 @@ export function WorldsTab({ profile, onLaunchRequest }: WorldsTabProps) {
                 );
               })}
             </ul>
-          )}
-        </div>
-
-        <div
-          ref={footerRef}
-          className="border-t-2 py-3 px-4 flex justify-between items-center"
-          style={{
-            backgroundColor: `${accentColor.value}20`,
-            borderColor: `${accentColor.value}40`,
-          }}
-        >
-          <div className="text-white/70 font-minecraft text-xl">
-            {displayItems.length > 0 ? (
-              <>
-                {displayItems.length}{" "}
-                {activeTab === "all" ? "items" : activeTab}
-                {displayItems.length !== 1 && !activeTab.endsWith("s")
-                  ? "s"
-                  : ""}
-              </>
-            ) : (
-              <span>No items</span>
-            )}
           </div>
-          <div className="flex items-center gap-3">
-            {activeTab === "servers" && (
-              <span className="text-white/70 font-minecraft text-xl">
-                {pingingServers.size > 0 ? (
-                  <span className="flex items-center">
-                    <Icon
-                      icon="solar:refresh-circle-bold-duotone"
-                      className="w-5 h-5 animate-spin mr-2"
-                    />
-                    Pinging servers...
-                  </span>
-                ) : (
-                  <span>{Object.keys(serverPings).length} servers pinged</span>
-                )}
-              </span>
-            )}
-          </div>
-        </div>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }

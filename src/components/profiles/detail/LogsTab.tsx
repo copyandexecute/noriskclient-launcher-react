@@ -17,7 +17,6 @@ import {
 import { LogViewerDisplay } from "../../log/LogViewerDisplay";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { toast } from "react-hot-toast";
-import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
 
 interface LogsTabProps {
@@ -265,7 +264,13 @@ export function LogsTab({
 
   return (
     <div ref={containerRef} className="h-full flex flex-col select-none p-4">
-      <Card className="h-full flex flex-col overflow-hidden">
+      <div
+        className="h-full flex flex-col overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
+      >
         <LogViewerDisplay
           isLoading={isLoadingList || isLoadingContent}
           error={errorList || errorContent}
@@ -286,7 +291,7 @@ export function LogsTab({
           logLevelsDefinition={LOG_LEVELS}
           scrollableContainerRef={scrollableContainerRef}
         />
-      </Card>
+      </div>
     </div>
   );
 }

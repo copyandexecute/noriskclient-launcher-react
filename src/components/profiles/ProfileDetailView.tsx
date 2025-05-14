@@ -8,12 +8,11 @@ import { WorldsTab } from "./detail/WorldsTab";
 import { LogsTab } from "./detail/LogsTab";
 import { BrowseTab } from "./detail/BrowseTab";
 import * as ProfileService from "../../services/profile-service";
-import { TabContent } from "../ui/TabContent";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { gsap } from "gsap";
-import { Card } from "../ui/Card";
+import { cn } from "../../lib/utils";
 
 function TabTransitionLoader() {
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -58,25 +57,37 @@ interface ProfileDetailViewProps {
   onEdit: () => void;
 }
 
-type TabType = "content" | "browse" | "worlds" | "logs";
+type MainTabType = "content" | "browse" | "worlds" | "logs";
+type ContentSubType =
+  | "mods"
+  | "resourcepacks"
+  | "shaderpacks"
+  | "datapacks"
+  | "norisk";
 
 export function ProfileDetailView({
   profile,
   onClose,
   onEdit,
 }: ProfileDetailViewProps) {
-  const [activeTab, setActiveTab] = useState<TabType>(
+  const [activeMainTab, setActiveMainTab] = useState<MainTabType>(
     profile.is_standard_version ? "logs" : "content",
   );
+  const [activeContentType, setActiveContentType] =
+    useState<ContentSubType>("mods");
   const [currentProfile, setCurrentProfile] = useState<Profile>(profile);
   const [browseContentType, setBrowseContentType] = useState<string>("mods");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
 
   const [tabTransition, setTabTransition] = useState(false);
   const tabTransitionTimer = useRef<NodeJS.Timeout | null>(null);
+  const subMenuRef = useRef<HTMLDivElement>(null);
+  const subItemsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const prevActiveMainTab = useRef<MainTabType | null>(null);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -97,7 +108,7 @@ export function ProfileDetailView({
     if (contentRef.current) {
       contentRef.current.scrollTop = 0;
     }
-  }, [activeTab]);
+  }, [activeMainTab, activeContentType]);
 
   useEffect(() => {
     return () => {
@@ -107,9 +118,57 @@ export function ProfileDetailView({
     };
   }, []);
 
+  // Animation for submenu appearance/disappearance
+  useEffect(() => {
+    if (prevActiveMainTab.current !== activeMainTab) {
+      if (activeMainTab === "content" && subMenuRef.current) {
+        // Animate the vertical line first
+        const verticalLine = subMenuRef.current.querySelector(
+          ".vertical-line",
+        ) as HTMLElement;
+        if (verticalLine) {
+          gsap.fromTo(
+            verticalLine,
+            { scaleY: 0, opacity: 0 },
+            {
+              scaleY: 1,
+              opacity: 1,
+              duration: 0.4,
+              ease: "power2.out",
+              transformOrigin: "top",
+            },
+          );
+        }
+
+        // Then animate each subitem with staggered delay
+        if (subItemsRef.current.length > 0) {
+          gsap.fromTo(
+            subItemsRef.current.filter(Boolean),
+            {
+              x: -10,
+              opacity: 0,
+              scale: 0.95,
+            },
+            {
+              x: 0,
+              opacity: 1,
+              scale: 1,
+              duration: 0.4,
+              stagger: 0.05,
+              ease: "back.out(1.2)",
+              delay: 0.15,
+            },
+          );
+        }
+      }
+
+      prevActiveMainTab.current = activeMainTab;
+    }
+  }, [activeMainTab]);
+
   const handleBrowseContent = (contentType: string) => {
     setBrowseContentType(contentType);
-    handleTabChange("browse");
+    handleMainTabChange("browse");
   };
 
   const handleRefresh = async () => {
@@ -124,8 +183,8 @@ export function ProfileDetailView({
     }
   };
 
-  const handleTabChange = (tab: TabType) => {
-    if (activeTab === tab) return;
+  const handleMainTabChange = (tab: MainTabType) => {
+    if (activeMainTab === tab) return;
 
     setTabTransition(true);
 
@@ -137,132 +196,276 @@ export function ProfileDetailView({
       setTabTransition(false);
     }, 600);
 
-    setActiveTab(tab);
+    setActiveMainTab(tab);
   };
 
-  const tabs = profile.is_standard_version
+  const handleContentTypeChange = (type: ContentSubType) => {
+    if (activeContentType === type) return;
+
+    // Animate the active indicator dot
+    gsap.to(`#dot-${activeContentType}`, {
+      scale: 0.8,
+      opacity: 0.5,
+      duration: 0.3,
+      ease: "power2.out",
+    });
+
+    gsap.fromTo(
+      `#dot-${type}`,
+      { scale: 0.8, opacity: 0.5 },
+      {
+        scale: 1.2,
+        opacity: 1,
+        duration: 0.4,
+        ease: "elastic.out(1, 0.5)",
+        onComplete: () => {
+          gsap.to(`#dot-${type}`, {
+            scale: 1,
+            duration: 0.2,
+            ease: "power2.out",
+          });
+        },
+      },
+    );
+
+    setTabTransition(true);
+
+    if (tabTransitionTimer.current) {
+      clearTimeout(tabTransitionTimer.current);
+    }
+
+    tabTransitionTimer.current = setTimeout(() => {
+      setTabTransition(false);
+    }, 600);
+
+    setActiveContentType(type);
+  };
+
+  const mainTabs = profile.is_standard_version
     ? [
         { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
         { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
       ]
     : [
         { id: "content", label: "Content", icon: "solar:widget-bold" },
-        { id: "browse", label: "Browse", icon: "solar:search-bold" },
+        { id: "browse", label: "Browse", icon: "solar:magnifer-bold" },
         { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
         { id: "logs", label: "Logs", icon: "solar:code-bold" },
       ];
 
+  const contentSubTabs = [
+    { id: "mods" as ContentSubType, label: "Mods", icon: "solar:bolt-bold" },
+    {
+      id: "resourcepacks" as ContentSubType,
+      label: "Resource Packs",
+      icon: "solar:gallery-bold",
+    },
+    {
+      id: "shaderpacks" as ContentSubType,
+      label: "Shaders",
+      icon: "solar:sun-bold",
+    },
+    {
+      id: "datapacks" as ContentSubType,
+      label: "Data Packs",
+      icon: "solar:database-bold",
+    },
+    {
+      id: "norisk" as ContentSubType,
+      label: "NoRisk Mods",
+      icon: "solar:shield-check-bold",
+    },
+  ];
+
   return (
-    <Card
-      ref={containerRef}
-      className="h-full flex flex-col overflow-hidden"
-      variant="elevated"
-    >
+    <div ref={containerRef} className="h-full flex overflow-hidden">
+      {/* Sidebar */}
       <div
-        className="flex items-center px-4 py-2 border-b-2"
+        className="w-64 h-full flex-shrink-0 border-r backdrop-blur-sm flex flex-col"
         style={{
-          backgroundColor: `${accentColor.value}40`,
-          borderColor: `${accentColor.value}60`,
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}30`,
         }}
       >
-        <div className="flex items-center">
-          <div
-            className="w-8 h-8 rounded flex items-center justify-center border-2 mr-2 flex-shrink-0"
-            style={{
-              backgroundColor: `${accentColor.value}50`,
-              borderColor: `${accentColor.value}80`,
-            }}
-          >
-            <Icon icon="solar:cube-bold" className="w-5 h-5 text-white" />
-          </div>
-          <div className="font-minecraft text-xl text-white truncate">
-            {profile.name || profile.id}
-            <span className="text-white/60 text-sm ml-2">
-              {profile.game_version} {profile.loader && `(${profile.loader})`}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="flex items-center justify-between px-4 py-4 border-b-2"
-        style={{
-          backgroundColor: `${accentColor.value}30`,
-          borderColor: `${accentColor.value}60`,
-        }}
-      >
-        <div className="py-1 flex items-center justify-start flex-1 overflow-x-auto scrollbar-hide gap-2">
-          {tabs.map((tab) => (
-            <Button
-              key={tab.id}
-              variant={activeTab === tab.id ? "default" : "ghost"}
-              size="md"
-              onClick={() => handleTabChange(tab.id as TabType)}
-              icon={<Icon icon={tab.icon} />}
-              iconPosition="left"
-              className={activeTab === tab.id ? "text-white" : "text-white/70"}
+        {/* Profile header */}
+        <div
+          className="p-4 border-b"
+          style={{ borderColor: `${accentColor.value}30` }}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div
+              className="w-10 h-10 rounded flex items-center justify-center border-2 flex-shrink-0"
+              style={{
+                backgroundColor: `${accentColor.value}30`,
+                borderColor: `${accentColor.value}50`,
+              }}
             >
-              {tab.label}
+              <Icon icon="solar:cube-bold" className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-minecraft text-xl text-white truncate">
+                {profile.name || profile.id}
+              </div>
+              <div className="text-white/60 text-sm">
+                {profile.game_version} {profile.loader && `(${profile.loader})`}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+              icon={<Icon icon="solar:arrow-left-bold" />}
+              iconPosition="left"
+              className="flex-1"
+            >
+              Back
             </Button>
-          ))}
-        </div>
 
-        <div className="flex items-center gap-2 ml-4 min-w-[170px] justify-end">
-          <IconButton
-            icon={
-              isRefreshing ? (
-                <Icon icon="solar:refresh-bold" className="animate-spin" />
-              ) : (
-                <Icon icon="solar:refresh-bold" />
-              )
-            }
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            title="Refresh profile"
-            size="sm"
-            variant="secondary"
-          />
+            {!profile.is_standard_version && (
+              <IconButton
+                icon={<Icon icon="solar:settings-bold" />}
+                onClick={onEdit}
+                title="Edit profile"
+                size="sm"
+                variant="secondary"
+              />
+            )}
 
-          {!profile.is_standard_version && (
             <IconButton
-              icon={<Icon icon="solar:settings-bold" />}
-              onClick={onEdit}
-              title="Edit profile"
+              icon={
+                isRefreshing ? (
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:refresh-bold" />
+                )
+              }
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              title="Refresh profile"
               size="sm"
               variant="secondary"
             />
-          )}
+          </div>
+        </div>
 
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            icon={<Icon icon="solar:arrow-left-bold" />}
-            iconPosition="left"
-          >
-            Back
-          </Button>
+        {/* Navigation tabs */}
+        <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="text-white/50 text-sm uppercase tracking-wider mb-2 px-2">
+            Navigation
+          </div>
+          <div className="flex flex-col gap-1">
+            {/* Main navigation buttons */}
+            {mainTabs.map((tab) => (
+              <div key={tab.id} className="flex flex-col">
+                <Button
+                  variant={activeMainTab === tab.id ? "default" : "ghost"}
+                  size="md"
+                  onClick={() => handleMainTabChange(tab.id as MainTabType)}
+                  icon={<Icon icon={tab.icon} />}
+                  iconPosition="left"
+                  className={cn(
+                    "justify-start",
+                    activeMainTab === tab.id ? "text-white" : "text-white/70",
+                  )}
+                >
+                  {tab.label}
+                </Button>
+
+                {/* Content sub-navigation - directly below Content button */}
+                {tab.id === "content" &&
+                  activeMainTab === "content" &&
+                  !profile.is_standard_version && (
+                    <div ref={subMenuRef} className="ml-3 pl-4 relative">
+                      {/* Vertical line connecting subpoints */}
+                      <div
+                        className="absolute left-0 top-0 bottom-0 w-0.5 vertical-line"
+                        style={{
+                          backgroundColor: `${accentColor.value}50`,
+                          transformOrigin: "top",
+                        }}
+                      ></div>
+
+                      <div className="flex flex-col gap-2 py-2">
+                        {contentSubTabs.map((subTab, index) => (
+                          <div
+                            key={subTab.id}
+                            className="flex items-center gap-3"
+                            ref={(el) => (subItemsRef.current[index] = el)}
+                          >
+                            {/* Indicator dot */}
+                            <div
+                              id={`dot-${subTab.id}`}
+                              className={cn(
+                                "w-3 h-3 rounded-full flex-shrink-0 transition-all duration-300",
+                                activeContentType === subTab.id
+                                  ? "shadow-glow"
+                                  : `bg-white/30`,
+                              )}
+                              style={
+                                activeContentType === subTab.id
+                                  ? {
+                                      backgroundColor: accentColor.value,
+                                      boxShadow: `0 0 8px ${accentColor.value}80`,
+                                    }
+                                  : {}
+                              }
+                            ></div>
+
+                            {/* Button without standard styling */}
+                            <button
+                              onClick={() => handleContentTypeChange(subTab.id)}
+                              className={cn(
+                                "flex items-center gap-2.5 py-1.5 px-2.5 rounded-md transition-all duration-200",
+                                "text-base font-medium tracking-wide",
+                                activeContentType === subTab.id
+                                  ? "text-white"
+                                  : "text-white/70 hover:text-white/90 hover:bg-white/5",
+                              )}
+                            >
+                              <Icon
+                                icon={subTab.icon}
+                                className={cn(
+                                  "w-5 h-5 transition-transform duration-300",
+                                  activeContentType === subTab.id &&
+                                    "scale-110",
+                                )}
+                              />
+                              <span>{subTab.label}</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      <TabContent className="relative flex-1 min-h-0">
-        {tabTransition && <TabTransitionLoader />}
-
+      {/* Main content */}
+      <div className="flex-1 min-w-0 h-full relative">
         <div
           ref={contentRef}
           className="h-full overflow-y-auto custom-scrollbar"
           style={{
-            backgroundColor: `${accentColor.value}10`,
+            backgroundColor: `${accentColor.value}08`,
           }}
         >
-          {activeTab === "content" && !profile.is_standard_version && (
+          {activeMainTab === "content" && !profile.is_standard_version && (
             <ContentTab
               profile={currentProfile}
               onRefresh={handleRefresh}
               onBrowse={handleBrowseContent}
+              activeContentType={activeContentType}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
             />
           )}
-          {activeTab === "browse" && !profile.is_standard_version && (
+          {activeMainTab === "browse" && !profile.is_standard_version && (
             <BrowseTab
               profile={currentProfile}
               initialContentType={browseContentType}
@@ -270,10 +473,10 @@ export function ProfileDetailView({
               parentTransitionActive={tabTransition}
             />
           )}
-          {activeTab === "worlds" && <WorldsTab profile={currentProfile} />}
-          {activeTab === "logs" && <LogsTab profile={currentProfile} />}
+          {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
+          {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
         </div>
-      </TabContent>
-    </Card>
+      </div>
+    </div>
   );
 }

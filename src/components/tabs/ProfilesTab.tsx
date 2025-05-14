@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
-import { ProfileDetailView } from "../profiles/ProfileDetailView";
+
 import { useProfileStore } from "../../store/profile-store";
 import { SearchInput } from "../ui/SearchInput";
 import { LoadingState } from "../ui/LoadingState";
@@ -23,6 +23,7 @@ import { Select } from "../ui/Select";
 import { Button } from "../ui/buttons/Button";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
+import { ProfileDetailView } from "../profiles/ProfileDetailView.tsx";
 
 const groupingOptions = [
   {

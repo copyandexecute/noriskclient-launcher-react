@@ -13,6 +13,8 @@ interface EmptyStateProps {
   description?: string;
   className?: string;
   action?: React.ReactNode;
+  fullHeight?: boolean;
+  compact?: boolean;
 }
 
 export function EmptyState({
@@ -21,6 +23,8 @@ export function EmptyState({
   description,
   className,
   action,
+  fullHeight = true,
+  compact = false,
 }: EmptyStateProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
@@ -42,6 +46,7 @@ export function EmptyState({
     }
 
     if (iconRef.current) {
+      // Initial animation
       gsap.fromTo(
         iconRef.current,
         { scale: 0.8, opacity: 0 },
@@ -54,9 +59,10 @@ export function EmptyState({
         },
       );
 
+      // Continuous subtle animation - smaller movement to prevent layout shifts
       gsap.to(iconRef.current, {
-        y: -5,
-        scale: 1.05,
+        y: -3,
+        scale: 1.03,
         repeat: -1,
         yoyo: true,
         duration: 1.5,
@@ -69,36 +75,42 @@ export function EmptyState({
     <div
       ref={containerRef}
       className={cn(
-        "flex flex-col items-center justify-center p-8 rounded-lg",
-        "border-2 border-b-4 shadow-md",
+        "flex flex-col items-center justify-center rounded-lg backdrop-blur-sm",
+        compact ? "p-4" : "p-8",
+        fullHeight ? "h-full w-full" : "auto",
         className,
       )}
       style={{
         backgroundColor: `${accentColor.value}10`,
-        borderColor: `${accentColor.value}60`,
-        borderBottomColor: accentColor.value,
-        boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 10px 15px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
       }}
     >
-      <span
-        className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-        style={{ backgroundColor: `${accentColor.value}80` }}
-      />
-
       <div
         ref={iconRef}
-        className="w-20 h-20 mb-6 flex items-center justify-center text-white"
+        className={cn(
+          "flex items-center justify-center text-white mb-4",
+          compact ? "w-16 h-16" : "w-20 h-20",
+        )}
         style={{ color: accentColor.value }}
       >
-        <Icon icon={icon} className="w-20 h-20" />
+        <Icon icon={icon} className={compact ? "w-16 h-16" : "w-20 h-20"} />
       </div>
 
-      <p className="text-2xl font-minecraft text-white lowercase text-center mb-2">
+      <p
+        className={cn(
+          "font-minecraft text-white lowercase text-center mb-2",
+          compact ? "text-xl" : "text-2xl",
+        )}
+      >
         {message}
       </p>
 
       {description && (
-        <p className="text-lg font-minecraft text-white/70 lowercase text-center mb-6 max-w-md">
+        <p
+          className={cn(
+            "font-minecraft text-white/70 lowercase text-center max-w-md",
+            compact ? "text-base mb-4" : "text-lg mb-6",
+          )}
+        >
           {description}
         </p>
       )}

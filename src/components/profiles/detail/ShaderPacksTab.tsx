@@ -13,25 +13,27 @@ import { formatFileSize } from "../../../utils/format-file-size";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { ContentTable } from "../../ui/ContentTable";
 import { Button } from "../../ui/buttons/Button";
-import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
 
 interface ShaderPacksTabProps {
   profile: Profile;
   onRefresh?: () => void;
   isActive?: boolean;
+  searchQuery?: string;
+  onBrowse?: (contentType: string) => void;
 }
 
 export function ShaderPacksTab({
   profile,
   onRefresh,
   isActive = false,
+  searchQuery = "",
 }: ShaderPacksTabProps) {
   const [shaderPacks, setShaderPacks] = useState<ShaderPackInfo[]>([]);
   const [selectedPacks, setSelectedPacks] = useState<Set<string>>(new Set());
   const [loadingShaderPacks, setLoadingShaderPacks] = useState(false);
   const [shaderPacksError, setShaderPacksError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "enabled">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -44,6 +46,13 @@ export function ShaderPacksTab({
   const [lastUpdateCheck, setLastUpdateCheck] = useState<number>(0);
   const accentColor = useThemeStore((state) => state.accentColor);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use parent's search query if provided
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     if (containerRef.current && isActive) {
@@ -567,8 +576,10 @@ export function ShaderPacksTab({
     }
   };
 
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+
   const filteredPacks = shaderPacks.filter((pack) =>
-    pack.filename.toLowerCase().includes(searchQuery.toLowerCase()),
+    pack.filename.toLowerCase().includes(effectiveSearchQuery.toLowerCase()),
   );
 
   const sortedPacks = [...filteredPacks].sort((a, b) => {
@@ -596,79 +607,91 @@ export function ShaderPacksTab({
   ).length;
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col select-none gap-6">
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      {/* Action bar with transparent styling */}
+      <div
+        className="flex items-center justify-between mb-4 p-3 rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}30`,
+        }}
+      >
+        {/* Only show search if parent isn't providing it */}
+        {!searchQuery && (
           <div className="w-full md:w-1/3">
             <SearchInput
-              value={searchQuery}
-              onChange={setSearchQuery}
+              value={localSearchQuery}
+              onChange={setLocalSearchQuery}
               placeholder="search shader packs..."
             />
           </div>
+        )}
 
-          <div className="flex items-center gap-4 justify-between md:justify-between w-full md:w-auto">
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={
+                checkingUpdates ? (
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:arrow-up-bold" />
+                )
+              }
+              onClick={checkForShaderPackUpdates}
+              disabled={checkingUpdates}
+            >
+              check updates
+              {packsWithUpdates > 0 && (
+                <span className="text-xl px-1.5 py-0.5 rounded-sm ml-1">
+                  ({packsWithUpdates})
+                </span>
+              )}
+            </Button>
+
+            {packsWithUpdates > 0 && (
               <Button
-                variant="secondary"
+                variant="success"
                 size="sm"
                 icon={
-                  checkingUpdates ? (
+                  loadingOperation && updatingPacks.size > 0 ? (
                     <Icon icon="solar:refresh-bold" className="animate-spin" />
                   ) : (
-                    <Icon icon="solar:arrow-up-bold" />
+                    <Icon icon="solar:download-bold" />
                   )
                 }
-                onClick={checkForShaderPackUpdates}
-                disabled={checkingUpdates}
+                onClick={updateAllPacks}
+                disabled={loadingOperation}
               >
-                check updates
-                {packsWithUpdates > 0 && (
-                  <span className="text-xl px-1.5 py-0.5 rounded-sm ml-1">
-                    ({packsWithUpdates})
-                  </span>
-                )}
+                {loadingOperation && updatingPacks.size > 0
+                  ? `updating (${updatingPacks.size}/${packsWithUpdates})`
+                  : `update all (${packsWithUpdates})`}
               </Button>
+            )}
 
-              {packsWithUpdates > 0 && (
-                <Button
-                  variant="success"
-                  size="sm"
-                  icon={
-                    loadingOperation && updatingPacks.size > 0 ? (
-                      <Icon
-                        icon="solar:refresh-bold"
-                        className="animate-spin"
-                      />
-                    ) : (
-                      <Icon icon="solar:download-bold" />
-                    )
-                  }
-                  onClick={updateAllPacks}
-                  disabled={loadingOperation}
-                >
-                  {loadingOperation && updatingPacks.size > 0
-                    ? `updating (${updatingPacks.size}/${packsWithUpdates})`
-                    : `update all (${packsWithUpdates})`}
-                </Button>
-              )}
-
+            {selectedPacks.size > 0 && (
               <Button
                 variant="destructive"
                 size="sm"
                 icon={<Icon icon="solar:trash-bin-trash-bold" />}
                 onClick={deleteSelectedPacks}
-                disabled={selectedPacks.size === 0}
               >
-                delete {selectedPacks.size > 0 && `(${selectedPacks.size})`}
+                delete ({selectedPacks.size})
               </Button>
-            </div>
+            )}
           </div>
         </div>
-      </Card>
+      </div>
 
       {updateError && (
-        <Card variant="elevated" className="p-3 flex items-center gap-2">
+        <div
+          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
+          style={{
+            backgroundColor: `rgba(220, 38, 38, 0.1)`,
+            borderColor: `rgba(220, 38, 38, 0.3)`,
+          }}
+        >
           <Icon
             icon="solar:danger-triangle-bold"
             className="w-5 h-5 text-red-400"
@@ -676,10 +699,16 @@ export function ShaderPacksTab({
           <span className="text-white font-minecraft text-lg">
             Error checking for updates: {updateError}
           </span>
-        </Card>
+        </div>
       )}
 
-      <Card className="flex-1 min-h-0 overflow-hidden">
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
+      >
         {loadingShaderPacks ? (
           <LoadingState message="loading shader packs..." />
         ) : shaderPacksError ? (
@@ -729,7 +758,7 @@ export function ShaderPacksTab({
             enabledCount={enabledPacks}
             onSelectAll={handleSelectAll}
             contentType="shader pack"
-            searchQuery={searchQuery}
+            searchQuery={effectiveSearchQuery}
           >
             {sortedPacks.length > 0 ? (
               sortedPacks.map((pack) => {
@@ -776,15 +805,16 @@ export function ShaderPacksTab({
               <EmptyState
                 icon="solar:sun-bold"
                 message={
-                  searchQuery
+                  effectiveSearchQuery
                     ? "no shader packs match your search"
                     : "no shader packs installed"
                 }
+                description="Drag and drop shader pack files here to install"
               />
             )}
           </ContentTable>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
