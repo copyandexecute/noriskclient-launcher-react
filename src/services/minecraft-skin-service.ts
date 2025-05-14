@@ -4,8 +4,15 @@ import type {
 } from "../types/minecraft"; // Relative path
 import type { 
     MinecraftSkin, 
-    SkinVariant 
+    SkinVariant, 
+    AddLocalSkinCommandPayload, 
+    SkinSourceDetails // Keep this for internal construction
 } from "../types/localSkin"; // Relative path
+
+// Regex for basic Minecraft username validation (could also be a global constant)
+const MINECRAFT_USERNAME_REGEX = /^[a-zA-Z0-9_]{3,16}$/;
+// Regex to check for UUID format (either 32 hex chars without hyphens, or 36 chars with hyphens in 8-4-4-4-12 format)
+const UUID_REGEX = /^(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/;
 
 export class MinecraftSkinService {
 
@@ -71,5 +78,43 @@ export class MinecraftSkinService {
      */
     static async updateSkinProperties(id: string, name: string, variant: SkinVariant): Promise<MinecraftSkin | null> {
         return await invoke<MinecraftSkin | null>("update_skin_properties", { id, name, variant });
+    }
+
+    /**
+     * Adds a skin to the local database from various sources.
+     * Determines the source type (Profile or URL) based on the skinInput.
+     * @param skinInput - The username, UUID, or URL for the skin source.
+     * @param targetName - The name to save the skin as.
+     * @param targetVariant - The skin model variant ('classic' or 'slim').
+     * @param description - Optional description for the skin.
+     * @returns A promise resolving to the newly added MinecraftSkin object.
+     */
+    static async addSkinLocally(
+        skinInput: string, 
+        targetName: string, 
+        targetVariant: SkinVariant, 
+        description?: string | null
+    ): Promise<MinecraftSkin> {
+        let sourceDetails: SkinSourceDetails;
+
+        if (MINECRAFT_USERNAME_REGEX.test(skinInput)) {
+            sourceDetails = { type: "Profile", details: { query: skinInput } };
+        } else if (UUID_REGEX.test(skinInput)) {
+            sourceDetails = { type: "Profile", details: { query: skinInput } };
+        } else {
+            // If it's not a typical Minecraft username and not a UUID, treat it as a URL.
+            // The backend will validate if it's a usable image URL.
+            console.log(`Input "${skinInput}" is not a typical MC username or UUID. Treating as URL.`);
+            sourceDetails = { type: "Url", details: { url: skinInput } };
+        }
+
+        const payload: AddLocalSkinCommandPayload = {
+            source: sourceDetails,
+            target_skin_name: targetName,
+            target_skin_variant: targetVariant,
+            description: description ?? null
+        };
+
+        return await invoke<MinecraftSkin>("add_skin_locally", { payload });
     }
 } 

@@ -25,4 +25,37 @@ export interface MinecraftSkin {
  */
 export interface SkinDatabase {
   skins?: MinecraftSkin[] | null;
-} 
+}
+
+// --- Payload Types for add_skin_locally command ---
+
+export interface ProfileSourceData {
+  query: string; // Username or UUID
+}
+
+export interface UrlSourceData {
+  url: string;
+}
+
+export interface FilePathSourceData {
+  path: string;
+}
+
+export interface Base64SourceData {
+  base64_content: string;
+}
+
+export type SkinSourceDetails =
+  | { type: "Profile"; details: ProfileSourceData }
+  | { type: "Url"; details: UrlSourceData }
+  | { type: "FilePath"; details: FilePathSourceData }
+  | { type: "Base64"; details: Base64SourceData };
+  
+export interface AddLocalSkinCommandPayload {
+  source: SkinSourceDetails;
+  target_skin_name: string;
+  target_skin_variant: SkinVariant; // Uses existing SkinVariant type
+  description?: string | null;
+}
+
+// --- End Payload Types --- 

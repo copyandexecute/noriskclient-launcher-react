@@ -9,7 +9,7 @@ import type {
 } from "../../types/minecraft";
 import type {
 	MinecraftSkin,
-	SkinVariant
+	SkinVariant,
 } from "../../types/localSkin";
 import {useMinecraftAuthStore} from "../../store/minecraft-auth-store";
 import {MinecraftSkinService} from "../../services/minecraft-skin-service";
@@ -113,7 +113,7 @@ const EditSkinModal = memo(({
 	skin?: MinecraftSkin
 	cancel: () => void,
 	saveSkin: (skin: MinecraftSkin) => Promise<void>,
-	addSkin: (skin: MinecraftSkin) => Promise<void>,
+	addSkin: (skinInput: string, targetName: string, targetVariant: SkinVariant, description?: string | null) => Promise<void>,
 	localSkinsLoading: boolean,
 }) => {
 	const [name, setName] = useState<string>(skin?.name ?? "");
@@ -121,16 +121,24 @@ const EditSkinModal = memo(({
 	const [skinFile, setSkinFile] = useState<File | null>(null);
 	const [skinInput, setskinInput] = useState<string>("");
 
-	const finishEditingSkin = () => {
+	const finishEditingSkin = async () => {
 		if (skin) {
-			saveSkin({
+			await saveSkin({
 				...skin,
 				name,
 				variant,
 			});
 		} else {
-			//addSkin()
-			// skin adden, jenachdem ob skinInput oder skinFile
+			if (!name.trim()) {
+				toast.error("Skin Name cannot be empty.");
+				return;
+			}
+			if (!skinInput.trim()) {
+				toast.error("Skin source (Username, UUID, or URL) cannot be empty.");
+				return;
+			}
+
+			await addSkin(skinInput, name, variant, null);
 		}
 	};
 
@@ -254,6 +262,9 @@ export function SkinsTab() {
 	const [localSkinsError, setLocalSkinsError] = useState<string | null>(null);
 	const [selectedLocalSkin, setSelectedLocalSkin] = useState<MinecraftSkin | null>(null);
 
+	// Loading state specifically for the add/save operations in the modal
+	const [modalLoading, setModalLoading] = useState<boolean>(false);
+
 	const [isEditingSkin, setIsEditingSkin] = useState<boolean>(false);
 	const [editingSkin, setEditingSkin] = useState<MinecraftSkin | null>(null);
 
@@ -337,29 +348,6 @@ export function SkinsTab() {
 		setIsEditingSkin(false);
 	};
 
-	/*const handleUploadSkin = async () => {
-		if (!activeAccount) return;
-		setLoading(true);
-
-		try {
-			await MinecraftSkinService.uploadSkin(activeAccount.id, activeAccount.access_token, selectedLocalSkin.variant);
-			toast.success("Skin successfully added to library!");
-			await loadSkinData(); // Reload current skin
-			await loadLocalSkins(); // Reload library
-		} catch (err) {
-			console.error("Error uploading skin:", err);
-			let message = err instanceof Error ? err.message : String(err);
-			if (message.includes("No skin file selected")) {
-				message = "Please select a valid PNG skin file to upload.";
-			} else if (message.includes("access_token")) {
-				message = "Authentication error. Please try logging out and back in.";
-			}
-			toast.error(message);
-		} finally {
-			setLoading(false);
-		}
-	};*/
-
 	const saveSkin = async (skin: MinecraftSkin) => {
 		if (!skin) return;
 		setLocalSkinsLoading(true);
@@ -395,8 +383,21 @@ export function SkinsTab() {
 		}
 	};
 
-	const addSkin = async (skin: MinecraftSkin) => {
-
+	const addSkin = async (skinInput: string, targetName: string, targetVariant: SkinVariant, description?: string | null) => {
+		setModalLoading(true);
+		try {
+			const newSkin = await MinecraftSkinService.addSkinLocally(skinInput, targetName, targetVariant, description);
+			toast.success(`Successfully added skin: ${newSkin.name}`);
+			setLocalSkins(prevSkins => [...prevSkins, newSkin].sort((a, b) => a.name.localeCompare(b.name)));
+			setIsEditingSkin(false);
+			setEditingSkin(null);
+		} catch (err) {
+			console.error("Error adding new skin:", err);
+			const errorMessage = err instanceof Error ? err.message : String(err);
+			toast.error(`Failed to add skin: ${errorMessage}`);
+		} finally {
+			setModalLoading(false);
+		}
 	}
 
 	const applyLocalSkin = async (skin: MinecraftSkin) => {
@@ -517,7 +518,7 @@ export function SkinsTab() {
 					cancel={cancelEditSkin}
 					saveSkin={saveSkin}
 					addSkin={addSkin}
-					localSkinsLoading={localSkinsLoading}
+					localSkinsLoading={modalLoading}
 				/>
 			)}
 		</div>
