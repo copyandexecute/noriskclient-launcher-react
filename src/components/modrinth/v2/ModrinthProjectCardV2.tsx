@@ -46,6 +46,7 @@ export interface ModrinthProjectCardV2Props extends VersionListPassthroughProps 
   installStatus: ContentInstallStatus | null;
   isQuickInstalling?: boolean;
   isInstallingModpackAsProfile?: boolean;
+  installingVersionStates?: Record<string, boolean>;
   onQuickInstallClick: (project: ModrinthSearchHit) => void;
   onInstallModpackAsProfileClick?: (project: ModrinthSearchHit) => void;
   onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
@@ -80,6 +81,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
   installStatus,
   isQuickInstalling,
   isInstallingModpackAsProfile,
+  installingVersionStates,
   onQuickInstallClick,
   onInstallModpackAsProfileClick,
   onInstallModpackVersionAsProfileClick,
@@ -311,6 +313,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
           uiState={versionDropdownUIState}
           openDropdowns={openVersionDropdowns}
           installedVersions={installedVersions}
+          installingVersionStates={installingVersionStates}
           selectedProfile={selectedProfile}
           selectedProfileId={selectedProfileId}
           hoveredVersionId={hoveredVersionId}

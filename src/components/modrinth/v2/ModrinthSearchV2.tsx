@@ -320,7 +320,7 @@ export function ModrinthSearchV2({
     if (searchResultsAreaRef.current) {
       searchResultsAreaRef.current.scrollTop = 0;
     }
-
+    
     // Reset expanded versions when filter changes
     setExpandedVersions({});
     setNumDisplayedVersions({});
@@ -578,7 +578,7 @@ export function ModrinthSearchV2({
         });
         
         // Ensure all fields from statusFromService are assigned
-        newInstalledState[version.id] = {
+          newInstalledState[version.id] = {
           is_installed: statusFromService.is_installed,
           is_included_in_norisk_pack: projectInNoRiskStatus.is_included_in_norisk_pack && statusFromService.is_specific_version_in_pack,
           is_specific_version_in_pack: statusFromService.is_specific_version_in_pack,
@@ -811,14 +811,14 @@ export function ModrinthSearchV2({
       openInstallModal(project, version);
       return;
     }
-
+    setInstallingVersion(prev => ({ ...prev, [version.id]: true })); // Start loading for this version
     const profileId = selectedProfile.id;
     const profileName = selectedProfile.name;
     
-    await toast.promise(
-      async () => {
-        const primaryFile = version.files.find(file => file.primary) || version.files[0];
-        if (!primaryFile) {
+      await toast.promise(
+        async () => {
+          const primaryFile = version.files.find(file => file.primary) || version.files[0];
+          if (!primaryFile) {
           throw new Error("No download file available for the selected version.");
         }
 
@@ -850,14 +850,14 @@ export function ModrinthSearchV2({
         await installContentToProfile(payload);
         
         // Update project status - always set to installed when a version is installed
-        setInstalledProjects(prev => ({
-          ...prev,
+          setInstalledProjects(prev => ({
+            ...prev,
           [project.project_id]: getStatusForNewInstall(prev[project.project_id])
-        }));
-        
+          }));
+          
         // Update version status to installed and enabled
-        setInstalledVersions(prev => ({
-          ...prev,
+          setInstalledVersions(prev => ({
+            ...prev,
           [version.id]: getStatusForNewInstall(prev[version.id])
         }));
         
@@ -877,6 +877,7 @@ export function ModrinthSearchV2({
         // Catch is mostly for toast.promise rejections that don't get auto-logged by toast
         console.error("Direct install error (toast.promise rejected):", error);
     });
+    setInstallingVersion(prev => ({ ...prev, [version.id]: false })); // Stop loading for this version
   };
 
   // Find the selected profile when the component mounts or selectedProfileId changes
@@ -938,6 +939,7 @@ export function ModrinthSearchV2({
   const [quickInstallError, setQuickInstallError] = useState<string | null>(null);
   const [quickInstallingProjects, setQuickInstallingProjects] = useState<Record<string, boolean>>({}); // New state for card button loading
   const [installingModpackAsProfile, setInstallingModpackAsProfile] = useState<Record<string, boolean>>({}); // New state for modpack install loading
+  const [installingVersion, setInstallingVersion] = useState<Record<string, boolean>>({}); // New state for specific version install loading
 
   // Helper function to map Modrinth project type to our ContentType enum
   function mapModrinthProjectTypeToNrContentType(projectType: ModrinthProjectType): NrContentType | null {
@@ -1234,7 +1236,7 @@ export function ModrinthSearchV2({
       if (onInstallSuccess) {
         onInstallSuccess();
       }
-
+      
     } catch (error) {
       toast.error(`Failed to install: ${error instanceof Error ? error.message : String(error)}`);
       console.error("Install error in quickInstallToProfile:", error);
@@ -1525,7 +1527,7 @@ export function ModrinthSearchV2({
         const gameVersion = version.game_versions[0] || 'unknown';
         let loader = 'vanilla';
         if (project.project_type === 'mod' || project.project_type === 'modpack') {
-            loader = version.loaders[0] || 'vanilla';
+          loader = version.loaders[0] || 'vanilla';
         }
 
         newProfileId = await ProfileService.createProfile({
@@ -1928,6 +1930,7 @@ export function ModrinthSearchV2({
                 installStatus={currentProjectInstallStatus}
                 isQuickInstalling={quickInstallingProjects[hit.project_id] || false} // Pass loading state
                 isInstallingModpackAsProfile={installingModpackAsProfile[hit.project_id] || false} // Pass new loading state
+                installingVersionStates={installingVersion} // Pass the whole record for version install states
                 onQuickInstallClick={quickInstall}
                 onInstallModpackAsProfileClick={handleInstallModpackAsProfile}
                 onInstallModpackVersionAsProfileClick={handleInstallModpackVersionAsProfile}
@@ -2025,17 +2028,17 @@ export function ModrinthSearchV2({
 
       {/* Quick Install Modal */}
       {quickInstallProject && quickInstallModalOpen && (
-        <ModrinthQuickInstallModalV2
-          isOpen={quickInstallModalOpen}
-          onClose={closeQuickInstallModal}
-          project={quickInstallProject}
-          versions={quickInstallVersions}
-          isLoading={quickInstallLoading}
-          error={quickInstallError}
-          profiles={internalProfiles}
-          selectedProfileId={selectedProfile?.id}
-          installStatus={installStatus}
-          installingProfiles={installing}
+      <ModrinthQuickInstallModalV2
+        isOpen={quickInstallModalOpen}
+        onClose={closeQuickInstallModal}
+        project={quickInstallProject}
+        versions={quickInstallVersions}
+        isLoading={quickInstallLoading}
+        error={quickInstallError}
+        profiles={internalProfiles}
+        selectedProfileId={selectedProfile?.id}
+        installStatus={installStatus}
+        installingProfiles={installing}
           onInstallToProfile={(profileId) => {
             // Call the existing quickInstallToProfile function
             quickInstallToProfile(profileId);
@@ -2043,7 +2046,7 @@ export function ModrinthSearchV2({
           onUninstallClick={async (profileId, project, version) => {
             await handleDeleteVersionFromProfile(profileId, project, version);
           }}
-          findBestVersionForProfile={findBestVersionForProfile}
+        findBestVersionForProfile={findBestVersionForProfile}
           onInstallToNewProfile={handleInstallToNewProfile}
         />
       )}
