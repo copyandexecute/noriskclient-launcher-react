@@ -840,26 +840,20 @@ export function ModrinthSearchV2({
 
         await installContentToProfile(payload);
         
+        // Update project status - always set to installed when a version is installed
         setInstalledProjects(prev => ({
           ...prev,
           [project.project_id]: getStatusForNewInstall(prev[project.project_id])
         }));
         
+        // Update version status to installed and enabled
         setInstalledVersions(prev => ({
           ...prev,
           [version.id]: getStatusForNewInstall(prev[version.id])
         }));
         
-        // Force refresh the installation status for this version to get the most up-to-date state
-        if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
-          await checkDisplayedVersionsStatus(
-            project.project_id, 
-            expandedVersions[project.project_id] as ModrinthVersion[],
-            0,
-            (numDisplayedVersions[project.project_id] || initialDisplayCount),
-            [version.id] // Force refresh this specific version
-          );
-        }
+        // No need to call checkDisplayedVersionsStatus since we already know the state
+        // This reduces server load and improves performance
 
         if (onInstallSuccess) {
             onInstallSuccess();
@@ -1605,14 +1599,6 @@ export function ModrinthSearchV2({
     version: ModrinthVersion
   ) => {
     const profileName = internalProfiles.find(p => p.id === profileId)?.name || profileId;
-    // const confirmation = window.confirm(
-    //   `Are you sure you want to delete ${project.title} (${version.version_number}) from profile "${profileName}"?`
-    // );
-
-    // if (!confirmation) {
-    //   toast("Deletion cancelled.", { icon: 'ℹ️' });
-    //   return;
-    // }
 
     const primaryFile = version.files.find(file => file.primary) || version.files[0];
     if (!primaryFile) {
@@ -1620,17 +1606,9 @@ export function ModrinthSearchV2({
       return;
     }
 
-    // mappedContentType is not directly part of UninstallContentPayload but might be useful for logging or future backend logic
-    // const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
-    // if (!mappedContentType) {
-    //   return;
-    // }
-
     const payload: UninstallContentPayload = {
       profile_id: profileId,
-      sha1_hash: primaryFile.hashes?.sha1 || undefined, // Use undefined if not present, as per existing type
-      // Future fields like mod_id_to_remove, filename_to_remove, content_type_to_scan are not used here yet.
-      // We are relying on sha1_hash for Modrinth content.
+      sha1_hash: primaryFile.hashes?.sha1 || undefined,
     };
 
     if (!payload.sha1_hash) {
@@ -1648,54 +1626,57 @@ export function ModrinthSearchV2({
       {
         loading: `Removing ${project.title} (${version.version_number}) from ${profileName}...`,
         success: (data: any) => {
+          // Update version status - set to not installed
           setInstalledVersions(prev => ({
             ...prev,
-            [version.id]: { ...prev[version.id], is_installed: false },
+            [version.id]: {
+              is_installed: false,
+              is_included_in_norisk_pack: prev[version.id]?.is_included_in_norisk_pack || false,
+              is_specific_version_in_pack: prev[version.id]?.is_specific_version_in_pack || false,
+              is_enabled: null, // Not applicable for uninstalled items
+              found_item_details: null, // Clear details for uninstalled items
+            }
           }));
-          // Update installStatus for modals if they are open and showing this item
+          
+          // Update modal states if they are open and showing this item
           if (installModalOpen && selectedProject?.project_id === project.project_id && selectedVersion?.id === version.id) {
             setInstallStatus(prev => ({ ...prev, [profileId]: false }));
           }
           if (quickInstallModalOpen && quickInstallProject?.project_id === project.project_id) {
-             setInstallStatus(prev => ({ ...prev, [profileId]: false })); // General update
+            setInstallStatus(prev => ({ ...prev, [profileId]: false }));
           }
 
-          // Re-check overall project installation status - Temporarily commented out
-          // console.log("TODO: Implement or uncomment checkInstallationStatus() or similar logic to update installedProjects state");
-          // checkInstallationStatus(); 
-          
-          /*
-          // The more complex logic for updating installedProjects is commented out for now
-          // to resolve linter errors and will be addressed later.
-          const otherVersionsOfProjectInstalled = Object.values(installedVersions).some(
-            (status, index) => {
-              const versionEntry = Object.entries(installedVersions)[index];
-              const versionIdFromFile = versionEntry[0];
-              let projectForVersionId: string | null = null;
-              searchResults.forEach(p => {
-                if (p.versions?.includes(versionIdFromFile)) { 
-                    projectForVersionId = p.project_id;
-                }
-              });
-              if(!projectForVersionId && expandedVersions[project.project_id] && Array.isArray(expandedVersions[project.project_id])){
-                const projVersions = expandedVersions[project.project_id] as ModrinthVersion[];
-                if(projVersions.find(v => v.id === versionIdFromFile)){
-                    projectForVersionId = project.project_id;
-                }
-              }
-              return projectForVersionId === project.project_id && status.is_installed;
-            }
-          );
+          // Check if any other versions of this project remain installed
+          // If not, mark the project as not installed
+          const anyVersionsStillInstalled = Object.entries(installedVersions)
+            .some(([versionId, status]) => {
+              // Skip the version we just deleted
+              if (versionId === version.id) return false;
+              
+              // Get the corresponding project for this version
+              const versionProject = expandedVersions[project.project_id];
+              if (!Array.isArray(versionProject)) return false;
+              
+              // Check if this version belongs to our project and is installed
+              const belongsToProject = versionProject.some(v => v.id === versionId);
+              return belongsToProject && status?.is_installed === true;
+            });
 
-          if (!otherVersionsOfProjectInstalled) {
+          // If no versions are still installed, update project status
+          if (!anyVersionsStillInstalled) {
             setInstalledProjects(prev => ({
               ...prev,
-              [project.project_id]: { ...prev[project.project_id], is_installed: false },
+              [project.project_id]: {
+                is_installed: false,
+                is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false,
+                is_specific_version_in_pack: prev[project.project_id]?.is_specific_version_in_pack || false,
+                is_enabled: null,
+                found_item_details: null,
+              }
             }));
           }
-          */
 
-          if (onInstallSuccess) { // Re-using onInstallSuccess for general UI refresh
+          if (onInstallSuccess) {
             onInstallSuccess();
           }
           return `Successfully removed ${project.title} (${version.version_number}) from ${profileName}`;
@@ -1731,9 +1712,7 @@ export function ModrinthSearchV2({
         
         await toggleContentFromProfile(payload);
         
-        // Update local UI state immediately (optimistic update)
-        // Since we're only changing one field and keeping the rest of the status,
-        // we use the spread operator to maintain other fields
+        // Update only the is_enabled field while preserving all other fields
         setInstalledVersions(prev => ({
           ...prev,
           [version.id]: prev[version.id] ? {
@@ -1742,16 +1721,8 @@ export function ModrinthSearchV2({
           } : null
         }));
 
-        // Force refresh the installation status for this version to get the most up-to-date state
-        if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
-          await checkDisplayedVersionsStatus(
-            project.project_id, 
-            expandedVersions[project.project_id] as ModrinthVersion[],
-            0,
-            (numDisplayedVersions[project.project_id] || initialDisplayCount),
-            [version.id] // Force refresh this specific version
-          );
-        }
+        // No need to update installedProjects as enabling/disabling doesn't change
+        // the installation state at the project level
 
         return { versionName: version.version_number };
       },
