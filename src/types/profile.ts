@@ -1,3 +1,5 @@
+import { ContentType } from "./content";
+
 export type ModLoader = "vanilla" | "forge" | "fabric" | "quilt" | "neoforge";
 export type ProfileState =
   | "not_installed"
@@ -232,10 +234,19 @@ export interface CheckContentParams {
 /**
  * Return type for the `is_content_installed` Tauri command.
  */
+export interface FoundItemDetails {
+  item_type: ContentType;
+  item_id?: string;
+  file_name?: string;
+  display_name?: string;
+}
+
 export interface ContentInstallStatus {
   is_included_in_norisk_pack: boolean;
   is_installed: boolean;
   is_specific_version_in_pack: boolean;
+  is_enabled?: boolean;
+  found_item_details?: FoundItemDetails;
 }
 
 // Added: Type for Screenshot Information
