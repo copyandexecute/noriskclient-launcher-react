@@ -11,6 +11,8 @@ import { DropdownFooter } from "../ui/dropdown/DropdownFooter";
 import { DropdownDivider } from "../ui/dropdown/DropdownDivider";
 import { Label } from "../ui/Label";
 import { StatusMessage } from "../ui/StatusMessage";
+import { useRef, useState } from "react";
+import { gsap } from "gsap";
 
 interface MinecraftAccountManagerProps {
   onClose: () => void;
@@ -39,11 +41,19 @@ export function MinecraftAccountManager({
   };
 
   const handleSetActive = async (accountId: string) => {
-    await setActiveAccount(accountId);
+    try {
+      await setActiveAccount(accountId);
+    } catch (err) {
+      console.error("Error setting active account:", err);
+    }
   };
 
   const handleRemoveAccount = async (accountId: string) => {
-    await removeAccount(accountId);
+    try {
+      await removeAccount(accountId);
+    } catch (err) {
+      console.error("Error removing account:", err);
+    }
   };
 
   if (isInDropdown) {
@@ -221,15 +231,63 @@ function AccountItem({
   isLoading,
   isDropdownItem,
 }: AccountItemProps) {
+  const itemRef = useRef<HTMLDivElement>(null);
+  const [isActivating, setIsActivating] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+
   const avatarUrl = account.id
     ? `https://crafatar.com/avatars/${account.id}?overlay&size=${isDropdownItem ? 24 : 40}`
     : null;
 
+  const handleAccountClick = () => {
+    if (account.active || isLoading || isActivating || isRemoving || !itemRef.current) return;
+
+    setIsActivating(true);
+    gsap.to(itemRef.current, {
+      scale: 0.97,
+      duration: 0.1,
+      yoyo: true,
+      repeat: 1,
+      ease: "power1.inOut",
+      onComplete: () => {
+        gsap.set(itemRef.current, { scale: 1 });
+        const performSetActive = async () => {
+          try {
+            await onSetActive(account.id);
+          } catch (err) {
+            console.error("Error setting account active:", err);
+          } finally {
+            setIsActivating(false);
+          }
+        };
+        performSetActive();
+      },
+    });
+  };
+
+  const handleRemoveClick = async () => {
+    if (isLoading || isActivating || isRemoving) return;
+
+    setIsRemoving(true);
+    try {
+      await onRemoveAccount(account.id);
+    } catch (err) {
+      console.error("Error removing account:", err);
+      setIsRemoving(false);
+    }
+  };
+
+  const effectiveIsLoading = isLoading || isActivating || isRemoving;
+
   return (
     <div
+      ref={itemRef}
       className={`flex items-center justify-between rounded-md ${
-        account.active ? "bg-white/10" : "bg-black/40"
-      } border border-white/10 hover:border-white/20 transition-colors overflow-hidden`}
+        account.active ? "bg-white/10" : "bg-black/40 hover:bg-white/5"
+      } border border-white/10 hover:border-white/20 transition-colors overflow-hidden ${
+        !account.active && !effectiveIsLoading ? "cursor-pointer" : "cursor-default"
+      } ${isActivating ? "opacity-75" : ""}`}
+      onClick={!account.active ? handleAccountClick : undefined}
     >
       <div className="flex items-center gap-2 min-w-0 flex-grow p-2">
         <div
@@ -255,48 +313,34 @@ function AccountItem({
             </span>
           )}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex items-center">
           <h4
-            className={`${isDropdownItem ? "text-sm" : "text-2xl"} text-white font-minecraft truncate`}
+            className={`${isDropdownItem ? "text-3xl" : "text-2xl"} text-white font-minecraft truncate`}
             title={account.minecraft_username || account.username}
           >
             {account.minecraft_username || account.username}
           </h4>
+          {isActivating && (
+            <Icon
+              icon="solar:spinner-bold"
+              className={`animate-spin ${isDropdownItem ? "w-4 h-4" : "w-5 h-5"} text-white/80 ml-2`}
+            />
+          )}
         </div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0 p-1">
-        {account.active ? (
-          <Label
-            variant="success"
-            size={isDropdownItem ? "xs" : "md"}
-            className="whitespace-nowrap"
-            icon={
-              <Icon
-                icon="solar:check-circle-bold"
-                className={isDropdownItem ? "w-3 h-3" : "w-5 h-5"}
-              />
-            }
-          >
-            Active
-          </Label>
-        ) : (
-          <Button
-            variant="secondary"
-            onClick={() => onSetActive(account.id)}
-            disabled={isLoading}
-            size={isDropdownItem ? "xs" : "md"}
-            className={isDropdownItem ? "min-w-0" : ""}
-          >
-            Set Active
-          </Button>
-        )}
         {isDropdownItem ? (
           <IconButton
             variant="destructive"
-            onClick={() => onRemoveAccount(account.id)}
-            disabled={isLoading}
+            onClick={handleRemoveClick}
+            disabled={effectiveIsLoading}
+            shadowDepth="short"
             icon={
-              <Icon icon="solar:trash-bin-trash-bold" className="w-3 h-3" />
+              isRemoving ? (
+                <Icon icon="solar:spinner-bold" className="w-3 h-3 animate-spin" />
+              ) : (
+                <Icon icon="solar:trash-bin-trash-bold" className="w-3 h-3" />
+              )
             }
             size="xs"
             aria-label="Remove Account"
@@ -304,15 +348,25 @@ function AccountItem({
         ) : (
           <Button
             variant="destructive"
-            onClick={() => onRemoveAccount(account.id)}
-            disabled={isLoading}
-            icon={
-              <Icon icon="solar:trash-bin-trash-bold" className="w-5 h-5" />
-            }
+            onClick={handleRemoveClick}
+            disabled={effectiveIsLoading}
             size="md"
             aria-label="Remove Account"
           >
-            Remove
+            {isRemoving ? (
+              <>
+                <Icon
+                  icon="solar:spinner-bold"
+                  className="w-5 h-5 animate-spin"
+                />
+                <span className="ml-2">Removing...</span>
+              </>
+            ) : (
+              <>
+                <Icon icon="solar:trash-bin-trash-bold" className="w-5 h-5" />
+                <span className="ml-1">Remove</span>
+              </>
+            )}
           </Button>
         )}
       </div>
