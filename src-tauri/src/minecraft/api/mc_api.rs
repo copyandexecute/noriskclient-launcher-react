@@ -4,8 +4,10 @@ use crate::minecraft::dto::piston_meta::PistonMeta;
 use crate::minecraft::dto::version_manifest::VersionManifest;
 use log::debug;
 use reqwest;
+use serde_json::Value;
 use std::fs;
 use std::path::Path;
+use uuid::Uuid;
 
 const VERSION_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 const MOJANG_API_URL: &str = "https://api.mojang.com";
@@ -72,6 +74,64 @@ impl MinecraftApiService {
 
         debug!("API call completed: get_user_profile");
         Ok(profile)
+    }
+
+    pub async fn get_profile_by_name_or_uuid(
+        &self,
+        name_or_uuid_query: &str,
+    ) -> Result<MinecraftProfile> {
+        debug!(
+            "API call: get_profile_by_name_or_uuid for query: {}",
+            name_or_uuid_query
+        );
+
+        // Check if the query is a valid UUID
+        if Uuid::parse_str(name_or_uuid_query).is_ok() {
+            debug!("Query is a UUID. Fetching profile directly.");
+            return self.get_user_profile(name_or_uuid_query).await;
+        }
+
+        // If not a UUID, assume it's a username and try to resolve it
+        debug!("Query is likely a username. Attempting to resolve to UUID.");
+        let username_lookup_url = format!(
+            "{}/users/profiles/minecraft/{}",
+            MOJANG_API_URL, name_or_uuid_query
+        );
+        debug!("Username lookup URL: {}", username_lookup_url);
+
+        let response = reqwest::get(&username_lookup_url)
+            .await
+            .map_err(|e| {
+                debug!("Failed to call Mojang API for username lookup: {:?}", e);
+                AppError::MinecraftApi(e)
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_else(|_| format!("HTTP Error {}", status));
+            debug!("Mojang API username lookup failed with status {}: {}", status, error_text);
+            return Err(AppError::Other(format!(
+                "Failed to find player by name '{}': {}",
+                name_or_uuid_query,
+                if status == 404 { "Player not found".to_string() } else { error_text }
+            )));
+        }
+
+        let player_data = response.json::<Value>().await.map_err(|e| {
+            debug!("Failed to parse Mojang API response for username lookup: {:?}", e);
+            AppError::MinecraftApi(e)
+        })?;
+
+        if let Some(uuid_str) = player_data.get("id").and_then(Value::as_str) {
+            debug!("Successfully resolved username to UUID: {}", uuid_str);
+            self.get_user_profile(uuid_str).await
+        } else {
+            debug!("Could not extract UUID from Mojang API response. Response: {:?}", player_data);
+            Err(AppError::Other(format!(
+                "Could not find UUID for player name: {}",
+                name_or_uuid_query
+            )))
+        }
     }
 
     // Change skin using access token (requires authentication)

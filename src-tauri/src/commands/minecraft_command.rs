@@ -98,6 +98,40 @@ pub async fn get_neoforge_versions(minecraft_version: String) -> Result<Vec<Stri
     Ok(filtered_versions)
 }
 
+#[tauri::command]
+pub async fn get_profile_by_name_or_uuid(
+    name_or_uuid_query: String,
+) -> Result<MinecraftProfile, CommandError> {
+    debug!(
+        "Command called: get_profile_by_name_or_uuid for query: {}",
+        name_or_uuid_query
+    );
+    let api_service = MinecraftApiService::new();
+
+    // This assumes MinecraftApiService has a method like `get_profile_by_name_or_uuid`
+    // which intelligently handles whether the input is a name or a UUID.
+    // If it's a name, it would first resolve it to a UUID, then fetch the profile.
+    match api_service
+        .get_profile_by_name_or_uuid(&name_or_uuid_query) // Hypothetical method
+        .await
+    {
+        Ok(profile) => {
+            debug!(
+                "Successfully retrieved profile for query: {}",
+                name_or_uuid_query
+            );
+            Ok(profile)
+        }
+        Err(e) => {
+            debug!(
+                "Failed to retrieve profile for query {}: {:?}",
+                name_or_uuid_query, e
+            );
+            Err(CommandError::from(e))
+        }
+    }
+}
+
 /// Get the current user skin data
 #[tauri::command]
 pub async fn get_user_skin_data(

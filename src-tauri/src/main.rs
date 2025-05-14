@@ -342,6 +342,7 @@ async fn main() {
             commands::content_command::uninstall_content_from_profile,
             commands::content_command::toggle_content_from_profile,
             commands::content_command::install_content_to_profile,
+            commands::minecraft_command::get_profile_by_name_or_uuid,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
