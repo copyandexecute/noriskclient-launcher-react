@@ -102,10 +102,36 @@ export class MinecraftSkinService {
         } else if (UUID_REGEX.test(skinInput)) {
             sourceDetails = { type: "Profile", details: { query: skinInput } };
         } else {
-            // If it's not a typical Minecraft username and not a UUID, treat it as a URL.
-            // The backend will validate if it's a usable image URL.
-            console.log(`Input "${skinInput}" is not a typical MC username or UUID. Treating as URL.`);
-            sourceDetails = { type: "Url", details: { url: skinInput } };
+            let isHttpUrl = false;
+            let isFileProtocolUrl = false;
+            let pathFromUrlIfFileProtocol = "";
+    
+            try {
+                const parsedUrl = new URL(skinInput); 
+                if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+                    isHttpUrl = true;
+                } else if (parsedUrl.protocol === "file:") {
+                    isFileProtocolUrl = true;
+                    pathFromUrlIfFileProtocol = decodeURIComponent(parsedUrl.pathname);
+                    // Remove leading slash on Windows if it looks like /C:/path - Rust will handle it better.
+                    // However, consistent path format from JS to Rust is good.
+                    // For file:///C:/foo.png, pathname is /C:/foo.png. std::path::Path on Windows handles this.
+                    // For file:///foo.png (mac/linux), pathname is /foo.png.
+                }
+            } catch (e) {
+                // Not a parsable URL (e.g. "/path/to/file.png" or "C:\path\to\file.png")
+                // It will be treated as a FilePath by default in the logic below.
+            }
+    
+            if (isHttpUrl) {
+                sourceDetails = { type: "Url", details: { url: skinInput } };
+            } else if (isFileProtocolUrl) {
+                sourceDetails = { type: "FilePath", details: { path: pathFromUrlIfFileProtocol } };
+            } else {
+                // Not a username, UUID, or a parsable http/https/file URL.
+                // Assume it's a direct file path like "/path/file.png" or "C:\path\file.png".
+                sourceDetails = { type: "FilePath", details: { path: skinInput } };
+            }
         }
 
         const payload: AddLocalSkinCommandPayload = {

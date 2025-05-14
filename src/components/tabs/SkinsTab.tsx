@@ -22,6 +22,7 @@ import {SearchInput} from "../ui/SearchInput.tsx";
 import {useDebounce} from "../../hooks/useDebounce";
 import {useThemeStore} from "../../store/useThemeStore.ts";
 import {toast} from "react-hot-toast";
+import { open } from '@tauri-apps/plugin-dialog';
 
 const SkinPreview = memo(({
 														skin,
@@ -142,6 +143,30 @@ const EditSkinModal = memo(({
 	const [skinFile, setSkinFile] = useState<File | null>(null);
 	const [skinInput, setskinInput] = useState<string>("");
 
+	const handleOpenFileUpload = async () => {
+		try {
+			const selectedFile = await open({
+				multiple: false,
+				directory: false,
+				filters: [{
+					name: 'Skin Image',
+					extensions: ['png']
+				}],
+				title: "Select Skin File (.png)"
+			});
+
+			if (typeof selectedFile === 'string') {
+				setskinInput(selectedFile);
+				toast.success("File selected: " + selectedFile.split(/[\\\/]/).pop());
+			} else if (selectedFile === null) {
+				console.log("User cancelled file selection.");
+			}
+		} catch (error) {
+			console.error("Error opening file dialog:", error);
+			toast.error("Failed to open file dialog. Ensure Tauri dialog plugin is configured.");
+		}
+	};
+
 	const finishEditingSkin = async () => {
 		if (skin) {
 			await saveSkin({
@@ -152,27 +177,52 @@ const EditSkinModal = memo(({
 		} else {
 			const trimmedInput = skinInput.trim();
 			if (!trimmedInput) {
-				toast.error("Skin source (Username, UUID, or URL) cannot be empty.");
+				toast.error("Skin source (Username, UUID, URL, or File Path) cannot be empty.");
 				return;
 			}
 
 			let targetName = "";
-			try {
-				// Attempt to parse as URL to extract filename
-				const url = new URL(trimmedInput);
-				const pathnameParts = url.pathname.split('/').filter(part => part.length > 0);
-				targetName = pathnameParts.pop() || url.hostname || "Web_Skin"; // Last part of path, or hostname, or default
-				// Remove .png or other common image extensions if present
+			const looksLikeHttpUrl = /^(https?):\/\//i.test(trimmedInput);
+			const isLikelyFilePath = (input: string): boolean => {
+				if (input.startsWith("file://")) return true;
+				const hasPathSeparators = /[\\\/]/.test(input);
+				const isHttp = /^(https?):\/\//i.test(input);
+				return hasPathSeparators && !isHttp;
+			};
+
+			if (looksLikeHttpUrl) {
+				try {
+					const url = new URL(trimmedInput);
+					const pathnameParts = url.pathname.split('/').filter(part => part.length > 0);
+					targetName = pathnameParts.pop() || url.hostname || "Web_Skin";
+					if (targetName.match(/\.(png|jpg|jpeg|gif)$/i)) {
+						targetName = targetName.substring(0, targetName.lastIndexOf('.'));
+					}
+				} catch (e) {
+					targetName = "Invalid_Web_Skin_Url";
+					console.error("Error parsing HTTP URL for name:", e);
+				}
+			} else if (isLikelyFilePath(trimmedInput)) {
+				let pathForNameExtraction = trimmedInput;
+				if (trimmedInput.startsWith("file://")) {
+					try {
+						const tempUrl = new URL(trimmedInput);
+						pathForNameExtraction = decodeURIComponent(tempUrl.pathname);
+					} catch (e) { 
+						console.error("Error parsing file:// URL for name extraction:", e);
+					}
+				}
+				const pathParts = pathForNameExtraction.split(/[\\\/]/);
+				targetName = pathParts.pop() || "File_Skin";
 				if (targetName.match(/\.(png|jpg|jpeg|gif)$/i)) {
 					targetName = targetName.substring(0, targetName.lastIndexOf('.'));
 				}
-			} catch (e) {
-				// Not a valid URL, assume it's a username/UUID
+			} else {
 				targetName = trimmedInput;
 			}
 
-			if (!targetName.trim()) { // Final safety check for derived name
-				targetName = "Unnamed_Skin"; // Fallback if somehow still empty
+			if (!targetName.trim()) { 
+				targetName = "Unnamed_Skin";
 				console.warn("Derived target name was empty, falling back to Unnamed_Skin for input:", trimmedInput);
 			}
 
@@ -242,6 +292,7 @@ const EditSkinModal = memo(({
 							<button
 								className="p-4 aspect-square bg-black/30 hover:bg-black/60 backdrop-blur-md border-2 border-white/20 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-300"
 								title={"Upload Skin from file"}
+								onClick={handleOpenFileUpload}
 							>
 								<Icon
 									icon="solar:folder-bold"
@@ -502,7 +553,7 @@ export function SkinsTab() {
 			await loadSkinData(); // Reload current skin display
 		} catch (err) {
 			console.error("Error applying local skin:", err);
-			toast.error(err instanceof Error ? err.message : String(err));
+			toast.error(err instanceof Error ? err.message : String(err.message));
 		} finally {
 			setLoading(false);
 		}
