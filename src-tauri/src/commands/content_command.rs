@@ -82,7 +82,7 @@ async fn uninstall_content_by_sha1_internal(
     let mut asset_file_deletion_errors_occurred = false;
     match state_manager.profile_manager.get_profile_instance_path(profile_id).await {
         Ok(profile_instance_path) => {
-            let asset_dirs_to_scan = vec!["shaders", "resourcepacks", "datapacks"];
+            let asset_dirs_to_scan = vec!["shaderpacks", "resourcepacks", "datapacks"];
             for dir_name in asset_dirs_to_scan {
                 let asset_dir_path = profile_instance_path.join(dir_name);
                 if asset_dir_path.is_dir() {
