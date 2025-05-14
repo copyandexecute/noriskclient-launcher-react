@@ -1699,12 +1699,12 @@ export function ModrinthSearchV2({
     newEnabledState: boolean,
     sha1Hash: string
   ) => {
-    // Get current installation status
-    const currentStatus = installedVersions[version.id];
+    // Get current installation status for the version
+    const currentVersionStatus = installedVersions[version.id];
 
     // Check if this is a NoRisk Pack item
-    if (currentStatus?.norisk_pack_item_details?.norisk_mod_identifier) {
-      const noriskIdentifier = currentStatus.norisk_pack_item_details.norisk_mod_identifier;
+    if (currentVersionStatus?.norisk_pack_item_details?.norisk_mod_identifier) {
+      const noriskIdentifier = currentVersionStatus.norisk_pack_item_details.norisk_mod_identifier;
       
       const toastMessage = newEnabledState ? "Enabling" : "Disabling";
       const successMessage = newEnabledState ? "enabled" : "disabled";
@@ -1719,7 +1719,7 @@ export function ModrinthSearchV2({
           
           await toggleContentFromProfile(payload);
           
-          // Update only the is_enabled field while preserving all other fields
+          // Update version's installation status
           setInstalledVersions(prev => ({
             ...prev,
             [version.id]: prev[version.id] ? {
@@ -1732,6 +1732,29 @@ export function ModrinthSearchV2({
             } : null
           }));
 
+          // Also update the project's installation status to reflect the change
+          // This is important if the project card's display depends on this specific item's state.
+          setInstalledProjects(prev => {
+            const currentProjectStatus = prev[project.project_id];
+            if (currentProjectStatus) {
+              return {
+                ...prev,
+                [project.project_id]: {
+                  ...currentProjectStatus,
+                  is_enabled: newEnabledState, // Update top-level is_enabled for the project
+                  norisk_pack_item_details: {
+                    // Ensure we spread existing details if they exist, or initialize if not
+                    ...(currentProjectStatus.norisk_pack_item_details || {}),
+                    // We might not have a full norisk_mod_identifier here at project level,
+                    // but the key is to update its is_enabled state if these details are what project card uses.
+                    is_enabled: newEnabledState 
+                  }
+                }
+              };
+            }
+            return prev; // If no existing project status, don't change it
+          });
+
           return { versionName: version.version_number };
         },
         {
@@ -1743,10 +1766,10 @@ export function ModrinthSearchV2({
         console.error(`Error ${toastMessage.toLowerCase()} NoRisk Pack item:`, err);
       });
       
-      return;
+      return; // Exit after handling NoRisk pack item
     }
 
-    // Regular content toggle using SHA1 hash
+    // Regular content toggle using SHA1 hash (for non-NoRisk pack items)
     if (!sha1Hash) {
       toast.error("Cannot enable/disable version: missing file hash");
       return;
@@ -1765,18 +1788,31 @@ export function ModrinthSearchV2({
         
         await toggleContentFromProfile(payload);
         
-        // Update only the is_enabled field while preserving all other fields
+        // Update version's installation status
         setInstalledVersions(prev => ({
           ...prev,
           [version.id]: prev[version.id] ? {
             ...prev[version.id]!,
             is_enabled: newEnabledState
+            // No norisk_pack_item_details to update here for regular items
           } : null
         }));
 
-        // No need to update installedProjects as enabling/disabling doesn't change
-        // the installation state at the project level
-
+        // Update project's installation status (only its is_enabled field)
+        setInstalledProjects(prev => {
+            const currentProjectStatus = prev[project.project_id];
+            if (currentProjectStatus && currentProjectStatus.is_installed) { // Only update if project is considered installed
+              return {
+                ...prev,
+                [project.project_id]: {
+                  ...currentProjectStatus,
+                  is_enabled: newEnabledState 
+                }
+              };
+            }
+            return prev;
+        });
+        
         return { versionName: version.version_number };
       },
       {

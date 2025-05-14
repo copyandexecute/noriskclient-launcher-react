@@ -171,7 +171,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
                     </TagBadge>
                     )}
                     {installStatus.is_included_in_norisk_pack && (
-                    <TagBadge variant="info">
+                    <TagBadge variant={installStatus.norisk_pack_item_details?.is_enabled === false ? "inactive" : "info"}>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         In NoRisk Pack
                     </TagBadge>
