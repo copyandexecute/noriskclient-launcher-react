@@ -232,10 +232,16 @@ export function SettingsTab() {
             </div>
             <ToggleSwitch
               checked={tempConfig?.is_experimental || false}
-              onChange={(checked) =>
-                tempConfig &&
-                setTempConfig({ ...tempConfig, is_experimental: checked })
-              }
+              onChange={(newCheckedState) => {
+                console.log('Experimental Mode toggle: onChange triggered');
+                console.log('Current tempConfig.is_experimental:', tempConfig?.is_experimental);
+                console.log('Value from ToggleSwitch (newCheckedState):', newCheckedState);
+                if (tempConfig) {
+                  setTempConfig({ ...tempConfig, is_experimental: newCheckedState });
+                } else {
+                  console.log('Experimental Mode toggle: tempConfig is null, cannot update.');
+                }
+              }}
               disabled={saving}
               size="lg"
             />

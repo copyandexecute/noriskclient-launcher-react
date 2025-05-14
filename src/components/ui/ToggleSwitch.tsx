@@ -141,8 +141,6 @@ export function ToggleSwitch({
         },
       });
     }
-
-    onChange(!checked);
   };
 
   return (
