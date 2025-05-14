@@ -8,6 +8,7 @@ import type {
   ModrinthGameVersion,
 } from '../../../types/modrinth';
 import type { AccentColor } from '../../../store/useThemeStore';
+import type { ContentInstallStatus } from '../../../types/profile';
 import { Icon } from '@iconify/react';
 import { Button } from '../../ui/buttons/Button';
 import { Input } from '../../ui/Input';
@@ -34,10 +35,7 @@ interface ModrinthVersionListV2Props {
     gameVersion: boolean;
     loader: boolean;
   };
-  installedVersions: Record<
-    string,
-    { is_installed: boolean; is_included_in_norisk_pack: boolean }
-  >;
+  installedVersions: Record<string, ContentInstallStatus | null>;
   selectedProfile: any | null; // Replace 'any' with actual Profile type if available
   accentColor: AccentColor;
   hoveredVersionId: string | null;
@@ -65,6 +63,7 @@ interface ModrinthVersionListV2Props {
   onHoverVersion: (id: string | null) => void;
   selectedProfileId?: string | null;
   onDeleteClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onToggleEnableClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion, newEnabledState: boolean, sha1Hash: string) => void;
 }
 
 // --- Component Implementation ---
@@ -93,6 +92,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
   onHoverVersion,
   selectedProfileId,
   onDeleteClick,
+  onToggleEnableClick,
 }) => {
   // --- Helper function to get filtered versions (moved from parent) ---
   const getFilteredVersions = (
@@ -459,9 +459,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
       {filteredVersions.length > 0 ? (
         <div className="space-y-2">
           {filteredVersions.slice(0, displayedCount).map((version) => {
-            const versionStatus = selectedProfile
-              ? installedVersions[version.id]
-              : null;
+            const versionStatus = installedVersions[version.id] || null;
             const isVersionHovered = hoveredVersionId === version.id;
             return (
               <ModrinthVersionItemV2
@@ -477,6 +475,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
                 onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
                 selectedProfileId={selectedProfileId}
                 onDeleteClick={onDeleteClick}
+                onToggleEnableClick={onToggleEnableClick}
               />
             );
           })}

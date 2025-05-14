@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import type { ModrinthSearchHit, ModrinthVersion, ModrinthGameVersion } from '../../../types/modrinth';
 import type { AccentColor } from '../../../store/useThemeStore';
+import type { ContentInstallStatus } from '../../../types/profile';
 import { Button } from '../../ui/buttons/Button';
 import { IconButton } from '../../ui/buttons/IconButton';
 import { Icon } from '@iconify/react';
@@ -15,18 +16,13 @@ import { toast } from 'react-hot-toast';
 // Define Profile type locally as it's not exported from modrinth.ts
 type Profile = any;
 
-interface InstallStatus {
-  is_installed: boolean;
-  is_included_in_norisk_pack: boolean;
-}
-
 interface VersionListPassthroughProps {
   projectVersions: ModrinthVersion[] | null | 'loading';
   displayedCount: number;
   versionFilters: { gameVersions: string[]; loaders: string[]; versionType: string; };
   versionDropdownUIState: { showAllGameVersions: boolean; gameVersionSearchTerm: string; };
   openVersionDropdowns: { type: boolean; gameVersion: boolean; loader: boolean };
-  installedVersions: Record<string, InstallStatus>;
+  installedVersions: Record<string, ContentInstallStatus | null>;
   selectedProfile: Profile | null;
   hoveredVersionId: string | null;
   gameVersionsData: ModrinthGameVersion[];
@@ -41,12 +37,13 @@ interface VersionListPassthroughProps {
   onHoverVersion: (versionId: string | null) => void;
   selectedProfileId?: string | null;
   onDeleteVersionClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onToggleEnableClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion, newEnabledState: boolean, sha1Hash: string) => void;
 }
 
 export interface ModrinthProjectCardV2Props extends VersionListPassthroughProps {
   hit: ModrinthSearchHit;
   accentColor: AccentColor;
-  installStatus: InstallStatus | null;
+  installStatus: ContentInstallStatus | null;
   onQuickInstallClick: (project: ModrinthSearchHit) => void;
   onInstallModpackAsProfileClick?: (project: ModrinthSearchHit) => void;
   onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
@@ -85,6 +82,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
   onHoverVersion,
   selectedProfileId,
   onDeleteVersionClick,
+  onToggleEnableClick,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -285,6 +283,7 @@ export const ModrinthProjectCardV2: React.FC<ModrinthProjectCardV2Props> = ({
           onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
           onHoverVersion={onHoverVersion}
           onDeleteClick={onDeleteVersionClick}
+          onToggleEnableClick={onToggleEnableClick}
         />
       )}
     </div>

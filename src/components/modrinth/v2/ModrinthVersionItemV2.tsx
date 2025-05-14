@@ -4,6 +4,7 @@ import React from 'react';
 import { cn } from '../../../lib/utils';
 import type { ModrinthVersion, ModrinthSearchHit } from '../../../types/modrinth';
 import type { AccentColor } from '../../../store/useThemeStore';
+import type { ContentInstallStatus } from '../../../types/profile';
 import { Icon } from '@iconify/react';
 import { Button } from '../../ui/buttons/Button';
 import { TagBadge } from '../../ui/TagBadge';
@@ -12,13 +13,14 @@ import { TagBadge } from '../../ui/TagBadge';
 interface ModrinthVersionItemV2Props {
   version: ModrinthVersion;
   project: ModrinthSearchHit;
-  versionStatus: { is_installed: boolean; is_included_in_norisk_pack: boolean } | null;
+  versionStatus: ContentInstallStatus | null;
   accentColor: AccentColor;
   isHovered: boolean;
   onMouseEnter: (id: string) => void;
   onMouseLeave: () => void;
   onInstallClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   onDeleteClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onToggleEnableClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion, newEnabledState: boolean, sha1Hash: string) => void;
   onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
   selectedProfileId?: string | null;
 }
@@ -33,6 +35,7 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
   onMouseLeave,
   onInstallClick,
   onDeleteClick,
+  onToggleEnableClick,
   onInstallModpackVersionAsProfileClick,
   selectedProfileId,
 }) => {
@@ -59,16 +62,41 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
     }
   };
 
-  let buttonText = versionStatus?.is_installed ? "Installed" : "Install";
-  let buttonVariant: "default" | "success" = versionStatus?.is_installed ? "default" : "success";
+  const handleToggleEnableButtonClick = () => {
+    const primaryFile = version.files.find(f => f.primary) || version.files[0];
+    if (onToggleEnableClick && !isModpack && selectedProfileId && versionStatus?.is_installed && primaryFile?.hashes?.sha1 && typeof versionStatus.is_enabled === 'boolean') {
+      onToggleEnableClick(selectedProfileId, project, version, !versionStatus.is_enabled, primaryFile.hashes.sha1);
+    } else {
+      console.warn("Toggle enable action called under invalid conditions or missing data", {
+        onToggleEnableClick: !!onToggleEnableClick,
+        isModpack,
+        selectedProfileId: !!selectedProfileId,
+        is_installed: versionStatus?.is_installed,
+        sha1: primaryFile?.hashes?.sha1,
+        is_enabled_type: typeof versionStatus?.is_enabled
+      });
+    }
+  };
 
-  if (isModpack && !versionStatus?.is_installed) {
-    buttonText = "Install";
-    buttonVariant = "success"; 
+  // Determine button state based on selectedProfileId and installation status
+  let buttonText = "Install";
+  let buttonVariant: "default" | "success" = "success";
+  let buttonDisabled = false;
+
+  // Only show installation status if a profile is selected
+  if (selectedProfileId) {
+    if (versionStatus?.is_installed) {
+      buttonText = "Install";
+      buttonVariant = "success";
+      buttonDisabled = true;
+    }
+    
+    if (isModpack && !versionStatus?.is_installed) {
+      buttonText = "Install";
+      buttonVariant = "success";
+      buttonDisabled = false;
+    }
   }
-  // If it's a modpack and IS installed, the generic "Installed" (disabled) state is probably fine.
-  // The definition of `versionStatus.is_installed` for a modpack might need to be considered carefully.
-  // For now, we assume it correctly reflects if this *specific version* was used to create a profile.
 
   return (
     // --- Version Item Card --- 
@@ -80,8 +108,9 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
         "relative overflow-hidden transition-all duration-300 p-2 rounded-md",
         "border-2 border-b-4",
         "backdrop-blur-md",
-        versionStatus?.is_installed && 'border-l-green-500', 
-        !versionStatus?.is_installed && versionStatus?.is_included_in_norisk_pack && 'border-l-blue-500'
+        // Only show installation UI colors if a profile is selected
+        selectedProfileId && versionStatus?.is_installed && 'border-l-green-500', 
+        selectedProfileId && !versionStatus?.is_installed && versionStatus?.is_included_in_norisk_pack && 'border-l-blue-500'
       )}
       style={{
         borderColor: `${accentColor.value}80`, 
@@ -116,13 +145,13 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
           {/* Badges container (takes available space) */} 
           <div className="flex flex-wrap items-center gap-1 flex-grow min-w-0"> 
             {/* --- Status Badges Moved to the beginning --- */} 
-            {versionStatus?.is_installed && (
+            {selectedProfileId && versionStatus?.is_installed && (
               <TagBadge variant="success" className="flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                 Installed
               </TagBadge>
             )}
-            {versionStatus?.is_included_in_norisk_pack && (
+            {selectedProfileId && versionStatus?.is_included_in_norisk_pack && (
               <TagBadge variant="info" className="flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 In NoRisk Pack
@@ -140,7 +169,18 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
           </div>
           {/* Install/Delete Button Group (fixed width, on the right) */} 
           <div className="flex gap-1 flex-shrink-0"> {/* Wrapper for buttons */}
-            {versionStatus?.is_installed && !isModpack && onDeleteClick && selectedProfileId && (
+            {selectedProfileId && versionStatus?.is_installed && !isModpack && typeof versionStatus.is_enabled === 'boolean' && onToggleEnableClick && (
+              <Button
+                onClick={handleToggleEnableButtonClick}
+                size="xs"
+                shadowDepth="short"
+                variant={versionStatus.is_enabled ? "warning" : "secondary"}
+                className="min-w-[80px] justify-center"
+              >
+                {versionStatus.is_enabled ? "Active" : "Inactive"}
+              </Button>
+            )}
+            {selectedProfileId && versionStatus?.is_installed && !isModpack && onDeleteClick && (
               <Button
                 onClick={handleDeleteButtonClick}
                 size="xs"
@@ -151,16 +191,19 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
                 Delete
               </Button>
             )}
-            <Button 
-              onClick={handleButtonClick}
-              size="xs"
-              shadowDepth="short"
-              variant={buttonVariant}
-              disabled={versionStatus?.is_installed}
-              className="min-w-[80px] justify-center" 
-            >
-              {buttonText}
-            </Button>
+            {/* Only show Install button when not installed or when no profile is selected */}
+            {(!selectedProfileId || !versionStatus?.is_installed) && (
+              <Button 
+                onClick={handleButtonClick}
+                size="xs"
+                shadowDepth="short"
+                variant={buttonVariant}
+                disabled={buttonDisabled}
+                className="min-w-[80px] justify-center" 
+              >
+                {buttonText}
+              </Button>
+            )}
           </div>
         </div>
         {/* Removed the separate bottom row div */} 

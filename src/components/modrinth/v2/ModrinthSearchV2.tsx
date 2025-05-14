@@ -33,12 +33,21 @@ import { ModrinthFilterSidebarV2 } from './ModrinthFilterSidebarV2'; // Import t
 import { ModrinthProjectCardV2 } from './ModrinthProjectCardV2'; // Import the new project card component
 import { ModrinthSearchControlsV2 } from './ModrinthSearchControlsV2'; // Import the new search controls component
 
-// Import new service and types
-import { installContentToProfile } from '../../../services/content-service';
-import { ContentType as NrContentType, type InstallContentPayload, type UninstallContentPayload } from '../../../types/content'; // Renamed ContentType to NrContentType to avoid conflict if ModrinthProjectType is also named ContentType
+// Consolidate imports from content-service and types/content
+import {
+  installContentToProfile,
+  uninstallContentFromProfile, // Ensure it's here
+  toggleContentFromProfile
+} from '../../../services/content-service';
+import {
+  ContentType as NrContentType, // Alias for ContentType from content.ts
+  type InstallContentPayload,
+  type UninstallContentPayload,
+  type ToggleContentPayload
+} from '../../../types/content';
+import type { ContentInstallStatus } from '../../../types/profile'; // For the extended status
 
-// Use existing uninstall service and type
-import { uninstallContentFromProfile } from '../../../services/content-service';
+// Remove any other stray imports of uninstallContentFromProfile below this point
 
 // Placeholder for the new service function and payload type
 // import { removeContentFromProfile, type RemoveContentPayload } from '../../../services/content-service';
@@ -139,16 +148,10 @@ export function ModrinthSearchV2({
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
 
   // New state for tracking which projects are installed in the selected profile
-  const [installedProjects, setInstalledProjects] = useState<Record<string, {
-    is_installed: boolean,
-    is_included_in_norisk_pack: boolean
-  }>>({});
+  const [installedProjects, setInstalledProjects] = useState<Record<string, ContentInstallStatus | null>>({}); // Updated type
 
   // Add a state for tracking installed versions
-  const [installedVersions, setInstalledVersions] = useState<Record<string, {
-    is_installed: boolean,
-    is_included_in_norisk_pack: boolean
-  }>>({});
+  const [installedVersions, setInstalledVersions] = useState<Record<string, ContentInstallStatus | null>>({}); // Updated type
 
   // Internal state for profiles, synced with the prop
   const [internalProfiles, setInternalProfiles] = useState<Profile[]>(initialProfiles);
@@ -515,41 +518,47 @@ export function ModrinthSearchV2({
   };
   
   // Create a new function to check installation status for displayed versions only
-  const checkDisplayedVersionsStatus = async (projectId: string, versions: ModrinthVersion[], startIndex: number, count: number) => {
+  const checkDisplayedVersionsStatus = async (projectId: string, versions: ModrinthVersion[], startIndex: number, count: number, forceRefresh: string[] = []) => {
     if (!selectedProfile || !versions || versions.length === 0) return;
     
-    // Get the currently displayed versions only
     const displayedVersions = versions.slice(startIndex, startIndex + count);
     if (displayedVersions.length === 0) return;
     
     console.log(`Checking installation status for ${displayedVersions.length} displayed versions of project ${projectId}`);
     
-    // First, get general project inclusion in NoRisk pack
     const projectInNoRiskStatus = await ProfileService.isContentInstalled({
       profile_id: selectedProfile.id,
       project_id: projectId,
       project_type: projectType
     });
 
-    const newInstalledState: Record<string, {
-      is_installed: boolean,
-      is_included_in_norisk_pack: boolean
-    }> = {};
+    const newInstalledState: Record<string, ContentInstallStatus | null> = {}; // Ensure this uses the full type
 
-    // Check each displayed version
     for (const version of displayedVersions) {
       try {
-        // Check if we already have status for this version
-        if (installedVersions[version.id]) {
-          continue; // Skip versions we've already checked
+        // Skip cache for versions in forceRefresh array (e.g. recently installed/toggled)
+        if (installedVersions[version.id] && !forceRefresh.includes(version.id)) {
+          // If we already have a full status, only update if necessary or skip
+          // For now, let's assume if it exists, it's up-to-date to avoid re-fetching constantly
+          // This could be refined later if partial updates are needed.
+          newInstalledState[version.id] = installedVersions[version.id];
+          continue; 
         }
         
-        // Find primary file
         const primaryFile = version.files.find(file => file.primary) || version.files[0];
-        if (!primaryFile) continue;
+        if (!primaryFile) {
+          newInstalledState[version.id] = {
+            is_installed: false,
+            is_included_in_norisk_pack: false,
+            is_specific_version_in_pack: false,
+            is_enabled: null,
+            found_item_details: null,
+          };
+          continue;
+        }
         
-        // For checking installed status, include all the same parameters as in the installation modal
-        const status = await ProfileService.isContentInstalled({
+        // This call should now return the full ContentInstallStatus
+        const statusFromService = await ProfileService.isContentInstalled({
           profile_id: selectedProfile.id,
           project_id: projectId,
           version_id: version.id,
@@ -561,41 +570,31 @@ export function ModrinthSearchV2({
           file_name: primaryFile.filename
         });
         
-        // For NoRisk pack check, we're more precise
-        if (projectInNoRiskStatus.is_included_in_norisk_pack) {
-          // Check if this specific version matches the pack version
-          const noriskSpecificStatus = await ProfileService.isContentInstalled({
-            profile_id: selectedProfile.id,
-            project_id: projectId,
-            version_id: version.id,
-            pack_version_number: version.version_number,
-            project_type: projectType
-          });
-          
-          newInstalledState[version.id] = {
-            is_installed: status.is_installed,
-            is_included_in_norisk_pack: noriskSpecificStatus.is_specific_version_in_pack
-          };
-        } else {
-          newInstalledState[version.id] = {
-            is_installed: status.is_installed,
-            is_included_in_norisk_pack: false
-          };
-        }
+        // Ensure all fields from statusFromService are assigned
+        newInstalledState[version.id] = {
+          is_installed: statusFromService.is_installed,
+          is_included_in_norisk_pack: projectInNoRiskStatus.is_included_in_norisk_pack && statusFromService.is_specific_version_in_pack,
+          is_specific_version_in_pack: statusFromService.is_specific_version_in_pack,
+          is_enabled: statusFromService.is_enabled !== undefined ? statusFromService.is_enabled : null, // Handle undefined
+          found_item_details: statusFromService.found_item_details || null, // Handle undefined
+        };
+
       } catch (error) {
         console.error(`Failed to check status for version ${version.version_number}:`, error);
         newInstalledState[version.id] = {
           is_installed: false,
-          is_included_in_norisk_pack: false
+          is_included_in_norisk_pack: false,
+          is_specific_version_in_pack: false,
+          is_enabled: null,
+          found_item_details: null,
         };
       }
     }
 
-    // Only update state if we have new information
     if (Object.keys(newInstalledState).length > 0) {
       setInstalledVersions(prev => ({
         ...prev,
-        ...newInstalledState
+        ...newInstalledState // newInstalledState now contains full ContentInstallStatus objects
       }));
     }
   };
@@ -777,18 +776,12 @@ export function ModrinthSearchV2({
       
       setInstalledProjects(prev => ({
         ...prev,
-        [selectedProject.project_id]: {
-          is_installed: true,
-          is_included_in_norisk_pack: prev[selectedProject.project_id]?.is_included_in_norisk_pack || false
-        }
+        [selectedProject.project_id]: getStatusForNewInstall(prev[selectedProject.project_id])
       }));
       
       setInstalledVersions(prev => ({
         ...prev,
-        [selectedVersion.id]: {
-          is_installed: true,
-          is_included_in_norisk_pack: prev[selectedVersion.id]?.is_included_in_norisk_pack || false
-        }
+        [selectedVersion.id]: getStatusForNewInstall(prev[selectedVersion.id])
       }));
 
       if (onInstallSuccess) {
@@ -849,26 +842,22 @@ export function ModrinthSearchV2({
         
         setInstalledProjects(prev => ({
           ...prev,
-          [project.project_id]: {
-            is_installed: true,
-            is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false
-          }
+          [project.project_id]: getStatusForNewInstall(prev[project.project_id])
         }));
         
         setInstalledVersions(prev => ({
           ...prev,
-          [version.id]: {
-            is_installed: true,
-            is_included_in_norisk_pack: prev[version.id]?.is_included_in_norisk_pack || false
-          }
+          [version.id]: getStatusForNewInstall(prev[version.id])
         }));
         
+        // Force refresh the installation status for this version to get the most up-to-date state
         if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
           await checkDisplayedVersionsStatus(
             project.project_id, 
             expandedVersions[project.project_id] as ModrinthVersion[],
             0,
-            (numDisplayedVersions[project.project_id] || initialDisplayCount)
+            (numDisplayedVersions[project.project_id] || initialDisplayCount),
+            [version.id] // Force refresh this specific version
           );
         }
 
@@ -1031,19 +1020,13 @@ export function ModrinthSearchV2({
             // Update installedProjects state to show as installed in the UI
             setInstalledProjects(prev => ({
               ...prev,
-              [project.project_id]: {
-                is_installed: true,
-                is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false
-              }
+              [project.project_id]: getStatusForNewInstall(prev[project.project_id])
             }));
             
             // Update installedVersions state to show this version as installed
             setInstalledVersions(prev => ({
               ...prev,
-              [bestVersion.id]: {
-                is_installed: true,
-                is_included_in_norisk_pack: prev[bestVersion.id]?.is_included_in_norisk_pack || false
-              }
+              [bestVersion.id]: getStatusForNewInstall(prev[bestVersion.id])
             }));
             
             return { version: bestVersion.version_number };
@@ -1232,18 +1215,12 @@ export function ModrinthSearchV2({
       
       setInstalledProjects(prev => ({
         ...prev,
-        [quickInstallProject.project_id]: {
-          is_installed: true,
-          is_included_in_norisk_pack: prev[quickInstallProject.project_id]?.is_included_in_norisk_pack || false
-        }
+        [quickInstallProject.project_id]: getStatusForNewInstall(prev[quickInstallProject.project_id])
       }));
       
       setInstalledVersions(prev => ({
         ...prev,
-        [bestVersion.id]: {
-          is_installed: true,
-          is_included_in_norisk_pack: prev[bestVersion.id]?.is_included_in_norisk_pack || false
-        }
+        [bestVersion.id]: getStatusForNewInstall(prev[bestVersion.id])
       }));
       
       if (onInstallSuccess) {
@@ -1266,34 +1243,22 @@ export function ModrinthSearchV2({
         return;
       }
 
-      const newInstalledState: Record<string, {
-        is_installed: boolean,
-        is_included_in_norisk_pack: boolean
-      }> = {};
+      const newInstalledState: Record<string, ContentInstallStatus | null> = {};
 
-      // Check each project
       for (const project of searchResults) {
         try {
+          // ProfileService.isContentInstalled now returns the full ContentInstallStatus
           const status = await ProfileService.isContentInstalled({
             profile_id: selectedProfile.id,
             project_id: project.project_id,
             project_type: project.project_type
           });
-
-          newInstalledState[project.project_id] = {
-            is_installed: status.is_installed,
-            is_included_in_norisk_pack: status.is_included_in_norisk_pack
-          };
+          newInstalledState[project.project_id] = status; // Assign the full status object
         } catch (error) {
           console.error(`Failed to check status for ${project.title}:`, error);
-          // Default to not installed if there's an error
-          newInstalledState[project.project_id] = {
-            is_installed: false,
-            is_included_in_norisk_pack: false
-          };
+          newInstalledState[project.project_id] = { ...defaultErrorContentStatus };
         }
       }
-
       setInstalledProjects(newInstalledState);
     };
 
@@ -1310,25 +1275,18 @@ export function ModrinthSearchV2({
         !installedProjects[project.project_id]
       );
 
-      // Only check newly loaded projects
       for (const project of uncheckedProjects) {
         try {
+          // ProfileService.isContentInstalled now returns the full ContentInstallStatus
           const status = await ProfileService.isContentInstalled({
             profile_id: selectedProfile.id,
             project_id: project.project_id,
             project_type: project.project_type
           });
-
-          newInstalledState[project.project_id] = {
-            is_installed: status.is_installed,
-            is_included_in_norisk_pack: status.is_included_in_norisk_pack
-          };
+          newInstalledState[project.project_id] = status; // Assign the full status object
         } catch (error) {
           console.error(`Failed to check status for ${project.title}:`, error);
-          newInstalledState[project.project_id] = {
-            is_installed: false,
-            is_included_in_norisk_pack: false
-          };
+          newInstalledState[project.project_id] = { ...defaultErrorContentStatus };
         }
       }
 
@@ -1338,7 +1296,17 @@ export function ModrinthSearchV2({
     };
 
     checkNewResultsInstallation();
-  }, [searchResults.length, selectedProfile]);
+  }, [searchResults.length, selectedProfile, installedProjects]); // Added installedProjects to dependency array for correctness
+
+  // Reset installation status when no profile is selected
+  useEffect(() => {
+    if (!selectedProfile) {
+      // Reset installation status when no profile is selected
+      console.log("No profile selected - resetting installation status");
+      setInstalledProjects({});
+      setInstalledVersions({});
+    }
+  }, [selectedProfile]);
 
   // Additional check when project type changes to update installation status
   useEffect(() => {
@@ -1737,6 +1705,85 @@ export function ModrinthSearchV2({
     );
   };
 
+  // New function to handle toggling enable/disable state of a version
+  const handleToggleEnableVersion = async (
+    profileId: string,
+    project: ModrinthSearchHit,
+    version: ModrinthVersion,
+    newEnabledState: boolean,
+    sha1Hash: string
+  ) => {
+    if (!sha1Hash) {
+      toast.error("Cannot enable/disable version: missing file hash");
+      return;
+    }
+
+    const toastMessage = newEnabledState ? "Enabling" : "Disabling";
+    const successMessage = newEnabledState ? "enabled" : "disabled";
+    
+    await toast.promise(
+      async () => {
+        const payload: ToggleContentPayload = {
+          profile_id: profileId,
+          sha1_hash: sha1Hash,
+          enabled: newEnabledState
+        };
+        
+        await toggleContentFromProfile(payload);
+        
+        // Update local UI state immediately (optimistic update)
+        // Since we're only changing one field and keeping the rest of the status,
+        // we use the spread operator to maintain other fields
+        setInstalledVersions(prev => ({
+          ...prev,
+          [version.id]: prev[version.id] ? {
+            ...prev[version.id]!,
+            is_enabled: newEnabledState
+          } : null
+        }));
+
+        // Force refresh the installation status for this version to get the most up-to-date state
+        if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
+          await checkDisplayedVersionsStatus(
+            project.project_id, 
+            expandedVersions[project.project_id] as ModrinthVersion[],
+            0,
+            (numDisplayedVersions[project.project_id] || initialDisplayCount),
+            [version.id] // Force refresh this specific version
+          );
+        }
+
+        return { versionName: version.version_number };
+      },
+      {
+        loading: `${toastMessage} ${project.title} (${version.version_number})...`,
+        success: ({ versionName }) => `Successfully ${successMessage} ${project.title} (${versionName})`,
+        error: (err) => `Failed to ${toastMessage.toLowerCase()}: ${err.message || String(err)}`
+      }
+    ).catch(err => {
+      console.error(`Error ${toastMessage.toLowerCase()} content:`, err);
+    });
+  };
+
+  // Define helper objects/functions at the component scope
+  const defaultErrorContentStatus: ContentInstallStatus = {
+    is_installed: false,
+    is_included_in_norisk_pack: false,
+    is_specific_version_in_pack: false,
+    is_enabled: null,
+    found_item_details: null,
+  };
+
+  const getStatusForNewInstall = (
+    existingPreviousStatus?: ContentInstallStatus | null,
+  ): ContentInstallStatus => ({
+    is_installed: true,
+    is_included_in_norisk_pack: existingPreviousStatus?.is_included_in_norisk_pack || false,
+    is_specific_version_in_pack: existingPreviousStatus?.is_specific_version_in_pack || false,
+    is_enabled: true, 
+    found_item_details: existingPreviousStatus?.found_item_details || null,
+  });
+
   return (
     // Overall container: now flex-row to place left content and sidebar side-by-side
     <div className={`modrinth-search-v2 flex flex-row h-full gap-3 ${className}`}> {/* Added gap-3 */} 
@@ -1829,9 +1876,10 @@ export function ModrinthSearchV2({
                 onToggleVersionDropdown={toggleVersionDropdown}
                 onCloseAllVersionDropdowns={closeAllVersionDropdowns}
                 onLoadMoreVersions={loadMoreProjectVersions}
-                onInstallVersionClick={openInstallModal}
+                onInstallVersionClick={handleDirectInstall} // Changed from openInstallModal
                 onHoverVersion={setHoveredVersionId}
                 onDeleteVersionClick={handleDeleteVersionFromProfile}
+                onToggleEnableClick={handleToggleEnableVersion} // Pass the new handler
               />
             );
           })}
