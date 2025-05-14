@@ -48,7 +48,7 @@ export function ModrinthTabV2({
 
   const handleInstallSuccess = useCallback(() => {
     // This might trigger a refresh of profile list or other UI elements
-    setRefreshKey((prev) => prev + 1);
+    // setRefreshKey((prev) => prev + 1);
     // Potentially reload profiles if an installation changes them
     // listProfiles().then(setProfiles).catch(err => console.error("Failed to refresh profiles after install", err));
   }, []);
@@ -63,7 +63,6 @@ export function ModrinthTabV2({
         <div className="flex-1 overflow-hidden flex space-x-4">
           <div className="flex-1 overflow-hidden">
             <ModrinthSearchV2
-              key={`search-v2-${refreshKey}`}
               profiles={profiles}
               onInstallSuccess={handleInstallSuccess}
               className="h-full"

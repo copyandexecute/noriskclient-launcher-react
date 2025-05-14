@@ -33,6 +33,10 @@ import { ModrinthFilterSidebarV2 } from './ModrinthFilterSidebarV2'; // Import t
 import { ModrinthProjectCardV2 } from './ModrinthProjectCardV2'; // Import the new project card component
 import { ModrinthSearchControlsV2 } from './ModrinthSearchControlsV2'; // Import the new search controls component
 
+// Import new service and types
+import { installContentToProfile } from '../../../services/content-service';
+import { ContentType as NrContentType, type InstallContentPayload } from '../../../types/content'; // Renamed ContentType to NrContentType to avoid conflict if ModrinthProjectType is also named ContentType
+
 // Profile type can remain generic for now or be imported if a specific type exists
 type Profile = any;
 
@@ -715,55 +719,49 @@ export function ModrinthSearchV2({
       return;
     }
 
-    // Set installing state for this profile
     setInstalling(prev => ({ ...prev, [profileId]: true }));
 
     try {
-      // Find primary file to download
       const primaryFile = selectedVersion.files.find(file => file.primary) || selectedVersion.files[0];
-      
       if (!primaryFile) {
-        toast.error("No download file available");
+        toast.error("No download file available for the selected version.");
         setInstalling(prev => ({ ...prev, [profileId]: false }));
         return;
       }
 
-      // Choose the right installation method based on project type
-      if (selectedProject.project_type === 'mod' || selectedProject.project_type === 'modpack') {
-        // Use mod-specific API for mods and modpacks
-        await ProfileService.addModrinthModToProfile(
-          profileId,
-          selectedProject.project_id,
-          selectedVersion.id,
-          primaryFile.filename,
-          primaryFile.url,
-          primaryFile.hashes?.sha1 || undefined,
-          selectedProject.title,
-          selectedVersion.version_number,
-          selectedVersion.loaders,
-          selectedVersion.game_versions
-        );
-      } else {
-        // Use content API for resourcepacks, shaders, and datapacks
-        await ProfileService.addModrinthContentToProfile(
-          profileId,
-          selectedProject.project_id,
-          selectedVersion.id,
-          primaryFile.filename,
-          primaryFile.url,
-          primaryFile.hashes?.sha1 || null,
-          selectedProject.title,
-          selectedVersion.version_number,
-          selectedProject.project_type
-        );
+      const mappedContentType = mapModrinthProjectTypeToNrContentType(selectedProject.project_type as ModrinthProjectType);
+      if (!mappedContentType) {
+        setInstalling(prev => ({ ...prev, [profileId]: false }));
+        return;
+      }
+      
+      // Special handling for modpacks: should not reach here if mapModrinthProjectTypeToNrContentType works correctly
+      if (selectedProject.project_type === 'modpack') {
+        toast.error("Modpacks must be installed as new profiles.");
+        setInstalling(prev => ({ ...prev, [profileId]: false }));
+        return;
       }
 
-      toast.success(`Successfully installed ${selectedProject.title} to ${internalProfiles.find(p => p.id === profileId)?.name}`);
+      const payload: InstallContentPayload = {
+        profile_id: profileId,
+        project_id: selectedProject.project_id,
+        version_id: selectedVersion.id,
+        file_name: primaryFile.filename,
+        download_url: primaryFile.url,
+        file_hash_sha1: primaryFile.hashes?.sha1 || undefined,
+        content_name: selectedProject.title,
+        version_number: selectedVersion.version_number,
+        content_type: mappedContentType,
+        loaders: selectedVersion.loaders,
+        game_versions: selectedVersion.game_versions,
+      };
+
+      await installContentToProfile(payload);
+
+      toast.success(`Successfully installed ${selectedProject.title} (${selectedVersion.version_number}) to ${internalProfiles.find(p => p.id === profileId)?.name || 'profile'}`);
       
-      // Mark this profile as installed
       setInstallStatus(prev => ({ ...prev, [profileId]: true }));
       
-      // Update installedProjects state to show as installed in the UI
       setInstalledProjects(prev => ({
         ...prev,
         [selectedProject.project_id]: {
@@ -772,7 +770,6 @@ export function ModrinthSearchV2({
         }
       }));
       
-      // Update installedVersions state to show this version as installed
       setInstalledVersions(prev => ({
         ...prev,
         [selectedVersion.id]: {
@@ -780,10 +777,14 @@ export function ModrinthSearchV2({
           is_included_in_norisk_pack: prev[selectedVersion.id]?.is_included_in_norisk_pack || false
         }
       }));
+
+      if (onInstallSuccess) {
+        onInstallSuccess();
+      }
       
     } catch (error) {
       toast.error(`Failed to install: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Install error:", error);
+      console.error("Install error in installToProfile:", error);
     } finally {
       setInstalling(prev => ({ ...prev, [profileId]: false }));
     }
@@ -791,9 +792,7 @@ export function ModrinthSearchV2({
 
   // New function to install directly to the selected profile without opening a modal
   const handleDirectInstall = async (project: ModrinthSearchHit, version: ModrinthVersion) => {
-    // Check if we have a selected profile
     if (!selectedProfile) {
-      // If no profile is selected, fall back to the regular installation modal
       openInstallModal(project, version);
       return;
     }
@@ -801,84 +800,78 @@ export function ModrinthSearchV2({
     const profileId = selectedProfile.id;
     const profileName = selectedProfile.name;
     
-    try {
-      await toast.promise(
-        // Promise-returning async function
-        async () => {
-          // Find primary file to download
-          const primaryFile = version.files.find(file => file.primary) || version.files[0];
-          
-          if (!primaryFile) {
-            throw new Error("No download file available");
-          }
-
-          // Choose the right installation method based on project type
-          if (project.project_type === 'mod' || project.project_type === 'modpack') {
-            // Use mod-specific API for mods and modpacks
-            await ProfileService.addModrinthModToProfile(
-              profileId,
-              project.project_id,
-              version.id,
-              primaryFile.filename,
-              primaryFile.url,
-              primaryFile.hashes?.sha1 || undefined,
-              project.title,
-              version.version_number,
-              version.loaders,
-              version.game_versions
-            );
-          } else {
-            // Use content API for resourcepacks, shaders, and datapacks
-            await ProfileService.addModrinthContentToProfile(
-              profileId,
-              project.project_id,
-              version.id,
-              primaryFile.filename,
-              primaryFile.url,
-              primaryFile.hashes?.sha1 || null,
-              project.title,
-              version.version_number,
-              project.project_type
-            );
-          }
-          
-          // Update installedProjects state to show as installed in the UI
-          setInstalledProjects(prev => ({
-            ...prev,
-            [project.project_id]: {
-              is_installed: true,
-              is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false
-            }
-          }));
-          
-          // Update installedVersions state to show this version as installed
-          setInstalledVersions(prev => ({
-            ...prev,
-            [version.id]: {
-              is_installed: true,
-              is_included_in_norisk_pack: prev[version.id]?.is_included_in_norisk_pack || false
-            }
-          }));
-          
-          // Refresh installation status for displayed versions
-          if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
-            await checkDisplayedVersionsStatus(
-              project.project_id, 
-              expandedVersions[project.project_id] as ModrinthVersion[],
-              0,
-              (numDisplayedVersions[project.project_id] || initialDisplayCount)
-            );
-          }
-        },
-        {
-          loading: `Installing ${project.title} to ${profileName}...`,
-          success: `Successfully installed ${project.title} to ${profileName}`,
-          error: (err) => `Failed to install: ${err instanceof Error ? err.message : String(err.message)}`
+    await toast.promise(
+      async () => {
+        const primaryFile = version.files.find(file => file.primary) || version.files[0];
+        if (!primaryFile) {
+          throw new Error("No download file available for the selected version.");
         }
-      );
-    } catch (error) {
-      console.error("Direct install error:", error);
-    }
+
+        const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
+        if (!mappedContentType) {
+          // The helper function shows its own toast for invalid types, so just throw to be caught by toast.promise.
+          throw new Error(`Unsupported project type for installation: ${project.project_type}`);
+        }
+        
+        // Special handling for modpacks (should be caught by mapModrinthProjectTypeToNrContentType but as a safeguard)
+        if (project.project_type === 'modpack') {
+            throw new Error("Modpacks must be installed as new profiles.");
+        }
+
+        const payload: InstallContentPayload = {
+          profile_id: profileId,
+          project_id: project.project_id,
+          version_id: version.id,
+          file_name: primaryFile.filename,
+          download_url: primaryFile.url,
+          file_hash_sha1: primaryFile.hashes?.sha1 || undefined,
+          content_name: project.title,
+          version_number: version.version_number,
+          content_type: mappedContentType,
+          loaders: version.loaders,
+          game_versions: version.game_versions,
+        };
+
+        await installContentToProfile(payload);
+        
+        setInstalledProjects(prev => ({
+          ...prev,
+          [project.project_id]: {
+            is_installed: true,
+            is_included_in_norisk_pack: prev[project.project_id]?.is_included_in_norisk_pack || false
+          }
+        }));
+        
+        setInstalledVersions(prev => ({
+          ...prev,
+          [version.id]: {
+            is_installed: true,
+            is_included_in_norisk_pack: prev[version.id]?.is_included_in_norisk_pack || false
+          }
+        }));
+        
+        if (expandedVersions[project.project_id] && expandedVersions[project.project_id] !== 'loading') {
+          await checkDisplayedVersionsStatus(
+            project.project_id, 
+            expandedVersions[project.project_id] as ModrinthVersion[],
+            0,
+            (numDisplayedVersions[project.project_id] || initialDisplayCount)
+          );
+        }
+
+        if (onInstallSuccess) {
+            onInstallSuccess();
+        }
+      },
+      {
+        loading: `Installing ${project.title} (${version.version_number}) to ${profileName}...`,
+        success: `Successfully installed ${project.title} (${version.version_number}) to ${profileName}`,
+        error: (err) => `Failed to install: ${err.message || String(err)}`
+      }
+    ).catch(error => {
+        // Catch is mostly for toast.promise rejections that don't get auto-logged by toast
+        console.error("Direct install error (toast.promise rejected):", error);
+    });
   };
 
   // Find the selected profile when the component mounts or selectedProfileId changes
@@ -938,6 +931,28 @@ export function ModrinthSearchV2({
   const [quickInstallVersions, setQuickInstallVersions] = useState<ModrinthVersion[] | null>(null);
   const [quickInstallLoading, setQuickInstallLoading] = useState(false);
   const [quickInstallError, setQuickInstallError] = useState<string | null>(null);
+
+  // Helper function to map Modrinth project type to our ContentType enum
+  function mapModrinthProjectTypeToNrContentType(projectType: ModrinthProjectType): NrContentType | null {
+    switch (projectType) {
+      case 'mod':
+        return NrContentType.Mod;
+      case 'resourcepack':
+        return NrContentType.ResourcePack;
+      case 'shader':
+        return NrContentType.ShaderPack;
+      case 'datapack':
+        return NrContentType.DataPack;
+      case 'modpack': // Modpacks are handled by creating a new profile
+        toast.error("Modpacks should be installed as new profiles, not as content via this method.");
+        return null;
+      default:
+        // Log unhandled project types if any, but avoid throwing error that breaks UI
+        console.warn(`Unsupported Modrinth project type for direct installation: ${projectType}`);
+        toast.error(`Cannot directly install project type: ${projectType}`);
+        return null;
+    }
+  }
 
   // Function to handle quick install
   const quickInstall = async (project: ModrinthSearchHit) => {
@@ -1151,62 +1166,57 @@ export function ModrinthSearchV2({
       return;
     }
 
-    // Find the best version for this profile
     const bestVersion = findBestVersionForProfile(profile, quickInstallVersions);
     if (!bestVersion) {
       toast.error(`No compatible version found for ${profile.name}`);
       return;
     }
 
-    // Set installing state for this profile
     setInstalling(prev => ({ ...prev, [profileId]: true }));
 
     try {
-      // Find primary file to download
       const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
-      
       if (!primaryFile) {
-        toast.error("No download file available");
+        toast.error("No download file available for the selected version.");
         setInstalling(prev => ({ ...prev, [profileId]: false }));
         return;
       }
 
-      // Choose the right installation method based on project type
-      if (quickInstallProject.project_type === 'mod' || quickInstallProject.project_type === 'modpack') {
-        // Use mod-specific API for mods and modpacks
-        await ProfileService.addModrinthModToProfile(
-          profileId,
-          quickInstallProject.project_id,
-          bestVersion.id,
-          primaryFile.filename,
-          primaryFile.url,
-          primaryFile.hashes?.sha1 || undefined,
-          quickInstallProject.title,
-          bestVersion.version_number,
-          bestVersion.loaders,
-          bestVersion.game_versions
-        );
-      } else {
-        // Use content API for resourcepacks, shaders, and datapacks
-        await ProfileService.addModrinthContentToProfile(
-          profileId,
-          quickInstallProject.project_id,
-          bestVersion.id,
-          primaryFile.filename,
-          primaryFile.url,
-          primaryFile.hashes?.sha1 || null,
-          quickInstallProject.title,
-          bestVersion.version_number,
-          quickInstallProject.project_type
-        );
+      const mappedContentType = mapModrinthProjectTypeToNrContentType(quickInstallProject.project_type as ModrinthProjectType);
+      if (!mappedContentType) {
+        // mapModrinthProjectTypeToNrContentType will show a toast for invalid types
+        setInstalling(prev => ({ ...prev, [profileId]: false }));
+        return;
       }
+      
+      // Special handling for modpacks: should not reach here if mapModrinthProjectTypeToNrContentType works correctly
+      if (quickInstallProject.project_type === 'modpack') {
+          toast.error("Modpacks must be installed as new profiles.");
+          setInstalling(prev => ({ ...prev, [profileId]: false }));
+          return;
+      }
+
+
+      const payload: InstallContentPayload = {
+        profile_id: profileId,
+        project_id: quickInstallProject.project_id,
+        version_id: bestVersion.id,
+        file_name: primaryFile.filename,
+        download_url: primaryFile.url,
+        file_hash_sha1: primaryFile.hashes?.sha1 || undefined,
+        content_name: quickInstallProject.title,
+        version_number: bestVersion.version_number,
+        content_type: mappedContentType,
+        loaders: bestVersion.loaders,
+        game_versions: bestVersion.game_versions,
+      };
+
+      await installContentToProfile(payload);
 
       toast.success(`Successfully installed ${quickInstallProject.title} (${bestVersion.version_number}) to ${profile.name}`);
       
-      // Mark this profile as installed
       setInstallStatus(prev => ({ ...prev, [profileId]: true }));
       
-      // Update installedProjects state to show as installed in the UI
       setInstalledProjects(prev => ({
         ...prev,
         [quickInstallProject.project_id]: {
@@ -1215,7 +1225,6 @@ export function ModrinthSearchV2({
         }
       }));
       
-      // Update installedVersions state to show this version as installed
       setInstalledVersions(prev => ({
         ...prev,
         [bestVersion.id]: {
@@ -1224,9 +1233,13 @@ export function ModrinthSearchV2({
         }
       }));
       
+      if (onInstallSuccess) {
+        onInstallSuccess();
+      }
+
     } catch (error) {
       toast.error(`Failed to install: ${error instanceof Error ? error.message : String(error)}`);
-      console.error("Install error:", error);
+      console.error("Install error in quickInstallToProfile:", error);
     } finally {
       setInstalling(prev => ({ ...prev, [profileId]: false }));
     }
@@ -1507,13 +1520,11 @@ export function ModrinthSearchV2({
 
     const installationPromise = async () => {
       let newProfileId: string;
-      let operationDescription = "Creating profile"; // Default description
       let successMessageDetail = `Successfully created profile '${profileName}'`;
 
       if (sourceProfileIdToCopy) {
         const sourceProfile = internalProfiles.find(p => p.id === sourceProfileIdToCopy);
         const sourceProfileName = sourceProfile ? sourceProfile.name : "source profile";
-        operationDescription = `Copying profile from '${sourceProfileName}' to '${profileName}'`;
         
         newProfileId = await ProfileService.copyProfile({
           source_profile_id: sourceProfileIdToCopy,
@@ -1525,8 +1536,9 @@ export function ModrinthSearchV2({
         const gameVersion = version.game_versions[0] || 'unknown';
         let loader = 'vanilla';
         if (project.project_type === 'mod' || project.project_type === 'modpack') {
-          loader = version.loaders[0] || 'vanilla';
+            loader = version.loaders[0] || 'vanilla';
         }
+
         newProfileId = await ProfileService.createProfile({
           name: profileName,
           game_version: gameVersion,
@@ -1534,46 +1546,47 @@ export function ModrinthSearchV2({
         });
       }
 
-      // Common part: Install content to the new/copied profile
       const primaryFile = version.files.find((f) => f.primary) || version.files[0];
       if (!primaryFile) {
         throw new Error("No primary file found for the selected version.");
       }
 
-      if (project.project_type === 'mod' || project.project_type === 'modpack') {
-        await ProfileService.addModrinthModToProfile(
-          newProfileId,
-          project.project_id,
-          version.id,
-          primaryFile.filename,
-          primaryFile.url,
-          primaryFile.hashes?.sha1 || undefined,
-          project.title,
-          version.version_number,
-          version.loaders,
-          version.game_versions
-        );
-      } else {
-        await ProfileService.addModrinthContentToProfile(
-          newProfileId,
-          project.project_id,
-          version.id,
-          primaryFile.filename,
-          primaryFile.url,
-          primaryFile.hashes?.sha1 || null,
-          project.title,
-          version.version_number,
-          project.project_type
-        );
+      const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
+      if (!mappedContentType) {
+        throw new Error(`Unsupported project type for installation: ${project.project_type}`);
       }
+
+      // Safeguard: Modpacks should not be installed as content here.
+      // mapModrinthProjectTypeToNrContentType handles toast, but this ensures error propagation for toast.promise
+      if (project.project_type === 'modpack') {
+        throw new Error("Modpacks should be installed as new profiles, not as content to an existing one.");
+      }
+
+      const payload: InstallContentPayload = {
+        profile_id: newProfileId,
+        project_id: project.project_id,
+        version_id: version.id,
+        file_name: primaryFile.filename,
+        download_url: primaryFile.url,
+        file_hash_sha1: primaryFile.hashes?.sha1 || undefined,
+        content_name: project.title,
+        version_number: version.version_number,
+        content_type: mappedContentType,
+        loaders: version.loaders,
+        game_versions: version.game_versions,
+      };
+
+      await installContentToProfile(payload);
+      
+      // The actual installation success of the content is handled by installContentToProfile.
+      // This promise now mainly returns details for the toast message about profile creation/copying.
       return { successMessageDetail, projectTitle: project.title, versionNumber: version.version_number };
     };
 
     try {
-      // Determine the correct loading message based on whether we are copying
       const loadingMessage = sourceProfileIdToCopy
-        ? `Copying profile '${profileName}' and installing ${project.title}...` 
-        : `Creating profile '${profileName}' and installing ${project.title}...`;
+        ? `Copying profile '${profileName}' and installing ${project.title} (${version.version_number})...` 
+        : `Creating profile '${profileName}' and installing ${project.title} (${version.version_number})...`;
 
       await toast.promise(
         installationPromise(),
@@ -1583,16 +1596,24 @@ export function ModrinthSearchV2({
           error: (err) => `Operation failed: ${err.message || 'Unknown error'}`,
         },
         {
-          // success: { duration: 6000 }, // Optional: make success toast stay longer
+          // success: { duration: 6000 }, 
         }
       );
 
       const updatedProfiles = await ProfileService.listProfiles();
       setInternalProfiles(updatedProfiles);
+      
+      // Call onInstallSuccess if it exists and the installed content was not a modpack
+      // (Modpack specific installations as new profiles might have their own success handlers or flows)
+      if (project.project_type !== 'modpack' && onInstallSuccess) {
+        onInstallSuccess();
+      }
 
     } catch (err: any) {
+      // This catch is for errors not caught by toast.promise or re-thrown
       console.error("Failed to create/copy profile and install content:", err);
-      throw err; 
+      // toast.promise already shows an error, so re-throwing might not be necessary unless specific handling is needed here.
+      // throw err; 
     }
   };
 
