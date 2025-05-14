@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { UninstallContentPayload } from '../types/content';
+import type { UninstallContentPayload, ToggleContentPayload } from '../types/content';
 
 /**
  * Uninstalls content from a specified profile based on the provided payload.
@@ -24,5 +24,33 @@ export async function uninstallContentFromProfile(
       error
     );
     throw error
+  }
+}
+
+/**
+ * Toggles the enabled state of content within a specified profile.
+ *
+ * @param payload - The criteria for identifying the content and the desired new state.
+ * @returns A promise that resolves if the toggle is successful, or rejects with an error.
+ */
+export async function toggleContentFromProfile(
+  payload: ToggleContentPayload,
+): Promise<void> {
+  try {
+    await invoke<void>('toggle_content_from_profile', { payload });
+    console.log(
+      `Successfully requested content toggle for profile ${payload.profile_id} to enabled=${payload.enabled} with criteria:`, 
+      payload
+    );
+    // Consider toast: toast.success("Content state updated.");
+  } catch (error) {
+    console.error(
+      `Error toggling content for profile ${payload.profile_id} to enabled=${payload.enabled} with criteria:`, 
+      payload, 
+      '\nError:', 
+      error
+    );
+    // Consider toast: toast.error(`Failed to update content state: ${error}`);
+    throw error;
   }
 } 

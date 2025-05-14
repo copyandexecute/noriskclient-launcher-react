@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 use tokio::fs;
@@ -7,6 +8,7 @@ use crate::error::{AppError, CommandError};
 use crate::state::profile_state::ModSource;
 use crate::state::state_manager::State as AppStateManager;
 use crate::utils::hash_utils; // For calculate_sha1
+use crate::utils::{shaderpack_utils, resourcepack_utils, datapack_utils}; // Added utils
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UninstallContentPayload {
@@ -84,7 +86,7 @@ async fn uninstall_content_by_sha1_internal(
                                                 }
                                             }
                                         }
-                                        Err(e) => log::warn!("Internal: Could not calculate SHA1 for file {:?}: {}. Skipping.", file_path, e),
+                                        Err(e) => log::warn!("Internal: Could not calculate SHA1 for asset file {:?}: {}. Skipping deletion.", file_path, e),
                                     }
                                 }
                             }
@@ -96,7 +98,7 @@ async fn uninstall_content_by_sha1_internal(
         }
         Err(e) => {
             log::error!("Internal: Failed to get profile instance path for {} to scan asset dirs: {}. Asset file deletion will be skipped.", profile_id, e);
-            asset_file_deletion_errors_occurred = true; // Mark as error if path retrieval fails
+            asset_file_deletion_errors_occurred = true; 
         }
     }
     Ok((
@@ -105,6 +107,242 @@ async fn uninstall_content_by_sha1_internal(
         mod_entry_deletion_errors_occurred,
         asset_file_deletion_errors_occurred,
     ))
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ToggleContentPayload {
+    profile_id: Uuid,
+    sha1_hash: Option<String>,
+    enabled: bool,
+}
+
+/// Helper function to toggle a single asset file (shader, resourcepack, datapack)
+async fn toggle_single_asset_file(
+    asset_path_str: &str,
+    asset_filename_str: &str, // Base name, e.g., "coolpack.zip"
+    asset_is_disabled: bool,
+    target_enabled_state: bool,
+    asset_type_name: &str, // For logging, e.g., "shader pack"
+) -> Result<(), AppError> {
+    let asset_path = PathBuf::from(asset_path_str);
+    log::debug!(
+        "Processing {} to toggle: {:?} (current_disabled: {}, target_enabled: {}).",
+        asset_type_name,
+        asset_path,
+        asset_is_disabled,
+        target_enabled_state
+    );
+
+    // If current disabled state is the inverse of target enabled state, it's already correct.
+    // e.g., asset_is_disabled = true, target_enabled_state = false -> already disabled
+    // e.g., asset_is_disabled = false, target_enabled_state = true -> already enabled
+    if asset_is_disabled == !target_enabled_state {
+        log::info!(
+            "{} {:?} is already in the desired state (enabled: {}).",
+            asset_type_name,
+            asset_path,
+            target_enabled_state
+        );
+        return Ok(()); // Already in desired state
+    }
+
+    let new_path = if target_enabled_state {
+        // To enable: ensure filename does NOT end with .disabled
+        // Use the base asset_filename_str. strip_suffix on it is for robustness if it somehow had .disabled
+        asset_path.with_file_name(asset_filename_str.strip_suffix(".disabled").unwrap_or(asset_filename_str))
+    } else {
+        // To disable: ensure filename DOES end with .disabled
+        asset_path.with_file_name(format!("{}.disabled", asset_filename_str))
+    };
+
+    log::info!(
+        "Toggling {}: {:?} -> {:?}",
+        asset_type_name,
+        asset_path,
+        new_path
+    );
+
+    fs::rename(&asset_path, &new_path).await.map_err(|e| {
+        log::error!(
+            "Failed to toggle {} {:?}: {}",
+            asset_type_name,
+            asset_path,
+            e
+        );
+        AppError::Io(e) // Or a more specific error type if created
+    })
+}
+
+#[tauri::command]
+pub async fn toggle_content_from_profile(
+    payload: ToggleContentPayload,
+) -> Result<(), CommandError> {
+    log::info!(
+        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, enabled={}",
+        payload.profile_id,
+        payload.sha1_hash,
+        payload.enabled
+    );
+
+    let current_sha1_hash = match payload.sha1_hash {
+        Some(ref hash) => hash.clone(),
+        None => {
+            log::warn!("SHA1 hash is required for the current toggle implementation.");
+            return Err(CommandError::from(AppError::Other(
+                "SHA1 hash is required for this toggle operation.".to_string(),
+            )));
+        }
+    };
+
+    let state_manager = AppStateManager::get().await.map_err(|e| {
+        log::error!("Failed to get AppStateManager: {}", e);
+        CommandError::from(AppError::Other(format!("Failed to get internal state: {}", e)))
+    })?;
+
+    let profile = state_manager
+        .profile_manager
+        .get_profile(payload.profile_id)
+        .await
+        .map_err(CommandError::from)?;
+
+    let mut mod_entries_toggled_count = 0;
+    let mut mod_entry_toggle_errors = false;
+
+    // --- Phase 1: Toggle Modrinth Mod Entries (in profile.mods list) ---
+    for mod_entry in profile.mods.iter() { // Iterate over a clone or ensure no modification invalidates iter
+        if let ModSource::Modrinth { file_hash_sha1: Some(mod_hash), .. } = &mod_entry.source {
+            if mod_hash == &current_sha1_hash {
+                if mod_entry.enabled == payload.enabled {
+                    log::info!("Mod entry {} in profile {} is already state enabled={}. Skipping DB update.", mod_entry.id, payload.profile_id, payload.enabled);
+                    mod_entries_toggled_count += 1;
+                    continue;
+                }
+                match state_manager
+                    .profile_manager
+                    .set_mod_enabled(payload.profile_id, mod_entry.id, payload.enabled)
+                    .await
+                {
+                    Ok(_) => {
+                        log::info!("Successfully toggled Modrinth entry {} in profile {} to enabled={}.", mod_entry.id, payload.profile_id, payload.enabled);
+                        mod_entries_toggled_count += 1;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to toggle Modrinth entry {} (SHA1: {}) in profile {}: {}", mod_entry.id, current_sha1_hash, payload.profile_id, e);
+                        mod_entry_toggle_errors = true;
+                    }
+                }
+            }
+        }
+    }
+    
+    let mut asset_files_toggled_count = 0;
+    let mut asset_file_toggle_errors = false;
+
+    // --- Phase 2a: Toggle Shader Packs ---
+    match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
+        Ok(shader_packs) => {
+            for pack_info in shader_packs {
+                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                    match toggle_single_asset_file(
+                        &pack_info.path,
+                        &pack_info.filename,
+                        pack_info.is_disabled,
+                        payload.enabled,
+                        "shader pack"
+                    ).await {
+                        Ok(_) => asset_files_toggled_count += 1,
+                        Err(_) => asset_file_toggle_errors = true,
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to list shader packs for profile {}: {}. Skipping shader toggle.", payload.profile_id, e);
+            asset_file_toggle_errors = true; // Consider this an error for asset toggling phase
+        }
+    }
+
+    // --- Phase 2b: Toggle Resource Packs ---
+    match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
+        Ok(resource_packs) => {
+            for pack_info in resource_packs {
+                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                    match toggle_single_asset_file(
+                        &pack_info.path,
+                        &pack_info.filename,
+                        pack_info.is_disabled,
+                        payload.enabled,
+                        "resource pack"
+                    ).await {
+                        Ok(_) => asset_files_toggled_count += 1,
+                        Err(_) => asset_file_toggle_errors = true,
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to list resource packs for profile {}: {}. Skipping resource pack toggle.", payload.profile_id, e);
+            asset_file_toggle_errors = true;
+        }
+    }
+    
+    // --- Phase 2c: Toggle Datapacks ---
+    match datapack_utils::get_datapacks_for_profile(&profile).await {
+        Ok(data_packs) => {
+            for pack_info in data_packs {
+                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                    match toggle_single_asset_file(
+                        &pack_info.path,
+                        &pack_info.filename,
+                        pack_info.is_disabled,
+                        payload.enabled,
+                        "datapack"
+                    ).await {
+                        Ok(_) => asset_files_toggled_count += 1,
+                        Err(_) => asset_file_toggle_errors = true,
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to list datapacks for profile {}: {}. Skipping datapack toggle.", payload.profile_id, e);
+            asset_file_toggle_errors = true; // Consider this an error for asset toggling phase
+        }
+    }
+    
+    // --- Datapacks: Toggling not yet implemented by SHA1, as they are often not single files with clear SHA1s from Modrinth directly in profile list ---
+    // Future: Could scan datapacks directory if needed, similar to uninstall, but toggling implies individual file identity.
+
+    if mod_entries_toggled_count == 0 && asset_files_toggled_count == 0 {
+        log::warn!(
+            "No Modrinth entries, shader packs, resource packs, or datapacks found with SHA1 '{}' in profile {} to toggle.",
+            current_sha1_hash, payload.profile_id
+        );
+        return Err(CommandError::from(AppError::Other(format!(
+            "No content with SHA1 '{}' found in profile {} to toggle (mods, shaders, resourcepacks, datapacks).",
+            current_sha1_hash, payload.profile_id
+        ))));
+    }
+
+    if mod_entry_toggle_errors || asset_file_toggle_errors {
+        log::error!(
+            "One or more errors occurred while toggling content for SHA1 '{}' in profile {}. ModToggleOK: {}, AssetToggleOK: {}. ModToggleErr: {}, AssetToggleErr: {}", 
+            current_sha1_hash, payload.profile_id, 
+            mod_entries_toggled_count > 0 && !mod_entry_toggle_errors, 
+            asset_files_toggled_count > 0 && !asset_file_toggle_errors, 
+            mod_entry_toggle_errors, asset_file_toggle_errors
+        );
+        return Err(CommandError::from(AppError::Other(format!(
+            "Errors occurred while toggling content for profile {}. Check logs.", 
+            payload.profile_id
+        ))));
+    }
+    
+    log::info!(
+        "Content toggle for SHA1 '{}' in profile {} processed. Modrinth entries processed: {}. Asset files (shaders, rpacks, datapacks) processed: {}.", 
+        current_sha1_hash, payload.profile_id, mod_entries_toggled_count, asset_files_toggled_count
+    );
+    Ok(())
 }
 
 #[tauri::command]

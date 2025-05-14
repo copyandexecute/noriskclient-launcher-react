@@ -340,6 +340,7 @@ async fn main() {
             commands::modrinth_commands::get_modrinth_loaders_command,
             commands::modrinth_commands::get_modrinth_game_versions_command,
             commands::content_command::uninstall_content_from_profile,
+            commands::content_command::toggle_content_from_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
