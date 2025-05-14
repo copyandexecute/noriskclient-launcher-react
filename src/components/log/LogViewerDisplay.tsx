@@ -388,7 +388,7 @@ export function LogViewerDisplay({
                 checked={isAutoscrollEnabled}
                 onChange={(e) => onAutoscrollChange(e.target.checked)}
                 label="Autoscroll"
-                size="sm"
+                customSize="sm"
               />
             )}
 

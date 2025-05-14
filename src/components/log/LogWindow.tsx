@@ -11,6 +11,7 @@ import {
   type ParsedLogLine,
   parseLogLinesFromString,
   uploadLogToMclogs,
+  LogParser
 } from "../../services/log-service";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -65,6 +66,8 @@ export function LogWindow() {
 
   const accentColor = useThemeStore((state) => state.accentColor);
 
+  const logParserRef = useRef<LogParser | null>(null);
+
   useEffect(() => {
     if (containerRef.current) {
       gsap.fromTo(
@@ -83,6 +86,10 @@ export function LogWindow() {
     if (id) {
       console.log(`[LogWindow] Detected processId: ${id}`);
       setProcessId(id);
+
+      if (!logParserRef.current) {
+        logParserRef.current = new LogParser();
+      }
 
       if (liveLogsUrlParam) {
         console.log(
@@ -139,6 +146,10 @@ export function LogWindow() {
       setRawLogContentForCopy(null);
       setIsLoading(false);
       setInitialLoadComplete(true);
+      
+      if (logParserRef.current) {
+        logParserRef.current.reset();
+      }
     } else {
       console.log(
         `[LogWindow] Non-live mode for ${processId}. Fetching initial logs.`,
@@ -148,11 +159,23 @@ export function LogWindow() {
         setError(null);
         setParsedLogLines([]);
         setRawLogContentForCopy(null);
+
+        if (logParserRef.current) {
+          logParserRef.current.reset();
+        }
+
         try {
           const rawContent =
             await ProcessService.getLogContentForProcess(processId);
           setRawLogContentForCopy(rawContent);
-          const lines = parseLogLinesFromString(rawContent);
+
+          let lines: ParsedLogLine[];
+          if (logParserRef.current) {
+            lines = logParserRef.current.parseLogContent(rawContent);
+          } else {
+            lines = parseLogLinesFromString(rawContent);
+          }
+          
           setParsedLogLines(lines);
           console.log(`[LogWindow] Loaded ${lines.length} initial log lines.`);
         } catch (err: any) {
@@ -184,7 +207,13 @@ export function LogWindow() {
               payload.target_id === processId
             ) {
               const rawLine = payload.message;
-              const newParsedLines = parseLogLinesFromString(rawLine);
+              
+              let newParsedLines: ParsedLogLine[];
+              if (logParserRef.current) {
+                newParsedLines = logParserRef.current.parseLogContent(rawLine);
+              } else {
+                newParsedLines = parseLogLinesFromString(rawLine);
+              }
 
               setParsedLogLines((prevLines) => {
                 const updatedLines = [...prevLines, ...newParsedLines];

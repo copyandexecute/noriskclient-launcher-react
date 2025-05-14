@@ -20,16 +20,30 @@ const logLineRegexNeoForgeSource = /^\s*\[([^\]]+)\]\s+\[([^/]+)\/([^\]]+)\]\s+\
 const logLineRegexNeoForgeNoSource = /^\s*\[([^\]]+)\]\s+\[([^/]+)\/([^\]]+)\]:\s*(.*)$/;
 
 /**
- * Parses a raw log string into an array of structured log lines.
- * Handles standard Minecraft/Fabric and NeoForge log formats.
- * Inherits log levels for lines that don't match known formats (e.g., stack traces).
- * @param rawContent The raw log content as a single string.
- * @returns An array of ParsedLogLine objects.
+ * Stateful log parser that maintains context between parsing calls.
+ * Useful for live logs where lines are received incrementally.
  */
-export function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
+export class LogParser {
+  private nextId: number = 0;
+  private lastKnownLevel: LogLevel | undefined = undefined;
+  private lastKnownThread: string | undefined = undefined;
+
+  /**
+   * Creates a new LogParser instance
+   * @param initialId Optional starting ID for log lines (default: 0)
+   */
+  constructor(initialId: number = 0) {
+    this.nextId = initialId;
+  }
+
+  /**
+   * Parse log content, maintaining state from previous parsing operations
+   * @param rawContent The raw log content to parse
+   * @returns Array of parsed log lines
+   */
+  parseLogContent(rawContent: string): ParsedLogLine[] {
     const linesArray = rawContent.split(/\r?\n/);
     const processedLines: ParsedLogLine[] = [];
-    let lastKnownLevel: LogLevel | undefined = undefined;
   
     for (let i = 0; i < linesArray.length; i++) {
       const line = linesArray[i];
@@ -47,6 +61,10 @@ export function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
         const levelUpper = match[3].toUpperCase() as LogLevel;
         level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
         text = match[4].trim(); // Full trim for captured text
+        
+        // Store these values for potential inheritance by future lines
+        this.lastKnownThread = thread;
+        if (level) this.lastKnownLevel = level;
       } else {
         // Try matching NeoForge with source format
         match = line.match(logLineRegexNeoForgeSource);
@@ -56,6 +74,10 @@ export function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
           const levelUpper = match[3].toUpperCase() as LogLevel;
           level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
           text = match[4].trim(); // Full trim
+          
+          // Store these values for potential inheritance by future lines
+          this.lastKnownThread = thread;
+          if (level) this.lastKnownLevel = level;
         } else {
            // Try matching NeoForge without source format
            match = line.match(logLineRegexNeoForgeNoSource);
@@ -65,6 +87,122 @@ export function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
               const levelUpper = match[3].toUpperCase() as LogLevel;
               level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
               text = match[4].trim(); // Full trim
+              
+              // Store these values for potential inheritance by future lines
+              this.lastKnownThread = thread;
+              if (level) this.lastKnownLevel = level;
+           }
+        }
+      }
+  
+      if (match) {
+        // We found a structured log line
+        processedLines.push({
+          id: this.nextId++,
+          raw: line,
+          timestamp: timestamp,
+          thread: thread,
+          level: level,
+          text: text,
+        });
+      } else {
+        // Line does NOT match any known format - inherit level and thread
+        // Now specifically handle indented lines like list items
+        processedLines.push({
+          id: this.nextId++,
+          raw: line,
+          timestamp: undefined,
+          thread: this.lastKnownThread, // Also inherit the thread
+          level: this.lastKnownLevel, // Use the last known level
+          text: text, // Already trimmed end
+        });
+      }
+    }
+    return processedLines;
+  }
+
+  /**
+   * Reset the parser state
+   */
+  reset(resetId: boolean = true): void {
+    this.lastKnownLevel = undefined;
+    this.lastKnownThread = undefined;
+    if (resetId) {
+      this.nextId = 0;
+    }
+  }
+
+  /**
+   * Get the current parser state
+   */
+  getState(): { nextId: number; lastLevel: LogLevel | undefined; lastThread: string | undefined } {
+    return {
+      nextId: this.nextId,
+      lastLevel: this.lastKnownLevel,
+      lastThread: this.lastKnownThread
+    };
+  }
+}
+
+/**
+ * Parses a raw log string into an array of structured log lines.
+ * Handles standard Minecraft/Fabric and NeoForge log formats.
+ * Inherits log levels for lines that don't match known formats (e.g., stack traces).
+ * @param rawContent The raw log content as a single string.
+ * @returns An array of ParsedLogLine objects.
+ */
+export function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
+    const linesArray = rawContent.split(/\r?\n/);
+    const processedLines: ParsedLogLine[] = [];
+    let lastKnownLevel: LogLevel | undefined = undefined;
+    let lastKnownThread: string | undefined = undefined;
+  
+    for (let i = 0; i < linesArray.length; i++) {
+      const line = linesArray[i];
+      let match: RegExpMatchArray | null = null;
+      let timestamp: string | undefined = undefined;
+      let thread: string | undefined = undefined;
+      let level: LogLevel | undefined = undefined;
+      let text: string = line.trimEnd(); // Default text, trim end
+  
+      // Try matching standard format
+      match = line.match(logLineRegexStandard);
+      if (match) {
+        timestamp = match[1];
+        thread = match[2];
+        const levelUpper = match[3].toUpperCase() as LogLevel;
+        level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
+        text = match[4].trim(); // Full trim for captured text
+        
+        // Store these values for potential inheritance by future lines
+        lastKnownThread = thread;
+        if (level) lastKnownLevel = level;
+      } else {
+        // Try matching NeoForge with source format
+        match = line.match(logLineRegexNeoForgeSource);
+        if (match) {
+          timestamp = match[1];
+          thread = match[2];
+          const levelUpper = match[3].toUpperCase() as LogLevel;
+          level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
+          text = match[4].trim(); // Full trim
+          
+          // Store these values for potential inheritance by future lines
+          lastKnownThread = thread;
+          if (level) lastKnownLevel = level;
+        } else {
+           // Try matching NeoForge without source format
+           match = line.match(logLineRegexNeoForgeNoSource);
+           if (match) {
+              timestamp = match[1];
+              thread = match[2];
+              const levelUpper = match[3].toUpperCase() as LogLevel;
+              level = LOG_LEVELS.includes(levelUpper) ? levelUpper : undefined;
+              text = match[4].trim(); // Full trim
+              
+              // Store these values for potential inheritance by future lines
+              lastKnownThread = thread;
+              if (level) lastKnownLevel = level;
            }
         }
       }
@@ -79,18 +217,17 @@ export function parseLogLinesFromString(rawContent: string): ParsedLogLine[] {
           level: level,
           text: text,
         });
-        lastKnownLevel = level; // Remember this level
       } else {
-        // Line does NOT match any known format - inherit level
+        // Line does NOT match any known format - inherit level and thread
+        // Now specifically handle indented lines like list items
         processedLines.push({
           id: i,
           raw: line,
           timestamp: undefined,
-          thread: undefined,
+          thread: lastKnownThread, // Also inherit the thread
           level: lastKnownLevel, // Use the last known level
           text: text, // Already trimmed end
         });
-        // Do not update lastKnownLevel here
       }
     }
     return processedLines;
