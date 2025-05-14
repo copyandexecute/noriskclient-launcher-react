@@ -12,9 +12,15 @@ use crate::minecraft::dto::VersionManifest;
 use crate::state::skin_state::MinecraftSkin;
 use crate::state::state_manager::State;
 use crate::utils::mc_utils;
-use log::{debug, info};
+use log::{debug, info, error};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
+
+// --- New Imports for add_skin_locally ---
+use crate::minecraft::dto::skin_payloads::{AddLocalSkinCommandPayload, SkinSource, SkinModelVariant};
+use crate::utils::mc_utils::{fetch_image_as_base64, extract_skin_info_from_profile};
+use chrono::Utc;
+// --- End New Imports ---
 
 #[tauri::command]
 pub async fn get_minecraft_versions() -> Result<VersionManifest, CommandError> {
@@ -572,4 +578,101 @@ pub async fn ping_minecraft_server(
 
     // No mapping needed as the function handles errors internally by returning them in the struct
     Ok(ping_result)
+}
+
+#[tauri::command]
+pub async fn add_skin_locally(
+    payload: AddLocalSkinCommandPayload,
+) -> Result<MinecraftSkin, CommandError> {
+    info!(
+        "[CMD] add_skin_locally: TargetName='{}', TargetVariant='{}', SourceType={:?}",
+        payload.target_skin_name,
+        payload.target_skin_variant,
+        payload.source
+    );
+
+    let base64_data: String;
+    let mut final_skin_name = payload.target_skin_name.clone();
+    let mut final_skin_variant = payload.target_skin_variant.clone();
+
+    match payload.source {
+        SkinSource::Profile(profile_data) => {
+            debug!("[CMD] add_skin_locally: Processing Profile source for query: {}", profile_data.query);
+            let api_service = MinecraftApiService::new();
+            let profile = api_service.get_profile_by_name_or_uuid(&profile_data.query).await?;
+
+            let (skin_url, source_variant, profile_name) = extract_skin_info_from_profile(&profile)?;
+
+            if final_skin_name.is_empty() {
+                final_skin_name = profile_name;
+            }
+            final_skin_variant = source_variant;
+            
+            base64_data = fetch_image_as_base64(&skin_url).await?;
+        }
+        SkinSource::Url(url_data) => {
+            debug!("[CMD] add_skin_locally: Processing URL source: {}", url_data.url);
+            base64_data = fetch_image_as_base64(&url_data.url).await?;
+        }
+        SkinSource::FilePath(filepath_data) => {
+            debug!("[CMD] add_skin_locally: Processing FilePath source: {}", filepath_data.path);
+            let file_content = std::fs::read(&filepath_data.path).map_err(|e| {
+                error!(
+                    "[CMD] add_skin_locally: Failed to read skin file from path {}: {}",
+                    filepath_data.path,
+                    e
+                );
+                AppError::Io(e)
+            })?;
+            base64_data = base64::encode(&file_content);
+
+            if final_skin_name.is_empty() {
+                final_skin_name = std::path::Path::new(&filepath_data.path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("skin_from_file")
+                    .to_string();
+            }
+        }
+        SkinSource::Base64(base64_content_data) => {
+            debug!("[CMD] add_skin_locally: Processing Base64 source");
+            base64_data = base64_content_data.base64_content;
+        }
+    }
+    
+    if final_skin_name.is_empty() {
+        error!("[CMD] add_skin_locally: Final skin name is empty after processing source.");
+        return Err(CommandError::from(AppError::InvalidInput(
+            "Skin name cannot be empty. Please provide a name or ensure the source can provide one (e.g., profile name, filename).".to_string()
+        )));
+    }
+
+    debug!(
+        "[CMD] add_skin_locally: Attempting to save skin to local database. Name: '{}', Variant: '{}'",
+        final_skin_name,
+        final_skin_variant
+    );
+    let state = State::get().await?;
+
+    let new_skin_id = Uuid::new_v4().to_string();
+    let current_time = Utc::now();
+
+    let skin_to_add = MinecraftSkin {
+        id: new_skin_id,
+        name: final_skin_name,
+        base64_data,
+        variant: final_skin_variant.to_string(),
+        description: payload.description.unwrap_or_else(|| {
+            format!("Added on {}", current_time.format("%Y-%m-%d"))
+        }),
+        added_at: current_time,
+    };
+
+    state.skin_manager.add_skin(skin_to_add.clone()).await?;
+    info!(
+        "[CMD] add_skin_locally: Successfully added skin '{}' (ID: {}) to local database.",
+        skin_to_add.name,
+        skin_to_add.id
+    );
+    Ok(skin_to_add)
 }

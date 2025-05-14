@@ -26,6 +26,19 @@ use trust_dns_resolver::TokioAsyncResolver;
 use uuid::Uuid;
  // Zusätzlicher Import für Url
 
+// --- New Helper Imports for Skin Fetching ---
+use crate::minecraft::dto::minecraft_profile::{
+    MinecraftProfile,
+    TexturesData,
+    TexturesDictionary,
+    TextureInfo,
+    TextureMetadata
+}; // Assuming these are public
+use crate::minecraft::dto::skin_payloads::SkinModelVariant; // Added import for new Enum
+use base64::{decode as base64_decode_str, encode as base64_encode_bytes};
+
+// --- End New Helper Imports ---
+
 // Referenziere unsere server_ping-Modul, das sich im gleichen Verzeichnis befindet
 
 // --- Struct for World Info ---
@@ -1141,4 +1154,104 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
         Ok(status) => ServerPingInfo::from_server_status(status),
         Err(e) => ServerPingInfo::error(address, format!("Server ping failed: {}", e), None),
     }
+}
+
+// --- Helper functions for add_skin_locally command ---
+
+/// Downloads an image from a URL and encodes it as a Base64 string.
+pub async fn fetch_image_as_base64(url: &str) -> Result<String> {
+    debug!("[MC Utils] Fetching image from URL: {}", url);
+    let response = reqwest::get(url).await.map_err(AppError::MinecraftApi)?;
+    if !response.status().is_success() {
+        error!(
+            "[MC Utils] Failed to download image from {}. Status: {}",
+            url,
+            response.status()
+        );
+        return Err(AppError::Other(format!(
+            "Failed to download image from URL {}: {}",
+            url,
+            response.status()
+        )));
+    }
+    let bytes = response.bytes().await.map_err(AppError::MinecraftApi)?;
+    Ok(base64_encode_bytes(&bytes))
+}
+
+/// Extracts skin URL, variant, and profile name from a MinecraftProfile.
+pub fn extract_skin_info_from_profile(
+    profile: &MinecraftProfile,
+) -> Result<(String, SkinModelVariant, String)> {
+    debug!(
+        "[MC Utils] Extracting skin info from profile: {}",
+        profile.name
+    );
+    let textures_prop = profile
+        .properties
+        .iter()
+        .find(|p| p.name == "textures")
+        .ok_or_else(|| {
+            error!("[MC Utils] Textures property not found in profile {}", profile.name);
+            AppError::Other("Textures property not found in profile".to_string())
+        })?;
+
+    let decoded_textures_value = base64_decode_str(&textures_prop.value).map_err(|e| {
+        error!(
+            "[MC Utils] Failed to decode textures base64 for profile {}: {}",
+            profile.name,
+            e
+        );
+        AppError::Other(format!("Failed to decode textures base64: {}", e))
+    })?;
+    let textures_json_str = String::from_utf8(decoded_textures_value).map_err(|e| {
+        error!(
+            "[MC Utils] Failed to convert decoded textures to string for profile {}: {}",
+            profile.name,
+            e
+        );
+        AppError::Other(format!(
+            "Failed to convert decoded textures to string: {}",
+            e
+        ))
+    })?;
+    let textures_data: TexturesData = serde_json::from_str(&textures_json_str).map_err(|e| {
+        error!(
+            "[MC Utils] Failed to parse textures JSON for profile {}: {}\nJSON: {}",
+            profile.name,
+            e,
+            textures_json_str
+        );
+        AppError::Other(format!("Failed to parse textures JSON: {}", e))
+    })?;
+
+    // Access textures.SKIN correctly
+    let skin_texture_info = textures_data
+        .textures // This is TexturesDictionary
+        .SKIN     // This is Option<TextureInfo>
+        .ok_or_else(|| {
+            error!(
+                "[MC Utils] SKIN texture info not found for profile {}",
+                profile.name
+            );
+            AppError::Other("SKIN texture info not found in profile textures".to_string())
+        })?;
+
+    let skin_url = skin_texture_info.url;
+    let skin_variant = skin_texture_info
+        .metadata
+        .and_then(|meta| meta.model) // model is Option<String>
+        .map_or(SkinModelVariant::Classic, |model_str| {
+            if model_str.to_lowercase() == "slim" {
+                SkinModelVariant::Slim
+            } else {
+                SkinModelVariant::Classic // Default to classic for "default" or any other value
+            }
+        });
+    let profile_name = profile.name.clone();
+
+    debug!(
+        "[MC Utils] Extracted info for profile {}: URL={}, Variant={}, Name={}",
+        profile.name, skin_url, skin_variant, profile_name
+    );
+    Ok((skin_url, skin_variant, profile_name))
 }
