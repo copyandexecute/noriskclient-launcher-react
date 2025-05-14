@@ -940,6 +940,7 @@ export function ModrinthSearchV2({
   const [quickInstallingProjects, setQuickInstallingProjects] = useState<Record<string, boolean>>({}); // New state for card button loading
   const [installingModpackAsProfile, setInstallingModpackAsProfile] = useState<Record<string, boolean>>({}); // New state for modpack install loading
   const [installingVersion, setInstallingVersion] = useState<Record<string, boolean>>({}); // New state for specific version install loading
+  const [installingModpackVersion, setInstallingModpackVersion] = useState<Record<string, boolean>>({}); // New state for modpack version install loading
 
   // Helper function to map Modrinth project type to our ContentType enum
   function mapModrinthProjectTypeToNrContentType(projectType: ModrinthProjectType): NrContentType | null {
@@ -1446,8 +1447,6 @@ export function ModrinthSearchV2({
 
   const handleInstallModpackVersionAsProfile = async (project: ModrinthSearchHit, version: ModrinthVersion) => {
     if (project.project_type !== 'modpack') {
-       // This case should ideally be handled by a different function.
-      // Ensure onInstallSuccess is still triggered for them if this path is taken.
       toast.error("This handler is primarily for modpack versions. For other types, behavior might differ.");
       if (onInstallSuccess) {
         onInstallSuccess();
@@ -1458,6 +1457,8 @@ export function ModrinthSearchV2({
       toast.error("Selected version has no files.");
       return;
     }
+
+    setInstallingModpackVersion(prev => ({ ...prev, [version.id]: true })); // Start loading for this modpack version
 
     const primaryFile = version.files.find(f => f.primary) || version.files[0];
     if (!primaryFile) { 
@@ -1499,6 +1500,8 @@ export function ModrinthSearchV2({
     } catch (err: any) {
       console.error("Failed to install modpack version as profile:", err);
       toast.error(`Error installing ${project.title}: ${err.message || 'Unknown error'}`, { id: toastId });
+    } finally {
+      setInstallingModpackVersion(prev => ({ ...prev, [version.id]: false })); // Stop loading for this modpack version
     }
   };
 
@@ -1931,6 +1934,7 @@ export function ModrinthSearchV2({
                 isQuickInstalling={quickInstallingProjects[hit.project_id] || false} // Pass loading state
                 isInstallingModpackAsProfile={installingModpackAsProfile[hit.project_id] || false} // Pass new loading state
                 installingVersionStates={installingVersion} // Pass the whole record for version install states
+                installingModpackVersionStates={installingModpackVersion} // Pass new state for modpack versions
                 onQuickInstallClick={quickInstall}
                 onInstallModpackAsProfileClick={handleInstallModpackAsProfile}
                 onInstallModpackVersionAsProfileClick={handleInstallModpackVersionAsProfile}

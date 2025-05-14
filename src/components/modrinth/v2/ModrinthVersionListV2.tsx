@@ -37,6 +37,7 @@ interface ModrinthVersionListV2Props {
   };
   installedVersions: Record<string, ContentInstallStatus | null>;
   installingVersionStates?: Record<string, boolean>;
+  installingModpackVersionStates?: Record<string, boolean>;
   selectedProfile: any | null; // Replace 'any' with actual Profile type if available
   accentColor: AccentColor;
   hoveredVersionId: string | null;
@@ -78,6 +79,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
   openDropdowns,
   installedVersions,
   installingVersionStates,
+  installingModpackVersionStates,
   selectedProfile,
   accentColor,
   hoveredVersionId,
@@ -465,6 +467,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
               ? installedVersions?.[version.id] || null
               : null;
             const isInstalling = installingVersionStates?.[version.id] || false;
+            const isInstallingModpackVersion = installingModpackVersionStates?.[version.id] || false;
             const isVersionHovered = hoveredVersionId === version.id;
             return (
               <ModrinthVersionItemV2
@@ -473,6 +476,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
                 project={project}
                 versionStatus={versionStatus}
                 isInstalling={isInstalling}
+                isInstallingModpackVersion={isInstallingModpackVersion}
                 accentColor={accentColor}
                 isHovered={isVersionHovered}
                 onMouseEnter={() => onHoverVersion(version.id)}

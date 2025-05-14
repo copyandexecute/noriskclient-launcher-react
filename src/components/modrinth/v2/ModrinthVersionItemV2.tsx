@@ -15,6 +15,7 @@ interface ModrinthVersionItemV2Props {
   project: ModrinthSearchHit;
   versionStatus: ContentInstallStatus | null;
   isInstalling?: boolean;
+  isInstallingModpackVersion?: boolean;
   accentColor: AccentColor;
   isHovered: boolean;
   onMouseEnter: (id: string) => void;
@@ -30,7 +31,8 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
   version,
   project,
   versionStatus,
-  isInstalling,
+  isInstalling = false,
+  isInstallingModpackVersion = false,
   accentColor,
   isHovered,
   onMouseEnter,
@@ -99,21 +101,33 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
 
   // Determine button state based on selectedProfileId and installation status
   let buttonText = "Install";
+  let buttonIcon: React.ReactNode = null;
   let buttonVariant: "default" | "success" | "secondary" = "success";
   let buttonDisabled = false;
-  let buttonIcon: React.ReactNode = <Icon icon="solar:download-minimalistic-bold" className="w-3.5 h-3.5" />;
 
-  if (isInstalling) {
+  // Modpack installation specific loading state
+  if (project.project_type === "modpack" && isInstallingModpackVersion) {
     buttonText = "Installing...";
-    buttonVariant = "secondary";
-    buttonDisabled = true;
     buttonIcon = (
-      <svg className="animate-spin h-3.5 w-3.5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <svg className="animate-spin mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
     );
-  } else if (selectedProfileId) {
+    buttonVariant = "secondary";
+    buttonDisabled = true;
+  } else if (isInstalling) {
+    // Generic installation loading state (for mods, shaders, etc.)
+    buttonText = "Installing...";
+    buttonIcon = (
+      <svg className="animate-spin mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    );
+    buttonVariant = "secondary";
+    buttonDisabled = true;
+  } else if (versionStatus && versionStatus.is_installed) {
     // Precedence:
     // 1. If it's part of a NoRisk Pack (and not a modpack itself) -> "In Pack", disabled.
     // 2. Else if it's already installed (and not a modpack) -> "Installed", disabled. (Button is likely hidden by outer conditional anyway)
