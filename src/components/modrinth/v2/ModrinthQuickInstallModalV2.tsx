@@ -27,6 +27,7 @@ interface ModrinthQuickInstallModalV2Props {
   installStatus: Record<string, boolean>;
   installingProfiles: Record<string, boolean>;
   onInstallToProfile: (profileId: string) => void;
+  onUninstallClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => Promise<void>;
   findBestVersionForProfile: (
     profile: any, // Replace 'any' with Profile type
     versions: ModrinthVersion[],
@@ -51,6 +52,7 @@ export const ModrinthQuickInstallModalV2: React.FC<ModrinthQuickInstallModalV2Pr
   installStatus,
   installingProfiles,
   onInstallToProfile,
+  onUninstallClick,
   findBestVersionForProfile,
   onInstallToNewProfile,
 }) => {
@@ -225,17 +227,37 @@ export const ModrinthQuickInstallModalV2: React.FC<ModrinthQuickInstallModalV2Pr
                           )}
                         </div>
 
-                        {installStatus[profile.id] ? (
+                        {installingProfiles[profile.id] ? (
                           <Button
                             size="xs"
-                            variant="default"
+                            variant="secondary"
                             disabled
                             shadowDepth="short"
-                            icon={<Icon icon="ph:check-bold" className="w-3.5 h-3.5" />}
-                            style={{ backgroundColor: `${accentColor.value}99`, borderColor: `${accentColor.value}` }}
+                            icon={ <svg /* spinner */ className="animate-spin h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" > <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg>}
+                            iconPosition="left"
                             className="flex-shrink-0"
                           >
-                            Installed
+                            Installing...
+                          </Button>
+                        ) : installStatus[profile.id] && bestVersion && onUninstallClick ? (
+                          <Button
+                            onClick={async () => {
+                              if (project && bestVersion) {
+                                try {
+                                  await onUninstallClick(profile.id, project, bestVersion);
+                                } catch (err) {
+                                  console.error("Uninstall from quick modal failed:", err);
+                                }
+                              }
+                            }}
+                            size="xs"
+                            variant="destructive"
+                            shadowDepth="short"
+                            icon={<Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />}
+                            iconPosition="left"
+                            className="flex-shrink-0"
+                          >
+                            Uninstall
                           </Button>
                         ) : !isCompatible ? (
                           <Button

@@ -1993,36 +1993,50 @@ export function ModrinthSearchV2({
         />
       )}
 
-      {/* Quick Install Modal - Now using the extracted component */}
-      <ModrinthQuickInstallModalV2
-        isOpen={quickInstallModalOpen}
-        onClose={closeQuickInstallModal}
-        project={quickInstallProject}
-        versions={quickInstallVersions}
-        isLoading={quickInstallLoading}
-        error={quickInstallError}
-        profiles={internalProfiles}
-        selectedProfileId={selectedProfile?.id}
-        installStatus={installStatus}
-        installingProfiles={installing}
-        onInstallToProfile={quickInstallToProfile}
-        findBestVersionForProfile={findBestVersionForProfile}
-        onInstallToNewProfile={handleInstallToNewProfile}
-      />
-
-      {/* Detailed Installation Modal - Now using the extracted component */}
+      {/* Regular Install Modal */}
       {selectedProject && selectedVersion && installModalOpen && (
         <ModrinthInstallModalV2
           isOpen={installModalOpen}
-          onClose={closeInstallModal}
+          onClose={() => setInstallModalOpen(false)}
           project={selectedProject}
           version={selectedVersion}
           profiles={internalProfiles}
           selectedProfileId={selectedProfile?.id}
-          isLoadingStatus={loadingStatus}
+          isLoadingStatus={loadingStatus} // Corrected from loadingProfiles to loadingStatus based on typical modal prop names
           installStatus={installStatus}
           installingProfiles={installing}
-          onInstallToProfile={installToProfile}
+          onInstallToProfile={(profileId) => {
+            // Call the existing installToProfile function which uses selectedProject and selectedVersion
+            installToProfile(profileId);
+          }}
+          onUninstallClick={async (profileId, project, version) => {
+            await handleDeleteVersionFromProfile(profileId, project, version);
+          }}
+          onInstallToNewProfile={handleInstallToNewProfile}
+        />
+      )}
+
+      {/* Quick Install Modal */}
+      {quickInstallProject && quickInstallModalOpen && (
+        <ModrinthQuickInstallModalV2
+          isOpen={quickInstallModalOpen}
+          onClose={closeQuickInstallModal}
+          project={quickInstallProject}
+          versions={quickInstallVersions}
+          isLoading={quickInstallLoading}
+          error={quickInstallError}
+          profiles={internalProfiles}
+          selectedProfileId={selectedProfile?.id}
+          installStatus={installStatus}
+          installingProfiles={installing}
+          onInstallToProfile={(profileId) => {
+            // Call the existing quickInstallToProfile function
+            quickInstallToProfile(profileId);
+          }}
+          onUninstallClick={async (profileId, project, version) => {
+            await handleDeleteVersionFromProfile(profileId, project, version);
+          }}
+          findBestVersionForProfile={findBestVersionForProfile}
           onInstallToNewProfile={handleInstallToNewProfile}
         />
       )}

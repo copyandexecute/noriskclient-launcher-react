@@ -34,6 +34,7 @@ interface ModrinthInstallModalV2Props {
   installStatus: Record<string, boolean>;
   installingProfiles: Record<string, boolean>;
   onInstallToProfile: (profileId: string) => void;
+  onUninstallClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => Promise<void>;
   onInstallToNewProfile: (
     profileName: string, 
     project: ModrinthSearchHit, 
@@ -53,6 +54,7 @@ export const ModrinthInstallModalV2: React.FC<ModrinthInstallModalV2Props> = ({
   installStatus,
   installingProfiles,
   onInstallToProfile,
+  onUninstallClick,
   onInstallToNewProfile,
 }) => {
   const [showQuickProfileView, setShowQuickProfileView] = useState(false);
@@ -255,50 +257,72 @@ export const ModrinthInstallModalV2: React.FC<ModrinthInstallModalV2Props> = ({
                         )}
                       </div>
 
-                      {installStatus[profile.id] ? (
+                      {installingProfiles[profile.id] ? (
                         <Button
                           size="xs"
-                          variant="default"
+                          variant="secondary"
                           disabled
                           shadowDepth="short"
-                          icon={<Icon icon="ph:check-bold" className="w-3.5 h-3.5" />}
-                          style={{ backgroundColor: `${accentColor.value}99`, borderColor: `${accentColor.value}` }}
+                          icon={<svg
+                            className="animate-spin h-3 w-3 text-white"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>}
+                          iconPosition="left"
                           className="flex-shrink-0"
                         >
-                          Installed
+                          Installing...
+                        </Button>
+                      ) : installStatus[profile.id] ? (
+                        <Button
+                          onClick={async () => {
+                            if (onUninstallClick && project && version) {
+                              try {
+                                await onUninstallClick(profile.id, project, version);
+                                // Optimistically update modal's internal state if needed, or rely on parent re-render
+                                // For now, parent state change via onInstallSuccess in handleDelete will trigger re-render.
+                              } catch (err) {
+                                // Error is usually handled by toast in the handler itself
+                                console.error("Uninstall from modal failed:", err);
+                              }
+                            }
+                          }}
+                          size="xs"
+                          variant="destructive"
+                          shadowDepth="short"
+                          icon={<Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />}
+                          iconPosition="left"
+                          className="flex-shrink-0"
+                          disabled={!onUninstallClick} // Disable if handler not provided
+                        >
+                          Uninstall
                         </Button>
                       ) : (
                         <Button
                           onClick={() => onInstallToProfile(profile.id)}
-                          disabled={installingProfiles[profile.id]}
                           size="xs"
-                          variant={installingProfiles[profile.id] ? "secondary" : "success"}
+                          variant={"success"} // No need for ternary, installing state handled above
                           shadowDepth="short"
-                          icon={installingProfiles[profile.id] ?
-                              <svg
-                                  className="animate-spin h-3 w-3 text-white"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                  >
-                                  <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                  ></circle>
-                                  <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                  ></path>
-                                  </svg> : <Icon icon="solar:download-minimalistic-bold" className="w-3.5 h-3.5" />}
+                          icon={<Icon icon="solar:download-minimalistic-bold" className="w-3.5 h-3.5" />}
                           iconPosition="left"
                           className="flex-shrink-0"
                         >
-                          {installingProfiles[profile.id] ? "Installing..." : "Install"}
+                          Install
                         </Button>
                       )}
                     </div>
