@@ -60,6 +60,7 @@ export interface ModrinthSearchV2Props {
   onInstallSuccess?: () => void;
   className?: string;
   selectedProfileId?: string; // Optional ID of pre-selected profile
+  initialSidebarVisible?: boolean; // New prop for initial sidebar visibility
 }
 
 const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'];
@@ -78,6 +79,7 @@ export function ModrinthSearchV2({
   onInstallSuccess,
   className = '',
   selectedProfileId,
+  initialSidebarVisible = true, // Default to true if not provided
 }: ModrinthSearchV2Props) {
   const searchResultsAreaRef = useRef<HTMLDivElement>(null); // Ref for the scrollable area
   const [searchTerm, setSearchTerm] = useState('');
@@ -143,7 +145,7 @@ export function ModrinthSearchV2({
   const [loadingStatus, setLoadingStatus] = useState(false);
 
   // Add new state for sidebar visibility
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(initialSidebarVisible);
 
   // Add state for currently selected profile
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
