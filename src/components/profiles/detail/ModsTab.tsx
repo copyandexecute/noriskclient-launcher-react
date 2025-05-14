@@ -21,6 +21,9 @@ import { Button } from "../../ui/buttons/Button";
 import { ErrorMessage } from "../../ui/ErrorMessage";
 import { gsap } from "gsap";
 import { ModrinthService } from "../../../services/modrinth-service";
+import { AutoSizer } from "react-virtualized/dist/es/AutoSizer";
+import { List } from "react-virtualized/dist/es/List";
+import type { ListRowProps } from "react-virtualized";
 
 interface ModsTabProps {
   profile: Profile;
@@ -459,6 +462,25 @@ export function ModsTab({
       (mod.source as ModSourceModrinth).file_hash_sha1! in modUpdates,
   ).length;
 
+  const rowRenderer = ({ index, key, style }: ListRowProps) => {
+    const mod = sortedMods[index];
+    return (
+      <ModRow
+        key={mod.id}
+        style={style}
+        mod={mod}
+        isSelected={selectedMods.has(mod.id)}
+        onSelect={() => handleSelectMod(mod.id)}
+        onToggle={() => handleToggleMod(mod.id)}
+        onDelete={() => handleDeleteMod(mod.id)}
+        onUpdate={handleUpdateMod}
+        updateVersion={getModUpdateVersion(mod)}
+        checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
+        modrinthIconUrl={mod.source?.type === "modrinth" && mod.source.project_id ? modrinthIcons[(mod.source as ModSourceModrinth).project_id!] : null}
+      />
+    );
+  };
+
   return (
     <div ref={containerRef} className="h-full flex flex-col select-none p-4">
       {/* Action bar with transparent styling */}
@@ -604,20 +626,20 @@ export function ModsTab({
             searchQuery={effectiveSearchQuery}
           >
             {sortedMods.length > 0 ? (
-              sortedMods.map((mod) => (
-                <ModRow
-                  key={mod.id}
-                  mod={mod}
-                  isSelected={selectedMods.has(mod.id)}
-                  onSelect={() => handleSelectMod(mod.id)}
-                  onToggle={() => handleToggleMod(mod.id)}
-                  onDelete={() => handleDeleteMod(mod.id)}
-                  onUpdate={handleUpdateMod}
-                  updateVersion={getModUpdateVersion(mod)}
-                  checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
-                  modrinthIconUrl={mod.source?.type === "modrinth" && mod.source.project_id ? modrinthIcons[(mod.source as ModSourceModrinth).project_id!] : null}
-                />
-              ))
+              // @ts-ignore TODO: Resolve react-virtualized type issue with React 18
+              <AutoSizer>
+                {({ height, width }) => (
+                  // @ts-ignore TODO: Resolve react-virtualized type issue with React 18
+                  <List
+                    width={width}
+                    height={height}
+                    rowCount={sortedMods.length}
+                    rowHeight={90}
+                    rowRenderer={rowRenderer}
+                    overscanRowCount={10}
+                  />
+                )}
+              </AutoSizer>
             ) : (
               <EmptyState
                 icon="solar:widget-bold"

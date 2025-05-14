@@ -23,6 +23,7 @@ interface ModRowProps {
   updateVersion?: ModrinthVersion | null;
   checkingUpdates?: boolean;
   modrinthIconUrl?: string | null;
+  style?: React.CSSProperties;
 }
 
 export function ModRow({
@@ -35,6 +36,7 @@ export function ModRow({
   updateVersion,
   checkingUpdates = false,
   modrinthIconUrl,
+  style,
 }: ModRowProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [iconUrl, setIconUrl] = useState<string | null>(null);
@@ -44,20 +46,7 @@ export function ModRow({
   const accentColor = useThemeStore((state) => state.accentColor);
   const rowRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (rowRef.current) {
-      gsap.fromTo(
-        rowRef.current,
-        { opacity: 0, x: -10 },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 0.3,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, []);
+
 
   useEffect(() => {
     const fetchModIcon = async () => {
@@ -120,6 +109,7 @@ export function ModRow({
   return (
     <div
       ref={rowRef}
+      style={{ ...style, borderColor: `${accentColor.value}15` }}
       className={cn(
         "flex items-center py-4 px-4 border-b transition-colors",
         isSelected
@@ -128,9 +118,6 @@ export function ModRow({
             ? "bg-white/5"
             : "bg-transparent",
       )}
-      style={{
-        borderColor: `${accentColor.value}15`,
-      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
