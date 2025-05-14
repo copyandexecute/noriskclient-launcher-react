@@ -13,12 +13,14 @@ import type {
   ModrinthBulkUpdateRequestBody,
   ModrinthHashAlgorithm,
   ModrinthVersion,
+  ModrinthProject,
 } from "../../../types/modrinth";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { ContentTable } from "../../ui/ContentTable";
 import { Button } from "../../ui/buttons/Button";
 import { ErrorMessage } from "../../ui/ErrorMessage";
 import { gsap } from "gsap";
+import { ModrinthService } from "../../../services/modrinth-service";
 
 interface ModsTabProps {
   profile: Profile;
@@ -50,15 +52,15 @@ export function ModsTab({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
 
-  const [modUpdates, setModUpdates] = useState<Record<string, ModrinthVersion>>(
-    {},
-  );
+  const [modUpdates, setModUpdates] = useState<
+    Record<string, ModrinthVersion | null>
+  >({});
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updatingMods, setUpdatingMods] = useState<Set<string>>(new Set());
   const accentColor = useThemeStore((state) => state.accentColor);
-
   const containerRef = useRef<HTMLDivElement>(null);
+  const [modrinthIcons, setModrinthIcons] = useState<Record<string, string | null>>({});
 
   // Use parent's search query if provided
   useEffect(() => {
@@ -81,6 +83,42 @@ export function ModsTab({
       );
     }
   }, [isActive]);
+
+  useEffect(() => {
+    const fetchAllModrinthIcons = async () => {
+      if (!mods || mods.length === 0) {
+        setModrinthIcons({});
+        return;
+      }
+
+      const modrinthProjectIds = mods
+        .filter(
+          (mod) => mod.source?.type === "modrinth" && mod.source.project_id,
+        )
+        .map((mod) => (mod.source as ModSourceModrinth).project_id!);
+
+      if (modrinthProjectIds.length > 0) {
+        try {
+          const projectDetailsList = await ModrinthService.getProjectDetails(modrinthProjectIds);
+
+          const icons: Record<string, string | null> = {};
+          projectDetailsList.forEach((detail) => {
+            if (detail?.id && detail.icon_url) {
+              icons[detail.id] = detail.icon_url;
+            }
+          });
+          setModrinthIcons(icons);
+        } catch (err) {
+          console.error("Failed to fetch Modrinth project details in bulk:", err);
+          // Optionally set an error state or handle partial failures
+        }
+      } else {
+        setModrinthIcons({});
+      }
+    };
+
+    fetchAllModrinthIcons();
+  }, [mods]); // Re-fetch if mods array changes
 
   const handleUpdateMod = async (mod: Mod, updateVersion: ModrinthVersion) => {
     if (
@@ -577,6 +615,7 @@ export function ModsTab({
                   onUpdate={handleUpdateMod}
                   updateVersion={getModUpdateVersion(mod)}
                   checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
+                  modrinthIconUrl={mod.source?.type === "modrinth" && mod.source.project_id ? modrinthIcons[(mod.source as ModSourceModrinth).project_id!] : null}
                 />
               ))
             ) : (

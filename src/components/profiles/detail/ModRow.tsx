@@ -22,6 +22,7 @@ interface ModRowProps {
   onUpdate?: (mod: Mod, version: ModrinthVersion) => void;
   updateVersion?: ModrinthVersion | null;
   checkingUpdates?: boolean;
+  modrinthIconUrl?: string | null;
 }
 
 export function ModRow({
@@ -33,6 +34,7 @@ export function ModRow({
   onUpdate,
   updateVersion,
   checkingUpdates = false,
+  modrinthIconUrl,
 }: ModRowProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [iconUrl, setIconUrl] = useState<string | null>(null);
@@ -60,22 +62,9 @@ export function ModRow({
   useEffect(() => {
     const fetchModIcon = async () => {
       try {
-        if (mod.source?.type === "modrinth" && mod.source.project_id) {
-          try {
-            const projectDetails = await invoke<any[]>(
-              "get_modrinth_project_details",
-              {
-                ids: [mod.source.project_id],
-              },
-            );
-
-            if (projectDetails && projectDetails[0]?.icon_url) {
-              setIconUrl(projectDetails[0].icon_url);
-              return;
-            }
-          } catch (error) {
-            console.error("Failed to fetch Modrinth icon:", error);
-          }
+        if (modrinthIconUrl) {
+          setIconUrl(modrinthIconUrl);
+          return;
         }
 
         try {
@@ -102,7 +91,7 @@ export function ModRow({
     };
 
     fetchModIcon();
-  }, [mod]);
+  }, [mod, modrinthIconUrl]);
 
   const handleDelete = () => {
     if (isConfirmingDelete) {
