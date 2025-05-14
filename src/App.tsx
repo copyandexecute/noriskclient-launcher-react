@@ -22,6 +22,7 @@ import { useCrashModalStore } from "./store/crash-modal-store";
 import {SkinsTab} from "./components/tabs/SkinsTab.tsx";
 import { refreshNrcDataOnMount } from "./services/nrc-service";
 import { NewsTab } from "./components/tabs/NewsTab.tsx";
+import { StoreTab } from "./components/tabs/StoreTab.tsx";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
@@ -104,7 +105,7 @@ export function App() {
       case "skins":
         return <SkinsTab />;
       case "store":
-        return null;
+        return <StoreTab />;
       case "news":
         return <NewsTab />;
       case "settings":

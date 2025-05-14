@@ -23,3 +23,23 @@ export interface CapesBrowseResponse {
   capes: CosmeticCape[];
   pagination: PaginationInfo;
 }
+
+// Optional interface types for function parameters
+export interface BrowseCapesOptions {
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  filter_has_elytra?: boolean;
+  filter_creator?: string;
+  time_frame?: string;
+  norisk_token?: string;
+  request_uuid?: string;
+}
+
+export interface GetPlayerCapesOptions {
+  page?: number;
+  page_size?: number;
+  filter_accepted?: boolean;
+  norisk_token?: string;
+  request_uuid?: string;
+}
