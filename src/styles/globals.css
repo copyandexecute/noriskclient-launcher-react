@@ -79,6 +79,22 @@
     }
 }
 
+@keyframes slideUpFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-slide-up-fade-in {
+    animation: slideUpFadeIn 0.5s ease-out forwards;
+    opacity: 0;
+}
+
 @keyframes ripple {
     0% {
         transform: scale(0);

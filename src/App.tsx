@@ -19,6 +19,7 @@ import {
 } from "./types/events";
 import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
 import { useCrashModalStore } from "./store/crash-modal-store";
+import {SkinsTab} from "./components/tabs/SkinsTab.tsx";
 import { refreshNrcDataOnMount } from "./services/nrc-service";
 import { NewsTab } from "./components/tabs/NewsTab.tsx";
 
@@ -101,7 +102,7 @@ export function App() {
       case "mods":
         return <ModrinthTabV2 />;
       case "skins":
-        return null;
+        return <SkinsTab />;
       case "store":
         return null;
       case "news":
