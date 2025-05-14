@@ -123,7 +123,6 @@ export function BrowseTab({
         <ModrinthSearchV2
           profiles={[profile]}
           selectedProfileId={profile.id}
-          onInstallSuccess={onRefresh}
           className="h-full"
         />
       </div>
