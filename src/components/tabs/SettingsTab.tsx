@@ -22,6 +22,7 @@ import {
 } from "../../store/background-effect-store";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
+import { toast } from "react-hot-toast";
 
 export function SettingsTab() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -29,7 +30,6 @@ export function SettingsTab() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"general" | "appearance">(
     "general",
   );
@@ -85,7 +85,6 @@ export function SettingsTab() {
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setSaveSuccess(false);
     try {
       const loadedConfig = await ConfigService.getLauncherConfig();
       setConfig(loadedConfig);
@@ -133,7 +132,6 @@ export function SettingsTab() {
     if (!tempConfig) return;
 
     setSaving(true);
-    setSaveSuccess(false);
     setError(null);
 
     try {
@@ -141,11 +139,12 @@ export function SettingsTab() {
       setConfig(updatedConfig);
       setTempConfig({ ...updatedConfig });
       console.log("Configuration saved successfully:", updatedConfig);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      toast.success("Settings saved!");
     } catch (err) {
       console.error("Failed to save configuration:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage);
+      toast.error(`Failed to save settings: ${errorMessage}`);
     } finally {
       setSaving(false);
     }
@@ -175,7 +174,6 @@ export function SettingsTab() {
     if (config) {
       setTempConfig({ ...config });
       setError(null);
-      setSaveSuccess(false);
     }
   };
 
@@ -652,13 +650,6 @@ export function SettingsTab() {
 
       <div className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar">
         <div ref={contentRef}>
-          {saveSuccess && (
-            <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-4 py-3 rounded-md mb-4">
-              <Icon icon="solar:check-circle-bold" className="w-5 h-5" />
-              <span className="text-xl font-minecraft">Settings saved!</span>
-            </div>
-          )}
-
           {renderTabContent()}
         </div>
       </div>
