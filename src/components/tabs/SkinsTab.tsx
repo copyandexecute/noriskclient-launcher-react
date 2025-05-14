@@ -31,7 +31,8 @@ const SkinPreview = memo(({
 														localSkinsLoading,
 														selectedLocalSkin,
 														onClick,
-														onEditSkin
+														onEditSkin,
+														onDeleteSkin
 													}: {
 	skin: MinecraftSkin,
 	skinUrl?: string,
@@ -40,7 +41,8 @@ const SkinPreview = memo(({
 	localSkinsLoading: boolean,
 	selectedLocalSkin: MinecraftSkin | null,
 	onClick: (skin: MinecraftSkin) => void,
-	onEditSkin?: (skin: MinecraftSkin, event: React.MouseEvent<HTMLButtonElement>) => void
+	onEditSkin?: (skin: MinecraftSkin, event: React.MouseEvent<HTMLButtonElement>) => void,
+	onDeleteSkin?: (skinId: string, skinName: string, event: React.MouseEvent<HTMLButtonElement>) => void
 }) => {
 	const accentColor = useThemeStore((state) => state.accentColor);
 
@@ -65,7 +67,10 @@ const SkinPreview = memo(({
 					className="absolute bottom-1.5 right-1.5 z-10 p-1.5 text-white/70 rounded
 					opacity-0 group-hover:opacity-100 transition-opacity hover:text-white
 					disabled:opacity-50 disabled:pointer-events-none"
-					onClick={(event) => onEditSkin(skin, event)}
+					onClick={(event) => {
+						event.stopPropagation();
+						onEditSkin(skin, event);
+					}}
 					title="Edit skin properties"
 					disabled={loading || localSkinsLoading}
 				>
@@ -98,6 +103,22 @@ const SkinPreview = memo(({
 						Applying...
 					</span>
 				</div>
+			)}
+
+			{onDeleteSkin && skin.id !== "add-skin" && (
+				<button
+					className="absolute top-1.5 right-1.5 z-10 p-1.5 text-white/70 rounded
+					opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-500
+					disabled:opacity-50 disabled:pointer-events-none"
+					onClick={(event) => {
+						event.stopPropagation();
+						onDeleteSkin(skin.id, skin.name, event);
+					}}
+					title="Delete skin"
+					disabled={loading || localSkinsLoading}
+				>
+					<Icon icon="mdi:trash-can-outline" className="w-4 h-4" /> {/* Assuming mdi:trash-can-outline is the chosen icon */}
+				</button>
 			)}
 		</div>
 	);
@@ -245,7 +266,7 @@ const EditSkinModal = memo(({
 			</div>
 		</Modal>
 	);
-})
+});
 
 export function SkinsTab() {
 	const {
@@ -400,6 +421,47 @@ export function SkinsTab() {
 		}
 	}
 
+	const handleDeleteSkin = async (skinId: string, skinName: string) => {
+		const deletePromise = async () => {
+			const removed = await MinecraftSkinService.removeSkin(skinId);
+			if (!removed) {
+				// Throw an error if not removed so toast.promise catches it in the error state
+				throw new Error(`Skin "${skinName}" could not be found or was already deleted.`);
+			}
+			return removed; // Or simply return void/true, the data isn't strictly used by success message here
+		};
+
+		toast.promise(
+			deletePromise(),
+			{
+				loading: `Deleting skin "${skinName}"...`,
+				success: (data) => { // data here would be the return value of deletePromise if successful
+					setLocalSkins(prevSkins => prevSkins.filter(s => s.id !== skinId));
+					if (selectedLocalSkin?.id === skinId) {
+						setSelectedLocalSkin(null);
+					}
+					return `Successfully deleted skin: ${skinName}`;
+				},
+				error: (err) => {
+					console.error("Error deleting skin:", err);
+					return err instanceof Error ? err.message : String(err.message);
+				}
+			},
+			{
+				success: {
+					duration: 4000,
+				},
+				error: {
+					duration: 5000,
+				}
+			}
+		);
+
+		// No need to manage modalLoading here as toast.promise handles its own lifecycle.
+		// However, if other elements should be disabled, modalLoading might still be useful.
+		// For now, let's assume the toast's visual feedback is sufficient.
+	};
+
 	const applyLocalSkin = async (skin: MinecraftSkin) => {
 		if (!activeAccount) {
 			toast.error("You must be logged in to apply a skin");
@@ -489,6 +551,7 @@ export function SkinsTab() {
 														selectedLocalSkin={selectedLocalSkin}
 														onClick={applyLocalSkin}
 														onEditSkin={startEditSkin}
+														onDeleteSkin={handleDeleteSkin}
 													/>
 												))}
 												<SkinPreview

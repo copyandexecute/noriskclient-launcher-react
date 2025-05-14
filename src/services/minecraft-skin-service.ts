@@ -117,4 +117,13 @@ export class MinecraftSkinService {
 
         return await invoke<MinecraftSkin>("add_skin_locally", { payload });
     }
+
+    /**
+     * Removes a locally stored skin from the database.
+     * @param skinId - The ID of the skin to remove.
+     * @returns A promise resolving to true if the skin was successfully removed, false otherwise.
+     */
+    static async removeSkin(skinId: string): Promise<boolean> {
+        return await invoke<boolean>("remove_skin", { id: skinId });
+    }
 } 
