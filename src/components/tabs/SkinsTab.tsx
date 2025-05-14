@@ -150,16 +150,33 @@ const EditSkinModal = memo(({
 				variant,
 			});
 		} else {
-			if (!name.trim()) {
-				toast.error("Skin Name cannot be empty.");
-				return;
-			}
-			if (!skinInput.trim()) {
+			const trimmedInput = skinInput.trim();
+			if (!trimmedInput) {
 				toast.error("Skin source (Username, UUID, or URL) cannot be empty.");
 				return;
 			}
 
-			await addSkin(skinInput, name, variant, null);
+			let targetName = "";
+			try {
+				// Attempt to parse as URL to extract filename
+				const url = new URL(trimmedInput);
+				const pathnameParts = url.pathname.split('/').filter(part => part.length > 0);
+				targetName = pathnameParts.pop() || url.hostname || "Web_Skin"; // Last part of path, or hostname, or default
+				// Remove .png or other common image extensions if present
+				if (targetName.match(/\.(png|jpg|jpeg|gif)$/i)) {
+					targetName = targetName.substring(0, targetName.lastIndexOf('.'));
+				}
+			} catch (e) {
+				// Not a valid URL, assume it's a username/UUID
+				targetName = trimmedInput;
+			}
+
+			if (!targetName.trim()) { // Final safety check for derived name
+				targetName = "Unnamed_Skin"; // Fallback if somehow still empty
+				console.warn("Derived target name was empty, falling back to Unnamed_Skin for input:", trimmedInput);
+			}
+
+			await addSkin(trimmedInput, targetName, variant, null);
 		}
 	};
 
@@ -187,19 +204,21 @@ const EditSkinModal = memo(({
 			}
 		>
 			<div className="p-4 space-y-2">
-				<label
-					className="block font-minecraft text-3xl -mt-3 text-white/80 lowercase"
-				>
-					Skin Name
-					<input
-						type="text"
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						placeholder="Enter skin name"
-						className="w-full bg-black/30 backdrop-blur-md border-2 border-white/20 px-4 py-2 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200"
-						disabled={localSkinsLoading}
-					/>
-				</label>
+				{skin && (
+					<label
+						className="block font-minecraft text-3xl -mt-3 text-white/80 lowercase"
+					>
+						Skin Name
+						<input
+							type="text"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="Enter skin name"
+							className="w-full bg-black/30 backdrop-blur-md border-2 border-white/20 px-4 py-2 text-white font-minecraft text-3xl rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200"
+							disabled={localSkinsLoading}
+						/>
+					</label>
+				)}
 				{!skin &&
 					<div className={"flex-col w-full pt-2"}>
 						<div className={"flex"}>
@@ -414,7 +433,7 @@ export function SkinsTab() {
 			setEditingSkin(null);
 		} catch (err) {
 			console.error("Error adding new skin:", err);
-			const errorMessage = err instanceof Error ? err.message : String(err);
+			const errorMessage = err instanceof Error ? err.message : String(err.message);
 			toast.error(`Failed to add skin: ${errorMessage}`);
 		} finally {
 			setModalLoading(false);
