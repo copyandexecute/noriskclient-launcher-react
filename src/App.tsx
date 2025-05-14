@@ -5,20 +5,21 @@ import { PlayTab } from "./components/tabs/PlayTab";
 import { SettingsTab } from "./components/tabs/SettingsTab";
 import { ThemeInitializer } from "./components/ThemeInitializer";
 import { ScrollbarProvider } from "./components/ui/ScrollbarProvider";
-import { NewsSection } from "./components/news/NewsSection";
 import { ProfilesTab } from "./components/tabs/ProfilesTab.tsx";
-import ModrinthTab from "./components/tabs/ModrinthTab.tsx";
+// import ModrinthTab from "./components/tabs/ModrinthTab.tsx"; // Ensure this line is removed or commented out
+import ModrinthTabV2 from "./components/tabs/ModrinthTabV2.tsx";
 import { GlobalToaster } from "./components/ui/GlobalToaster";
-import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
-import { toast } from 'react-hot-toast';
+import { Event as TauriEvent, listen } from "@tauri-apps/api/event";
+import { toast } from "react-hot-toast";
 import {
-  EventType as FrontendEventType,
   EventPayload as FrontendEventPayload,
-  MinecraftProcessExitedPayload
+  EventType as FrontendEventType,
+  MinecraftProcessExitedPayload,
 } from "./types/events";
 import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
 import { useCrashModalStore } from "./store/crash-modal-store";
 import { refreshNrcDataOnMount } from "./services/nrc-service";
+import { NewsTab } from "./components/tabs/NewsTab";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
@@ -59,25 +60,38 @@ export function App() {
 
   // Global listener for Minecraft crash events
   useEffect(() => {
-    const unlisten = listen<FrontendEventPayload>("state_event", (event: TauriEvent<FrontendEventPayload>) => {
-      if (event.payload.event_type === FrontendEventType.MinecraftProcessExited) {
-        try {
-          const exitPayload: MinecraftProcessExitedPayload = JSON.parse(event.payload.message);
-          console.log("[App.tsx] Global MinecraftProcessExited event:", exitPayload);
-          if (!exitPayload.success) {
-            const crashMsg = `Minecraft crashed (Exit Code: ${exitPayload.exit_code ?? 'N/A'}). See crash report for details.`;
-            toast.error(crashMsg, { duration: 10000 }); 
-            openCrashModal(exitPayload); 
+    const unlisten = listen<FrontendEventPayload>(
+      "state_event",
+      (event: TauriEvent<FrontendEventPayload>) => {
+        if (
+          event.payload.event_type === FrontendEventType.MinecraftProcessExited
+        ) {
+          try {
+            const exitPayload: MinecraftProcessExitedPayload = JSON.parse(
+              event.payload.message,
+            );
+            console.log(
+              "[App.tsx] Global MinecraftProcessExited event:",
+              exitPayload,
+            );
+            if (!exitPayload.success) {
+              const crashMsg = `Minecraft crashed (Exit Code: ${exitPayload.exit_code ?? "N/A"}). See crash report for details.`;
+              toast.error(crashMsg, { duration: 10000 });
+              openCrashModal(exitPayload);
+            }
+          } catch (e) {
+            console.error(
+              "[App.tsx] Failed to parse MinecraftProcessExitedPayload:",
+              e,
+            );
+            toast.error("Could not globally process Minecraft process status.");
           }
-        } catch (e) {
-          console.error("[App.tsx] Failed to parse MinecraftProcessExitedPayload:", e);
-          toast.error("Could not globally process Minecraft process status.");
         }
-      }
-    });
+      },
+    );
 
     return () => {
-      unlisten.then(f => f());
+      unlisten.then((f) => f());
     };
   }, [openCrashModal]);
 
@@ -97,13 +111,13 @@ export function App() {
       case "profiles":
         return <ProfilesTab />;
       case "mods":
-        return <ModrinthTab />;
+        return <ModrinthTabV2 />;
       case "skins":
         return null;
       case "store":
         return null;
       case "news":
-        return <NewsSection />;
+        return <NewsTab />;
       case "settings":
         return <SettingsTab />;
       default:

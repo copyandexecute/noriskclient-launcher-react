@@ -18,6 +18,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
+  shadowDepth?: "default" | "short";
 }
 
 interface RippleType {
@@ -37,6 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       disabled = false,
       icon,
       iconPosition = "left",
+      shadowDepth = "default",
       onClick,
       ...props
     },
@@ -139,12 +141,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       setIsHovered(true);
 
       if (buttonRef.current) {
+        const part1Y = shadowDepth === 'short' ? '7px' : '13px';
+        const part2Y = shadowDepth === 'short' ? '10px' : '16px';
+        const part2Blur = shadowDepth === 'short' ? '15px' : '20px'; 
+
         gsap.to(buttonRef.current, {
           y: -5,
           boxShadow:
             variant === "ghost"
               ? "none"
-              : "0 13px 0 rgba(0,0,0,0.25), 0 16px 20px rgba(0,0,0,0.4)",
+              : `0 ${part1Y} 0 rgba(0,0,0,0.25), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.4)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -156,12 +162,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       setIsHovered(false);
 
       if (buttonRef.current) {
+        const part1Y = shadowDepth === 'short' ? '4px' : '8px';
+        const part2Y = shadowDepth === 'short' ? '6px' : '10px';
+        const part2Blur = shadowDepth === 'short' ? '10px' : '15px';
+
         gsap.to(buttonRef.current, {
           y: 0,
           boxShadow:
             variant === "ghost"
               ? "none"
-              : "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35)",
+              : `0 ${part1Y} 0 rgba(0,0,0,0.3), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.35)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -250,6 +260,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       return isHovered ? `${colors.light}` : `${colors.main}80`;
     };
 
+    const initialPart1Y = shadowDepth === 'short' ? '4px' : '8px';
+    const initialPart2Y = shadowDepth === 'short' ? '6px' : '10px';
+    const initialPart2Blur = shadowDepth === 'short' ? '10px' : '15px';
+
+    const initialBoxShadow = variant === "ghost"
+        ? "none"
+        : `0 ${initialPart1Y} 0 rgba(0,0,0,0.3), 0 ${initialPart2Y} ${initialPart2Blur} rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`;
+
     return (
       <button
         ref={mergedRef}
@@ -264,12 +282,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           "rounded-md text-white tracking-wider lowercase",
           "flex items-center justify-center gap-2",
           "text-shadow-sm whitespace-nowrap",
-          variant !== "ghost" &&
+          variant !== "ghost" && shadowDepth === 'default' &&
             "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+          variant !== "ghost" && shadowDepth === 'short' &&
+            "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
           "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
           "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0",
-          variant !== "ghost" &&
+          variant !== "ghost" && shadowDepth === 'default' &&
             "disabled:hover:shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+          variant !== "ghost" && shadowDepth === 'short' &&
+            "disabled:hover:shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
           sizeStyles[size],
           className,
         )}
@@ -282,10 +304,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
               : isHovered
                 ? colors.light
                 : colors.dark,
-          boxShadow:
-            variant === "ghost"
-              ? "none"
-              : `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`,
+          boxShadow: initialBoxShadow,
           color: colors.text,
           transform:
             isHovered && !disabled ? "translateY(-5px)" : "translateY(0)",

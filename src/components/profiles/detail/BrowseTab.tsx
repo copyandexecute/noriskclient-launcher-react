@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ModrinthSearch } from "../../modrinth/ModrinthSearch";
 import type { Profile } from "../../../types/profile";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { useDisplayContextStore } from "../../../store/useDisplayContextStore";
 import { Icon } from "@iconify/react";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
+import { ModrinthSearchV2 } from "../../modrinth/v2/ModrinthSearchV2.tsx";
 
 interface BrowseTabProps {
   profile: Profile;
@@ -22,7 +23,18 @@ export function BrowseTab({
   parentTransitionActive,
 }: BrowseTabProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const setDisplayContext = useDisplayContextStore((state) => state.setContext);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Set display context to 'detail' when component mounts
+  useEffect(() => {
+    setDisplayContext("detail");
+
+    // Optional: Reset to default when component unmounts
+    return () => {
+      setDisplayContext("standalone");
+    };
+  }, [setDisplayContext]);
 
   useEffect(() => {
     if (containerRef.current && !parentTransitionActive) {
@@ -119,13 +131,11 @@ export function BrowseTab({
   return (
     <div ref={containerRef} className="h-full flex flex-col p-4 gap-6">
       <div className="flex-1 overflow-hidden">
-        <ModrinthSearch
+        <ModrinthSearchV2
           profiles={[profile]}
           selectedProfileId={profile.id}
-          initialProjectType={getProjectType()}
           onInstallSuccess={onRefresh}
           className="h-full"
-          parentTransitionActive={parentTransitionActive}
         />
       </div>
     </div>

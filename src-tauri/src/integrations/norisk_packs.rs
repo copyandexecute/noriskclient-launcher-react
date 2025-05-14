@@ -4,6 +4,7 @@ use crate::state::profile_state::{Profile, ProfileState};
 use crate::state::state_manager::State;
 use async_zip::tokio::read::seek::ZipFileReader;
 use chrono::Utc;
+use futures::future::try_join_all;
 use log::{debug, error, info, warn};
 use sanitize_filename::sanitize;
 use serde::{Deserialize, Serialize};
@@ -14,6 +15,7 @@ use std::path::PathBuf;
 use tokio::fs;
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufReader};
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 use uuid::Uuid; // Added for env! macro
 
 /// Represents the overall structure of the norisk_modpacks.json file.
@@ -137,28 +139,28 @@ pub fn get_norisk_pack_mod_filename(
 }
 
 /// Imports a profile from a .noriskpack file.
-/// This function reads profile.json, creates a new profile, and extracts overrides.
+/// This function reads profile.json, creates a new profile, and extracts overrides concurrently.
 pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     info!("Starting import process for noriskpack: {:?}", pack_path);
 
-    // 1. Open the file and create a reader
-    let file = File::open(&pack_path).await.map_err(|e| {
-        error!("Failed to open noriskpack file {:?}: {}", pack_path, e);
+    // 1. Open the file and create a reader for profile.json initially
+    let profile_json_file = File::open(&pack_path).await.map_err(|e| {
+        error!("Failed to open noriskpack file for profile.json {:?}: {}", pack_path, e);
         AppError::Io(e)
     })?;
-    let mut buf_reader = BufReader::new(file);
+    let mut profile_json_buf_reader = BufReader::new(profile_json_file);
 
-    // 2. Create zip reader
-    let mut zip = ZipFileReader::with_tokio(&mut buf_reader)
+    // 2. Create zip reader for profile.json
+    let mut zip_for_profile_json = ZipFileReader::with_tokio(&mut profile_json_buf_reader)
         .await
         .map_err(|e| {
-            error!("Failed to read noriskpack as ZIP: {}", e);
-            AppError::Other(format!("Failed to read noriskpack zip: {}", e))
+            error!("Failed to read noriskpack as ZIP for profile.json: {}", e);
+            AppError::Other(format!("Failed to read noriskpack zip for profile.json: {}", e))
         })?;
 
     // 3. Find and read profile.json
-    let entries = zip.file().entries();
-    let profile_entry_index = entries
+    let entries_for_profile = zip_for_profile_json.file().entries();
+    let profile_entry_index = entries_for_profile
         .iter()
         .position(|e| {
             e.filename()
@@ -171,7 +173,7 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
         })?;
 
     let profile_content = {
-        let mut entry_reader = zip
+        let mut entry_reader = zip_for_profile_json
             .reader_with_entry(profile_entry_index)
             .await
             .map_err(|e| {
@@ -193,6 +195,9 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
             AppError::Other(format!("profile.json content is not valid UTF-8: {}", e))
         })?
     };
+    // Drop the first zip reader and file handle for profile.json as we are done with it.
+    drop(zip_for_profile_json);
+    drop(profile_json_buf_reader);
 
     // 4. Parse the profile.json
     let mut exported_profile: Profile = serde_json::from_str(&profile_content).map_err(|e| {
@@ -214,33 +219,33 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     // 6. Create a new profile with a unique path
     let base_profiles_dir = crate::state::profile_state::default_profile_path();
     let sanitized_base_name = sanitize(&exported_profile.name);
-    if sanitized_base_name.is_empty() {
-        // Handle empty name after sanitization
+    let final_profile_name = if sanitized_base_name.is_empty() {
         let default_name = format!("imported-noriskpack-{}", Utc::now().timestamp_millis());
         warn!(
             "Profile name '{}' became empty after sanitization. Using default: {}",
             exported_profile.name, default_name
         );
-        exported_profile.name = default_name.clone();
-    }
+        default_name
+    } else {
+        sanitized_base_name.to_string()
+    };
+    exported_profile.name = final_profile_name.clone(); // Ensure profile name is also sanitized or defaulted
 
-    // Find a unique path segment
     let unique_segment = crate::utils::path_utils::find_unique_profile_segment(
         &base_profiles_dir,
-        &sanitized_base_name,
+        &final_profile_name, // Use the potentially defaulted and sanitized name
     )
     .await?;
 
-    // Update the profile with new values
     exported_profile.path = unique_segment;
-    exported_profile.id = Uuid::new_v4(); // Generate a new UUID
-    exported_profile.created = Utc::now(); // Set creation time to now
+    exported_profile.id = Uuid::new_v4();
+    exported_profile.created = Utc::now();
     exported_profile.last_played = None;
     exported_profile.state = ProfileState::NotInstalled;
 
     info!("Prepared new profile with path: {}", exported_profile.path);
 
-    // 7. Ensure the target profile directory exists
+    // 7. Ensure the target profile directory exists (can be done once before spawning tasks)
     let target_dir = base_profiles_dir.join(&exported_profile.path);
     if !target_dir.exists() {
         fs::create_dir_all(&target_dir).await.map_err(|e| {
@@ -252,114 +257,202 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
         })?;
     }
 
-    // 8. Extract the overrides directory
+    // 8. Extract the overrides directory concurrently using streaming
     info!(
-        "Extracting overrides to profile directory: {:?}",
+        "Extracting overrides to profile directory: {:?} using concurrent streaming...",
         target_dir
     );
-    let num_entries = zip.file().entries().len();
+
+    let state = State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
+    // Open the zip file again for listing entries for override extraction
+    let overrides_file_for_listing = File::open(&pack_path).await.map_err(|e| {
+        error!("Failed to open noriskpack file for overrides listing {:?}: {}", pack_path, e);
+        AppError::Io(e)
+    })?;
+    let mut overrides_buf_reader = BufReader::new(overrides_file_for_listing);
+    let mut zip_lister_for_overrides = ZipFileReader::with_tokio(&mut overrides_buf_reader)
+        .await
+        .map_err(|e| {
+            error!("Failed to read noriskpack as ZIP for overrides listing: {}", e);
+            AppError::Other(format!("Failed to read noriskpack zip for overrides: {}", e))
+        })?;
+
+    let num_entries = zip_lister_for_overrides.file().entries().len();
+    info!(
+        "Found {} entries in noriskpack. Preparing concurrent streaming for overrides...",
+        num_entries
+    );
+
+    let mut extraction_tasks = Vec::new();
 
     for index in 0..num_entries {
-        let entry = match zip.file().entries().get(index) {
-            Some(e) => e,
-            None => continue,
-        };
+        let entry_filename_str;
+        let is_entry_dir;
+        let entry_uncompressed_size; 
+        {
+            let entry = match zip_lister_for_overrides.file().entries().get(index) {
+                Some(e) => e,
+                None => {
+                    error!("Failed to get zip entry metadata for index {} during overrides listing", index);
+                    continue;
+                }
+            };
+            entry_filename_str = match entry.filename().as_str() {
+                Ok(s) => s.to_string(),
+                Err(_) => {
+                    error!("Non UTF-8 filename at index {} during overrides listing", index);
+                    continue;
+                }
+            };
+            is_entry_dir = entry.dir().unwrap_or_else(|_err| {
+                warn!("Overrides: Failed to determine if '{}' is a directory, falling back to path check.", entry_filename_str);
+                entry_filename_str.ends_with('/')
+            });
+            entry_uncompressed_size = entry.uncompressed_size(); 
+        }
 
-        let original_file_name = match entry.filename().as_str() {
-            Ok(s) => s,
-            Err(_) => {
-                error!("Non UTF-8 filename at index {}", index);
-                continue;
-            }
-        };
-
-        let is_override = original_file_name.starts_with("overrides/");
-        let is_directory = original_file_name.ends_with('/');
-        let uncompressed_size = if is_override && !is_directory {
-            entry.uncompressed_size() as usize
-        } else {
-            0
-        };
-
-        let owned_filename = original_file_name.to_string();
-
-        if is_override {
-            let relative_path_in_overrides = match owned_filename.strip_prefix("overrides/") {
-                Some(p) if !p.is_empty() => p,
-                _ => continue,
+        // Only process the "overrides/" directory for .noriskpack files
+        if entry_filename_str.starts_with("overrides/") {
+            let path_after_strip_str = match entry_filename_str.strip_prefix("overrides/") {
+                Some(p_str) if !p_str.is_empty() => p_str,
+                _ => continue, // Skip if path after prefix is empty (e.g. just "overrides/")
             };
 
-            let final_dest_path = target_dir.join(relative_path_in_overrides);
+            // Sanitize each component of the path to prevent directory traversal and invalid names
+            let sanitized_relative_path_buf = PathBuf::from(path_after_strip_str)
+                .components()
+                .filter_map(|comp| match comp {
+                    std::path::Component::Normal(os_str) => {
+                        let sanitized_comp = sanitize_filename::sanitize(os_str.to_string_lossy().as_ref());
+                        if sanitized_comp.is_empty() {
+                            None
+                        } else {
+                            Some(sanitized_comp)
+                        }
+                    }
+                    std::path::Component::ParentDir => {
+                        warn!("Parent directory component '..' found and removed in noriskpack override path: {}", path_after_strip_str);
+                        None 
+                    }
+                    std::path::Component::CurDir => None,
+                    std::path::Component::RootDir => None,
+                    std::path::Component::Prefix(_) => None,
+                })
+                .collect::<PathBuf>();
 
-            if is_directory {
-                // Directory Creation
-                if !final_dest_path.exists() {
-                    info!("Creating directory: {:?}", final_dest_path);
-                    fs::create_dir_all(&final_dest_path).await.map_err(|e| {
-                        error!("Failed to create directory {:?}: {}", final_dest_path, e);
-                        AppError::Io(e)
-                    })?;
-                }
-            } else {
-                // File Extraction
-                info!(
-                    "Extracting override file: '{}' -> {:?}",
-                    owned_filename, final_dest_path
+            // If sanitization results in an empty path (e.g., path was only ".." or similar), skip it.
+            if sanitized_relative_path_buf.as_os_str().is_empty() {
+                warn!(
+                    "Skipping empty sanitized relative path for noriskpack override entry: {} (original relative: {})",
+                    entry_filename_str, path_after_strip_str
                 );
+                continue;
+            }
+            
+            let final_dest_path = target_dir.join(sanitized_relative_path_buf);
+            
+            let task_pack_path = pack_path.clone(); // PathBuf is cheap to clone
+            let task_io_semaphore = io_semaphore.clone();
+            let task_final_dest_path = final_dest_path.clone();
+            let original_entry_index = index;
 
-                if let Some(parent) = final_dest_path.parent() {
-                    if !fs::try_exists(parent).await? {
-                        info!("Creating parent directory: {:?}", parent);
-                        fs::create_dir_all(parent).await.map_err(|e| {
-                            error!("Failed to create parent directory {:?}: {}", parent, e);
+            if is_entry_dir {
+                extraction_tasks.push(tokio::spawn(async move {
+                    let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                        error!("Overrides Task: Failed to acquire semaphore for dir {}: {}", task_final_dest_path.display(), e);
+                        AppError::Other(format!("Semaphore error for dir {}: {}",task_final_dest_path.display(),e))
+                    })?;
+                    if !task_final_dest_path.exists() {
+                        debug!("Overrides Task: Creating directory: {:?}", task_final_dest_path);
+                        fs::create_dir_all(&task_final_dest_path).await.map_err(|e| {
+                            error!("Overrides Task: Failed to create directory {:?}: {}", task_final_dest_path, e);
                             AppError::Io(e)
                         })?;
                     }
-                }
-
-                // Extract file content
-                let mut entry_reader = zip.reader_with_entry(index).await.map_err(|e| {
-                    error!(
-                        "Failed to get reader for zip entry '{}': {}",
-                        owned_filename, e
-                    );
-                    AppError::Other(format!("Failed to read zip entry {}: {}", index, e))
-                })?;
-
-                let mut writer = fs::File::create(&final_dest_path).await.map_err(|e| {
-                    error!(
-                        "Failed to create destination file {:?}: {}",
-                        final_dest_path, e
-                    );
-                    AppError::Io(e)
-                })?;
-
-                let mut buffer = Vec::with_capacity(uncompressed_size);
-                entry_reader
-                    .read_to_end_checked(&mut buffer)
-                    .await
-                    .map_err(|e| {
-                        error!(
-                            "Failed to read zip entry content '{}': {}",
-                            owned_filename, e
-                        );
-                        AppError::Other(format!("Failed to read zip entry content: {}", e))
+                    Ok::<(), AppError>(())
+                }));
+            } else {
+                info!(
+                    "Overrides Task: Queueing concurrent streaming for '{}' -> {:?} (Size: {} bytes)",
+                    entry_filename_str, task_final_dest_path, entry_uncompressed_size
+                );
+                extraction_tasks.push(tokio::spawn(async move {
+                    let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                         error!("Overrides Task: Failed to acquire semaphore for '{}': {}", task_final_dest_path.display(), e);
+                         AppError::Other(format!("Semaphore error for '{}': {}",task_final_dest_path.display(),e))
                     })?;
 
-                writer.write_all(&buffer).await.map_err(|e| {
-                    error!("Failed to write content to {:?}: {}", final_dest_path, e);
-                    AppError::Io(e)
-                })?;
+                    if let Some(parent) = task_final_dest_path.parent() {
+                        if !parent.exists() { 
+                            fs::create_dir_all(parent).await.map_err(|e| {
+                                error!("Overrides Task: Failed to create parent for '{}': {}", task_final_dest_path.display(), e);
+                                AppError::Io(e)
+                            })?;
+                        }
+                    }
 
-                info!("Successfully extracted to: {}", final_dest_path.display());
+                    let task_file = File::open(&task_pack_path).await.map_err(|e|{
+                        error!("Overrides Task: Failed to open pack file {:?}: {}", task_pack_path, e);
+                        AppError::Io(e)
+                    })?;
+                    let mut task_buf_reader = BufReader::new(task_file);
+                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader).await.map_err(|e|{
+                        error!("Overrides Task: Failed to read pack as ZIP for '{}': {}", task_final_dest_path.display(), e);
+                        AppError::Other(format!("Task: ZIP read error for {}: {}",task_final_dest_path.display(),e))
+                    })?;
+                    
+                    let entry_reader_futures = task_zip_reader.reader_without_entry(original_entry_index).await.map_err(|e| {
+                        error!(
+                            "Overrides Task: Failed to get entry reader for '{}' (index {}): {}",
+                            task_final_dest_path.display(), original_entry_index, e
+                        );
+                        AppError::Other(format!("Task: Entry reader error for {}: {}",task_final_dest_path.display(),e))
+                    })?;
+                    let mut entry_reader_tokio = entry_reader_futures.compat();
+
+                    let mut file_writer = fs::File::create(&task_final_dest_path).await.map_err(|e| {
+                        error!("Overrides Task: Failed to create dest file {:?}: {}", task_final_dest_path, e);
+                        AppError::Io(e)
+                    })?;
+
+                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
+                        error!(
+                            "Overrides Task: Failed to stream for '{}' to {:?}: {}",
+                            task_final_dest_path.display(), task_final_dest_path, e
+                        );
+                        AppError::Io(e)
+                    })?;
+                    
+                    debug!("Overrides Task: Streamed {} bytes for: {}", bytes_copied, task_final_dest_path.display());
+                    Ok::<(), AppError>(())
+                }));
             }
         }
     }
+    // Drop the zip lister and its file handle as we are done with it before awaiting tasks.
+    drop(zip_lister_for_overrides);
+    drop(overrides_buf_reader); 
 
-    info!("Successfully extracted overrides.");
+    // Wait for all extraction tasks to complete
+    if !extraction_tasks.is_empty() {
+        info!("Waiting for {} override extraction tasks to complete...", extraction_tasks.len());
+        let results = try_join_all(extraction_tasks).await.map_err(|e| {
+            error!("Error joining override extraction tasks for noriskpack: {}", e);
+            AppError::Other(format!("Noriskpack override extraction tasks panicked: {}", e))
+        })?;
+
+        for result in results {
+            result?; 
+        }
+        info!("Successfully extracted all queued overrides for noriskpack.");
+    } else {
+        info!("No override files found or queued for extraction in noriskpack.");
+    }
 
     // 9. Save the profile using ProfileManager
-    let state = State::get().await?;
+    // let state_for_save = State::get().await?; // Already have state from above
     let profile_id = state
         .profile_manager
         .create_profile(exported_profile)

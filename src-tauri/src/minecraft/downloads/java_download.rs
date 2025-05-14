@@ -1,16 +1,22 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::{JavaDistribution, ZuluApiResponse};
+use crate::state::State;
 use crate::utils::system_info::{Architecture, OperatingSystem, ARCHITECTURE, OS};
 use async_zip::tokio::read::seek::ZipFileReader;
 use flate2::read::GzDecoder;
-use log::info;
+use log::{debug, error, info};
 use reqwest;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 use std::io::Cursor;
 use std::path::PathBuf;
 use tar::Archive;
 use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufReader};
+use futures::future::try_join_all;
+use std::fs::File;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 const JAVA_DIR: &str = "java";
 const DEFAULT_CONCURRENT_EXTRACTIONS: usize = 4;
@@ -173,101 +179,165 @@ impl JavaDownloadService {
         archive_path: &PathBuf,
         target_dir: &PathBuf,
     ) -> Result<()> {
-        info!("Extracting Java archive...");
+        info!("Extracting Java archive: {:?} to {:?}", archive_path, target_dir);
 
         match OS {
             OperatingSystem::WINDOWS => {
-                // Read the zip file content
-                let file_content = fs::read(archive_path).await?;
-                let cursor = Cursor::new(file_content);
-                let mut reader = BufReader::new(cursor);
+                let state = State::get().await?;
+                let io_semaphore = state.io_semaphore.clone();
 
-                let mut zip = ZipFileReader::with_tokio(&mut reader)
+                // Initial open for listing entries and determining root_dir
+                let file_for_listing = tokio::fs::File::open(archive_path).await.map_err(|e| {
+                    error!("Failed to open Java ZIP for listing {:?}: {}", archive_path, e);
+                    AppError::JavaDownload(format!("ZIP Open error for listing: {}", e))
+                })?;
+                let mut buf_reader_listing = BufReader::new(file_for_listing);
+                let mut zip_lister = ZipFileReader::with_tokio(&mut buf_reader_listing)
                     .await
-                    .map_err(|e| AppError::JavaDownload(e.to_string()))?;
+                    .map_err(|e| {
+                        error!("Failed to read Java ZIP for listing: {}", e);
+                        AppError::JavaDownload(format!("ZIP Read error for listing: {}", e))
+                    })?;
 
-                // Determine the common root directory
-                let entries = zip.file().entries();
-                let mut root_dir: Option<String> = None;
-
-                // Find the common root directory
-                for entry in entries {
-                    let file_name = entry
-                        .filename()
-                        .as_str()
-                        .map_err(|e| AppError::JavaDownload(e.to_string()))?;
-
-                    if file_name.ends_with('/')
-                        && file_name.chars().filter(|&c| c == '/').count() == 1
-                    {
-                        // This is a root level directory
-                        root_dir = Some(file_name.to_string());
+                let entries_meta = zip_lister
+                    .file()
+                    .entries()
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, e)| {
+                        let filename = e.filename().as_str().unwrap_or("").to_string();
+                        let is_dir = e.dir().unwrap_or(false);
+                        let uncompressed_size = e.uncompressed_size();
+                        (idx, filename, is_dir, uncompressed_size)
+                    })
+                    .collect::<Vec<_>>();
+                
+                // Determine the common root directory from the collected metadata
+                let mut root_dir_prefix: Option<String> = None;
+                for (_, path_str, is_dir, _) in &entries_meta {
+                    if *is_dir && path_str.chars().filter(|&c| c == '/').count() == 1 {
+                        root_dir_prefix = Some(path_str.clone());
+                        debug!("Detected Java archive root directory: {:?}", root_dir_prefix);
                         break;
                     }
                 }
+                // Drop the lister and its file handle, we have the metadata needed.
+                drop(zip_lister);
+                drop(buf_reader_listing);
 
-                // Extract files, skipping the root directory
-                for index in 0..zip.file().entries().len() {
-                    let entry = &zip.file().entries().get(index).unwrap();
-                    let file_name = entry
-                        .filename()
-                        .as_str()
-                        .map_err(|e| AppError::JavaDownload(e.to_string()))?;
+                let mut extraction_tasks = Vec::new();
 
-                    // Skip the root directory itself
-                    if let Some(ref root) = root_dir {
-                        if file_name == root {
-                            continue;
-                        }
-                    }
-
-                    // Calculate the path without the root directory
-                    let relative_path = if let Some(ref root) = root_dir {
-                        if file_name.starts_with(root) {
-                            file_name[root.len()..].to_string()
+                for (original_entry_index, full_path_str, is_entry_dir, entry_size) in entries_meta {
+                    // Calculate the path relative to target_dir, stripping the root_dir_prefix if present
+                    let relative_path_str = if let Some(ref root) = root_dir_prefix {
+                        if full_path_str.starts_with(root) && full_path_str != *root {
+                            full_path_str[root.len()..].to_string()
+                        } else if full_path_str == *root {
+                            continue; // Skip the root directory entry itself
                         } else {
-                            file_name.to_string()
+                            full_path_str.to_string() // Should not happen if root_dir_prefix is determined correctly
                         }
                     } else {
-                        file_name.to_string()
+                        full_path_str.to_string()
                     };
 
-                    // Skip empty paths that might result from stripping the root
-                    if relative_path.is_empty() {
+                    if relative_path_str.is_empty() {
                         continue;
                     }
 
-                    let path = target_dir.join(&relative_path);
-                    let entry_is_dir = relative_path.ends_with('/');
+                    let final_dest_path = target_dir.join(relative_path_str);
 
-                    if entry_is_dir {
-                        if !fs::try_exists(&path).await? {
-                            fs::create_dir_all(&path).await?;
-                        }
-                    } else {
-                        // Create parent directories if they don't exist
-                        if let Some(parent) = path.parent() {
-                            if !fs::try_exists(parent).await? {
-                                fs::create_dir_all(parent).await?;
+                    let task_archive_path = archive_path.clone();
+                    let task_io_semaphore = io_semaphore.clone();
+                    let task_final_dest_path = final_dest_path.clone();
+                    // original_entry_index is already defined from the loop
+
+                    if is_entry_dir {
+                        extraction_tasks.push(tokio::spawn(async move {
+                            let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                                error!("Java Task: Failed to acquire semaphore for dir {}: {}", task_final_dest_path.display(), e);
+                                AppError::JavaDownload(format!("Semaphore error for dir {}: {}",task_final_dest_path.display(),e))
+                            })?;
+                            if !task_final_dest_path.exists() {
+                                debug!("Java Task: Creating directory: {:?}", task_final_dest_path);
+                                fs::create_dir_all(&task_final_dest_path).await.map_err(|e|{
+                                     error!("Java Task: Failed to create dir {:?}: {}", task_final_dest_path, e);
+                                     AppError::JavaDownload(format!("Create dir error: {}", e))
+                                })?;
                             }
-                        }
+                            Ok::<(), AppError>(())
+                        }));
+                    } else {
+                        info!(
+                            "Java Task: Queueing concurrent streaming for '{}' -> {:?} (Size: {} bytes)",
+                            full_path_str, task_final_dest_path, entry_size
+                        );
+                        extraction_tasks.push(tokio::spawn(async move {
+                            let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                                 error!("Java Task: Failed to acquire semaphore for '{}': {}", task_final_dest_path.display(), e);
+                                 AppError::JavaDownload(format!("Semaphore error for '{}': {}",task_final_dest_path.display(),e))
+                            })?;
 
-                        let mut entry_reader = zip
-                            .reader_with_entry(index)
-                            .await
-                            .map_err(|e| AppError::JavaDownload(e.to_string()))?;
-                        let mut writer = fs::File::create(&path).await?;
+                            if let Some(parent) = task_final_dest_path.parent() {
+                                if !parent.exists() { 
+                                    fs::create_dir_all(parent).await.map_err(|e|{
+                                        error!("Java Task: Failed to create parent for '{}': {}", task_final_dest_path.display(), e);
+                                        AppError::JavaDownload(format!("Create parent error: {}", e))
+                                    })?;
+                                }
+                            }
 
-                        // Read the entry content into a buffer
-                        let mut buffer = Vec::new();
-                        entry_reader
-                            .read_to_end_checked(&mut buffer)
-                            .await
-                            .map_err(|e| AppError::JavaDownload(e.to_string()))?;
+                            let task_file = tokio::fs::File::open(&task_archive_path).await.map_err(|e|{
+                                error!("Java Task: Failed to open archive {:?}: {}", task_archive_path, e);
+                                AppError::JavaDownload(format!("ZIP Open error in task: {}", e))
+                            })?;
+                            let mut task_buf_reader = BufReader::new(task_file);
+                            let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader).await.map_err(|e|{
+                                error!("Java Task: Failed to read archive as ZIP for '{}': {}", task_final_dest_path.display(), e);
+                                AppError::JavaDownload(format!("ZIP Read error in task for {}: {}",task_final_dest_path.display(), e))
+                            })?;
+                            
+                            let entry_reader_futures = task_zip_reader.reader_without_entry(original_entry_index).await.map_err(|e| {
+                                error!(
+                                    "Java Task: Failed to get entry reader for '{}' (index {}): {}",
+                                    task_final_dest_path.display(), original_entry_index, e
+                                );
+                                AppError::JavaDownload(format!("Entry reader error for {}: {}",task_final_dest_path.display(),e))
+                            })?;
+                            let mut entry_reader_tokio = entry_reader_futures.compat();
 
-                        // Write the content asynchronously
-                        writer.write_all(&buffer).await?;
+                            let mut file_writer = fs::File::create(&task_final_dest_path).await.map_err(|e|{
+                                error!("Java Task: Failed to create dest file {:?}: {}", task_final_dest_path, e);
+                                AppError::JavaDownload(format!("File create error: {}", e))
+                            })?;
+
+                            let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
+                                error!(
+                                    "Java Task: Failed to stream for '{}' to {:?}: {}",
+                                    task_final_dest_path.display(), task_final_dest_path, e
+                                );
+                                AppError::JavaDownload(format!("Streaming copy error: {}", e))
+                            })?;
+                            
+                            debug!("Java Task: Streamed {} bytes for: {}", bytes_copied, task_final_dest_path.display());
+                            Ok::<(), AppError>(())
+                        }));
                     }
+                }
+
+                if !extraction_tasks.is_empty() {
+                    info!("Java Task: Waiting for {} extraction tasks to complete...", extraction_tasks.len());
+                    let results = try_join_all(extraction_tasks).await.map_err(|e| {
+                        error!("Error joining Java extraction tasks: {}", e);
+                        AppError::JavaDownload(format!("Java extraction tasks panicked: {}", e))
+                    })?;
+
+                    for result in results {
+                        result?; 
+                    }
+                    info!("Java Task: Successfully extracted all queued Java files.");
+                } else {
+                    info!("Java Task: No files found or queued for extraction.");
                 }
             }
             OperatingSystem::LINUX | OperatingSystem::OSX => {
@@ -338,6 +408,7 @@ impl JavaDownloadService {
             _ => return Err(AppError::JavaDownload("Unsupported OS".to_string())),
         }
 
+        info!("Finished Java archive extraction.");
         Ok(())
     }
 

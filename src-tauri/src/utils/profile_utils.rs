@@ -22,10 +22,18 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 /// Represents the type of content to be installed
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ContentType {
     ResourcePack,
     ShaderPack,
     DataPack,
+    Mod,
+}
+
+impl Default for ContentType {
+    fn default() -> Self {
+        ContentType::Mod
+    }
 }
 
 impl From<ModrinthProjectType> for ContentType {
@@ -172,6 +180,12 @@ async fn get_content_directory(profile: &Profile, content_type: &ContentType) ->
         ContentType::ResourcePack => resourcepack_utils::get_resourcepacks_dir(profile).await,
         ContentType::ShaderPack => shaderpack_utils::get_shaderpacks_dir(profile).await,
         ContentType::DataPack => datapack_utils::get_datapacks_dir(profile).await,
+        ContentType::Mod => {
+            // For mods, the target directory is the 'mods' folder within the profile's instance path.
+            let state = State::get().await?;
+            let instance_path = state.profile_manager.calculate_instance_path_for_profile(profile)?;
+            Ok(instance_path.join("mods"))
+        }
     }
 }
 
@@ -181,6 +195,7 @@ fn content_type_to_string(content_type: &ContentType) -> &'static str {
         ContentType::ResourcePack => "Resource Pack",
         ContentType::ShaderPack => "Shader Pack",
         ContentType::DataPack => "Data Pack",
+        ContentType::Mod => "Mod",
     }
 }
 
@@ -232,11 +247,21 @@ pub struct CheckContentParams {
 }
 
 // --- Return Type ---
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct FoundItemDetails {
+    pub item_type: ContentType, // Changed from String
+    pub item_id: Option<String>, // e.g., Mod ID (UUID) if it's a mod
+    pub file_name: Option<String>, // The actual filename on disk
+    pub display_name: Option<String>, // Display name if available
+}
+
 #[derive(Serialize, Debug, Default, Clone)]
 pub struct ContentInstallStatus {
     pub is_included_in_norisk_pack: bool,
     pub is_installed: bool,
     pub is_specific_version_in_pack: bool,
+    pub is_enabled: Option<bool>,
+    pub found_item_details: Option<FoundItemDetails>,
 }
 
 /// Checks the installation status of a specific Modrinth content item within a profile's context.
@@ -378,7 +403,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                 let mut mod_project_id: Option<&str> = None;
                 let mut mod_version_id: Option<&str> = None;
                 let mut mod_sha1_hash: Option<&str> = None;
-                let mut mod_file_name: Option<&str> = None;
+                let mut mod_file_name_str: Option<&str> = None; // Renamed to avoid conflict
 
                 if let ModSource::Modrinth {
                     project_id: pid,
@@ -391,7 +416,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                     mod_project_id = Some(pid);
                     mod_version_id = Some(vid);
                     mod_sha1_hash = hash_opt.as_deref();
-                    mod_file_name = Some(fname);
+                    mod_file_name_str = Some(fname);
                 }
                 // TODO: Add extraction logic for other source types
 
@@ -409,7 +434,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                 }
                 let mut match_name = true;
                 if let Some(name) = &params.file_name {
-                    match_name = mod_file_name == Some(name.as_str());
+                    match_name = mod_file_name_str == Some(name.as_str());
                 }
                 let mut match_game_version = true;
                 if let Some(installed_versions) = &installed_mod.game_versions {
@@ -438,6 +463,13 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                             .unwrap_or("[Unknown Name]")
                     );
                     status.is_installed = true;
+                    status.is_enabled = Some(installed_mod.enabled);
+                    status.found_item_details = Some(FoundItemDetails {
+                        item_type: ContentType::Mod,
+                        item_id: Some(installed_mod.id.to_string()),
+                        file_name: mod_file_name_str.map(String::from),
+                        display_name: installed_mod.display_name.clone(),
+                    });
                     break;
                 }
             }
@@ -465,7 +497,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                             .as_ref()
                             .map(|m| m.version_id.as_str());
                         let pack_hash = pack_info.sha1_hash.as_deref();
-                        let pack_filename = Some(pack_info.filename.as_str());
+                        let pack_filename_str = Some(pack_info.filename.as_str()); // Renamed
 
                         // Match against provided parameters (excluding context for RPs)
                         let mut match_project = true;
@@ -482,7 +514,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                         }
                         let mut match_name = true;
                         if let Some(name) = &params.file_name {
-                            match_name = pack_filename == Some(name.as_str());
+                            match_name = pack_filename_str == Some(name.as_str());
                         }
 
                         if match_project && match_version && match_hash && match_name {
@@ -491,6 +523,13 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                                 pack_info.filename
                             );
                             status.is_installed = true;
+                            status.is_enabled = Some(!pack_info.is_disabled);
+                            status.found_item_details = Some(FoundItemDetails {
+                                item_type: ContentType::ResourcePack,
+                                item_id: None, // No specific ID for RPs in this context
+                                file_name: Some(pack_info.filename.clone()),
+                                display_name: Some(pack_info.filename.clone()), // Use filename as display_name
+                            });
                             break;
                         }
                     }
@@ -526,7 +565,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                             .as_ref()
                             .map(|m| m.version_id.as_str());
                         let pack_hash = pack_info.sha1_hash.as_deref();
-                        let pack_filename = Some(pack_info.filename.as_str());
+                        let pack_filename_str = Some(pack_info.filename.as_str()); // Renamed
 
                         // Match against provided parameters (excluding context)
                         let mut match_project = true;
@@ -543,7 +582,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                         }
                         let mut match_name = true;
                         if let Some(name) = &params.file_name {
-                            match_name = pack_filename == Some(name.as_str());
+                            match_name = pack_filename_str == Some(name.as_str());
                         }
 
                         if match_project && match_version && match_hash && match_name {
@@ -552,6 +591,13 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                                 pack_info.filename
                             );
                             status.is_installed = true;
+                            status.is_enabled = Some(!pack_info.is_disabled);
+                            status.found_item_details = Some(FoundItemDetails {
+                                item_type: ContentType::ShaderPack,
+                                item_id: None,
+                                file_name: Some(pack_info.filename.clone()),
+                                display_name: Some(pack_info.filename.clone()), // Use filename as display_name
+                            });
                             break;
                         }
                     }
@@ -587,7 +633,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                             .as_ref()
                             .map(|m| m.version_id.as_str());
                         let pack_hash = pack_info.sha1_hash.as_deref();
-                        let pack_filename = Some(pack_info.filename.as_str());
+                        let pack_filename_str = Some(pack_info.filename.as_str()); // Renamed
 
                         // Match against provided parameters (excluding context)
                         let mut match_project = true;
@@ -604,7 +650,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                         }
                         let mut match_name = true;
                         if let Some(name) = &params.file_name {
-                            match_name = pack_filename == Some(name.as_str());
+                            match_name = pack_filename_str == Some(name.as_str());
                         }
 
                         if match_project && match_version && match_hash && match_name {
@@ -613,6 +659,13 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                                 pack_info.filename
                             );
                             status.is_installed = true;
+                            status.is_enabled = Some(!pack_info.is_disabled);
+                            status.found_item_details = Some(FoundItemDetails {
+                                item_type: ContentType::DataPack,
+                                item_id: None,
+                                file_name: Some(pack_info.filename.clone()),
+                                display_name: Some(pack_info.filename.clone()), // Use filename as display_name
+                            });
                             break;
                         }
                     }
@@ -640,7 +693,9 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
     }
 
     if status.is_installed {
-        debug!("Final status: Found content installed locally.");
+        debug!("Final status: Found content installed locally. Enabled: {:?}. Details: {:?}", status.is_enabled, status.found_item_details);
+    } else {
+        debug!("Final status: Content not found locally.");
     }
 
     Ok(status)

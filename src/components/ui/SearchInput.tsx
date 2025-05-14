@@ -177,10 +177,9 @@ export function SearchInput({
     <div
       ref={containerRef}
       className={cn(
-        "relative flex items-center transition-all duration-200",
-        variantStyles.border,
-        sizeConfig[size].container,
-        disabled && "opacity-50 cursor-not-allowed",
+        "w-full flex items-center justify-between px-4 py-2 text-white font-minecraft lowercase rounded-md transition-all duration-200",
+        "border-2 border-b-4 overflow-hidden",
+        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
         className,
       )}
       style={{

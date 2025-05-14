@@ -9,7 +9,7 @@ import { Dropdown } from "./dropdown/Dropdown.tsx";
 import { DropdownItem } from "./dropdown/DropdownItem.tsx";
 import { gsap } from "gsap";
 
-interface SelectOption {
+export interface SelectOption {
   value: string;
   label: string;
   icon?: React.ReactNode;

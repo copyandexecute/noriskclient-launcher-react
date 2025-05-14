@@ -10,10 +10,12 @@ use crate::state::process_state::{default_processes_path, ProcessManager};
 use crate::state::profile_state::ProfileManager;
 use crate::state::skin_state::{default_skins_path, SkinManager};
 use std::sync::Arc;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, Semaphore};
 
 // Global state that will be initialized once
 static LAUNCHER_STATE: OnceCell<Arc<State>> = OnceCell::const_new();
+
+const CONCURRENT_IO_LIMIT: usize = 10;
 
 pub struct State {
     // Basic state properties will be added here
@@ -27,15 +29,17 @@ pub struct State {
     pub config_manager: ConfigManager,
     pub skin_manager: SkinManager,
     pub discord_manager: DiscordManager,
+    pub io_semaphore: Arc<Semaphore>,
 }
 
 impl State {
     // Initialize the global state
     pub async fn init(app: Arc<tauri::AppHandle>) -> Result<()> {
-        let state = LAUNCHER_STATE
+        let _state = LAUNCHER_STATE
             .get_or_try_init(|| async {
                 let config_manager = ConfigManager::new().await?;
                 let config = config_manager.get_config().await;
+                let io_semaphore = Arc::new(Semaphore::new(CONCURRENT_IO_LIMIT));
 
                 Ok::<Arc<State>, AppError>(Arc::new(Self {
                     initialized: true,
@@ -55,16 +59,17 @@ impl State {
                     config_manager,
                     skin_manager: SkinManager::new(default_skins_path()).await?,
                     discord_manager: DiscordManager::new(config.enable_discord_presence).await?,
+                    io_semaphore,
                 }))
             })
             .await?;
 
-        if let Ok(state) = crate::state::State::get().await {
-            state.norisk_pack_manager.print_current_config().await;
-            state.norisk_version_manager.print_current_config().await;
+        if let Ok(state_instance) = crate::state::State::get().await {
+            state_instance.norisk_pack_manager.print_current_config().await;
+            state_instance.norisk_version_manager.print_current_config().await;
 
             // Log the current configuration
-            let config = state.config_manager.get_config().await;
+            let config = state_instance.config_manager.get_config().await;
             tracing::info!(
                 "Launcher Config - Experimental mode: {}",
                 config.is_experimental

@@ -3,17 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
-
+import { ProfileDetailView } from "../profiles/ProfileDetailView";
 import { useProfileStore } from "../../store/profile-store";
 import { SearchInput } from "../ui/SearchInput";
+import { IconButton } from "../ui/buttons/IconButton";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
 import { getStandardProfiles } from "../../services/profile-service";
-import {
-  getLauncherConfig,
-  setProfileGroupingPreference,
-} from "../../services/launcher-config-service";
+import { getLauncherConfig, setProfileGroupingPreference } from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
 import { ProfileImport } from "../profiles/ProfileImport";
@@ -22,30 +20,13 @@ import { ProfileWizard } from "../profiles/ProfileWizard.tsx";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/buttons/Button";
 import { toast } from "react-hot-toast";
-import { Card } from "../ui/Card";
-import { ProfileDetailView } from "../profiles/ProfileDetailView.tsx";
 
+// Define grouping options
 const groupingOptions = [
-  {
-    value: "none",
-    label: "No Grouping",
-    icon: <Icon icon="solar:menu-dots-linear" className="w-4 h-4" />,
-  },
-  {
-    value: "loader",
-    label: "Loader",
-    icon: <Icon icon="solar:box-bold" className="w-4 h-4" />,
-  },
-  {
-    value: "game_version",
-    label: "Game Version",
-    icon: <Icon icon="solar:gamepad-bold" className="w-4 h-4" />,
-  },
-  {
-    value: "group",
-    label: "Group",
-    icon: <Icon icon="solar:users-group-rounded-bold" className="w-4 h-4" />,
-  },
+  { value: "none", label: "No Grouping", icon: <Icon icon="solar:menu-dots-linear" className="w-4 h-4" /> },
+  { value: "loader", label: "Loader", icon: <Icon icon="solar:box-bold" className="w-4 h-4" /> },
+  { value: "game_version", label: "Game Version", icon: <Icon icon="solar:gamepad-bold" className="w-4 h-4" /> },
+  { value: "group", label: "Group", icon: <Icon icon="solar:users-group-rounded-bold" className="w-4 h-4" /> },
 ];
 
 export function ProfilesTab() {
@@ -60,8 +41,6 @@ export function ProfilesTab() {
 
   const accentColor = useThemeStore((state) => state.accentColor);
   const tabRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [groupingCriterion, setGroupingCriterion] = useState<string>("none");
@@ -81,34 +60,6 @@ export function ProfilesTab() {
         {
           opacity: 1,
           duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (headerRef.current) {
-      gsap.fromTo(
-        headerRef.current,
-        { opacity: 0, y: -20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          delay: 0.1,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (contentRef.current) {
-      gsap.fromTo(
-        contentRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          delay: 0.2,
           ease: "power2.out",
         },
       );
@@ -150,10 +101,7 @@ export function ProfilesTab() {
         setGroupingCriterion("none");
       }
     } catch (err) {
-      console.error(
-        "Failed to fetch launcher config for grouping criterion:",
-        err,
-      );
+      console.error("Failed to fetch launcher config for grouping criterion:", err);
       setGroupingCriterion("none");
     }
   };
@@ -174,65 +122,60 @@ export function ProfilesTab() {
     return true;
   });
 
+  // Grouping logic
   const groupedProfiles = (() => {
-    if (groupingCriterion === "none") {
-      return { "All Profiles": initiallyFilteredProfiles };
+    if (groupingCriterion === 'none') {
+      return { 'All Profiles': initiallyFilteredProfiles };
     }
 
-    return initiallyFilteredProfiles.reduce(
-      (acc, profile) => {
-        let key = "Unknown";
-        if (groupingCriterion === "loader") {
-          key = profile.loader?.toString() || "Vanilla";
-        } else if (groupingCriterion === "game_version") {
-          key = profile.game_version || "Unknown Version";
-        } else if (groupingCriterion === "group") {
-          key = profile.group || "No Group";
-        }
-
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(profile);
-        return acc;
-      },
-      {} as Record<string, Profile[]>,
-    );
+    return initiallyFilteredProfiles.reduce((acc, profile) => {
+      let key = 'Unknown';
+      if (groupingCriterion === 'loader') {
+        key = profile.loader?.toString() || 'Vanilla';
+      } else if (groupingCriterion === 'game_version') {
+        key = profile.game_version || 'Unknown Version';
+      } else if (groupingCriterion === 'group') {
+        key = profile.group || 'No Group';
+      }
+      
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(profile);
+      return acc;
+    }, {} as Record<string, Profile[]>);
   })();
 
+  // Helper function to compare Minecraft versions (newest first)
   const compareMinecraftVersions = (v1: string, v2: string): number => {
-    const parts1 = v1.split(".").map(Number);
-    const parts2 = v2.split(".").map(Number);
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
     const len = Math.max(parts1.length, parts2.length);
 
     for (let i = 0; i < len; i++) {
       const p1 = parts1[i] || 0;
       const p2 = parts2[i] || 0;
-      if (p1 > p2) return -1;
-      if (p1 < p2) return 1;
+      if (p1 > p2) return -1; // v1 is newer
+      if (p1 < p2) return 1;  // v2 is newer
     }
     return 0;
   };
 
   const sortedGroupKeys = Object.keys(groupedProfiles).sort((a, b) => {
-    const specialKeys = [
-      "All Profiles",
-      "Unknown",
-      "Vanilla",
-      "Unknown Version",
-      "No Group",
-    ];
+    const specialKeys = ['All Profiles', 'Unknown', 'Vanilla', 'Unknown Version', 'No Group'];
     const isASpecial = specialKeys.includes(a);
     const isBSpecial = specialKeys.includes(b);
 
-    if (isASpecial && !isBSpecial) return 1;
-    if (!isASpecial && isBSpecial) return -1;
-    if (isASpecial && isBSpecial) return a.localeCompare(b);
-
-    if (groupingCriterion === "game_version") {
+    if (isASpecial && !isBSpecial) return 1;  // a is special, b is not -> a comes after b
+    if (!isASpecial && isBSpecial) return -1; // b is special, a is not -> b comes after a
+    if (isASpecial && isBSpecial) return a.localeCompare(b); // both special, sort alphabetically (or however you prefer)
+    
+    // If grouping by game version, use custom sort
+    if (groupingCriterion === 'game_version') {
       return compareMinecraftVersions(a, b);
     }
-
+    
+    // Default alphabetical sort for other criteria
     return a.localeCompare(b);
   });
 
@@ -258,28 +201,27 @@ export function ProfilesTab() {
     setShowImport(false);
   };
 
-  const handleDeleteProfile = async (
-    profileId: string,
-    profileName: string,
-  ) => {
+  const handleDeleteProfile = async (profileId: string, profileName: string) => {
     const deletePromise = useProfileStore.getState().deleteProfile(profileId);
 
-    toast.promise(deletePromise, {
-      loading: `Deleting profile '${profileName}'...`,
-      success: () => {
-        fetchProfiles();
-        return `Profile '${profileName}' deleted successfully!`;
-      },
-      error: (err) =>
-        `Failed to delete profile: ${err instanceof Error ? err.message : String(err)}`,
-    });
+    toast.promise(
+      deletePromise,
+      {
+        loading: `Deleting profile '${profileName}'...`,
+        success: () => {
+          fetchProfiles(); // Refresh profiles list on success
+          return `Profile '${profileName}' deleted successfully!`;
+        },
+        error: (err) => `Failed to delete profile: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    );
   };
 
   const handleGroupingChange = async (newCriterion: string) => {
     setGroupingCriterion(newCriterion);
     try {
       await setProfileGroupingPreference(newCriterion);
-      console.log("Grouping preference saved successfully.");
+      console.log("Grouping preference saved successfully."); // Optional: log success to console
     } catch (error) {
       console.error("Failed to save grouping preference:", error);
       toast.error("Failed to save grouping preference.");
@@ -304,10 +246,13 @@ export function ProfilesTab() {
         />
       ) : (
         <>
-          <Card
-            ref={headerRef}
-            className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 sticky top-0 z-10 rounded-none border-b-2"
-            variant="flat"
+          <div
+            className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 border-b-2 sticky top-0 z-10"
+            style={{
+              backgroundColor: `${accentColor.value}15`,
+              borderColor: `${accentColor.value}60`,
+              boxShadow: `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)`,
+            }}
           >
             <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
               <SearchInput
@@ -325,7 +270,7 @@ export function ProfilesTab() {
             </div>
 
             <div className="flex items-center gap-3">
-              <Button
+              <Button 
                 onClick={() => setShowWizard(true)}
                 variant="default"
                 size="md"
@@ -335,7 +280,7 @@ export function ProfilesTab() {
               >
                 CREATE
               </Button>
-              <Button
+              <Button 
                 onClick={() => setShowImport(true)}
                 variant="secondary"
                 size="md"
@@ -346,13 +291,10 @@ export function ProfilesTab() {
                 IMPORT
               </Button>
             </div>
-          </Card>
+          </div>
 
-          <div
-            ref={contentRef}
-            className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar"
-          >
-            {loading || loadingStandard ? (
+          <div className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar">
+            {(loading || loadingStandard) ? (
               <LoadingState message="loading profiles..." />
             ) : error || standardError ? (
               <EmptyState
@@ -363,8 +305,8 @@ export function ProfilesTab() {
               <div className="space-y-6">
                 {sortedGroupKeys.map((groupKey) => (
                   <div key={groupKey}>
-                    {groupingCriterion !== "none" && (
-                      <h2
+                    {groupingCriterion !== 'none' && (
+                      <h2 
                         className="text-2xl font-minecraft lowercase text-white mb-3 pb-1 border-b-2"
                         style={{ borderColor: `${accentColor.value}40` }}
                       >
@@ -383,12 +325,9 @@ export function ProfilesTab() {
                         />
                       ))}
                     </div>
-                    {groupedProfiles[groupKey].length === 0 &&
-                      groupingCriterion !== "none" && (
-                        <p className="text-neutral-500 italic text-center py-4">
-                          No profiles in this group.
-                        </p>
-                      )}
+                    {groupedProfiles[groupKey].length === 0 && groupingCriterion !== 'none' && (
+                       <p className="text-neutral-500 italic text-center py-4">No profiles in this group.</p>
+                    )}
                   </div>
                 ))}
               </div>
