@@ -1694,6 +1694,54 @@ export function ModrinthSearchV2({
     newEnabledState: boolean,
     sha1Hash: string
   ) => {
+    // Get current installation status
+    const currentStatus = installedVersions[version.id];
+
+    // Check if this is a NoRisk Pack item
+    if (currentStatus?.norisk_pack_item_details?.norisk_mod_identifier) {
+      const noriskIdentifier = currentStatus.norisk_pack_item_details.norisk_mod_identifier;
+      
+      const toastMessage = newEnabledState ? "Enabling" : "Disabling";
+      const successMessage = newEnabledState ? "enabled" : "disabled";
+      
+      await toast.promise(
+        async () => {
+          const payload: ToggleContentPayload = {
+            profile_id: profileId,
+            enabled: newEnabledState,
+            norisk_mod_identifier: noriskIdentifier
+          };
+          
+          await toggleContentFromProfile(payload);
+          
+          // Update only the is_enabled field while preserving all other fields
+          setInstalledVersions(prev => ({
+            ...prev,
+            [version.id]: prev[version.id] ? {
+              ...prev[version.id]!,
+              is_enabled: newEnabledState,
+              norisk_pack_item_details: {
+                ...prev[version.id]!.norisk_pack_item_details!,
+                is_enabled: newEnabledState
+              }
+            } : null
+          }));
+
+          return { versionName: version.version_number };
+        },
+        {
+          loading: `${toastMessage} NoRisk Pack item: ${project.title} (${version.version_number})...`,
+          success: ({ versionName }) => `Successfully ${successMessage} NoRisk Pack item: ${project.title} (${versionName})`,
+          error: (err) => `Failed to ${toastMessage.toLowerCase()} NoRisk Pack item: ${err.message || String(err)}`
+        }
+      ).catch(err => {
+        console.error(`Error ${toastMessage.toLowerCase()} NoRisk Pack item:`, err);
+      });
+      
+      return;
+    }
+
+    // Regular content toggle using SHA1 hash
     if (!sha1Hash) {
       toast.error("Cannot enable/disable version: missing file hash");
       return;

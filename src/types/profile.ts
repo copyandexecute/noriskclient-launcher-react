@@ -241,12 +241,21 @@ export interface FoundItemDetails {
   display_name?: string;
 }
 
+/**
+ * Details about an item when it comes from a NoRisk Pack
+ */
+export interface NoRiskPackItemDetails {
+  is_enabled: boolean;
+  norisk_mod_identifier?: NoriskModIdentifier;
+}
+
 export interface ContentInstallStatus {
   is_included_in_norisk_pack: boolean;
   is_installed: boolean;
   is_specific_version_in_pack: boolean;
   is_enabled?: boolean;
   found_item_details?: FoundItemDetails;
+  norisk_pack_item_details?: NoRiskPackItemDetails;
 }
 
 // Added: Type for Screenshot Information

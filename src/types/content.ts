@@ -1,3 +1,5 @@
+import { NoriskModIdentifier } from "./profile";
+
 /**
  * Payload for uninstalling content from a profile.
  * Mirrors the Rust struct `UninstallContentPayload`.
@@ -19,6 +21,7 @@ export interface ToggleContentPayload {
   profile_id: string; // UUID
   sha1_hash?: string;  // Made optional - SHA1 hash of the content to toggle
   enabled: boolean;   // The desired new enabled state
+  norisk_mod_identifier?: NoriskModIdentifier; // Optional identifier for NoRisk Pack items
   // Future: content_identifier (e.g., could be sha1, mod_id, filename)
   // Future: content_type?: 'mod' | 'resourcepack' | 'shaderpack' | 'datapack';
 }
