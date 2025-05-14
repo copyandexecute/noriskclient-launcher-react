@@ -161,6 +161,16 @@ export function SettingsTab() {
     }
   };
 
+  const handleConcurrentIoLimitChange = (
+    e: ChangeEvent<HTMLInputElement>,
+  ) => {
+    if (!tempConfig) return;
+    const value = Number.parseInt(e.target.value, 10);
+    if (!isNaN(value) && value >= 1 && value <= 20) {
+      setTempConfig({ ...tempConfig, concurrent_io_limit: value });
+    }
+  };
+
   const resetChanges = () => {
     if (config) {
       setTempConfig({ ...config });
@@ -336,7 +346,31 @@ export function SettingsTab() {
                 onChange={handleConcurrentDownloadsChange}
                 disabled={saving}
                 className="w-24"
-                icon={<Icon icon="solar:sort-by-time-bold" />}
+                icon={<Icon icon="solar:multiple-forward-right-bold" />}
+              />
+            </div>
+          </div>
+
+          <div
+            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
+            style={settingItemStyle}
+          >
+            <div>
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Concurrent I/O Operations
+              </h5>
+            </div>
+            <div className="flex items-center">
+              <Input
+                type="number"
+                id="concurrent_io_limit"
+                min="1"
+                max="20"
+                value={tempConfig?.concurrent_io_limit || 10}
+                onChange={handleConcurrentIoLimitChange}
+                disabled={saving}
+                className="w-24"
+                icon={<Icon icon="solar:server-bold" />}
               />
             </div>
           </div>

@@ -10,4 +10,5 @@ export interface LauncherConfig {
   check_beta_channel: boolean; // Added from Rust struct
   profile_grouping_criterion: string | null; // Option<String>
   open_logs_after_starting: boolean;
+  concurrent_io_limit: number; // usize
 } 

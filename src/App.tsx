@@ -20,9 +20,7 @@ import {
 import { GlobalCrashReportModal } from "./components/modals/GlobalCrashReportModal";
 import { useCrashModalStore } from "./store/crash-modal-store";
 import { refreshNrcDataOnMount } from "./services/nrc-service";
-import { SettingsProvider } from "./contexts/SettingsContext";
 import { NewsTab } from "./components/tabs/NewsTab.tsx";
-import { Sidebar } from "./components/layout/Sidebar";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");

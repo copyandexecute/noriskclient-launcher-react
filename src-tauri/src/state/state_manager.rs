@@ -15,8 +15,6 @@ use tokio::sync::{OnceCell, Semaphore};
 // Global state that will be initialized once
 static LAUNCHER_STATE: OnceCell<Arc<State>> = OnceCell::const_new();
 
-const CONCURRENT_IO_LIMIT: usize = 10;
-
 pub struct State {
     // Basic state properties will be added here
     pub initialized: bool,
@@ -39,7 +37,7 @@ impl State {
             .get_or_try_init(|| async {
                 let config_manager = ConfigManager::new().await?;
                 let config = config_manager.get_config().await;
-                let io_semaphore = Arc::new(Semaphore::new(CONCURRENT_IO_LIMIT));
+                let io_semaphore = Arc::new(Semaphore::new(config.concurrent_io_limit));
 
                 Ok::<Arc<State>, AppError>(Arc::new(Self {
                     initialized: true,

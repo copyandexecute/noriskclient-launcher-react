@@ -29,6 +29,8 @@ pub struct LauncherConfig {
     pub profile_grouping_criterion: Option<String>,
     #[serde(default = "default_open_logs_after_starting")]
     pub open_logs_after_starting: bool,
+    #[serde(default = "default_concurrent_io_limit")]
+    pub concurrent_io_limit: usize,
 }
 
 fn default_config_version() -> u32 {
@@ -51,6 +53,10 @@ fn default_open_logs_after_starting() -> bool {
     false
 }
 
+fn default_concurrent_io_limit() -> usize {
+    10 // Default based on CONCURRENT_IO_LIMIT in state_manager.rs
+}
+
 impl Default for LauncherConfig {
     fn default() -> Self {
         Self {
@@ -62,6 +68,7 @@ impl Default for LauncherConfig {
             check_beta_channel: true,
             profile_grouping_criterion: default_profile_grouping_criterion(),
             open_logs_after_starting: default_open_logs_after_starting(),
+            concurrent_io_limit: default_concurrent_io_limit(),
         }
     }
 }
@@ -170,6 +177,7 @@ impl ConfigManager {
                 && current.check_beta_channel == new_config.check_beta_channel
                 && current.profile_grouping_criterion == new_config.profile_grouping_criterion
                 && current.open_logs_after_starting == new_config.open_logs_after_starting
+                && current.concurrent_io_limit == new_config.concurrent_io_limit
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -220,6 +228,12 @@ impl ConfigManager {
                         current.open_logs_after_starting, new_config.open_logs_after_starting
                     );
                 }
+                if current.concurrent_io_limit != new_config.concurrent_io_limit {
+                    info!(
+                        "Changing concurrent IO limit: {} -> {}",
+                        current.concurrent_io_limit, new_config.concurrent_io_limit
+                    );
+                }
 
                 // Update config while preserving version
                 *config = LauncherConfig {
@@ -231,6 +245,7 @@ impl ConfigManager {
                     check_beta_channel: new_config.check_beta_channel,
                     profile_grouping_criterion: new_config.profile_grouping_criterion.clone(),
                     open_logs_after_starting: new_config.open_logs_after_starting,
+                    concurrent_io_limit: new_config.concurrent_io_limit,
                 };
 
                 true
