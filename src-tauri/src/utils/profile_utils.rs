@@ -255,6 +255,13 @@ pub struct FoundItemDetails {
     pub display_name: Option<String>, // Display name if available
 }
 
+/// Represents details about an item when it comes from a NoRisk Pack
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NoRiskPackItemDetails {
+    pub is_enabled: bool,
+    pub norisk_mod_identifier: Option<crate::state::profile_state::NoriskModIdentifier>,
+}
+
 #[derive(Serialize, Debug, Default, Clone)]
 pub struct ContentInstallStatus {
     pub is_included_in_norisk_pack: bool,
@@ -262,6 +269,7 @@ pub struct ContentInstallStatus {
     pub is_specific_version_in_pack: bool,
     pub is_enabled: Option<bool>,
     pub found_item_details: Option<FoundItemDetails>,
+    pub norisk_pack_item_details: Option<NoRiskPackItemDetails>,
 }
 
 /// Checks the installation status of a specific Modrinth content item within a profile's context.
@@ -363,6 +371,25 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                                         status.is_specific_version_in_pack = true;
                                     }
                                 }
+
+                                // New addition: Add NoRiskPackItemDetails
+                                let mod_identifier = norisk_mod.id.clone();
+                                
+                                // Create a proper NoriskModIdentifier
+                                let norisk_mod_identifier = crate::state::profile_state::NoriskModIdentifier {
+                                    pack_id: pack_id.clone(),
+                                    mod_id: mod_identifier.clone(),
+                                    game_version: target_game_version.to_string(),
+                                    loader: crate::state::profile_state::ModLoader::from_str(target_loader_str).unwrap_or(profile.loader.clone()),
+                                };
+                                
+                                // Check if it's disabled in the profile
+                                let is_pack_mod_enabled = !profile.disabled_norisk_mods_detailed.contains(&norisk_mod_identifier);
+                                
+                                status.norisk_pack_item_details = Some(NoRiskPackItemDetails {
+                                    is_enabled: is_pack_mod_enabled,
+                                    norisk_mod_identifier: Some(norisk_mod_identifier),
+                                });
 
                                 if status.is_specific_version_in_pack {
                                     break; // Found specific version in pack
