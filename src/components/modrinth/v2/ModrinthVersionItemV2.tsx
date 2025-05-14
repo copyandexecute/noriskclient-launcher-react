@@ -145,10 +145,19 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
           {/* Badges container (takes available space) */} 
           <div className="flex flex-wrap items-center gap-1 flex-grow min-w-0"> 
             {/* --- Status Badges Moved to the beginning --- */} 
-            {selectedProfileId && versionStatus?.is_installed && (
+            {selectedProfileId && versionStatus?.is_installed && versionStatus?.is_enabled !== false && (
               <TagBadge variant="success" className="flex-shrink-0">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                 Installed
+              </TagBadge>
+            )}
+            {selectedProfileId && versionStatus?.is_installed && versionStatus?.is_enabled === false && (
+              <TagBadge variant="inactive" className="flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                  <line x1="5" y1="5" x2="19" y2="19" strokeWidth="2"/>
+                </svg>
+                Disabled
               </TagBadge>
             )}
             {selectedProfileId && versionStatus?.is_included_in_norisk_pack && (
@@ -177,7 +186,7 @@ export const ModrinthVersionItemV2: React.FC<ModrinthVersionItemV2Props> = ({
                 variant={versionStatus.is_enabled ? "warning" : "secondary"}
                 className="min-w-[80px] justify-center"
               >
-                {versionStatus.is_enabled ? "Active" : "Inactive"}
+                {versionStatus.is_enabled ? "Active" : "Disabled"}
               </Button>
             )}
             {selectedProfileId && versionStatus?.is_installed && !isModpack && onDeleteClick && (

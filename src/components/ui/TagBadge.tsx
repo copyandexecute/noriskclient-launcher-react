@@ -5,7 +5,7 @@ import { cn } from '../../lib/utils';
 interface TagBadgeProps {
   children: React.ReactNode;
   className?: string;
-  variant?: 'default' | 'success' | 'info';
+  variant?: 'default' | 'success' | 'info' | 'inactive';
 }
 
 export const TagBadge: React.FC<TagBadgeProps> = ({ children, className, variant = 'default' }) => {
@@ -24,6 +24,12 @@ export const TagBadge: React.FC<TagBadgeProps> = ({ children, className, variant
           backgroundColor: 'rgba(59, 130, 246, 0.2)', // Tailwind blue-500 with 20% opacity
           borderColor: 'rgba(59, 130, 246, 0.7)', // Tailwind blue-500 with 70% opacity
           color: '#93c5fd', // Tailwind blue-300
+        };
+      case 'inactive':
+        return {
+          backgroundColor: 'rgba(100, 116, 139, 0.2)', // Tailwind slate-500 with 20% opacity
+          borderColor: 'rgba(100, 116, 139, 0.7)', // Tailwind slate-500 with 70% opacity
+          color: '#cbd5e1', // Tailwind slate-300
         };
       default: // 'default'
         return {
