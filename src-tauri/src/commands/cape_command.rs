@@ -2,22 +2,13 @@ use crate::error::{AppError, CommandError};
 use crate::minecraft::api::cape_api::{CapeApi, CapesBrowseResponse};
 use crate::state::state_manager::State;
 use log::debug;
+use serde::Deserialize;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-/// Browse capes with optional parameters
-///
-/// Parameters:
-/// - page: Page number (default: 0)
-/// - page_size: Number of items per page (default: 20)
-/// - sort_by: Sort order (newest, oldest, mostUsed)
-/// - filter_has_elytra: Filter capes with elytra (true/false)
-/// - filter_creator: Filter by creator UUID
-/// - time_frame: Time frame filter (weekly, monthly)
-/// - request_uuid: UUID for tracking the request
-/// - norisk_token: Optional NoRisk token
-#[tauri::command]
-pub async fn browse_capes(
+// Define a struct to hold all parameters for browse_capes
+#[derive(Deserialize, Debug)]
+pub struct BrowseCapesPayload {
     page: Option<u32>,
     page_size: Option<u32>,
     sort_by: Option<String>,
@@ -26,10 +17,17 @@ pub async fn browse_capes(
     time_frame: Option<String>,
     norisk_token: Option<String>,
     request_uuid: Option<String>,
+}
+
+/// Browse capes with optional parameters
+///
+/// Parameters are now passed via the BrowseCapesPayload struct
+#[tauri::command]
+pub async fn browse_capes(
+    payload: BrowseCapesPayload,
 ) -> Result<CapesBrowseResponse, CommandError> {
     debug!("Command called: browse_capes");
-    debug!("Parameters: page={:?}, page_size={:?}, sort_by={:?}, filter_has_elytra={:?}, filter_creator={:?}, time_frame={:?}, norisk_token={:?}, request_uuid={:?}", 
-        page, page_size, sort_by, filter_has_elytra, filter_creator, time_frame, norisk_token, request_uuid);
+    debug!("Payload: {:?}", payload);
 
     // Get the state manager
     let state = State::get().await?;
@@ -46,7 +44,7 @@ pub async fn browse_capes(
         .ok_or_else(|| CommandError::from(AppError::NoCredentialsError))?;
 
     // Get the NoRisk token: prioritize passed token, otherwise get from active account
-    let token_to_use = match norisk_token {
+    let token_to_use = match payload.norisk_token {
         Some(token) => {
             debug!("Using provided NoRisk token.");
             token
@@ -62,7 +60,7 @@ pub async fn browse_capes(
     let cape_api = CapeApi::new();
 
     // Convert filter_creator from String to Uuid if provided
-    let filter_creator_uuid = if let Some(creator_str) = filter_creator {
+    let filter_creator_uuid = if let Some(creator_str) = payload.filter_creator {
         match Uuid::parse_str(&creator_str) {
             Ok(uuid) => Some(uuid),
             Err(e) => {
@@ -78,7 +76,7 @@ pub async fn browse_capes(
     };
 
     // Determine the request UUID to use
-    let uuid_to_use = match request_uuid {
+    let uuid_to_use = match payload.request_uuid {
         Some(uuid) => {
             debug!("Using provided request UUID: {}", uuid);
             uuid
@@ -95,12 +93,12 @@ pub async fn browse_capes(
     let result = cape_api
         .browse_capes(
             &token_to_use,
-            page,
-            page_size,
-            sort_by.as_deref(),
-            filter_has_elytra,
+            payload.page,
+            payload.page_size,
+            payload.sort_by.as_deref(),
+            payload.filter_has_elytra,
             filter_creator_uuid.as_ref(),
-            time_frame.as_deref(),
+            payload.time_frame.as_deref(),
             &uuid_to_use,
             is_experimental,
         )
@@ -177,7 +175,7 @@ pub async fn get_player_capes(
     let cape_api = CapeApi::new();
 
     // Convert player_uuid from String to Uuid
-    let player_uuid = match Uuid::parse_str(&player_uuid) {
+    let player_uuid_parsed = match Uuid::parse_str(&player_uuid) {
         Ok(uuid) => uuid,
         Err(e) => {
             debug!("Invalid UUID format for player_uuid: {}", e);
@@ -206,7 +204,7 @@ pub async fn get_player_capes(
     let result = cape_api
         .get_player_capes(
             &token_to_use,
-            &player_uuid,
+            &player_uuid_parsed,
             page,
             page_size,
             filter_accepted,
@@ -238,7 +236,7 @@ pub async fn get_player_capes(
 pub async fn equip_cape(
     cape_hash: String,
     norisk_token: Option<String>,
-    player_uuid: Option<Uuid>, // Changed to Option<Uuid>
+    player_uuid: Option<Uuid>,
 ) -> Result<(), CommandError> {
     debug!(
         "Command called: equip_cape for cape_hash: {}, player_uuid: {:?}",
@@ -293,7 +291,7 @@ pub async fn equip_cape(
     let result = cape_api
         .equip_cape(
             &token_to_use,
-            &uuid_to_use, // Use the determined UUID
+            &uuid_to_use,
             &cape_hash,
             is_experimental,
         )
@@ -322,7 +320,7 @@ pub async fn equip_cape(
 pub async fn delete_cape(
     cape_hash: String,
     norisk_token: Option<String>,
-    player_uuid: Option<Uuid>, // Changed to Option<Uuid>
+    player_uuid: Option<Uuid>,
 ) -> Result<(), CommandError> {
     debug!(
         "Command called: delete_cape for cape_hash: {}, player_uuid: {:?}",
@@ -377,7 +375,7 @@ pub async fn delete_cape(
     let result = cape_api
         .delete_cape(
             &token_to_use,
-            &uuid_to_use, // Use the determined UUID
+            &uuid_to_use,
             &cape_hash,
             is_experimental,
         )
@@ -406,7 +404,7 @@ pub async fn delete_cape(
 pub async fn upload_cape(
     image_path: String,
     norisk_token: Option<String>,
-    player_uuid: Option<Uuid>, // Changed to Option<Uuid>
+    player_uuid: Option<Uuid>,
 ) -> Result<String, CommandError> {
     debug!(
         "Command called: upload_cape with image_path: {}, player_uuid: {:?}",
@@ -464,7 +462,7 @@ pub async fn upload_cape(
     let result = cape_api
         .upload_cape(
             &token_to_use,
-            &uuid_to_use, // Use the determined UUID
+            &uuid_to_use,
             &image_path_buf,
             is_experimental,
         )
@@ -491,7 +489,7 @@ pub async fn upload_cape(
 #[tauri::command]
 pub async fn unequip_cape(
     norisk_token: Option<String>,
-    player_uuid: Option<Uuid>, // Changed to Option<Uuid>
+    player_uuid: Option<Uuid>,
 ) -> Result<(), CommandError> {
     debug!(
         "Command called: unequip_cape for player_uuid: {:?}",
@@ -546,7 +544,7 @@ pub async fn unequip_cape(
     let result = cape_api
         .unequip_cape(
             &token_to_use,
-            &uuid_to_use, // Use the determined UUID
+            &uuid_to_use,
             is_experimental,
         )
         .await

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { CapesBrowseResponse, BrowseCapesOptions, GetPlayerCapesOptions } from '../types/noriskCapes';
+import type { MinecraftProfile } from '../types/minecraft';
 
 /**
  * Browse capes with optional parameters
@@ -8,112 +9,120 @@ import type { CapesBrowseResponse, BrowseCapesOptions, GetPlayerCapesOptions } f
  * @returns A promise that resolves to a CapesBrowseResponse
  */
 export const browseCapes = (options: BrowseCapesOptions = {}): Promise<CapesBrowseResponse> => {
-  return invoke('browse_capes', {
-    page: options.page,
-    page_size: options.page_size,
-    sort_by: options.sort_by,
-    filter_has_elytra: options.filter_has_elytra,
-    filter_creator: options.filter_creator,
-    time_frame: options.time_frame,
-    norisk_token: options.norisk_token,
-    request_uuid: options.request_uuid
+  // Log the options object that will be wrapped in the payload
+  console.log('[cape-service] browseCapes called with options for payload:', options);
+
+  return invoke('browse_capes', { 
+    payload: options // Pass the options object as the 'payload' field
   });
 };
 
 /**
  * Get capes for a specific player
  * 
- * @param player_uuid UUID of the player
+ * @param playerUuid UUID of the player
  * @param options Options for retrieving player capes including pagination and filtering
  * @returns A promise that resolves to a CapesBrowseResponse
  */
 export const getPlayerCapes = (
-  player_uuid: string,
+  playerUuid: string,
   options: GetPlayerCapesOptions = {}
 ): Promise<CapesBrowseResponse> => {
   return invoke('get_player_capes', {
-    player_uuid,
+    playerUuid,
     page: options.page,
-    page_size: options.page_size,
-    filter_accepted: options.filter_accepted,
-    norisk_token: options.norisk_token,
-    request_uuid: options.request_uuid
+    pageSize: options.page_size,
+    filterAccepted: options.filter_accepted,
+    noriskToken: options.norisk_token,
+    requestUuid: options.request_uuid
   });
 };
 
 /**
  * Equip a specific cape for a player
  * 
- * @param cape_hash Hash of the cape to equip
- * @param norisk_token Optional NoRisk token
- * @param player_uuid Optional UUID of the player (defaults to active account)
+ * @param capeHash Hash of the cape to equip
+ * @param noriskToken Optional NoRisk token
+ * @param playerUuid Optional UUID of the player (defaults to active account)
  * @returns A promise that resolves when the cape is equipped
  */
 export const equipCape = (
-  cape_hash: string,
-  norisk_token?: string,
-  player_uuid?: string
+  capeHash: string,
+  noriskToken?: string,
+  playerUuid?: string
 ): Promise<void> => {
   return invoke('equip_cape', {
-    cape_hash,
-    norisk_token,
-    player_uuid
+     capeHash,
+     noriskToken,
+     playerUuid
   });
 };
 
 /**
  * Delete a specific cape owned by the player
  * 
- * @param cape_hash Hash of the cape to delete
- * @param norisk_token Optional NoRisk token
- * @param player_uuid Optional UUID of the player (defaults to active account)
+ * @param capeHash Hash of the cape to delete
+ * @param noriskToken Optional NoRisk token
+ * @param playerUuid Optional UUID of the player (defaults to active account)
  * @returns A promise that resolves when the cape is deleted
  */
 export const deleteCape = (
-  cape_hash: string,
-  norisk_token?: string,
-  player_uuid?: string
+  capeHash: string,
+  noriskToken?: string,
+  playerUuid?: string
 ): Promise<void> => {
   return invoke('delete_cape', {
-    cape_hash,
-    norisk_token,
-    player_uuid
+    capeHash,
+    noriskToken,
+    playerUuid
   });
 };
 
 /**
  * Upload a new cape image for the active player
  * 
- * @param image_path Path to the cape image file (PNG)
- * @param norisk_token Optional NoRisk token
- * @param player_uuid Optional UUID of the player (defaults to active account)
+ * @param imagePath Path to the cape image file (PNG)
+ * @param noriskToken Optional NoRisk token
+ * @param playerUuid Optional UUID of the player (defaults to active account)
  * @returns A promise that resolves to the cape hash of the uploaded cape
  */
 export const uploadCape = (
-  image_path: string,
-  norisk_token?: string,
-  player_uuid?: string
+  imagePath: string,
+  noriskToken?: string,
+  playerUuid?: string
 ): Promise<string> => {
   return invoke('upload_cape', {
-    image_path,
-    norisk_token,
-    player_uuid
+    imagePath,
+    noriskToken,
+    playerUuid
   });
 };
 
 /**
  * Unequip the currently equipped cape for the active player
  * 
- * @param norisk_token Optional NoRisk token
- * @param player_uuid Optional UUID of the player (defaults to active account)
+ * @param noriskToken Optional NoRisk token
+ * @param playerUuid Optional UUID of the player (defaults to active account)
  * @returns A promise that resolves when the cape is unequipped
  */
 export const unequipCape = (
-  norisk_token?: string,
-  player_uuid?: string
+  noriskToken?: string,
+  playerUuid?: string
 ): Promise<void> => {
   return invoke('unequip_cape', {
-    norisk_token,
-    player_uuid
+    noriskToken,
+    playerUuid
   });
+};
+
+/**
+ * Fetches a Minecraft profile by player name or UUID.
+ * Corresponds to the Rust `get_profile_by_name_or_uuid` command.
+ *
+ * @param nameOrUuidQuery - The player's name or UUID to query.
+ * @returns A promise that resolves to a `MinecraftProfile` object.
+ * @throws If the backend command fails.
+ */
+export const getPlayerProfileByUuidOrName = (nameOrUuidQuery: string): Promise<MinecraftProfile> => {
+  return invoke('get_profile_by_name_or_uuid', { nameOrUuidQuery });
 }; 
