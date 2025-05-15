@@ -1,65 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { SkinViewer } from "../launcher/SkinViewer";
 import { LaunchButton } from "../launcher/LaunchButton";
 import { VersionInfo } from "../launcher/VersionInfo";
 import { NewsSection } from "../news/NewsSection";
-import * as ProfileService from "../../services/profile-service";
 import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
-import { toast } from "react-hot-toast";
+import { useProfileStore } from "../../store/profile-store";
 import { Profile } from "../../types/profile";
+
 export function PlayTab() {
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedVersion, setSelectedVersion] = useState("");
-  const [launchError, setLaunchError] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const {
+    profiles,
+    selectedProfile: storeSelectedProfile,
+    loading: profilesLoading,
+    error: profilesError,
+    setSelectedProfile,
+  } = useProfileStore();
 
   const { activeAccount } = useMinecraftAuthStore();
 
   useEffect(() => {
-    const loadProfiles = async () => {
-      try {
-        setLoading(true);
-        const response = await ProfileService.getAllProfilesAndLastPlayed();
-        const allProfiles = response.all_profiles;
-        setProfiles(allProfiles);
+    if (!storeSelectedProfile && profiles.length > 0) {
+      console.log(
+        "[PlayTab] No profile selected in store, defaulting to first available profile.",
+      );
+      setSelectedProfile(profiles[0]);
+    }
+  }, [storeSelectedProfile, profiles, setSelectedProfile]);
 
-        if (allProfiles.length > 0) {
-          const initialSelectedVersion = response.last_played_profile_id || allProfiles[0].id;
-          console.log(
-            `[PlayTab] Setting initial selected version to ${initialSelectedVersion}`,
-          );
-          setSelectedVersion(initialSelectedVersion);
-        } else {
-          // Handle case where no profiles are available
-          setSelectedVersion(""); // or some other default/empty state
-          console.log("[PlayTab] No profiles available to select.");
-        }
-
-        setIsInitialized(true);
-      } catch (err) {
-        console.error("Failed to load profiles:", err);
-        setLaunchError("Failed to load profiles");
-        setIsInitialized(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProfiles();
-  }, []);
-
-  const handleVersionChange = (version: string) => {
-    console.log(`[PlayTab] Version changed to ${version}`);
-    setSelectedVersion(version);
+  const handleVersionChange = (versionId: string) => {
+    console.log(`[PlayTab] User selected version changed to ${versionId}`);
+    const profileToSelect = profiles.find((p) => p.id === versionId) || null;
+    setSelectedProfile(profileToSelect);
   };
 
-  const selectedProfile =
-    profiles.find((p) => p.id === selectedVersion) || profiles[0];
+  const currentDisplayProfile = storeSelectedProfile || (profiles.length > 0 ? profiles[0] : null);
 
   const versions = profiles.map((profile) => ({
     id: profile.id,
@@ -73,18 +51,22 @@ export function PlayTab() {
     ? `https://crafatar.com/skins/${activeAccount.id}`
     : `https://crafatar.com/skins/606e2ff0-ed77-4842-9d6c-e1d3321c7838`;
 
-  if (loading) {
-    return <LoadingState message="Loading profiles..." />;
+  if (profilesLoading) {
+    return <LoadingState message="Loading profiles and data..." />;
+  }
+
+  if (!profilesLoading && profiles.length === 0 && !profilesError) {
+    console.log("[PlayTab] No profiles found after initialization.");
   }
 
   return (
     <div className="flex h-full">
       <div className="flex-grow flex flex-col items-center justify-center p-8 relative">
-        {launchError && <ErrorMessage message={launchError} />}
+        {(profilesError) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
 
-        {selectedProfile && (
+        {currentDisplayProfile && (
           <VersionInfo
-            profileId={selectedProfile.id}
+            profileId={currentDisplayProfile.id}
             className="absolute top-6 left-6 z-10"
           />
         )}
@@ -106,15 +88,13 @@ export function PlayTab() {
             />
 
             <div className="absolute bottom-8 left-20 right-0 w-full flex flex-col gap-3">
-              {isInitialized && (
-                <div className="px-4 w-full">
-                  <LaunchButton
-                    defaultVersion={selectedVersion}
-                    onVersionChange={handleVersionChange}
-                    versions={versions}
-                  />
-                </div>
-              )}
+              <div className="px-4 w-full">
+                <LaunchButton
+                  defaultVersion={storeSelectedProfile?.id || ""}
+                  onVersionChange={handleVersionChange}
+                  versions={versions}
+                />
+              </div>
             </div>
           </div>
         </div>

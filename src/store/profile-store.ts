@@ -3,6 +3,7 @@ import type {
   CreateProfileParams,
   Profile,
   UpdateProfileParams,
+  AllProfilesAndLastPlayed,
 } from "../types/profile";
 import * as ProfileService from "../services/profile-service";
 
@@ -11,6 +12,7 @@ interface ProfileState {
   loading: boolean;
   error: string | null;
   selectedProfile: Profile | null;
+  lastPlayedProfileId: string | null;
 
   fetchProfiles: () => Promise<void>;
   getProfile: (id: string) => Promise<Profile>;
@@ -40,15 +42,29 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   loading: false,
   error: null,
   selectedProfile: null,
+  lastPlayedProfileId: null,
 
   fetchProfiles: async () => {
     try {
       set({ loading: true, error: null });
-      const profiles = await ProfileService.listProfiles();
-      set({ profiles, loading: false });
+      const response = await ProfileService.getAllProfilesAndLastPlayed();
+      const { all_profiles, last_played_profile_id } = response;
+
+      let newlySelectedProfile: Profile | null = null;
+      if (last_played_profile_id) {
+        newlySelectedProfile =
+          all_profiles.find((p) => p.id === last_played_profile_id) || null;
+      }
+      
+      set({
+        profiles: all_profiles,
+        lastPlayedProfileId: last_played_profile_id,
+        selectedProfile: newlySelectedProfile,
+        loading: false,
+      });
     } catch (error) {
-      console.error("Failed to fetch profiles:", error);
-      set({ error: "Failed to load profiles", loading: false });
+      console.error("Failed to fetch all profiles and last played:", error);
+      set({ error: "Failed to load profiles data", loading: false });
     }
   },
 

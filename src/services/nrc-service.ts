@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { BlogPost } from '../types/wordPress';
+import { useProfileStore } from '../store/profile-store';
 
 /**
  * Fetches the latest news and changelog posts from the backend.
@@ -37,9 +38,13 @@ export const refreshStandardVersions = (): Promise<void> => {
  * Logs success or errors to the console.
  */
 export const refreshNrcDataOnMount = async (): Promise<void> => {
+  let nrcPacksSuccess = false;
+  let standardVersionsSuccess = false;
+
   try {
     await refreshNoriskPacks();
     console.log("Norisk Packs updated successfully on mount!");
+    nrcPacksSuccess = true;
   } catch (error) {
     console.error("Failed to refresh Norisk Packs on mount:", error);
   }
@@ -47,7 +52,20 @@ export const refreshNrcDataOnMount = async (): Promise<void> => {
   try {
     await refreshStandardVersions();
     console.log("Standard Versions updated successfully on mount!");
+    standardVersionsSuccess = true;
   } catch (error) {
     console.error("Failed to refresh Standard Versions on mount:", error);
+  }
+
+  // Fetch profiles from the store after NRC data is refreshed
+  // This ensures the profile list (including standard versions) and last played are up-to-date.
+  if (nrcPacksSuccess || standardVersionsSuccess) { // Or simply always call it if appropriate
+    try {
+      console.log("Refreshing profiles state after NRC data update...");
+      await useProfileStore.getState().fetchProfiles();
+      console.log("Profiles state refreshed successfully.");
+    } catch (error) {
+      console.error("Failed to refresh profiles state after NRC data update:", error);
+    }
   }
 }; 
