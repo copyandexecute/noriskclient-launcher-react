@@ -324,6 +324,15 @@ impl ProfileManager {
     }
 
     pub async fn update_profile(&self, id: Uuid, profile: Profile) -> Result<()> {
+        // Check if the profile being updated is a standard version
+        if profile.is_standard_version {
+            warn!(
+                "Attempted to update a standard version profile (ID: {}). Updates to standard versions are not allowed.",
+                id
+            );
+            return Ok(()); // Do not proceed with update for standard versions
+        }
+
         {
             let mut profiles = self.profiles.write().await;
             profiles.insert(id, profile);
