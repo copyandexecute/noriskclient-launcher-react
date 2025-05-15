@@ -264,3 +264,9 @@ export interface ScreenshotInfo {
   path: string;
   modified: string | null; // DateTime<Utc> -> string (ISO 8601) | null
 }
+
+// --- New Type for All Profiles and Last Played ---
+export interface AllProfilesAndLastPlayed {
+  all_profiles: Profile[];
+  last_played_profile_id: string | null;
+}

@@ -23,7 +23,7 @@ use chrono::Utc;
 use log::{error, info, warn};
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use sanitize_filename::sanitize;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use sysinfo::System;
@@ -167,6 +167,14 @@ pub async fn launch_profile(
                 .profile_manager
                 .update_profile(id, profile.clone())
                 .await?;
+
+            // Update launcher config with last played profile ID
+            let mut current_config = state.config_manager.get_config().await;
+            current_config.last_played_profile = Some(id);
+            if let Err(e) = state.config_manager.set_config(current_config).await {
+                warn!("Failed to update last_played_profile in config: {}", e);
+            }
+
             profile
         }
         Err(_) => {
@@ -194,6 +202,14 @@ pub async fn launch_profile(
                 "Converting standard profile '{}' to a temporary profile",
                 standard_profile.name
             );
+
+            // Update launcher config with last played profile ID (for standard versions too)
+            // Even though it's not a "user" profile, we still record it was the last one launched.
+            let mut current_config = state.config_manager.get_config().await;
+            current_config.last_played_profile = Some(id); // id here is the standard_profile.id
+            if let Err(e) = state.config_manager.set_config(current_config).await {
+                warn!("Failed to update last_played_profile in config for standard version: {}", e);
+            }
 
             // Return the converted profile without saving it
             standard_profile.clone()
@@ -1648,4 +1664,92 @@ pub async fn list_profile_screenshots(
     );
     // Call the utility function from profile_utils, passing only the ID
     Ok(profile_utils::get_screenshots_for_profile(profile_id).await?)
+}
+
+// --- New DTO and Command for All Profiles and Last Played ---
+#[derive(Serialize, Debug, Clone)]
+pub struct AllProfilesAndLastPlayed {
+    all_profiles: Vec<Profile>,
+    last_played_profile_id: Option<Uuid>,
+}
+
+#[tauri::command]
+pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlayed, CommandError> {
+    info!("Executing get_all_profiles_and_last_played command");
+    let state = State::get().await?;
+
+    // 1. Fetch User Profiles
+    let user_profiles = state.profile_manager.list_profiles().await?;
+
+    // 2. Fetch Standard Norisk Profiles
+    let norisk_versions_config = state.norisk_version_manager.get_config().await;
+    let standard_profiles = norisk_versions_config.profiles; // This is Vec<Profile>
+
+    // 3. Combine Profiles
+    let mut all_profiles_combined = user_profiles.clone();
+    all_profiles_combined.extend(standard_profiles.clone());
+
+    // Deduplicate based on ID, preferring user profiles if IDs clash (highly unlikely with UUIDs but safe)
+    // This is a more robust way to combine, though simple concatenation is often fine.
+    let mut unique_profiles_map: HashMap<Uuid, Profile> = HashMap::new();
+    for profile in standard_profiles.iter() {
+        unique_profiles_map.insert(profile.id, profile.clone());
+    }
+    for profile in user_profiles.iter() { // User profiles overwrite standard if same ID
+        unique_profiles_map.insert(profile.id, profile.clone());
+    }
+    let all_profiles_final: Vec<Profile> = unique_profiles_map.values().cloned().collect();
+
+
+    // 4. Handle `last_played_profile_id`
+    let mut launcher_config = state.config_manager.get_config().await;
+    let mut effective_last_played_id = launcher_config.last_played_profile;
+    let mut config_needs_update = false;
+
+    // Validate existing last_played_profile_id
+    if let Some(id_to_check) = effective_last_played_id {
+        let exists = all_profiles_final.iter().any(|p| p.id == id_to_check);
+        if !exists {
+            info!("Last played profile ID {} no longer exists. Marking for reset.", id_to_check);
+            effective_last_played_id = None; // Mark for reset logic below
+            // The actual launcher_config.last_played_profile will be updated if a new default is found or it's set to None
+        }
+    }
+
+    // If effective_last_played_id is None (either initially or after validation failed)
+    if effective_last_played_id.is_none() {
+        info!("Last played profile ID is not set or invalid. Attempting to set a default.");
+        let new_default_id: Option<Uuid> = if !standard_profiles.is_empty() {
+            standard_profiles.first().map(|p| p.id)
+        } else if !user_profiles.is_empty() {
+            user_profiles.first().map(|p| p.id)
+        } else {
+            None
+        };
+
+        // Check if the determined new_default_id is different from what's in the original config.
+        // This ensures we only write to config if there's an actual change.
+        if launcher_config.last_played_profile != new_default_id {
+            info!("Updating last_played_profile in config to: {:?}", new_default_id);
+            launcher_config.last_played_profile = new_default_id;
+            config_needs_update = true;
+        }
+        effective_last_played_id = new_default_id; // This is the ID to be returned
+    }
+
+    // Save config if it was changed
+    if config_needs_update {
+        if let Err(e) = state.config_manager.set_config(launcher_config).await {
+            warn!("Failed to update launcher config with new last_played_profile_id: {}. Proceeding with potentially stale config value for this response.", e);
+            // If saving fails, the effective_last_played_id we calculated is still returned,
+            // but the config on disk might not reflect this change for the next app start.
+        } else {
+            info!("Successfully updated last_played_profile_id in launcher config.");
+        }
+    }
+
+    Ok(AllProfilesAndLastPlayed {
+        all_profiles: all_profiles_final,
+        last_played_profile_id: effective_last_played_id,
+    })
 }

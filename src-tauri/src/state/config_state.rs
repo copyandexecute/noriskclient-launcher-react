@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::{Mutex, RwLock};
+use uuid::Uuid;
 
 const CONFIG_FILENAME: &str = "launcher_config.json";
 const CONFIG_CURRENT_VERSION: u32 = 1;
@@ -31,6 +32,8 @@ pub struct LauncherConfig {
     pub open_logs_after_starting: bool,
     #[serde(default = "default_concurrent_io_limit")]
     pub concurrent_io_limit: usize,
+    #[serde(default)]
+    pub last_played_profile: Option<Uuid>,
 }
 
 fn default_config_version() -> u32 {
@@ -69,6 +72,7 @@ impl Default for LauncherConfig {
             profile_grouping_criterion: default_profile_grouping_criterion(),
             open_logs_after_starting: default_open_logs_after_starting(),
             concurrent_io_limit: default_concurrent_io_limit(),
+            last_played_profile: None,
         }
     }
 }
@@ -178,6 +182,7 @@ impl ConfigManager {
                 && current.profile_grouping_criterion == new_config.profile_grouping_criterion
                 && current.open_logs_after_starting == new_config.open_logs_after_starting
                 && current.concurrent_io_limit == new_config.concurrent_io_limit
+                && current.last_played_profile == new_config.last_played_profile
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -234,6 +239,12 @@ impl ConfigManager {
                         current.concurrent_io_limit, new_config.concurrent_io_limit
                     );
                 }
+                if current.last_played_profile != new_config.last_played_profile {
+                    info!(
+                        "Changing last played profile: {:?} -> {:?}",
+                        current.last_played_profile, new_config.last_played_profile
+                    );
+                }
 
                 // Update config while preserving version
                 *config = LauncherConfig {
@@ -246,6 +257,7 @@ impl ConfigManager {
                     profile_grouping_criterion: new_config.profile_grouping_criterion.clone(),
                     open_logs_after_starting: new_config.open_logs_after_starting,
                     concurrent_io_limit: new_config.concurrent_io_limit,
+                    last_played_profile: new_config.last_played_profile,
                 };
 
                 true

@@ -8,6 +8,7 @@ import type {
   ExportProfileParams,
   Profile,
   UpdateProfileParams,
+  AllProfilesAndLastPlayed,
 } from "../types/profile";
 import type {
   DataPackInfo,
@@ -15,6 +16,7 @@ import type {
   ResourcePackInfo,
   ShaderPackInfo,
 } from "../types/modrinth";
+import { NoriskVersionsConfig } from "../types/noriskVersions";
 
 export async function listProfiles(): Promise<Profile[]> {
   return invoke<Profile[]>("list_profiles");
@@ -277,8 +279,8 @@ export async function getNoriskPacksResolved(): Promise<any> {
   return invoke<any>("get_norisk_packs_resolved");
 }
 
-export async function getStandardProfiles(): Promise<any> {
-  return invoke<any>("get_standard_profiles");
+export async function getStandardProfiles(): Promise<NoriskVersionsConfig> {
+  return invoke<NoriskVersionsConfig>("get_standard_profiles");
 }
 
 export async function refreshNoriskPacks(): Promise<void> {
@@ -291,4 +293,8 @@ export async function refreshStandardVersions(): Promise<void> {
 
 export async function getProfileLatestLogContent(profileId: string): Promise<string> {
   return invoke<string>("get_profile_latest_log_content", { profileId });
+}
+
+export async function getAllProfilesAndLastPlayed(): Promise<AllProfilesAndLastPlayed> {
+  return invoke<AllProfilesAndLastPlayed>("get_all_profiles_and_last_played");
 }

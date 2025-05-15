@@ -10,9 +10,9 @@ import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { toast } from "react-hot-toast";
-
+import { Profile } from "../../types/profile";
 export function PlayTab() {
-  const [profiles, setProfiles] = useState<any[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedVersion, setSelectedVersion] = useState("");
   const [launchError, setLaunchError] = useState<string | null>(null);
@@ -24,15 +24,20 @@ export function PlayTab() {
     const loadProfiles = async () => {
       try {
         setLoading(true);
-        const data = await ProfileService.listProfiles();
-        setProfiles(data);
+        const response = await ProfileService.getAllProfilesAndLastPlayed();
+        const allProfiles = response.all_profiles;
+        setProfiles(allProfiles);
 
-        if (data.length > 0) {
-          const newSelectedVersion = data[0].id;
+        if (allProfiles.length > 0) {
+          const initialSelectedVersion = response.last_played_profile_id || allProfiles[0].id;
           console.log(
-            `[PlayTab] Setting initial selected version to ${newSelectedVersion}`,
+            `[PlayTab] Setting initial selected version to ${initialSelectedVersion}`,
           );
-          setSelectedVersion(newSelectedVersion);
+          setSelectedVersion(initialSelectedVersion);
+        } else {
+          // Handle case where no profiles are available
+          setSelectedVersion(""); // or some other default/empty state
+          console.log("[PlayTab] No profiles available to select.");
         }
 
         setIsInitialized(true);
