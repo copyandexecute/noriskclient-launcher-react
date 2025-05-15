@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ModrinthSearch } from "../../modrinth/ModrinthSearch";
 import type { Profile } from "../../../types/profile";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { useDisplayContextStore } from "../../../store/useDisplayContextStore";
 import { Icon } from "@iconify/react";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
@@ -23,7 +23,18 @@ export function BrowseTab({
   parentTransitionActive,
 }: BrowseTabProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const setDisplayContext = useDisplayContextStore((state) => state.setContext);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Set display context to 'detail' when component mounts
+  useEffect(() => {
+    setDisplayContext("detail");
+
+    // Optional: Reset to default when component unmounts
+    return () => {
+      setDisplayContext("standalone");
+    };
+  }, [setDisplayContext]);
 
   useEffect(() => {
     if (containerRef.current && !parentTransitionActive) {
