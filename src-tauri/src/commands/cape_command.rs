@@ -1,10 +1,11 @@
 use crate::error::{AppError, CommandError};
 use crate::minecraft::api::cape_api::{CapeApi, CapesBrowseResponse};
 use crate::state::state_manager::State;
-use log::debug;
+use log::{debug, error};
 use serde::Deserialize;
 use std::path::PathBuf;
 use uuid::Uuid;
+use crate::minecraft::api::mc_api::MinecraftApiService;
 
 // Define a struct to hold all parameters for browse_capes
 #[derive(Deserialize, Debug)]
@@ -117,6 +118,16 @@ pub async fn browse_capes(
     result
 }
 
+#[derive(Deserialize, Debug)]
+pub struct GetPlayerCapesPayload {
+    pub player_identifier: String,
+    pub page: Option<u32>,
+    pub page_size: Option<u32>,
+    pub filter_accepted: Option<bool>,
+    pub norisk_token: Option<String>,
+    pub request_uuid: Option<String>,
+}
+
 /// Get capes for a specific player
 ///
 /// Parameters:
@@ -128,102 +139,83 @@ pub async fn browse_capes(
 /// - norisk_token: Optional NoRisk token
 #[tauri::command]
 pub async fn get_player_capes(
-    player_uuid: String,
-    page: Option<u32>,
-    page_size: Option<u32>,
-    filter_accepted: Option<bool>,
-    norisk_token: Option<String>,
-    request_uuid: Option<String>,
+    payload: GetPlayerCapesPayload,
 ) -> Result<CapesBrowseResponse, CommandError> {
     debug!(
-        "Command called: get_player_capes for player: {}",
-        player_uuid
-    );
-    debug!(
-        "Parameters: page={:?}, page_size={:?}, filter_accepted={:?}, norisk_token={:?}, request_uuid={:?}",
-        page, page_size, filter_accepted, norisk_token, request_uuid
+        "Command called: get_player_capes with payload: {:?}",
+        payload
     );
 
-    // Get the state manager
     let state = State::get().await?;
-
-    // Get the is_experimental value from the config state
     let is_experimental = state.config_manager.is_experimental_mode().await;
     debug!("Using experimental mode: {}", is_experimental);
 
-    // Get the active account
     let active_account = state
         .minecraft_account_manager_v2
         .get_active_account()
-        .await?
-        .ok_or_else(|| CommandError::from(AppError::NoCredentialsError))?;
+        .await?;
 
-    // Get the NoRisk token: prioritize passed token, otherwise get from active account
-    let token_to_use = match norisk_token {
-        Some(token) => {
-            debug!("Using provided NoRisk token.");
-            token
+    let player_uuid_to_use: Uuid = match Uuid::parse_str(&payload.player_identifier) {
+        Ok(uuid) => {
+            debug!("Successfully parsed player_identifier as UUID: {}", uuid);
+            uuid
         }
+        Err(_) => {
+            debug!(
+                "player_identifier '{}' is not a UUID, attempting to resolve as name.",
+                payload.player_identifier
+            );
+            let api_service = MinecraftApiService::new();
+            let profile = api_service.get_profile_by_name_or_uuid(&payload.player_identifier).await?;
+            match Uuid::parse_str(&profile.id) {
+                 Ok(resolved_uuid) => {
+                    debug!("Resolved player name '{}' to UUID: {}", payload.player_identifier, resolved_uuid);
+                    resolved_uuid
+                 },
+                 Err(e) => {
+                    error!("Failed to parse UUID from resolved profile for '{}'. Profile ID: '{}'. Error: {}", payload.player_identifier, profile.id, e);
+                    return Err(CommandError::from(AppError::InvalidInput(format!(
+                        "Could not resolve player '{}' to a valid UUID.",
+                        payload.player_identifier
+                    ))));
+                 }
+            }
+        }
+    };
+
+    let token_to_use = match payload.norisk_token {
+        Some(token) => token,
         None => {
-            debug!("No token provided, retrieving from active account.");
-            active_account
-                .norisk_credentials
+            let acc = active_account.as_ref().ok_or_else(|| CommandError::from(AppError::NoCredentialsError))?;
+            acc.norisk_credentials
                 .get_token_for_mode(is_experimental)?
         }
     };
 
     let cape_api = CapeApi::new();
 
-    // Convert player_uuid from String to Uuid
-    let player_uuid_parsed = match Uuid::parse_str(&player_uuid) {
-        Ok(uuid) => uuid,
-        Err(e) => {
-            debug!("Invalid UUID format for player_uuid: {}", e);
-            return Err(CommandError::from(AppError::InvalidInput(format!(
-                "Invalid UUID format for player_uuid: {}",
-                e
-            ))));
-        }
-    };
-
-    // Determine the request UUID to use
-    let uuid_to_use = match request_uuid {
-        Some(uuid) => {
-            debug!("Using provided request UUID: {}", uuid);
-            uuid
-        }
+    let uuid_for_request = match payload.request_uuid {
+        Some(uuid) => uuid,
         None => {
-            debug!(
-                "No request UUID provided, using active account ID: {}",
-                active_account.id
-            );
-            active_account.id.to_string()
+            match active_account {
+                Some(acc) => acc.id.to_string(),
+                None => Uuid::new_v4().to_string(),
+            }
         }
     };
 
-    let result = cape_api
+    cape_api
         .get_player_capes(
             &token_to_use,
-            &player_uuid_parsed,
-            page,
-            page_size,
-            filter_accepted,
-            &uuid_to_use,
+            &player_uuid_to_use,
+            payload.page,
+            payload.page_size,
+            payload.filter_accepted,
+            &uuid_for_request,
             is_experimental,
         )
         .await
-        .map_err(|e| {
-            debug!("Failed to get player capes: {:?}", e);
-            CommandError::from(e)
-        });
-
-    if result.is_ok() {
-        debug!("Command completed: get_player_capes");
-    } else {
-        debug!("Command failed: get_player_capes");
-    }
-
-    result
+        .map_err(CommandError::from)
 }
 
 /// Equip a specific cape for a player
