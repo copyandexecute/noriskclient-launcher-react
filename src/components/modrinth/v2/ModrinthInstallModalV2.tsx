@@ -181,7 +181,6 @@ export const ModrinthInstallModalV2: React.FC<ModrinthInstallModalV2Props> = ({
         }}
         error={quickProfileError}
         isLoading={isCreatingProfile} 
-        profiles={profiles} // Pass the full list of profiles
         selectedSourceProfileId={sourceProfileToCopyId}
         onSourceProfileChange={setSourceProfileToCopyId}
       />

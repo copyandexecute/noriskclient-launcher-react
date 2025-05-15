@@ -84,10 +84,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   createProfile: async (params: CreateProfileParams) => {
     try {
       const id = await ProfileService.createProfile(params);
-      const newProfile = await ProfileService.getProfile(id);
-      set((state) => ({
-        profiles: [...state.profiles, newProfile],
-      }));
+      await get().fetchProfiles();
       return id;
     } catch (error) {
       console.error("Failed to create profile:", error);

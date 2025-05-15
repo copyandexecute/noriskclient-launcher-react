@@ -47,6 +47,8 @@ import {
 } from '../../../types/content';
 import type { ContentInstallStatus } from '../../../types/profile'; // For the extended status
 
+import { useProfileStore } from '../../../store/profile-store'; // Hinzufügen des ProfileStore Imports
+
 // Remove any other stray imports of uninstallContentFromProfile below this point
 
 // Placeholder for the new service function and payload type
@@ -1517,15 +1519,18 @@ export function ModrinthSearchV2({
     const installationPromise = async () => {
       let newProfileId: string;
       let successMessageDetail = `Successfully created profile '${profileName}'`;
+      const store = useProfileStore.getState(); // Store-Instanz holen
 
       if (sourceProfileIdToCopy) {
         const sourceProfile = internalProfiles.find(p => p.id === sourceProfileIdToCopy);
         const sourceProfileName = sourceProfile ? sourceProfile.name : "source profile";
         
-        newProfileId = await ProfileService.copyProfile({
-          source_profile_id: sourceProfileIdToCopy,
-          new_profile_name: profileName,
-        });
+        // Verwende die Store-Methode copyProfile
+        newProfileId = await store.copyProfile(
+          sourceProfileIdToCopy, 
+          profileName
+          // Optional: includeFiles hier hinzufügen, falls benötigt
+        );
         successMessageDetail = `Successfully copied profile '${profileName}' from '${sourceProfileName}'`;
 
       } else {
@@ -1535,7 +1540,8 @@ export function ModrinthSearchV2({
           loader = version.loaders[0] || 'vanilla';
         }
 
-        newProfileId = await ProfileService.createProfile({
+        // Verwende die Store-Methode createProfile
+        newProfileId = await store.createProfile({
           name: profileName,
           game_version: gameVersion,
           loader: loader,

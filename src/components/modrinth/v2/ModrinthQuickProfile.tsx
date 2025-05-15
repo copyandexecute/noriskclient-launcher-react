@@ -7,11 +7,7 @@ import { IconButton } from '../../ui/buttons/IconButton';
 import { Icon } from '@iconify/react';
 import type { AccentColor } from '../../../store/useThemeStore';
 import { cn } from '../../../lib/utils';
-
-interface ProfileForItem {
-  id: string;
-  name: string;
-}
+import { useProfileStore } from '../../../store/profile-store';
 
 interface ModrinthQuickProfileProps {
   accentColor: AccentColor;
@@ -22,13 +18,13 @@ interface ModrinthQuickProfileProps {
   error: string | null;
   isLoading?: boolean;
   
-  profiles: ProfileForItem[];
   selectedSourceProfileId: string | null;
   onSourceProfileChange: (profileId: string | null) => void;
 }
 
 const PLACEHOLDER_VALUE = "__placeholder__";
 const NO_PROFILES_VALUE = "__no_profiles__";
+const LOADING_PROFILES_VALUE = "__loading_profiles__";
 
 export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
   accentColor,
@@ -38,15 +34,15 @@ export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
   onProfileNameChange,
   error,
   isLoading = false,
-  profiles,
   selectedSourceProfileId,
   onSourceProfileChange,
 }) => {
   const [showSourceSelectInput, setShowSourceSelectInput] = useState(false);
+  const { profiles: storeProfiles, loading: profilesLoading } = useProfileStore();
 
-  const sourceProfileOptions: SelectOption[] = profiles.map(p => ({ value: p.id, label: p.name }));
+  const sourceProfileOptions: SelectOption[] = storeProfiles.map(p => ({ value: p.id, label: p.name }));
 
-  if (profiles.length > 0) {
+  if (storeProfiles.length > 0 && !profilesLoading) {
     sourceProfileOptions.unshift({ value: PLACEHOLDER_VALUE, label: "Select a profile to copy from..." });
   }
 
@@ -77,7 +73,7 @@ export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
       
       <p className="text-xs sm:text-sm text-gray-400 text-center">
         {isActuallyCopying 
-          ? `Copying settings from '${profiles.find(p=>p.id === selectedSourceProfileId)?.name || 'selected profile'}'. Enter a name for the new copy.` 
+          ? `Copying settings from '${storeProfiles.find(p=>p.id === selectedSourceProfileId)?.name || 'selected profile'}'. Enter a name for the new copy.` 
           : "Enter a name for the new profile. Optionally, copy settings from an existing profile."}
       </p>
       
@@ -119,22 +115,24 @@ export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
             <Select
               value={selectedSourceProfileId || PLACEHOLDER_VALUE}
               onChange={(value) => {
-                if (value === PLACEHOLDER_VALUE || value === NO_PROFILES_VALUE) {
+                if (value === PLACEHOLDER_VALUE || value === NO_PROFILES_VALUE || value === LOADING_PROFILES_VALUE) {
                   onSourceProfileChange(null);
                 } else {
                   onSourceProfileChange(value);
                   setShowSourceSelectInput(true);
                 }
               }}
-              options={profiles.length === 0 
-                ? [{ value: NO_PROFILES_VALUE, label: "No profiles available to copy"}]
-                : sourceProfileOptions
+              options={profilesLoading
+                ? [{ value: LOADING_PROFILES_VALUE, label: "Loading profiles..." }]
+                : storeProfiles.length === 0
+                  ? [{ value: NO_PROFILES_VALUE, label: "No profiles available to copy" }]
+                  : sourceProfileOptions
               }
               placeholder="Select a profile to copy from..."
-              disabled={isLoading || profiles.length === 0}
+              disabled={isLoading || profilesLoading || (storeProfiles.length === 0 && !profilesLoading)}
               className="w-full"
             />
-            {profiles.length === 0 && (showSourceSelectInput || isActuallyCopying) && (
+            {storeProfiles.length === 0 && !profilesLoading && (showSourceSelectInput || isActuallyCopying) && (
               <p className="text-xs text-amber-500 mt-1 text-center">
                 You don't have any profiles to copy from. A new empty profile will be created if you proceed without selecting a source.
               </p>
