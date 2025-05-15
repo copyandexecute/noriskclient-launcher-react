@@ -294,10 +294,33 @@ impl ProfileManager {
 
     pub async fn get_profile(&self, id: Uuid) -> Result<Profile> {
         let profiles = self.profiles.read().await;
-        profiles
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| crate::error::AppError::ProfileNotFound(id))
+        if let Some(profile) = profiles.get(&id).cloned() {
+            Ok(profile)
+        } else {
+            // Profile not found in local manager, try standard versions
+            info!(
+                "Profile with ID {} not found in ProfileManager, checking standard versions via global State.",
+                id
+            );
+            // Access global state to get NoriskVersionManager
+            // This assumes State::get() is available and NoriskVersionManager has get_profile_by_id
+            match crate::state::state_manager::State::get().await {
+                Ok(state) => {
+                    if let Some(standard_profile) = state.norisk_version_manager.get_profile_by_id(id).await {
+                        info!("Found standard profile '{}' for ID {}", standard_profile.name, id);
+                        Ok(standard_profile)
+                    } else {
+                        info!("Profile ID {} not found in standard versions either.", id);
+                        Err(crate::error::AppError::ProfileNotFound(id))
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to get global state while trying to fetch standard profile for ID {}: {}", id, e);
+                    // Return the original ProfileNotFound error, or a more specific one for state access failure
+                    Err(crate::error::AppError::ProfileNotFound(id))
+                }
+            }
+        }
     }
 
     pub async fn update_profile(&self, id: Uuid, profile: Profile) -> Result<()> {
