@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '../../../lib/utils';
 import type {
   ModrinthVersion,
@@ -14,6 +14,9 @@ import { Button } from '../../ui/buttons/Button';
 import { Input } from '../../ui/Input';
 import { Checkbox } from '../../ui/Checkbox';
 import { ModrinthVersionItemV2 } from './ModrinthVersionItemV2';
+import { Select, type SelectOption } from "../../ui/Select";
+import { TagBadge } from "../../ui/TagBadge";
+import { gsap } from "gsap";
 
 // --- Define Props for the new component ---
 interface ModrinthVersionListV2Props {
@@ -98,6 +101,42 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
   onDeleteClick,
   onToggleEnableClick,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Create Select options for version type
+  const versionTypeOptions: SelectOption[] = [
+    { value: "all", label: "All Types" },
+    { value: "release", label: "Release" },
+    { value: "beta", label: "Beta" },
+    { value: "alpha", label: "Alpha" },
+  ];
+
+  // Animation for the container when it mounts
+  useEffect(() => {
+    if (containerRef.current) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
+
+  // Update showFilters state when filters change
+  useEffect(() => {
+    setShowFilters(
+      filters.gameVersions.length > 0 ||
+        filters.loaders.length > 0 ||
+        filters.versionType !== "all",
+    );
+  }, [filters]);
+
   // --- Helper function to get filtered versions (moved from parent) ---
   const getFilteredVersions = (
     allVersions: ModrinthVersion[],
@@ -135,329 +174,264 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
 
   const filteredVersions = getFilteredVersions(versions);
 
+  // Get available game versions
+  const getAvailableGameVersions = () => {
+    const allProjectGameVersionsSet = new Set(
+      versions.flatMap((v) => v.game_versions),
+    );
+    let availableGVs = Array.from(allProjectGameVersionsSet);
+
+    if (!uiState?.showAllGameVersions) {
+      // Apply main sidebar filters when checkbox is OFF
+      if (selectedGameVersionsSidebar.length > 0) {
+        availableGVs = availableGVs.filter((gv) =>
+          selectedGameVersionsSidebar.includes(gv),
+        );
+      }
+      if (!showAllGameVersionsSidebar) {
+        const releaseVersions = new Set(
+          gameVersionsData
+            .filter((v) => v.version_type === "release")
+            .map((v) => v.version),
+        );
+        availableGVs = availableGVs.filter((gv) => releaseVersions.has(gv));
+      }
+    }
+
+    // Sort versions
+    return availableGVs.sort((a, b) =>
+      b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" }),
+    );
+  };
+
+  // Get available loaders for the current project type
+  const getAvailableLoaders = () => {
+    // Get loaders that are actually used in this project's versions
+    const projectLoaders = Array.from(
+      new Set(versions.flatMap((v) => v.loaders)),
+    );
+
+    // Only show loaders that are relevant to this project
+    return projectLoaders.sort();
+  };
+
+  // Create game version options
+  const gameVersionOptions: SelectOption[] = [
+    { value: "all", label: "All Game Versions" },
+    ...getAvailableGameVersions().map((gv) => ({
+      value: gv,
+      label: gv,
+      icon: filters.gameVersions.includes(gv) ? (
+        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+      ) : undefined,
+    })),
+  ];
+
+  // Create loader options
+  const loaderOptions: SelectOption[] = [
+    { value: "all", label: "All Loaders" },
+    ...getAvailableLoaders().map((loader) => ({
+      value: loader,
+      label: loader,
+      icon: filters.loaders.includes(loader) ? (
+        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+      ) : undefined,
+    })),
+  ];
+
+  // Handle clearing all filters
+  const handleClearAllFilters = () => {
+    onFilterChange(projectId, "versionType", "all");
+    onFilterChange(projectId, "gameVersions", []);
+    onFilterChange(projectId, "loaders", []);
+  };
+
   // --- JSX Rendering (To be moved here in the next step) ---
   return (
-    <div className="p-3 relative">
-      {/* Header with version filters - Moved from ModrinthSearchV2 */}
-      <div className="mb-4 space-y-2">
+    <div ref={containerRef} className="p-3 relative">
+      {/* Header with version filters - New design */}
+      <div
+        className="mb-4 p-3 rounded-md border-2 border-b-4 backdrop-blur-md"
+        style={{
+          borderColor: `${accentColor.value}60`,
+          borderBottomColor: accentColor.value,
+          backgroundColor: `${accentColor.value}10`,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        }}
+      >
+        <span
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+          style={{ backgroundColor: `${accentColor.value}80` }}
+        />
         <div className="flex flex-wrap gap-2 items-center">
-          {/* Version Type Dropdown */}
+          {/* Version Type Select */}
           <div className="relative">
-            <Button
-              onClick={() => onToggleDropdown(projectId, "type")}
-              size="xs"
-              variant="secondary"
-              shadowDepth="short"
-              icon={<Icon icon="solar:alt-arrow-down-bold" className="w-3 h-3" />}
-              iconPosition="right"
-            >
-              Type: {filters?.versionType || "all"}
-            </Button>
-            <div
-              className={cn(
-                "absolute font-minecraft backdrop-blur-md z-20 mt-1 w-40 overflow-hidden",
-                "rounded-md text-white",
-                "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-                !(openDropdowns?.type) && "hidden",
-              )}
-              style={{
-                backgroundColor: `${accentColor.value}15`,
-                borderColor: `${accentColor.value}40`,
-                borderBottomColor: accentColor.dark,
-                boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.light}20, inset 0 0 0 1px ${accentColor.value}10`,
+            <Select
+              value={filters.versionType}
+              onChange={(value) => {
+                onFilterChange(projectId, "versionType", value);
               }}
-            >
-              <div className="relative z-10 p-1">
-                {["all", "release", "beta", "alpha"].map((type) => {
-                  const isActive = filters?.versionType === type;
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => {
-                        onFilterChange(projectId, "versionType", type);
-                        onCloseAllDropdowns(projectId);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between gap-1.5 p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                        "hover:bg-white/10 active:bg-white/5",
-                        isActive && "bg-white/15",
-                      )}
-                      style={{ color: isActive ? accentColor.value : "white" }}
-                    >
-                      <span className="flex-grow text-left">{type}</span>
-                      {isActive && (
-                        <Icon
-                          icon="ph:check-bold"
-                          className="w-4 h-4 flex-shrink-0 ml-2"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              options={versionTypeOptions}
+              size="sm"
+              className="w-40"
+            />
           </div>
 
-          {/* Game Version Dropdown */}
+          {/* Game Version Select */}
           <div className="relative">
-            <Button
-              onClick={() => onToggleDropdown(projectId, "gameVersion")}
-              size="xs"
-              variant="secondary"
-              shadowDepth="short"
-              icon={<Icon icon="solar:alt-arrow-down-bold" className="w-3 h-3" />}
-              iconPosition="right"
-            >
-              Game Version ({filters?.gameVersions?.length || 0})
-            </Button>
-            <div
-              className={cn(
-                "absolute font-minecraft backdrop-blur-md z-20 mt-1 w-56 overflow-hidden",
-                "rounded-md text-white",
-                "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-                !(openDropdowns?.gameVersion) && "hidden",
-              )}
-              style={{
-                backgroundColor: `${accentColor.value}15`,
-                borderColor: `${accentColor.value}40`,
-                borderBottomColor: accentColor.dark,
-                boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.light}20, inset 0 0 0 1px ${accentColor.value}10`,
+            <Select
+              value={
+                filters.gameVersions.length > 0
+                  ? filters.gameVersions[0]
+                  : "all"
+              }
+              onChange={(value) => {
+                if (value === "all") {
+                  onFilterChange(projectId, "gameVersions", []);
+                } else {
+                  // Toggle the selected version
+                  const current = filters.gameVersions || [];
+                  const isAlreadySelected = current.includes(value);
+                  const newValue = isAlreadySelected
+                    ? current.filter((v) => v !== value)
+                    : [...current, value];
+                  onFilterChange(projectId, "gameVersions", newValue);
+                }
               }}
-            >
-              {/* --- Search Input --- */}
-              <div className="p-1.5">
-                <Input
-                  type="text"
-                  placeholder="Search versions..."
-                  value={uiState?.gameVersionSearchTerm || ""}
-                  onChange={(e) =>
-                    onUiStateChange(
-                      projectId,
-                      "gameVersionSearchTerm",
-                      e.target.value,
-                    )
-                  }
-                  className="w-full h-7 text-xs"
-                />
-              </div>
-              {/* --- End Search Input --- */}
-
-              {/* Inner scrollable container for Game Version List */}
-              <div className="relative z-10 p-1 max-h-40 overflow-y-auto">
-                {((
-                  () => {
-                    // --- Calculation of available game versions (moved from parent IIFE) ---
-                    const allProjectGameVersionsSet = new Set(
-                      versions.flatMap((v) => v.game_versions),
-                    );
-                    let availableGVs = Array.from(allProjectGameVersionsSet);
-
-                    if (!uiState?.showAllGameVersions) {
-                      // Apply main sidebar filters when checkbox is OFF
-                      if (selectedGameVersionsSidebar.length > 0) {
-                        availableGVs = availableGVs.filter((gv) =>
-                          selectedGameVersionsSidebar.includes(gv),
-                        );
-                      }
-                      if (!showAllGameVersionsSidebar) {
-                        const releaseVersions = new Set(
-                          gameVersionsData
-                            .filter((v) => v.version_type === "release")
-                            .map((v) => v.version),
-                        );
-                        availableGVs = availableGVs.filter((gv) =>
-                          releaseVersions.has(gv),
-                        );
-                      }
-                    }
-
-                    // Apply search term filter
-                    if (uiState?.gameVersionSearchTerm) {
-                      const searchTermLower =
-                        uiState.gameVersionSearchTerm.toLowerCase();
-                      availableGVs = availableGVs.filter((gv) =>
-                        gv.toLowerCase().includes(searchTermLower),
-                      );
-                    }
-
-                    // Apply descending sort
-                    return availableGVs.sort((a, b) =>
-                      b.localeCompare(a, undefined, {
-                        numeric: true,
-                        sensitivity: "base",
-                      }),
-                    );
-                  }
-                )()).map((gv) => {
-                  const isChecked = filters?.gameVersions?.includes(gv) || false;
-                  return (
-                    <button
-                      key={gv}
-                      onClick={() => {
-                        const current = filters?.gameVersions || [];
-                        const newValue =
-                          isChecked
-                            ? current.filter((v) => v !== gv)
-                            : [...current, gv];
-                        onFilterChange(projectId, "gameVersions", newValue);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between gap-1.5 p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                        "hover:bg-white/10 active:bg-white/5",
-                        isChecked && "bg-white/15",
-                      )}
-                      style={{ color: isChecked ? accentColor.value : "white" }}
-                    >
-                      <span className="flex-grow text-left">{gv}</span>
-                      {isChecked && (
-                        <Icon
-                          icon="ph:check-bold"
-                          className="w-4 h-4 flex-shrink-0 ml-2"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-                {/* Show message if no versions match search/filter */}
-                {((
-                  () => {
-                    // Re-calculate filtered list to check count
-                    const allProjectGameVersionsSet = new Set(
-                      versions.flatMap((v) => v.game_versions),
-                    );
-                    let availableGVs = Array.from(allProjectGameVersionsSet);
-                    if (!uiState?.showAllGameVersions) {
-                      if (selectedGameVersionsSidebar.length > 0) {
-                        availableGVs = availableGVs.filter((gv) =>
-                          selectedGameVersionsSidebar.includes(gv),
-                        );
-                      }
-                      if (!showAllGameVersionsSidebar) {
-                        const releaseVersions = new Set(
-                          gameVersionsData
-                            .filter((v) => v.version_type === "release")
-                            .map((v) => v.version),
-                        );
-                        availableGVs = availableGVs.filter((gv) =>
-                          releaseVersions.has(gv),
-                        );
-                      }
-                    }
-                    if (uiState?.gameVersionSearchTerm) {
-                      const searchTermLower =
-                        uiState.gameVersionSearchTerm.toLowerCase();
-                      availableGVs = availableGVs.filter((gv) =>
-                        gv.toLowerCase().includes(searchTermLower),
-                      );
-                    }
-                    if (availableGVs.length === 0) {
-                      return (
-                        <p className="text-xs text-gray-500 italic p-1 text-center">
-                          Keine Treffer.
-                        </p>
-                      );
-                    }
-                    return null;
-                  }
-                )())}
-              </div>
-              {/* --- 'Show All' Toggle --- */}
-              <div className="p-1.5">
-                <Checkbox
-                  id={`show-all-gv-${projectId}`}
-                  label="Show All Versions"
-                  checked={uiState?.showAllGameVersions || false}
-                  onChange={(e) =>
-                    onUiStateChange(projectId, "showAllGameVersions", e.target.checked)
-                  }
-                  className="text-sm"
-                />
-              </div>
-              {/* --- End 'Show All' Toggle --- */}
-            </div>
+              options={gameVersionOptions}
+              size="sm"
+              className="w-52"
+            />
           </div>
 
-          {/* Loader Dropdown */}
+          {/* Loader Select */}
           <div className="relative">
-            <Button
-              onClick={() => onToggleDropdown(projectId, "loader")}
-              size="xs"
-              variant="secondary"
-              shadowDepth="short"
-              icon={<Icon icon="solar:alt-arrow-down-bold" className="w-3 h-3" />}
-              iconPosition="right"
-            >
-              Loader ({filters?.loaders?.length || 0})
-            </Button>
-            <div
-              className={cn(
-                "absolute font-minecraft backdrop-blur-md z-20 mt-1 w-40 overflow-hidden max-h-48",
-                "rounded-md text-white",
-                "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-                !(openDropdowns?.loader) && "hidden",
-              )}
-              style={{
-                backgroundColor: `${accentColor.value}15`,
-                borderColor: `${accentColor.value}40`,
-                borderBottomColor: accentColor.dark,
-                boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.light}20, inset 0 0 0 1px ${accentColor.value}10`,
+            <Select
+              value={filters.loaders.length > 0 ? filters.loaders[0] : "all"}
+              onChange={(value) => {
+                if (value === "all") {
+                  onFilterChange(projectId, "loaders", []);
+                } else {
+                  // Toggle the selected loader
+                  const current = filters.loaders || [];
+                  const isAlreadySelected = current.includes(value);
+                  const newValue = isAlreadySelected
+                    ? current.filter((l) => l !== value)
+                    : [...current, value];
+                  onFilterChange(projectId, "loaders", newValue);
+                }
               }}
-            >
-              {/* Inner scrollable container */}
-              <div className="relative z-10 p-1 max-h-48 overflow-y-auto">
-                {((
-                  () => {
-                    const allProjectLoaders = Array.from(
-                      new Set(versions.flatMap((v) => v.loaders)),
-                    );
-                    return allProjectLoaders.sort();
-                  }
-                )()).map((loader) => {
-                  const isChecked = filters?.loaders?.includes(loader) || false;
-                  return (
-                    <button
-                      key={loader}
-                      onClick={() => {
-                        const current = filters?.loaders || [];
-                        const newValue =
-                          isChecked
-                            ? current.filter((l) => l !== loader)
-                            : [...current, loader];
-                        onFilterChange(projectId, "loaders", newValue);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between gap-1.5 p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                        "hover:bg-white/10 active:bg-white/5",
-                        isChecked && "bg-white/15",
-                      )}
-                      style={{ color: isChecked ? accentColor.value : "white" }}
-                    >
-                      <span className="flex-grow text-left">{loader}</span>
-                      {isChecked && (
-                        <Icon
-                          icon="ph:check-bold"
-                          className="w-4 h-4 flex-shrink-0 ml-2"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              options={loaderOptions}
+              size="sm"
+              className="w-40"
+            />
+          </div>
+
+          {/* Show checkbox for 'Show All' when using game versions dropdown */}
+          <div className="ml-auto">
+            <Checkbox
+              id={`show-all-gv-${projectId}`}
+              label="Show All Versions"
+              checked={uiState?.showAllGameVersions || false}
+              onChange={(e) =>
+                onUiStateChange(projectId, "showAllGameVersions", e.target.checked)
+              }
+              className="text-sm"
+            />
           </div>
         </div>
-      </div>
 
-      {/* --- Re-added Backdrop --- */}
-      {(openDropdowns?.type ||
-        openDropdowns?.gameVersion ||
-        openDropdowns?.loader) && (
-        <div
-          className="fixed inset-0 z-10"
-          onClick={() => onCloseAllDropdowns(projectId)}
-        ></div>
-      )}
-      {/* --- End Backdrop --- */}
+        {showFilters && (
+          <div className="flex items-center mt-2 gap-2">
+            <div
+              className="flex-1 border rounded-md h-[48px] overflow-x-auto overflow-y-hidden whitespace-nowrap hide-scrollbar"
+              style={{
+                backgroundColor: `${accentColor.value}08`,
+                borderColor: `${accentColor.value}30`,
+              }}
+            >
+              <div className="flex items-center gap-1.5 p-2">
+                {filters.versionType !== "all" && (
+                  <TagBadge className="inline-flex whitespace-nowrap">
+                    Type: {filters.versionType}
+                    <button
+                      onClick={() =>
+                        onFilterChange(projectId, "versionType", "all")
+                      }
+                      className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
+                      aria-label={`Remove version type ${filters.versionType}`}
+                    >
+                      <Icon
+                        icon="solar:close-circle-bold"
+                        className="w-3 h-3"
+                      />
+                    </button>
+                  </TagBadge>
+                )}
+
+                {filters.gameVersions.map((version) => (
+                  <TagBadge
+                    key={`gv-${version}`}
+                    className="inline-flex whitespace-nowrap"
+                  >
+                    {version}
+                    <button
+                      onClick={() => {
+                        const newVersions = filters.gameVersions.filter(
+                          (v) => v !== version,
+                        );
+                        onFilterChange(projectId, "gameVersions", newVersions);
+                      }}
+                      className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
+                      aria-label={`Remove game version ${version}`}
+                    >
+                      <Icon
+                        icon="solar:close-circle-bold"
+                        className="w-3 h-3"
+                      />
+                    </button>
+                  </TagBadge>
+                ))}
+
+                {filters.loaders.map((loader) => (
+                  <TagBadge
+                    key={`loader-${loader}`}
+                    className="inline-flex whitespace-nowrap"
+                  >
+                    {loader}
+                    <button
+                      onClick={() => {
+                        const newLoaders = filters.loaders.filter(
+                          (l) => l !== loader,
+                        );
+                        onFilterChange(projectId, "loaders", newLoaders);
+                      }}
+                      className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
+                      aria-label={`Remove loader ${loader}`}
+                    >
+                      <Icon
+                        icon="solar:close-circle-bold"
+                        className="w-3 h-3"
+                      />
+                    </button>
+                  </TagBadge>
+                ))}
+              </div>
+            </div>
+
+            <TagBadge
+              variant="destructive"
+              className="cursor-pointer hover:brightness-110 transition-all flex-shrink-0 h-[48px] flex items-center"
+              onClick={handleClearAllFilters}
+              withIcon
+              size="lg"
+            >
+              <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+              <span>Clear All</span>
+            </TagBadge>
+          </div>
+        )}
+      </div>
 
       {/* Filtered Versions List - Moved from ModrinthSearchV2 */}
       {filteredVersions.length > 0 ? (
@@ -503,9 +477,21 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
           )}
         </div>
       ) : (
-        <p className="text-sm text-gray-400 text-center py-2">
+        <div
+          className="relative overflow-hidden transition-colors duration-150 rounded-md p-4 text-sm text-gray-400 text-center border-2 border-b-4 backdrop-blur-md"
+          style={{
+            borderColor: `${accentColor.value}60`,
+            borderBottomColor: accentColor.value,
+            boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)`,
+            backgroundColor: `${accentColor.value}15`,
+          }}
+        >
+          <span
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+            style={{ backgroundColor: `${accentColor.value}80` }}
+          />
           No versions match the selected filters.
-        </p>
+        </div>
       )}
     </div>
   );
