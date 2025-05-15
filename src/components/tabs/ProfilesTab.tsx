@@ -9,7 +9,6 @@ import { SearchInput } from "../ui/SearchInput";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
-import { getStandardProfiles } from "../../services/profile-service";
 import {
   getLauncherConfig,
   setProfileGroupingPreference,
@@ -69,9 +68,6 @@ export function ProfilesTab() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [standardProfiles, setStandardProfiles] = useState<Profile[]>([]);
-  const [loadingStandard, setLoadingStandard] = useState(false);
-  const [standardError, setStandardError] = useState<string | null>(null);
 
   useEffect(() => {
     if (tabRef.current) {
@@ -116,32 +112,10 @@ export function ProfilesTab() {
   }, []);
 
   useEffect(() => {
-    fetchProfiles();
-    fetchStandardProfilesAndCriterion();
-  }, [fetchProfiles]);
+    fetchGroupingCriterion();
+  }, []);
 
-  const fetchStandardProfilesAndCriterion = async () => {
-    try {
-      setLoadingStandard(true);
-      setStandardError(null);
-      const result = await getStandardProfiles();
-
-      if (result && result.profiles && Array.isArray(result.profiles)) {
-        setStandardProfiles(result.profiles);
-      } else if (Array.isArray(result)) {
-        setStandardProfiles(result);
-      } else {
-        console.warn("Unexpected format for standard profiles:", result);
-        setStandardProfiles([]);
-      }
-    } catch (err) {
-      console.error("Failed to fetch standard profiles:", err);
-      setStandardError("Failed to load NoRisk versions");
-      setStandardProfiles([]);
-    } finally {
-      setLoadingStandard(false);
-    }
-
+  const fetchGroupingCriterion = async () => {
     try {
       const config = await getLauncherConfig();
       if (config && config.profile_grouping_criterion) {
@@ -158,10 +132,7 @@ export function ProfilesTab() {
     }
   };
 
-  const standardProfilesArray = Array.isArray(standardProfiles)
-    ? standardProfiles
-    : [];
-  const allProfiles = [...profiles, ...standardProfilesArray];
+  const allProfiles = profiles;
 
   const initiallyFilteredProfiles = allProfiles.filter((profile) => {
     if (
@@ -354,12 +325,12 @@ export function ProfilesTab() {
             ref={contentRef}
             className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar"
           >
-            {loading || loadingStandard ? (
+            {loading ? (
               <LoadingState message="loading profiles..." />
-            ) : error || standardError ? (
+            ) : error ? (
               <EmptyState
                 icon="solar:danger-triangle-bold"
-                message={error || standardError || ""}
+                message={error || ""}
               />
             ) : initiallyFilteredProfiles.length > 0 ? (
               <div className="space-y-6">
