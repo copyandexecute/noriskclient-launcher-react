@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ModrinthProjectType,
   ModrinthSortType,
@@ -14,7 +14,7 @@ import { TagBadge } from "../../ui/TagBadge";
 import { useDisplayContextStore } from "../../../store/useDisplayContextStore";
 import { Icon } from "@iconify/react";
 import { useThemeStore } from "../../../store/useThemeStore";
-import { cn } from "../../../lib/utils"; // Define Profile type locally, similar to ModrinthSearchV2.tsx
+import { cn } from "../../../lib/utils";
 
 // Define Profile type locally, similar to ModrinthSearchV2.tsx
 type Profile = any;
@@ -77,6 +77,7 @@ export const ModrinthSearchControlsV2: React.FC<
   const displayContext = useDisplayContextStore((state) => state.context);
   const accentColor = useThemeStore((state) => state.accentColor);
   const filtersContainerRef = useRef<HTMLDivElement>(null);
+  const [hasHorizontalScroll, setHasHorizontalScroll] = useState(false);
 
   const isDetailView = displayContext === "detail";
   const buttonSize = isDetailView
@@ -87,12 +88,49 @@ export const ModrinthSearchControlsV2: React.FC<
       ? "lg"
       : "sm";
 
+  // Calculate total number of active filters
   const totalFilters =
     selectedGameVersions.length +
     currentSelectedLoaders.length +
     currentSelectedCategories.length +
     (filterClientRequired ? 1 : 0) +
     (filterServerRequired ? 1 : 0);
+
+  // Check if the filters container has horizontal overflow
+  useEffect(() => {
+    if (filtersContainerRef.current && totalFilters > 0) {
+      const checkForOverflow = () => {
+        const container = filtersContainerRef.current;
+        if (container) {
+          const hasOverflow = container.scrollWidth > container.clientWidth;
+          setHasHorizontalScroll(hasOverflow);
+        }
+      };
+
+      // Check initially
+      checkForOverflow();
+
+      // Also check on resize
+      const resizeObserver = new ResizeObserver(checkForOverflow);
+      resizeObserver.observe(filtersContainerRef.current);
+
+      return () => {
+        if (filtersContainerRef.current) {
+          resizeObserver.unobserve(filtersContainerRef.current);
+        }
+        resizeObserver.disconnect();
+      };
+    } else {
+      setHasHorizontalScroll(false);
+    }
+  }, [
+    totalFilters,
+    selectedGameVersions,
+    currentSelectedLoaders,
+    currentSelectedCategories,
+    filterClientRequired,
+    filterServerRequired,
+  ]);
 
   return (
     <div className={`search-bar-and-types p-${isDetailView ? "1.5" : "2"}`}>
@@ -150,7 +188,12 @@ export const ModrinthSearchControlsV2: React.FC<
       </div>
 
       {totalFilters > 0 && (
-        <div className="flex items-center gap-2 mt-2">
+        <div
+          className={cn(
+            "flex items-center mt-2",
+            hasHorizontalScroll ? "gap-2" : "gap-0",
+          )}
+        >
           <div
             className={cn(
               "flex-1 border rounded-md h-[48px] overflow-x-auto overflow-y-hidden whitespace-nowrap",
@@ -159,23 +202,21 @@ export const ModrinthSearchControlsV2: React.FC<
             style={{
               backgroundColor: `${accentColor.value}15`,
               borderColor: `${accentColor.value}30`,
+              boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.05)",
             }}
             ref={filtersContainerRef}
           >
-            <div className="flex items-center gap-1.5 p-2">
+            <div className="flex items-center gap-2 p-2">
               {selectedGameVersions.map((version) => (
                 <TagBadge
                   key={`gv-${version}`}
                   className="inline-flex whitespace-nowrap"
+                  withIcon
+                  size="md"
+                  onClick={() => onRemoveGameVersionTag(version)}
                 >
-                  {version}
-                  <button
-                    onClick={() => onRemoveGameVersionTag(version)}
-                    className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
-                    aria-label={`Remove game version ${version}`}
-                  >
-                    <Icon icon="solar:close-circle-bold" className="w-3 h-3" />
-                  </button>
+                  <span>{version}</span>
+                  <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
                 </TagBadge>
               ))}
 
@@ -183,15 +224,12 @@ export const ModrinthSearchControlsV2: React.FC<
                 <TagBadge
                   key={`loader-${loader}`}
                   className="inline-flex whitespace-nowrap"
+                  withIcon
+                  size="md"
+                  onClick={() => onRemoveLoaderTag(loader)}
                 >
-                  {loader}
-                  <button
-                    onClick={() => onRemoveLoaderTag(loader)}
-                    className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
-                    aria-label={`Remove loader ${loader}`}
-                  >
-                    <Icon icon="solar:close-circle-bold" className="w-3 h-3" />
-                  </button>
+                  <span>{loader}</span>
+                  <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
                 </TagBadge>
               ))}
 
@@ -199,15 +237,12 @@ export const ModrinthSearchControlsV2: React.FC<
                 <TagBadge
                   key={`cat-${category}`}
                   className="inline-flex whitespace-nowrap"
+                  withIcon
+                  size="md"
+                  onClick={() => onRemoveCategoryTag(category)}
                 >
-                  {category}
-                  <button
-                    onClick={() => onRemoveCategoryTag(category)}
-                    className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
-                    aria-label={`Remove category ${category}`}
-                  >
-                    <Icon icon="solar:close-circle-bold" className="w-3 h-3" />
-                  </button>
+                  <span>{category}</span>
+                  <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
                 </TagBadge>
               ))}
 
@@ -215,15 +250,12 @@ export const ModrinthSearchControlsV2: React.FC<
                 <TagBadge
                   key="client-req"
                   className="inline-flex whitespace-nowrap"
+                  withIcon
+                  size="md"
+                  onClick={onRemoveClientRequiredTag}
                 >
-                  Client
-                  <button
-                    onClick={onRemoveClientRequiredTag}
-                    className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
-                    aria-label="Remove client required filter"
-                  >
-                    <Icon icon="solar:close-circle-bold" className="w-3 h-3" />
-                  </button>
+                  <span>Client</span>
+                  <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
                 </TagBadge>
               )}
 
@@ -231,26 +263,42 @@ export const ModrinthSearchControlsV2: React.FC<
                 <TagBadge
                   key="server-req"
                   className="inline-flex whitespace-nowrap"
+                  withIcon
+                  size="md"
+                  onClick={() => onRemoveServerRequiredTag}
                 >
-                  Server
-                  <button
-                    onClick={() => onRemoveServerRequiredTag}
-                    className="ml-1.5 text-current opacity-70 hover:opacity-100 focus:outline-none"
-                    aria-label="Remove server required filter"
-                  >
-                    <Icon icon="solar:close-circle-bold" className="w-3 h-3" />
-                  </button>
+                  <span>Server</span>
+                  <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
                 </TagBadge>
               )}
             </div>
           </div>
 
-          <TagBadge
-            variant="destructive"
-            className="cursor-pointer hover:brightness-110 transition-all flex-shrink-0 h-[48px] flex items-center"
-          >
-            <button onClick={onClearAllFilters}> Clear All</button>
-          </TagBadge>
+          {hasHorizontalScroll && (
+            <TagBadge
+              variant="destructive"
+              className="cursor-pointer hover:brightness-110 transition-all flex-shrink-0 h-[48px] flex items-center"
+              onClick={onClearAllFilters}
+              withIcon
+              size="lg"
+            >
+              <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+              <span>Clear All</span>
+            </TagBadge>
+          )}
+
+          {!hasHorizontalScroll && (
+            <TagBadge
+              variant="destructive"
+              className="cursor-pointer hover:brightness-110 transition-all flex-shrink-0 h-[48px] flex items-center rounded-l-none border-l-0"
+              onClick={onClearAllFilters}
+              withIcon
+              size="lg"
+            >
+              <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+              <span>Clear All</span>
+            </TagBadge>
+          )}
         </div>
       )}
     </div>
