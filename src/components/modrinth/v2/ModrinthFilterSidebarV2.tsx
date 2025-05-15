@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { cn } from '../../../lib/utils';
 import type {
   ModrinthProjectType,
@@ -13,6 +13,7 @@ import { useThemeStore } from '../../../store/useThemeStore';
 import { Icon } from '@iconify/react';
 import { SearchInput } from '../../ui/SearchInput';
 import { Checkbox } from '../../ui/Checkbox';
+import { gsap } from "gsap";
 
 // Re-define UIDynamicFilterGroup if it's specific to the sidebar and not used elsewhere globally
 // For now, assuming it might be defined in the parent or a shared types file if used elsewhere.
@@ -29,13 +30,67 @@ interface AccordionItemProps {
   title: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  activeCount?: number;
 }
 
 
 // --- AccordionItem Component Definition (Moved Here) ---
-const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, defaultOpen = false }) => {
-  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+const AccordionItem: React.FC<AccordionItemProps> = ({ 
+  title, 
+  children, 
+  defaultOpen = false,
+  activeCount = 0
+}) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen || activeCount > 0);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+
+  const toggleAccordion = () => {
+    if (contentRef.current) {
+      if (isOpen) {
+        // Animate closing
+        gsap.to(contentRef.current, {
+          height: 0,
+          opacity: 0,
+          duration: 0.3,
+          ease: "power2.out",
+          onComplete: () => setIsOpen(false),
+        });
+      } else {
+        // Set to open first to measure height
+        setIsOpen(true);
+        // Then animate opening
+        gsap.fromTo(
+          contentRef.current,
+          { height: 0, opacity: 0 },
+          {
+            height: "auto",
+            opacity: 1,
+            duration: 0.3,
+            ease: "power2.out",
+          },
+        );
+      }
+    } else {
+      setIsOpen(!isOpen);
+    }
+
+    // Animate the button on click
+    if (buttonRef.current) {
+      gsap.fromTo(
+        buttonRef.current,
+        { y: 0 },
+        {
+          y: -3,
+          duration: 0.1,
+          ease: "power1.out",
+          yoyo: true,
+          repeat: 1,
+        },
+      );
+    }
+  };
 
   return (
     <div 
@@ -46,9 +101,9 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, defaultO
         "mb-3"
       )}
       style={{
-        borderColor: `${accentColor.value}80`, 
+        borderColor: `${accentColor.value}60`,
         borderBottomColor: accentColor.value, 
-        boxShadow: "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)", 
+        boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
         backgroundColor: `${accentColor.value}30`,
       }}
     >
@@ -57,29 +112,128 @@ const AccordionItem: React.FC<AccordionItemProps> = ({ title, children, defaultO
         style={{ backgroundColor: `${accentColor.value}80` }}
       /> 
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        onClick={toggleAccordion}
         className={cn(
-          "w-full px-2 py-2 text-left font-medium text-gray-200 flex justify-between items-center focus:outline-none transition-colors lowercase text-3xl",
+          "w-full px-3 py-2.5 text-left font-minecraft text-gray-200 flex justify-between items-center focus:outline-none transition-colors lowercase text-lg",
           isOpen && "border-b", 
           "hover:bg-white/5",
           "relative z-10"
         )}
         style={{
-          borderBottomColor: isOpen ? `${accentColor.value}80` : 'transparent', 
+          borderBottomColor: isOpen ? `${accentColor.value}40` : 'transparent', 
         }}
       >
-        <span className="truncate mr-2">{title}</span> 
-        <Icon icon={isOpen ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} className="w-4 h-4 flex-shrink-0" /> 
-      </button>
-      {isOpen && (
-        <div className="p-2 text-sm relative z-10">
-          {children}
+        <div className="flex items-center gap-2">
+          <span className="truncate mr-2">{title}</span>
+          {activeCount > 0 && (
+            <div
+              className="flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold"
+              style={{ backgroundColor: accentColor.value }}
+            >
+              {activeCount}
+            </div>
+          )}
         </div>
-      )}
+        <Icon 
+          icon={isOpen ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} 
+          className="w-4 h-4 flex-shrink-0" 
+        />
+      </button>
+
+      <div
+        ref={contentRef}
+        className={cn(
+          "overflow-hidden",
+          !defaultOpen && !isOpen && "h-0 opacity-0",
+        )}
+      >
+        {(isOpen || defaultOpen) && (
+          <div className="p-2 text-sm relative z-10">{children}</div>
+        )}
+      </div>
     </div>
   );
 };
 // --- End AccordionItem Component Definition ---
+
+// FilterOption component for consistent styling
+const FilterOption = ({
+  label,
+  icon,
+  isSelected,
+  onClick,
+  accentColor,
+}: {
+  label: string;
+  icon?: React.ReactNode | string;
+  isSelected: boolean;
+  onClick: () => void;
+  accentColor: AccentColor;
+}) => {
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+
+  const handleClick = () => {
+    onClick();
+
+    // Add a small animation on click
+    if (buttonRef.current) {
+      gsap.fromTo(
+        buttonRef.current,
+        { y: 0 },
+        {
+          y: -3,
+          duration: 0.1,
+          ease: "power1.out",
+          yoyo: true,
+          repeat: 1,
+        },
+      );
+    }
+  };
+
+  return (
+    <button
+      ref={buttonRef}
+      onClick={handleClick}
+      className={cn(
+        "w-full flex items-center justify-between p-1.5 text-base font-minecraft transition-all duration-200 cursor-pointer rounded-md mb-1.5",
+        "border-2 border-b-4",
+        isSelected
+          ? "bg-white/15 text-white border-white/30"
+          : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10",
+      )}
+      style={{
+        borderColor: isSelected ? `${accentColor.value}60` : undefined,
+        borderBottomColor: isSelected ? accentColor.value : undefined,
+        color: isSelected ? accentColor.value : undefined,
+        boxShadow: isSelected
+          ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
+          : "0 2px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.05)",
+        transform: isSelected ? "translateY(-2px)" : "translateY(0)",
+      }}
+    >
+      <span className="flex items-center flex-grow text-left">
+        {typeof icon === "string" ? (
+          <span
+            className="w-4 h-4 mr-1.5 flex-shrink-0"
+            dangerouslySetInnerHTML={{ __html: icon }}
+          />
+        ) : icon ? (
+          <span className="mr-1.5 flex-shrink-0">{icon}</span>
+        ) : null}
+        <span className="truncate">{label}</span>
+      </span>
+      {isSelected && (
+        <Icon
+          icon="solar:check-circle-bold"
+          className="w-4 h-4 flex-shrink-0 ml-2"
+          style={{ color: accentColor.value }}
+        />
+      )}
+    </button>
+  );
+};
 
 interface ModrinthFilterSidebarV2Props {
   projectType: ModrinthProjectType;
@@ -139,53 +293,101 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
   const otherDynamicGroups = dynamicFilterGroups.filter(
     group => group.headerValue.toLowerCase() !== 'categories'
   );
+  
+  // Calculate counts for badges
+  const totalGameVersionFilters = selectedGameVersions.length;
+  const totalLoaderFilters = currentSelectedLoaders.length;
+  const totalEnvironmentFilters = (filterClientRequired ? 1 : 0) + (filterServerRequired ? 1 : 0);
+
+  const dynamicGroupCounts = dynamicFilterGroups.reduce(
+    (acc, group) => {
+      acc[group.headerValue] = group.options.filter((opt) =>
+        currentSelectedCategories.includes(opt.name),
+      ).length;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (sidebarRef.current) {
+      gsap.fromTo(
+        sidebarRef.current,
+        { opacity: 0, x: -20 },
+        {
+          opacity: 1,
+          x: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, []);
 
   return (
     <div 
+      ref={sidebarRef}
       className={cn(
-        "filters-sidebar w-1/4 max-w-[15rem] flex-shrink-0 overflow-y-auto p-1 h-full", 
-        "[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        "filters-sidebar w-1/4 max-w-[15rem] flex-shrink-0 overflow-y-auto p-2 h-full", 
+        "hide-scrollbar"
       )}
+      style={{
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
     >
-      <div className="space-y-3 pt-2">
-        <AccordionItem title="Game Version" defaultOpen={false}>
+      <div className="space-y-3 pt-1">
+        <AccordionItem 
+          title="Game Version" 
+          defaultOpen={totalGameVersionFilters > 0}
+          activeCount={totalGameVersionFilters}
+        >
           <div className="space-y-2">
-            <SearchInput
-              value={gameVersionSearchTerm}
-              onChange={onGameVersionSearchTermChange}
-              placeholder="Search version..."
-              className="w-full mb-1.5"
-            />
-            <div className="max-h-40 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-              {displayedGameVersions.map(gv => {
-                const isChecked = selectedGameVersions.includes(gv.version);
-                return (
-                  <button 
-                    key={gv.version} 
-                    onClick={() => onGameVersionToggle(gv.version)} 
-                    className={cn(
-                      "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                      "hover:bg-white/10 active:bg-white/5",
-                      isChecked ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
-                    )}
-                    style={{ color: isChecked ? accentColor.value : undefined }}
-                  >
-                    <span className="flex-grow text-left">{gv.version} <span className="text-xs opacity-60">({gv.version_type})</span></span>
-                    {isChecked && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
-                  </button>
-                );
-              })}
-              {displayedGameVersions.length === 0 && <p className="text-gray-500 italic p-1 text-xs text-center">No matching versions.</p>}
+            <div
+              className="relative mb-2"
+              style={{
+                borderColor: `${accentColor.value}60`,
+                borderBottomColor: accentColor.value,
+                boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+              }}
+            >
+              <SearchInput
+                value={gameVersionSearchTerm}
+                onChange={onGameVersionSearchTermChange}
+                placeholder="Search version..."
+                className="w-full h-[40px]"
+                size="sm"
+              />
             </div>
-            <div className="flex items-center mt-2">
+
+            <div className="max-h-40 overflow-y-auto space-y-1 pr-1 hide-scrollbar">
+              {displayedGameVersions.map((gv) => (
+                <FilterOption
+                  key={gv.version}
+                  label={`${gv.version} ${gv.version_type !== "release" ? `(${gv.version_type})` : ""}`}
+                  isSelected={selectedGameVersions.includes(gv.version)}
+                  onClick={() => onGameVersionToggle(gv.version)}
+                  accentColor={accentColor}
+                />
+              ))}
+              
+              {displayedGameVersions.length === 0 && (
+                <p className="text-gray-500 italic p-1 text-xs text-center">No matching versions.</p>
+              )}
+            </div>
+            
+            <div className="flex items-center mt-2 p-1">
               <Checkbox
-                id="showAllVersionsSidebarInNewComponent" // Ensure unique ID
+                id="showAllVersionsSidebarInNewComponent"
                 checked={showAllGameVersionsSidebar}
-                onChange={(e) => onShowAllGameVersionsSidebarChange(e.target.checked)} 
+                onChange={(e) => onShowAllGameVersionsSidebarChange(e.target.checked)}
+                className="rounded-sm"
               />
               <label 
                 htmlFor="showAllVersionsSidebarInNewComponent" 
-                className="ml-2 text-xl truncate cursor-pointer"
+                className="ml-2 text-sm truncate cursor-pointer text-gray-200"
               >
                 Show all versions
               </label>
@@ -195,67 +397,46 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
 
         {/* Render Categories group here if it exists */}
         {categoriesGroup && (
-          <AccordionItem key={categoriesGroup.headerValue} title={categoriesGroup.accordionTitle} defaultOpen={true}>
-            <div className="max-h-60 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"> 
-              {categoriesGroup.options.length > 0 ? categoriesGroup.options.map(cat => {
-                const isChecked = currentSelectedCategories.includes(cat.name);
-                return (
-                  <button 
-                    key={cat.name} 
-                    onClick={() => onCategoryToggle(cat.name)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                      "hover:bg-white/10 active:bg-white/5",
-                      isChecked ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
-                    )}
-                    style={{ color: isChecked ? accentColor.value : undefined }}
-                  >
-                    <span className="flex items-center flex-grow text-left"> 
-                       {cat.icon && (
-                         <span 
-                           className="w-4 h-4 mr-1.5 flex-shrink-0" 
-                           dangerouslySetInnerHTML={{ __html: cat.icon }}
-                         />
-                       )}
-                      {cat.name}
-                    </span>
-                    {isChecked && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
-                  </button>
-                );
-               }) : (
+          <AccordionItem 
+            key={categoriesGroup.headerValue} 
+            title={categoriesGroup.accordionTitle} 
+            defaultOpen={dynamicGroupCounts[categoriesGroup.headerValue] > 0}
+            activeCount={dynamicGroupCounts[categoriesGroup.headerValue]}
+          >
+            <div className="max-h-60 overflow-y-auto space-y-1 pr-1 hide-scrollbar">
+              {categoriesGroup.options.length > 0 ? categoriesGroup.options.map(cat => (
+                <FilterOption
+                  key={cat.name}
+                  label={cat.name}
+                  icon={cat.icon}
+                  isSelected={currentSelectedCategories.includes(cat.name)}
+                  onClick={() => onCategoryToggle(cat.name)}
+                  accentColor={accentColor}
+                />
+              )) : (
                 <p className="text-xs text-gray-500 italic p-1 text-center">No options for {categoriesGroup.accordionTitle}.</p>
               )}
             </div>
           </AccordionItem>
         )}
 
-        <AccordionItem title="Loader" defaultOpen={true}>
-          <div className="max-h-40 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <AccordionItem 
+          title="Loader" 
+          defaultOpen={totalLoaderFilters > 0}
+          activeCount={totalLoaderFilters}
+        >
+          <div className="max-h-40 overflow-y-auto space-y-1 pr-1 hide-scrollbar">
             {availableLoaders.map(loader => {
-              const isChecked = currentSelectedLoaders.includes(loader.name);
               const fullLoaderData = allLoadersData.find(l => l.name === loader.name);
               return (
-                <button 
-                  key={loader.name} 
+                <FilterOption
+                  key={loader.name}
+                  label={loader.name}
+                  icon={fullLoaderData?.icon}
+                  isSelected={currentSelectedLoaders.includes(loader.name)}
                   onClick={() => onLoaderToggle(loader.name)}
-                  className={cn(
-                    "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                    "hover:bg-white/10 active:bg-white/5",
-                    isChecked ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
-                  )}
-                  style={{ color: isChecked ? accentColor.value : undefined }}
-                >
-                  <span className="flex items-center flex-grow text-left"> 
-                    {fullLoaderData?.icon && fullLoaderData.icon.trim() !== '' && (
-                      <span 
-                        className="w-4 h-4 mr-1.5 flex-shrink-0" 
-                        dangerouslySetInnerHTML={{ __html: fullLoaderData.icon }}
-                      />
-                    )}
-                    {loader.name}
-                  </span>
-                  {isChecked && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
-                </button>
+                  accentColor={accentColor}
+                />
               );
             })}
             {availableLoaders.length === 0 && <p className="text-gray-500 italic p-1 text-xs text-center">No loaders for {projectType}.</p>}
@@ -264,72 +445,49 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
 
         {/* Render other dynamic groups here */}
         {otherDynamicGroups.map(group => (
-          <AccordionItem key={group.headerValue} title={group.accordionTitle} defaultOpen={group.headerValue.toLowerCase() === 'categories' /* This defaultOpen might need adjustment if categories is handled separately */}>
-            <div className="max-h-60 overflow-y-auto space-y-0.5 p-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"> 
-              {group.options.length > 0 ? group.options.map(cat => {
-                const isChecked = currentSelectedCategories.includes(cat.name);
-                return (
-                  <button 
-                    key={cat.name} 
-                    onClick={() => onCategoryToggle(cat.name)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                      "hover:bg-white/10 active:bg-white/5",
-                      isChecked ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
-                    )}
-                    style={{ color: isChecked ? accentColor.value : undefined }}
-                  >
-                    <span className="flex items-center flex-grow text-left"> 
-                       {cat.icon && (
-                         <span 
-                           className="w-4 h-4 mr-1.5 flex-shrink-0" 
-                           dangerouslySetInnerHTML={{ __html: cat.icon }}
-                         />
-                       )}
-                      {cat.name}
-                    </span>
-                    {isChecked && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
-                  </button>
-                );
-               }) : (
+          <AccordionItem 
+            key={group.headerValue} 
+            title={group.accordionTitle} 
+            defaultOpen={dynamicGroupCounts[group.headerValue] > 0}
+            activeCount={dynamicGroupCounts[group.headerValue]}
+          >
+            <div className="max-h-60 overflow-y-auto space-y-1 pr-1 hide-scrollbar"> 
+              {group.options.length > 0 ? group.options.map(cat => (
+                <FilterOption
+                  key={cat.name}
+                  label={cat.name}
+                  icon={cat.icon}
+                  isSelected={currentSelectedCategories.includes(cat.name)}
+                  onClick={() => onCategoryToggle(cat.name)}
+                  accentColor={accentColor}
+                />
+              )) : (
                 <p className="text-xs text-gray-500 italic p-1 text-center">No options for {group.accordionTitle}.</p>
               )}
             </div>
           </AccordionItem>
         ))}
 
-        <AccordionItem title="Environment" defaultOpen={false}> 
-          <div className="space-y-0.5 p-1"> 
-            <button 
-              onClick={onClientRequiredToggle} 
-              className={cn(
-                "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                "hover:bg-white/10 active:bg-white/5",
-                filterClientRequired ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
-              )}
-              style={{ color: filterClientRequired ? accentColor.value : undefined }}
-            >
-              <span className="flex items-center flex-grow text-left"> 
-                <Icon icon="mdi:desktop-classic" className="w-4 h-4 mr-1.5 flex-shrink-0" />
-                Client
-              </span>
-              {filterClientRequired && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
-            </button>
-            <button 
-              onClick={onServerRequiredToggle} 
-              className={cn(
-                "w-full flex items-center justify-between p-1 text-xl font-minecraft transition-all duration-200 cursor-pointer",
-                "hover:bg-white/10 active:bg-white/5",
-                filterServerRequired ? "bg-white/15 text-[color:var(--accent)]" : "text-gray-300"
-              )}
-              style={{ color: filterServerRequired ? accentColor.value : undefined }}
-            >
-              <span className="flex items-center flex-grow text-left"> 
-                <Icon icon="mdi:server" className="w-4 h-4 mr-1.5 flex-shrink-0" />
-                Server
-              </span>
-              {filterServerRequired && <Icon icon="ph:check-bold" className="w-4 h-4 flex-shrink-0 ml-2" />} 
-            </button>
+        <AccordionItem 
+          title="Environment" 
+          defaultOpen={totalEnvironmentFilters > 0}
+          activeCount={totalEnvironmentFilters}
+        > 
+          <div className="space-y-1 pr-1">
+            <FilterOption
+              label="Client"
+              icon={<Icon icon="solar:devices-bold" className="w-4 h-4 mr-1.5" />}
+              isSelected={filterClientRequired}
+              onClick={onClientRequiredToggle}
+              accentColor={accentColor}
+            />
+            <FilterOption
+              label="Server"
+              icon={<Icon icon="solar:server-bold" className="w-4 h-4 mr-1.5" />}
+              isSelected={filterServerRequired}
+              onClick={onServerRequiredToggle}
+              accentColor={accentColor}
+            />
           </div>
         </AccordionItem>
       </div>
