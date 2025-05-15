@@ -15,7 +15,7 @@ export function PlayTab() {
   const {
     profiles,
     selectedProfile: storeSelectedProfile,
-    loading: profilesLoading,
+    loading,
     error: profilesError,
     setSelectedProfile,
   } = useProfileStore();
@@ -51,25 +51,19 @@ export function PlayTab() {
     ? `https://crafatar.com/skins/${activeAccount.id}`
     : `https://crafatar.com/skins/606e2ff0-ed77-4842-9d6c-e1d3321c7838`;
 
-  if (profilesLoading) {
-    return <LoadingState message="Loading profiles and data..." />;
-  }
-
-  if (!profilesLoading && profiles.length === 0 && !profilesError) {
+  if (!loading && profiles.length === 0 && !profilesError) {
     console.log("[PlayTab] No profiles found after initialization.");
   }
 
   return (
     <div className="flex h-full">
       <div className="flex-grow flex flex-col items-center justify-center p-8 relative">
-        {(profilesError) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
+        {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
 
-        {currentDisplayProfile && (
-          <VersionInfo
-            profileId={currentDisplayProfile.id}
-            className="absolute top-6 left-6 z-10"
-          />
-        )}
+        <VersionInfo
+          profileId={currentDisplayProfile?.id || ""}
+          className="absolute top-6 left-6 z-10"
+        />
 
         <div className="flex flex-col items-center z-10">
           <h2 className="font-minecraft text-6xl text-center text-white mb-2 lowercase font-normal">

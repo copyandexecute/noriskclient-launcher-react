@@ -39,14 +39,14 @@ interface ProfileState {
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
-  loading: false,
+  loading: true,
   error: null,
   selectedProfile: null,
   lastPlayedProfileId: null,
 
   fetchProfiles: async () => {
     try {
-      set({ loading: true, error: null });
+      set({ error: null });
       const response = await ProfileService.getAllProfilesAndLastPlayed();
       const { all_profiles, last_played_profile_id } = response;
 

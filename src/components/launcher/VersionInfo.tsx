@@ -9,6 +9,7 @@ import {
   LaunchState,
   useLaunchStateStore,
 } from "../../store/launch-state-store";
+import { useProfileStore } from "../../store/profile-store";
 
 interface VersionInfoProps {
   profileId: string;
@@ -17,41 +18,73 @@ interface VersionInfoProps {
 
 export function VersionInfo({ profileId, className }: VersionInfoProps) {
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const { accentColor } = useThemeStore();
 
   const { initializeProfile, getProfileState } = useLaunchStateStore();
   const { launchState } = getProfileState(profileId || "");
 
+  const { loading: initialDataLoading, error: initialDataError } = useProfileStore();
+
   useEffect(() => {
     const loadProfile = async () => {
       if (!profileId) {
-        setLoading(false);
+        setProfileLoading(false);
         setProfile(null);
         return;
       }
 
+      if (initialDataLoading) return;
+
       try {
-        setLoading(true);
+        setProfileLoading(true);
         const profileData = await ProfileService.getProfile(profileId);
         setProfile(profileData);
-        setError(null);
+        setProfileError(null);
 
         initializeProfile(profileId);
       } catch (err) {
         console.error(`Error loading profile ${profileId}:`, err);
-        setError("Failed to load profile");
+        setProfileError("Failed to load profile details");
         setProfile(null);
       } finally {
-        setLoading(false);
+        setProfileLoading(false);
       }
     };
 
     loadProfile();
-  }, [profileId, initializeProfile]);
+  }, [profileId, initializeProfile, initialDataLoading]);
 
-  if (!profileId) {
+  if (initialDataLoading) {
+    return (
+      <Button
+        variant="default"
+        size="md"
+        disabled
+        icon={ <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" /> }
+        className={cn("font-minecraft", className)}
+      >
+        Loading initial data...
+      </Button>
+    );
+  }
+  
+  if (initialDataError && !initialDataLoading) {
+    return (
+      <Button
+        variant="destructive"
+        size="md"
+        disabled
+        icon={ <Icon icon="pixel:exclamation-triangle-solid" className="w-4 h-4" /> }
+        className={cn("font-minecraft", className)}
+      >
+        Error loading data
+      </Button>
+    );
+  }
+
+  if (!profileId && !initialDataLoading) {
     return (
       <Button
         variant="default"
@@ -67,23 +100,21 @@ export function VersionInfo({ profileId, className }: VersionInfoProps) {
     );
   }
 
-  if (loading) {
+  if (profileLoading && !initialDataLoading) {
     return (
       <Button
         variant="default"
         size="md"
         disabled
-        icon={
-          <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" />
-        }
+        icon={ <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" /> }
         className={cn("font-minecraft", className)}
       >
-        Loading...
+        Loading profile...
       </Button>
     );
   }
 
-  if (error || !profile) {
+  if ((profileError || !profile) && !initialDataLoading && !profileLoading) {
     return (
       <Button
         variant="destructive"
@@ -94,42 +125,46 @@ export function VersionInfo({ profileId, className }: VersionInfoProps) {
         }
         className={cn("font-minecraft", className)}
       >
-        {error || "Profile not found"}
+        {profileError || "Profile details not found"}
       </Button>
     );
   }
+  
+  if (profile && !initialDataLoading && !profileLoading && !profileError) {
+    const getModLoaderIcon = (loader: string) => {
+      return `/icons/${loader.toLowerCase()}.png`;
+    };
 
-  const getModLoaderIcon = (loader: string) => {
-    return `/icons/${loader.toLowerCase()}.png`;
-  };
+    const isLaunching = launchState === LaunchState.LAUNCHING;
+    const variant = isLaunching ? "info" : "default";
 
-  const isLaunching = launchState === LaunchState.LAUNCHING;
-  const variant = isLaunching ? "info" : "default";
-
-  return (
-    <Button
-      variant={variant}
-      size="md"
-      disabled
-      icon={
-        <img
-          src={getModLoaderIcon(profile.loader) || "/placeholder.svg"}
-          alt={`${profile.loader} icon`}
-          className="w-5 h-5"
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = "/icons/minecraft.png";
-          }}
-        />
-      }
-      className={cn("font-minecraft", className)}
-    >
-      {profile.name} ({profile.game_version})
-      {isLaunching && (
-        <Icon
-          icon="pixel:spinner-solid"
-          className="w-4 h-4 ml-2 text-red-400 animate-spin"
-        />
-      )}
-    </Button>
-  );
+    return (
+      <Button
+        variant={variant}
+        size="md"
+        disabled
+        icon={
+          <img
+            src={getModLoaderIcon(profile.loader) || "/placeholder.svg"}
+            alt={`${profile.loader} icon`}
+            className="w-5 h-5"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+            }}
+          />
+        }
+        className={cn("font-minecraft", className)}
+      >
+        {profile.name} ({profile.game_version})
+        {isLaunching && (
+          <Icon
+            icon="pixel:spinner-solid"
+            className="w-4 h-4 ml-2 text-red-400 animate-spin"
+          />
+        )}
+      </Button>
+    );
+  }
+  
+  return null;
 }

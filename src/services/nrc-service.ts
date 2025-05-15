@@ -38,34 +38,57 @@ export const refreshStandardVersions = (): Promise<void> => {
  * Logs success or errors to the console.
  */
 export const refreshNrcDataOnMount = async (): Promise<void> => {
-  let nrcPacksSuccess = false;
-  let standardVersionsSuccess = false;
+  // Direkt setState verwenden, um den Ladezustand zu Beginn zu setzen
+  useProfileStore.setState({ loading: true, error: null });
+
+  // Introduce a 5-second delay for testing
+  //console.log("[TEST] Starting 5-second delay in refreshNrcDataOnMount...");
+  //await new Promise(resolve => setTimeout(resolve, 5000));
+  //console.log("[TEST] 5-second delay finished.");
 
   try {
-    await refreshNoriskPacks();
-    console.log("Norisk Packs updated successfully on mount!");
-    nrcPacksSuccess = true;
-  } catch (error) {
-    console.error("Failed to refresh Norisk Packs on mount:", error);
-  }
+    let nrcPacksSuccess = false;
+    let standardVersionsSuccess = false;
 
-  try {
-    await refreshStandardVersions();
-    console.log("Standard Versions updated successfully on mount!");
-    standardVersionsSuccess = true;
-  } catch (error) {
-    console.error("Failed to refresh Standard Versions on mount:", error);
-  }
-
-  // Fetch profiles from the store after NRC data is refreshed
-  // This ensures the profile list (including standard versions) and last played are up-to-date.
-  if (nrcPacksSuccess || standardVersionsSuccess) { // Or simply always call it if appropriate
     try {
-      console.log("Refreshing profiles state after NRC data update...");
-      await useProfileStore.getState().fetchProfiles();
-      console.log("Profiles state refreshed successfully.");
+      await refreshNoriskPacks();
+      console.log("Norisk Packs updated successfully on mount!");
+      nrcPacksSuccess = true;
     } catch (error) {
-      console.error("Failed to refresh profiles state after NRC data update:", error);
+      console.error("Failed to refresh Norisk Packs on mount:", error);
     }
+
+    try {
+      await refreshStandardVersions();
+      console.log("Standard Versions updated successfully on mount!");
+      standardVersionsSuccess = true;
+    } catch (error) {
+      console.error("Failed to refresh Standard Versions on mount:", error);
+    }
+
+    // Fetch profiles from the store after NRC data is refreshed
+    // This ensures the profile list (including standard versions) and last played are up-to-date.
+    if (nrcPacksSuccess || standardVersionsSuccess) { // Or simply always call it if appropriate
+      try {
+        console.log("Refreshing profiles state after NRC data update...");
+        await useProfileStore.getState().fetchProfiles();
+        console.log("Profiles state refreshed successfully.");
+        // fetchProfiles setzt loading: false bei Erfolg oder Fehler
+      } catch (error) {
+        console.error("Failed to refresh profiles state after NRC data update:", error);
+        // fetchProfiles sollte seinen eigenen Ladezustand und Fehler behandeln.
+        // Wenn fetchProfiles hier einen Fehler wirft, wird er vom äußeren Catch behandelt.
+      }
+    }
+  } catch (error) {
+    // Dieser Catch fängt Fehler von refreshNoriskPacks, refreshStandardVersions
+    // oder wenn fetchProfiles selbst einen Fehler wirft, der nicht intern zu loading:false führt.
+    console.error("Error during NRC data refresh or profile fetching process:", error);
+    useProfileStore.setState({
+      error: "Failed to initialize or refresh app data.",
+      loading: false, // Sicherstellen, dass der Ladezustand beendet wird
+    });
   }
+  // Kein expliziter finally-Block hier nötig, um loading auf false zu setzen,
+  // da dies entweder durch fetchProfiles() oder den catch-Block oben abgedeckt wird.
 }; 
