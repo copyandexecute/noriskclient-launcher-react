@@ -38,9 +38,6 @@ export interface BrowseCapesOptions {
 
 export interface GetPlayerCapesPayloadOptions { 
   player_identifier: string; // snake_case
-  page?: number;
-  page_size?: number;       // snake_case
-  filter_accepted?: boolean; // snake_case
   norisk_token?: string;    // snake_case
   request_uuid?: string;    // snake_case
 }

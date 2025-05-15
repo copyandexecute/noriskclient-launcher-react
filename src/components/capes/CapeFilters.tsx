@@ -1,10 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { SearchInput } from '../ui/SearchInput'; // Assuming SearchInput is available and styled like in SkinsTab
 
 export interface CapeFiltersData {
-  searchTerm?: string; // Added for search functionality
   sortBy?: string;
   filterHasElytra?: boolean;
   timeFrame?: string; // Added for time frame filtering
@@ -14,11 +13,24 @@ export interface CapeFiltersData {
 interface CapeFiltersProps {
   onFilterChange: (filters: CapeFiltersData) => void;
   currentFilters: CapeFiltersData;
+  onSearchSubmit?: (term: string) => void; // For search submission on Enter
 }
 
-export function CapeFilters({ onFilterChange, currentFilters }: CapeFiltersProps) {
+export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: CapeFiltersProps) {
+  // Local state for search input value, no longer stored in parent filters
+  const [searchInputValue, setSearchInputValue] = useState<string>('');
+
   const handleSearchChange = (value: string) => {
-    onFilterChange({ ...currentFilters, searchTerm: value || undefined });
+    // Just update local state, don't propagate to parent filters
+    setSearchInputValue(value);
+  };
+
+  // Function to handle search submission
+  const handleSearch = () => {
+    // Always call onSearchSubmit, even with empty string to allow resetting search
+    if (onSearchSubmit) {
+      onSearchSubmit(searchInputValue.trim());
+    }
   };
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -37,8 +49,9 @@ export function CapeFilters({ onFilterChange, currentFilters }: CapeFiltersProps
     <div className="p-3 sm:p-4 border-b border-white/10 bg-background-secondary flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
       <div className="flex-grow min-w-[180px] sm:min-w-[200px]">
         <SearchInput 
-          value={currentFilters.searchTerm || ''} 
+          value={searchInputValue} 
           onChange={handleSearchChange} 
+          onSearch={handleSearch}
           placeholder="Search capes..." 
           className="text-xl w-full h-[38px]"
         />

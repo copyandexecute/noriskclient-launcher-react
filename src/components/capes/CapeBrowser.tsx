@@ -7,7 +7,6 @@ import type { CosmeticCape, PaginationInfo, BrowseCapesOptions, GetPlayerCapesPa
 import { CapeList } from './CapeList';
 import { CapePagination } from './CapePagination';
 import { CapeFilters, type CapeFiltersData } from './CapeFilters';
-import { useDebounce } from '../../hooks/useDebounce'; // For debouncing search term
 
 export function CapeBrowser() {
   const [capes, setCapes] = useState<CosmeticCape[]>([]);
@@ -18,8 +17,7 @@ export function CapeBrowser() {
   const [currentPage, setCurrentPage] = useState(0);
   const [filters, setFilters] = useState<CapeFiltersData>({ sortBy: '', timeFrame: '' }); // Default sortBy to newest and initialize timeFrame for "All Time"
   const [error, setError] = useState<string | null>(null);
-
-  const debouncedSearchTerm = useDebounce(filters.searchTerm, 300);
+  const [searchQuery, setSearchQuery] = useState<string>(''); // Active search query (triggered by Enter)
 
   const fetchCapesData = useCallback(async (page: number, currentFilters: CapeFiltersData, term?: string) => {
     console.log('[CapeBrowser] fetchCapesData called with:', { page, currentFilters, term });
@@ -31,13 +29,18 @@ export function CapeBrowser() {
         // Fetch specific player capes
         const playerCapesOptions: GetPlayerCapesPayloadOptions = {
           player_identifier: term,
-          page,
-          page_size: 20, // Or use a state variable for pageSize
-          // filter_accepted is true by default in Rust command if not specified, or can be added here
         };
         console.log('[CapeBrowser] Options object before calling getPlayerCapes:', JSON.stringify(playerCapesOptions));
         response = await getPlayerCapes(playerCapesOptions);
-        console.log('[CapeBrowser] getPlayerCapes response:', { count: response.capes.length, pagination: response.pagination });
+        setCapes(response);
+        setAllFetchedCapes(response);
+        // Since getPlayerCapes now returns an array directly, we need to create a dummy pagination object
+        setPaginationInfo({
+          currentPage: 0,
+          pageSize: response.length,
+          totalItems: response.length,
+          totalPages: 1
+        });
       } else {
         // Browse all capes
         const browseOptions: BrowseCapesOptions = {
@@ -50,11 +53,10 @@ export function CapeBrowser() {
         console.log('[CapeBrowser] Options object before calling browseCapes:', JSON.stringify(browseOptions));
         response = await browseCapes(browseOptions);
         console.log('[CapeBrowser] browseCapes response:', { count: response.capes.length, pagination: response.pagination });
+        setAllFetchedCapes(response.capes); 
+        setCapes(response.capes); 
+        setPaginationInfo(response.pagination);
       }
-      
-      setAllFetchedCapes(response.capes); 
-      setCapes(response.capes); 
-      setPaginationInfo(response.pagination);
     } catch (err: any) {
       console.error('Error fetching capes:', err);
       const errorMessage = err?.message || 'Failed to load capes. Please try again later.';
@@ -66,28 +68,12 @@ export function CapeBrowser() {
   }, []);
 
   useEffect(() => {
-    console.log('[CapeBrowser] useEffect triggered. Dependencies:', { currentPage, filters, debouncedSearchTerm });
-    fetchCapesData(currentPage, filters, debouncedSearchTerm);
-  }, [currentPage, filters, debouncedSearchTerm, fetchCapesData]); // Added debouncedSearchTerm
-
-  // Client-side filtering is no longer needed if search triggers a server-side player cape fetch.
-  // This can be removed or adjusted. For now, it will operate on whatever `capes` contains.
-  // If a search term is active, `capes` will be player-specific capes.
-  // If no search term, `capes` will be browse results.
-  // So, this existing filter might still be useful for further filtering player-specific capes locally,
-  // but the primary search is now server-side.
-  const primarilyFilteredCapes = capes; // Data is now primarily filtered by server
+    console.log('[CapeBrowser] useEffect triggered. Dependencies:', { currentPage, filters, searchQuery });
+    fetchCapesData(currentPage, filters, searchQuery);
+  }, [currentPage, filters, searchQuery, fetchCapesData]); // Using searchQuery now instead of debouncedSearchTerm
 
   // This local search can be kept if you want to further filter the results from getPlayerCapes or browseCapes
-  // For example, if getPlayerCapes returns many capes for a player, and you want to type to find one.
-  // However, if the search input's main purpose is to trigger getPlayerCapes, this might be confusing.
-  // For now, I'll assume the search term in the input is for `getPlayerCapes`.
-  // The `filteredCapes` useMemo will just return what's in `capes` if a server search is done.
-  // If no server search (no debouncedSearchTerm), it might still be used for browseCapes results if we implement local filtering there.
-
-  // Let's simplify: if debouncedSearchTerm is used for getPlayerCapes, `capes` already contains filtered data.
-  // No need for further client-side filtering based on the same term.
-  const displayedCapes = capes; // Directly use capes from state, as filtering is server-side or not applicable for player search.
+  const displayedCapes = capes; // Directly use capes from state
 
   const handlePageChange = (newPage: number) => {
     setCurrentPage(newPage);
@@ -96,28 +82,45 @@ export function CapeBrowser() {
   const handleFilterChange = (newFilters: CapeFiltersData) => {
     console.log('[CapeBrowser] handleFilterChange RAW newFilters received:', JSON.stringify(newFilters));
 
+    // We ignore searchTerm changes completely in filters now
+    // searchTerm is managed separately via the searchQuery state
+    const filtersWithoutSearch = { ...newFilters };
+    // No need to delete searchTerm as it's not in the type anymore
+    
     setFilters(prevFilters => {
-      console.log('[CapeBrowser] Inside setFilters. prevFilters:', JSON.stringify(prevFilters), 'newFilters from closure:', JSON.stringify(newFilters));
+      console.log('[CapeBrowser] Inside setFilters. prevFilters:', JSON.stringify(prevFilters), 'newFilters from closure:', JSON.stringify(filtersWithoutSearch));
       
       const hasMajorFilterChanged = 
-        newFilters.sortBy !== prevFilters.sortBy ||
-        newFilters.timeFrame !== prevFilters.timeFrame ||
-        newFilters.filterHasElytra !== prevFilters.filterHasElytra;
+        filtersWithoutSearch.sortBy !== prevFilters.sortBy ||
+        filtersWithoutSearch.timeFrame !== prevFilters.timeFrame ||
+        filtersWithoutSearch.filterHasElytra !== prevFilters.filterHasElytra;
   
-      let updatedFilters;
       if (hasMajorFilterChanged) {
-        updatedFilters = { ...newFilters, searchTerm: undefined };
-        console.log('[CapeBrowser] Major filter change. Resetting searchTerm. Updated filters:', JSON.stringify(updatedFilters));
-      } else {
-        // Only searchTerm has changed, or no change (e.g. if only searchTerm was in newFilters and it matched prevFilters.searchTerm)
-        // Ensure all properties from newFilters are preserved.
-        updatedFilters = { ...prevFilters, ...newFilters }; 
-        console.log('[CapeBrowser] SearchTerm change or minor. Updated filters:', JSON.stringify(updatedFilters));
+        // If major filter changed, reset search query too
+        setSearchQuery('');
+        console.log('[CapeBrowser] Major filter change. Resetting searchQuery. Updated filters:', JSON.stringify(filtersWithoutSearch));
       }
-      return updatedFilters;
+
+      return { ...prevFilters, ...filtersWithoutSearch };
     });
   
-    setCurrentPage(0); // Page Reset happens when any filter changes
+    // Reset page when filters change
+    setCurrentPage(0);
+  };
+
+  // Function to handle search submission when Enter is pressed
+  const handleSearchSubmit = (term: string) => {
+    console.log('[CapeBrowser] Search submitted with term:', term);
+    
+    // Reset search if term is empty
+    if (!term.trim()) {
+      console.log('[CapeBrowser] Empty search term, resetting search');
+      setSearchQuery('');
+    } else {
+      setSearchQuery(term.trim());
+    }
+    
+    setCurrentPage(0);
   };
 
   const handleEquipCape = async (capeHash: string) => {
@@ -143,7 +146,7 @@ export function CapeBrowser() {
         <p className="font-minecraft text-3xl">Error Loading Capes</p>
         <p className="text-lg mt-2 mb-4 text-white/70">{error}</p>
         <button 
-          onClick={() => fetchCapesData(currentPage, filters)} 
+          onClick={() => fetchCapesData(currentPage, filters, searchQuery)} 
           className="font-minecraft lowercase text-2xl px-6 py-2 bg-accent text-accent-foreground rounded hover:bg-accent-hover transition-colors"
         >
           Retry
@@ -154,7 +157,11 @@ export function CapeBrowser() {
 
   return (
     <div className="h-full flex flex-col bg-background-primary overflow-hidden">
-      <CapeFilters onFilterChange={handleFilterChange} currentFilters={filters} />
+      <CapeFilters 
+        onFilterChange={handleFilterChange} 
+        currentFilters={filters} 
+        onSearchSubmit={handleSearchSubmit} 
+      />
       
       <div className="flex-grow overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
         {/* Show loading overlay for list if capes.length > 0 but still loading new page/filter results */}
@@ -168,7 +175,7 @@ export function CapeBrowser() {
             onEquipCape={handleEquipCape} 
             isLoading={isLoading && capes.length > 0} 
             isEquippingCapeId={isEquippingCapeId}
-            searchQuery={debouncedSearchTerm}
+            searchQuery={searchQuery}
         />
       </div>
 

@@ -1,5 +1,5 @@
 use crate::error::{AppError, CommandError};
-use crate::minecraft::api::cape_api::{CapeApi, CapesBrowseResponse};
+use crate::minecraft::api::cape_api::{CapeApi, CapesBrowseResponse, CosmeticCape};
 use crate::minecraft::api::mc_api::MinecraftApiService;
 use crate::state::state_manager::State;
 use log::{debug, error};
@@ -121,9 +121,6 @@ pub async fn browse_capes(
 #[derive(Deserialize, Debug)]
 pub struct GetPlayerCapesPayload {
     pub player_identifier: String,
-    pub page: Option<u32>,
-    pub page_size: Option<u32>,
-    pub filter_accepted: Option<bool>,
     pub norisk_token: Option<String>,
     pub request_uuid: Option<String>,
 }
@@ -131,16 +128,13 @@ pub struct GetPlayerCapesPayload {
 /// Get capes for a specific player
 ///
 /// Parameters:
-/// - player_uuid: UUID of the player
-/// - page: Page number (default: 0)
-/// - page_size: Number of items per page (default: 20)
-/// - filter_accepted: Filter by accepted status (default: true)
-/// - request_uuid: UUID for tracking the request
+/// - player_identifier: UUID or username of the player
+/// - request_uuid: UUID for tracking the request (optional)
 /// - norisk_token: Optional NoRisk token
 #[tauri::command]
 pub async fn get_player_capes(
     payload: GetPlayerCapesPayload,
-) -> Result<CapesBrowseResponse, CommandError> {
+) -> Result<Vec<CosmeticCape>, CommandError> {
     debug!(
         "[CMD get_player_capes] Initial payload received: {:?}",
         payload
@@ -244,16 +238,13 @@ pub async fn get_player_capes(
         "[CMD get_player_capes] Request UUID for API call: {}",
         uuid_for_request
     );
-    debug!("[CMD get_player_capes] Calling cape_api.get_player_capes with player_uuid: {}, page: {:?}, page_size: {:?}, filter_accepted: {:?}, request_uuid: {}, is_experimental: {}", 
-        player_uuid_to_use, payload.page, payload.page_size, payload.filter_accepted, uuid_for_request, is_experimental);
+    debug!("[CMD get_player_capes] Calling cape_api.get_player_capes with player_uuid: {}, request_uuid: {}, is_experimental: {}", 
+        player_uuid_to_use, uuid_for_request, is_experimental);
 
     cape_api
         .get_player_capes(
             &token_to_use,
             &player_uuid_to_use,
-            payload.page,
-            payload.page_size,
-            payload.filter_accepted,
             &uuid_for_request,
             is_experimental,
         )

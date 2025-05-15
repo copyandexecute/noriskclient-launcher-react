@@ -192,22 +192,18 @@ impl CapeApi {
     /// Get capes for a specific player
     ///
     /// Parameters:
-    /// - player_uuid: UUID of the player
-    /// - page: Page number (default: 0)
-    /// - pageSize: Number of items per page (default: 20)
-    /// - filterAccepted: Filter by accepted status (default: true)
+    /// - norisk_token: Authentication token
+    /// - player_uuid: UUID of the player to get capes for
     /// - request_uuid: UUID for tracking the request
+    /// - is_experimental: Whether to use the experimental API endpoint
     pub async fn get_player_capes(
         &self,
         norisk_token: &str,
         player_uuid: &Uuid,
-        page: Option<u32>,
-        page_size: Option<u32>,
-        filter_accepted: Option<bool>,
         request_uuid: &str,
         is_experimental: bool,
-    ) -> Result<CapesBrowseResponse> {
-        let endpoint = format!("cape/browse/player/{}", player_uuid);
+    ) -> Result<Vec<CosmeticCape>> {
+        let endpoint = format!("cape/user/{}", player_uuid);
         let base_url = Self::get_api_base(is_experimental);
         let url = format!("{}/{}", base_url, endpoint);
 
@@ -218,16 +214,6 @@ impl CapeApi {
 
         let mut query_params = HashMap::new();
         query_params.insert("uuid", request_uuid.to_string());
-
-        if let Some(p) = page {
-            query_params.insert("page", p.to_string());
-        }
-        if let Some(ps) = page_size {
-            query_params.insert("pageSize", ps.to_string());
-        }
-        if let Some(fa) = filter_accepted {
-            query_params.insert("filterAccepted", fa.to_string());
-        }
 
         debug!(
             "[Cape API get_player_capes] Authorization token (first/last 8 chars): {}...{}", 
@@ -263,7 +249,7 @@ impl CapeApi {
         }
 
         debug!("[Cape API get_player_capes] Parsing response body as JSON");
-        response.json::<CapesBrowseResponse>().await.map_err(|e| {
+        response.json::<Vec<CosmeticCape>>().await.map_err(|e| {
             error!("[Cape API get_player_capes] Failed to parse response: {}", e);
             AppError::ParseError(format!("Failed to parse Cape API response for get_player_capes: {}", e))
         })

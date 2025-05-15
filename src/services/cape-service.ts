@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { CapesBrowseResponse, BrowseCapesOptions, GetPlayerCapesPayloadOptions } from '../types/noriskCapes';
+import type { CapesBrowseResponse, BrowseCapesOptions, GetPlayerCapesPayloadOptions, CosmeticCape } from '../types/noriskCapes';
 import type { MinecraftProfile } from '../types/minecraft';
 
 /**
@@ -20,12 +20,12 @@ export const browseCapes = (options: BrowseCapesOptions = {}): Promise<CapesBrow
 /**
  * Get capes for a specific player. Now uses a payload object.
  * 
- * @param options Options for retrieving player capes, including playerIdentifier (UUID or name), pagination, and filtering.
- * @returns A promise that resolves to a CapesBrowseResponse
+ * @param options Options for retrieving player capes, including playerIdentifier (UUID or name)
+ * @returns A promise that resolves to an array of CosmeticCape objects
  */
 export const getPlayerCapes = (
   options: GetPlayerCapesPayloadOptions // Single options/payload argument
-): Promise<CapesBrowseResponse> => {
+): Promise<CosmeticCape[]> => {
   // Log the options object that will be wrapped in the payload
   console.log('[cape-service] getPlayerCapes called with options for payload:', options);
   return invoke('get_player_capes', {
