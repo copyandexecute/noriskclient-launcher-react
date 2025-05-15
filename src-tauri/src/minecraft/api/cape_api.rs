@@ -212,59 +212,60 @@ impl CapeApi {
         let url = format!("{}/{}", base_url, endpoint);
 
         debug!(
-            "[Cape API] Making request to player capes endpoint for player: {}",
-            player_uuid
+            "[Cape API get_player_capes] Making request for player_uuid: {}. Full URL to be called: {}",
+            player_uuid, url
         );
-        debug!("[Cape API] Full URL: {}", url);
 
         let mut query_params = HashMap::new();
-
-        // Add request UUID for tracking
         query_params.insert("uuid", request_uuid.to_string());
 
         if let Some(p) = page {
             query_params.insert("page", p.to_string());
         }
-
         if let Some(ps) = page_size {
             query_params.insert("pageSize", ps.to_string());
         }
-
         if let Some(fa) = filter_accepted {
             query_params.insert("filterAccepted", fa.to_string());
         }
 
         debug!(
-            "[Cape API] Sending GET request with parameters: {:?}",
+            "[Cape API get_player_capes] Authorization token (first/last 8 chars): {}...{}", 
+            &norisk_token[..std::cmp::min(8, norisk_token.len())], 
+            &norisk_token[std::cmp::max(0, norisk_token.len().saturating_sub(8))..]
+        );
+        debug!(
+            "[Cape API get_player_capes] Sending GET request with query parameters: {:?}",
             query_params
         );
 
         let response = HTTP_CLIENT
-            .get(url)
+            .get(&url)
             .header("Authorization", format!("Bearer {}", norisk_token))
             .query(&query_params)
             .send()
             .await
             .map_err(|e| {
-                error!("[Cape API] Request failed: {}", e);
-                AppError::RequestError(format!("Failed to send request to Cape API: {}", e))
+                error!("[Cape API get_player_capes] Request failed: {}", e);
+                AppError::RequestError(format!("Failed to send request to Cape API for get_player_capes: {}", e))
             })?;
 
         let status = response.status();
-        debug!("[Cape API] Response status: {}", status);
+        debug!("[Cape API get_player_capes] Response status: {}", status);
 
         if !status.is_success() {
-            error!("[Cape API] Error response: Status {}", status);
+            let error_body = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
+            error!("[Cape API get_player_capes] Error response: Status {}, Body: {}", status, error_body);
             return Err(AppError::RequestError(format!(
-                "Cape API returned error status: {}",
-                status
+                "Cape API (get_player_capes) returned error status: {}. Details: {}",
+                status, error_body
             )));
         }
 
-        debug!("[Cape API] Parsing response body as JSON");
+        debug!("[Cape API get_player_capes] Parsing response body as JSON");
         response.json::<CapesBrowseResponse>().await.map_err(|e| {
-            error!("[Cape API] Failed to parse response: {}", e);
-            AppError::ParseError(format!("Failed to parse Cape API response: {}", e))
+            error!("[Cape API get_player_capes] Failed to parse response: {}", e);
+            AppError::ParseError(format!("Failed to parse Cape API response for get_player_capes: {}", e))
         })
     }
 
