@@ -20,6 +20,7 @@
     "clipboard-manager:allow-write-text",
     "clipboard-manager:allow-write-image",
     "dialog:allow-open",
-    "updater:default"
+    "updater:default",
+    "fs:default"
   ]
 }

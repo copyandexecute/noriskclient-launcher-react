@@ -76,15 +76,15 @@ use commands::file_command::{
 };
 
 // Import config commands
-use commands::config_commands::{get_launcher_config, set_launcher_config, get_app_version};
+use commands::config_commands::{get_app_version, get_launcher_config, set_launcher_config};
 
 // Import path commands
 use commands::path_commands::{get_launcher_directory, resolve_image_path};
 
 // Import cape commands
 use commands::cape_command::{
-    browse_capes, delete_cape, equip_cape, get_player_capes, unequip_cape, upload_cape,
-    download_template_and_open_explorer,
+    browse_capes, delete_cape, download_template_and_open_explorer, equip_cape, get_player_capes,
+    unequip_cape, upload_cape,
 };
 
 use tauri::Manager;
@@ -98,6 +98,7 @@ async fn main() {
     info!("Starting NoRiskClient Launcher...");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         //TODO .plugin(minecraft_auth_command::init())
         .plugin(tauri_plugin_dialog::init())

@@ -9,25 +9,8 @@ import { CapePagination } from './CapePagination';
 import { CapeFilters, type CapeFiltersData } from './CapeFilters';
 import { Icon } from '@iconify/react';
 import { useThemeStore } from '../../store/useThemeStore';
-
-// Declare the Tauri APIs used in this component
-declare global {
-  interface Window {
-    __TAURI__: {
-      path: {
-        appLocalDataDir(): Promise<string>;
-      };
-      fs: {
-        writeBinaryFile(options: { contents: ArrayBuffer; path: string }): Promise<void>;
-        removeFile(path: string): Promise<void>;
-      };
-      shell: {
-        open(url: string): Promise<void>;
-      };
-      invoke: (command: string, args?: any) => Promise<void>;
-    };
-  }
-}
+import { open } from '@tauri-apps/plugin-dialog';
+import { readFile } from '@tauri-apps/plugin-fs';
 
 export function CapeBrowser() {
   const [capes, setCapes] = useState<CosmeticCape[]>([]);
@@ -41,6 +24,11 @@ export function CapeBrowser() {
   const [filters, setFilters] = useState<CapeFiltersData>({ sortBy: '', timeFrame: '' });
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Cape preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewImagePath, setPreviewImagePath] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -178,59 +166,82 @@ export function CapeBrowser() {
     }
   };
 
-  const handleUploadClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+  const handleUploadClick = async () => {
+    try {
+      // Open the file dialog to select a PNG file
+      const selectedFile = await open({
+        multiple: false,
+        directory: false,
+        filters: [{
+          name: 'PNG Images',
+          extensions: ['png']
+        }]
+      });
+      
+      // If no file was selected (user canceled the dialog), return
+      if (!selectedFile) return;
+
+      // Upload directly using the file path and show the preview modal
+      const filePath = selectedFile as string;
+      setPreviewImagePath(filePath);
+      
+      // Read file content for preview
+      try {
+        console.log('[CapeBrowser] Reading file for preview:', filePath);
+        const fileContent = await readFile(filePath);
+        const blob = new Blob([fileContent], { type: 'image/png' });
+        const imageUrl = URL.createObjectURL(blob);
+        setPreviewImageUrl(imageUrl);
+        setShowPreviewModal(true);
+      } catch (err: any) {
+        console.error('Error reading file for preview:', err);
+        toast.error(`Couldn't preview file: ${err.message || 'Unknown error'}`);
+        // Even if preview fails, we can still try to upload
+        handleConfirmUpload(filePath);
+      }
+    } catch (err: any) {
+      console.error('Error selecting cape file:', err);
+      toast.error(`Failed to select cape file: ${err.message || 'Unknown error'}`);
     }
   };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check if the file is a PNG image
-    if (file.type !== 'image/png') {
-      toast.error('Only PNG images are supported for capes');
-      return;
+  
+  const handleCancelUpload = () => {
+    // Clean up the preview
+    if (previewImageUrl) {
+      URL.revokeObjectURL(previewImageUrl);
     }
-
-    // Check file size (2MB max)
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Maximum file size is 2MB');
-      return;
-    }
-
+    setPreviewImagePath(null);
+    setPreviewImageUrl(null);
+    setShowPreviewModal(false);
+  };
+  
+  const handleConfirmUpload = async (filePath?: string) => {
+    const path = filePath || previewImagePath;
+    if (!path) return;
+    
     setIsUploading(true);
     try {
-      // First save the file to a temporary location
-      // Note: In a real application, you'd use a more secure approach
-      // This is simplified for demonstration purposes
-      const filePath = await window.__TAURI__.path.appLocalDataDir();
-      const tempFilePath = `${filePath}/temp_cape_upload.png`;
-      
-      await window.__TAURI__.fs.writeBinaryFile({
-        contents: await file.arrayBuffer(),
-        path: tempFilePath,
-      });
-
-      // Now upload the cape using the Cape API
-      const capeHash = await uploadCape(tempFilePath);
+      // Upload the cape using the file path directly
+      const capeHash = await uploadCape(path);
       toast.success('Cape uploaded successfully!');
       
       // Refresh the cape list to show the newly uploaded cape
       fetchCapesData(currentPage, filters, searchQuery);
       
-      // Clean up the temporary file
-      await window.__TAURI__.fs.removeFile(tempFilePath);
+      // Close the modal
+      setShowPreviewModal(false);
+      
     } catch (err: any) {
       console.error('Error uploading cape:', err);
       toast.error(`Failed to upload cape: ${err.message || 'Unknown error'}`);
     } finally {
-      setIsUploading(false);
-      // Reset the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      // Clean up
+      if (previewImageUrl) {
+        URL.revokeObjectURL(previewImageUrl);
       }
+      setPreviewImagePath(null);
+      setPreviewImageUrl(null);
+      setIsUploading(false);
     }
   };
 
@@ -300,15 +311,6 @@ export function CapeBrowser() {
             )}
             Unequip Cape
           </button>
-
-          {/* Hidden file input for cape upload */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/png"
-            className="hidden"
-          />
         </div>
       </div>
 
@@ -335,6 +337,58 @@ export function CapeBrowser() {
 
       {paginationInfo && paginationInfo.totalPages > 0 && displayedCapes.length > 0 && (
         <CapePagination paginationInfo={paginationInfo} onPageChange={handlePageChange} />
+      )}
+      
+      {/* Cape Preview Modal */}
+      {showPreviewModal && previewImageUrl && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
+          <div className="bg-background-secondary rounded-md p-4 w-full max-w-md flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-minecraft text-xl text-white/90 lowercase">Cape Preview</h3>
+              <button 
+                onClick={handleCancelUpload}
+                className="text-white/70 hover:text-white"
+              >
+                <Icon icon="solar:close-circle-bold" className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="bg-black/30 rounded p-3 mb-4 flex items-center justify-center">
+              <img 
+                src={previewImageUrl} 
+                alt="Cape Preview" 
+                className="max-h-64 object-contain"
+              />
+            </div>
+            
+            <div className="flex items-center justify-between gap-3">
+              <button
+                onClick={handleCancelUpload}
+                className="flex-1 font-minecraft lowercase px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmUpload()}
+                disabled={isUploading}
+                className="flex-1 font-minecraft lowercase px-3 py-2 bg-accent hover:bg-accent-hover text-accent-foreground rounded transition-colors flex items-center justify-center gap-2"
+                style={{ backgroundColor: `${accentColor.value}` }}
+              >
+                {isUploading ? (
+                  <>
+                    <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Icon icon="solar:upload-minimalistic-bold" className="w-4 h-4" />
+                    Upload
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

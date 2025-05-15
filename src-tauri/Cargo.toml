@@ -69,6 +69,7 @@ trust-dns-resolver = { version = "0.23.0", features = ["tokio-runtime"] }
 fs_extra = "1.3.0"
 fs4 = { version = "0.8", features = ["tokio"] }
 url = "2.5.4"
+tauri-plugin-fs = "2"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
