@@ -120,21 +120,19 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
 
       const deletePromise = deleteProfile(profile.id);
 
-      toast.promise(
-        deletePromise,
-        {
-          loading: `Deleting profile '${profile.name}'...`,
-          success: () => {
-            onClose();
-            return `Profile '${profile.name}' deleted successfully!`;
-          },
-          error: (err) => {
-            const errorMessage = err instanceof Error ? err.message : String(err.message);
-            setError(`Failed to delete profile: ${errorMessage}`);
-            return `Failed to delete profile: ${errorMessage}`;
-          },
-        }
-      );
+      toast.promise(deletePromise, {
+        loading: `Deleting profile '${profile.name}'...`,
+        success: () => {
+          onClose();
+          return `Profile '${profile.name}' deleted successfully!`;
+        },
+        error: (err) => {
+          const errorMessage =
+            err instanceof Error ? err.message : String(err.message);
+          setError(`Failed to delete profile: ${errorMessage}`);
+          return `Failed to delete profile: ${errorMessage}`;
+        },
+      });
     } catch (err) {
       console.error("Error during delete initiation:", err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -441,7 +439,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
                         : "rgba(255,255,255,0.2)",
                       borderBottomColor: isActive
                         ? accentColor.value
-                        : undefined,
+                        : "rgba(255,255,255,0.15)",
                       borderBottomWidth: isActive ? "4px" : "2px",
                       boxShadow: isActive
                         ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
