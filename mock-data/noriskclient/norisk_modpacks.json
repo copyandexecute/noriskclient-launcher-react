@@ -52,6 +52,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "0.115.1+1.21.4",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "0.123.2+1.21.5",
@@ -73,6 +79,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.11.0+kotlin.2.0.0",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.13.1+kotlin.2.1.10",
                 "filename": null
               }
             },
@@ -99,6 +111,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "mc1.21.4-0.6.10-fabric",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "mc1.21.5-0.6.13-fabric",
@@ -119,6 +137,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "3.0.6+mc1.21",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "cHQjeYVS",
                 "filename": null
               }
             },
@@ -145,6 +169,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.11.0",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "1.11.1",
@@ -165,6 +195,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "mc1.21-0.12.7",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "mc1.21.4-0.14.7-fabric",
                 "filename": null
               }
             },
@@ -225,6 +261,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "13.0.1",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "14.0.0-rc.2",
@@ -245,6 +287,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.6.5+1.21.1-fabric",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.8.0+1.21.4-fabric",
                 "filename": null
               }
             },
@@ -288,6 +336,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "7.1.1-fabric",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "8.0.0-fabric",
@@ -308,6 +362,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "4.5.7-fabric",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "4.8.2-fabric",
                 "filename": null
               }
             },
@@ -334,6 +394,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "0.12.20+1.21.4",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "0.12.20+1.21.5",
@@ -354,6 +420,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.7.0-1.21,fabric",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "NkBXk0Ye",
                 "filename": null
               }
             },
@@ -379,6 +451,12 @@
                 "identifier": "5.19.1+mc1.21",
                 "filename": null
               }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "5.20.2+mc1.21.4",
+                "filename": null
+              }
             }
           }
         },
@@ -395,6 +473,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.21-2.2.37",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.2.33",
                 "filename": null
               }
             },
@@ -422,6 +506,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.2.116",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "1.21.5-2.2.129",
@@ -443,6 +533,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.21-2.1.31",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.1.12",
                 "filename": null
               }
             },
@@ -470,6 +566,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.2.57",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "1.21.5-2.2.66",
@@ -491,6 +593,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.21-2.2.92",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.2.86",
                 "filename": null
               }
             },
@@ -518,6 +626,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.0.52",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "1.21.5-2.0.59",
@@ -539,6 +653,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.21-2.1.26",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-2.1.26",
                 "filename": null
               }
             },
@@ -601,6 +721,12 @@
                 "identifier": "1.21-1.0.18",
                 "filename": null
               }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-1.0.18",
+                "filename": null
+              }
             }
           }
         },
@@ -617,6 +743,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.21-1.0.27",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-1.0.26",
                 "filename": null
               }
             },
@@ -641,6 +773,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.21-1.1.26",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-1.1.26",
                 "filename": null
               }
             },
@@ -722,6 +860,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.21.4-1.1.31",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "1.21.5-1.1.31",
@@ -742,6 +886,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "fabric-1.21.1-2.5.27",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "fabric-1.21.4-2.5.27",
                 "filename": null
               }
             },
@@ -894,6 +1044,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "17.0.144+fabric",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "18.0.145+fabric",
@@ -914,6 +1070,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "0.26.0",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "kELp84IT",
                 "filename": null
               }
             },
@@ -940,6 +1102,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "D5GmlSf8",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "qFwcwulG",
@@ -960,6 +1128,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "1.11.6+mc1.21",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.13.2+mc1.21.4",
                 "filename": null
               }
             },
@@ -986,6 +1160,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "1.6.0+1.21.4",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "1.7.1+1.21.5",
@@ -1009,6 +1189,12 @@
                 "filename": null
               }
             },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "xWqFqiiF",
+                "filename": null
+              }
+            },
             "1.21.5": {
               "fabric": {
                 "identifier": "A8HBEAVx",
@@ -1029,6 +1215,12 @@
             "1.21": {
               "fabric": {
                 "identifier": "5.1.2+1.21-fabric",
+                "filename": null
+              }
+            },
+            "1.21.4": {
+              "fabric": {
+                "identifier": "5.2.4+1.21.4-fabric",
                 "filename": null
               }
             },

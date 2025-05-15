@@ -1,14 +1,14 @@
 {
     "build": {
-        "branch": "1.21.4",
+        "branch": "norisk-dev-2",
         "jre_version": 21,
         "mc_version": "1.21.4",
         "fabric_loader_version": "0.16.10"
     },
     "devOnly": false,
     "server": "",
-    "autoUpdate": false,
-    "subTitle": "[NEW UPDATE - TEST]",
+    "autoUpdate": true,
+    "subTitle": "[1.21.4 TESTS]",
     "mods": [
         {
             "default": true,
@@ -75,7 +75,27 @@
             "name": "ImmediatelyFast",
             "required": false,
             "source": {
-                "artifact": "maven.modrinth:immediatelyfast:1.3.6+1.21.4-fabric",
+                "artifact": "maven.modrinth:immediatelyfast:1.8.0+1.21.4-fabric",
+                "repository": "modrinth",
+                "type": "repository"
+            }
+        },
+        {
+            "default": true,
+            "name": "3dskinlayers",
+            "required": false,
+            "source": {
+                "artifact": "maven.modrinth:3dskinlayers:D5GmlSf8",
+                "repository": "modrinth",
+                "type": "repository"
+            }
+        },
+        {
+            "default": true,
+            "name": "shulkerboxtooltip",
+            "required": false,
+            "source": {
+                "artifact": "maven.modrinth:shulkerboxtooltip:5.2.4+1.21.4-fabric",
                 "repository": "modrinth",
                 "type": "repository"
             }
@@ -162,10 +182,40 @@
         },
         {
             "default": true,
+            "name": "WaveyCapes",
+            "required": false,
+            "source": {
+                "artifact": "maven.modrinth:wavey-capes:xWqFqiiF",
+                "repository": "modrinth",
+                "type": "repository"
+            }
+        },
+        {
+            "default": true,
+            "name": "tiertagger",
+            "required": false,
+            "source": {
+                "artifact": "maven.modrinth:tiertagger:1.13.2+mc1.21.4",
+                "repository": "modrinth",
+                "type": "repository"
+            }
+        },
+        {
+            "default": true,
+            "name": "ukulib",
+            "required": false,
+            "source": {
+                "artifact": "maven.modrinth:ukulib:1.6.0+1.21.4",
+                "repository": "modrinth",
+                "type": "repository"
+            }
+        },
+        {
+            "default": true,
             "name": "NoRiskClient-Fabric-Utils",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:noriskclient-fabric-utils:1.21.4-2.2.25",
+                "artifact": "gg.norisk:noriskclient-fabric-utils:1.21.4-2.2.33",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -175,17 +225,7 @@
             "name": "NoRiskClient-UI",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:ui:1.21.4-2.2.92",
-                "repository": "noriskproduction",
-                "type": "repository"
-            }
-        },
-        {
-            "default": true,
-            "name": "NoRiskClient-Branding",
-            "required": true,
-            "source": {
-                "artifact": "gg.norisk:branding:1.21.4-2.1.7",
+                "artifact": "gg.norisk:ui:1.21.4-2.2.116",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -195,7 +235,7 @@
             "name": "NoRiskClient-Client",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:client:1.21.4-2.0.84",
+                "artifact": "gg.norisk:client:1.21.4-2.1.12",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -205,7 +245,7 @@
             "name": "NoRiskClient-Cosmetics",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:cosmetics:1.21.4-2.2.41",
+                "artifact": "gg.norisk:cosmetics:1.21.4-2.2.57",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -215,7 +255,7 @@
             "name": "NoRiskClient-Friends",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:friends:1.21.4-2.2.82",
+                "artifact": "gg.norisk:friends:1.21.4-2.2.86",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -225,7 +265,7 @@
             "name": "NoRiskClient-McReal",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:mcreal:1.21.4-2.0.50",
+                "artifact": "gg.norisk:mcreal:1.21.4-2.0.52",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -235,17 +275,7 @@
             "name": "NoRiskClient-Minigames",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:minigames:1.21.4-2.1.24",
-                "repository": "noriskproduction",
-                "type": "repository"
-            }
-        },
-        {
-            "default": true,
-            "name": "NoRiskClient-Toasts",
-            "required": false,
-            "source": {
-                "artifact": "gg.norisk:toasts:1.21.4-2.0.10",
+                "artifact": "gg.norisk:minigames:1.21.4-2.1.26",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -255,7 +285,7 @@
             "name": "owoplus",
             "required": false,
             "source": {
-                "artifact": "gg.norisk:owoplus:1.21.4-1.0.20",
+                "artifact": "gg.norisk:owoplus:1.21.4-1.0.26",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
@@ -265,7 +295,7 @@
             "name": "Emotes",
             "required": true,
             "source": {
-                "artifact": "gg.norisk:emote-lib:1.21.4-1.1.23",
+                "artifact": "gg.norisk:emote-lib:1.21.4-1.1.26",
                 "repository": "noriskproduction",
                 "type": "repository"
             }
