@@ -139,7 +139,10 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             }}
           >
             {props.checked && (
-              <Icon icon="solar:check-bold" className="w-4 h-4 text-white" />
+              <Icon
+                icon="solar:unread-outline"
+                className="w-4 h-4 text-white"
+              />
             )}
 
             <span
