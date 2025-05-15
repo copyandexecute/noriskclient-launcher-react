@@ -10,6 +10,8 @@ import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { useProfileStore } from "../../store/profile-store";
 import { Profile } from "../../types/profile";
+import { Checkbox } from "../ui/Checkbox";
+import { useThemeStore } from "../../store/useThemeStore";
 
 export function PlayTab() {
   const {
@@ -21,6 +23,7 @@ export function PlayTab() {
   } = useProfileStore();
 
   const { activeAccount } = useMinecraftAuthStore();
+  const { isBackgroundAnimationEnabled, toggleBackgroundAnimation } = useThemeStore();
 
   useEffect(() => {
     if (!storeSelectedProfile && profiles.length > 0) {
@@ -95,6 +98,15 @@ export function PlayTab() {
       </div>
 
       <NewsSection className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col" />
+
+      <div className="absolute bottom-4 left-4 z-20">
+        <Checkbox
+          label="Animation"
+          checked={isBackgroundAnimationEnabled}
+          onChange={toggleBackgroundAnimation}
+          customSize="sm"
+        />
+      </div>
     </div>
   );
 }

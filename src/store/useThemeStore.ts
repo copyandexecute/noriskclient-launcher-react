@@ -146,12 +146,15 @@ interface ThemeState {
   setAccentColor: (color: AccentColor) => void;
   setCustomAccentColor: (hexColor: string) => void;
   applyAccentColorToDOM: () => void;
+  isBackgroundAnimationEnabled: boolean;
+  toggleBackgroundAnimation: () => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       accentColor: ACCENT_COLORS.blue,
+      isBackgroundAnimationEnabled: true,
 
       setAccentColor: (color: AccentColor) => {
         set({ accentColor: color });
@@ -167,6 +170,12 @@ export const useThemeStore = create<ThemeState>()(
 
         set({ accentColor: customColor });
         get().applyAccentColorToDOM();
+      },
+
+      toggleBackgroundAnimation: () => {
+        set((state) => ({
+          isBackgroundAnimationEnabled: !state.isBackgroundAnimationEnabled,
+        }));
       },
 
       applyAccentColorToDOM: () => {

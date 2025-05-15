@@ -17,8 +17,15 @@ export default function MatrixRainEffect({
 }: MatrixRainEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   useEffect(() => {
+    if (!isBackgroundAnimationEnabled) {
+      return;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -180,7 +187,11 @@ export default function MatrixRainEffect({
       window.removeEventListener("resize", resize);
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [opacity, speed, accentColor.value]);
+  }, [opacity, speed, accentColor.value, isBackgroundAnimationEnabled]);
+
+  if (!isBackgroundAnimationEnabled) {
+    return null;
+  }
 
   return (
     <canvas
