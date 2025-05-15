@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { browseCapes, equipCape, unequipCape, uploadCape, getPlayerCapes, downloadTemplateAndOpenExplorer } from '../../services/cape-service';
+import { browseCapes, equipCape, unequipCape, uploadCape, getPlayerCapes, downloadTemplateAndOpenExplorer, deleteCape } from '../../services/cape-service';
 import type { CosmeticCape, PaginationInfo, BrowseCapesOptions, GetPlayerCapesPayloadOptions } from '../../types/noriskCapes';
 import { CapeList } from './CapeList';
 import { CapePagination } from './CapePagination';
@@ -10,7 +10,11 @@ import { CapeFilters, type CapeFiltersData } from './CapeFilters';
 import { Icon } from '@iconify/react';
 import { useThemeStore } from '../../store/useThemeStore';
 import { open } from '@tauri-apps/plugin-dialog';
-import { readFile } from '@tauri-apps/plugin-fs';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { Modal } from '../ui/Modal';
+import { Cape3DRenderer } from './Cape3DRenderer';
+import { Button } from '../ui/buttons/Button';
+import { useMinecraftAuthStore } from '../../store/minecraft-auth-store';
 
 export function CapeBrowser() {
   const [capes, setCapes] = useState<CosmeticCape[]>([]);
@@ -21,7 +25,7 @@ export function CapeBrowser() {
   const [isUploading, setIsUploading] = useState(false);
   const [isUnequipping, setIsUnequipping] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [filters, setFilters] = useState<CapeFiltersData>({ sortBy: '', timeFrame: '' });
+  const [filters, setFilters] = useState<CapeFiltersData>({ sortBy: '', timeFrame: '', showOwnedOnly: false });
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
@@ -30,8 +34,14 @@ export function CapeBrowser() {
   const [previewImagePath, setPreviewImagePath] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   
+  // Delete cape modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [capeToDelete, setCapeToDelete] = useState<CosmeticCape | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { activeAccount } = useMinecraftAuthStore();
 
   const fetchCapesData = useCallback(async (page: number, currentFilters: CapeFiltersData, term?: string) => {
     console.log('[CapeBrowser] fetchCapesData called with:', { page, currentFilters, term });
@@ -39,7 +49,30 @@ export function CapeBrowser() {
     setError(null);
     try {
       let response;
-      if (term && term.trim() !== '') {
+
+      // If "My Capes" filter is active, use getPlayerCapes instead
+      if (currentFilters.showOwnedOnly && activeAccount) {
+        console.log('[CapeBrowser] Fetching capes for active account:', activeAccount.username);
+        
+        // Use the active account's username (or UUID) for getPlayerCapes
+        const playerCapesOptions: GetPlayerCapesPayloadOptions = {
+          player_identifier: activeAccount.id, // Using UUID is more reliable than username
+        };
+        
+        console.log('[CapeBrowser] Options for getPlayerCapes:', JSON.stringify(playerCapesOptions));
+        response = await getPlayerCapes(playerCapesOptions);
+        setCapes(response);
+        setAllFetchedCapes(response);
+        
+        // Create a pagination object for the user's capes
+        setPaginationInfo({
+          currentPage: 0,
+          pageSize: response.length,
+          totalItems: response.length,
+          totalPages: 1
+        });
+      }
+      else if (term && term.trim() !== '') {
         // Fetch specific player capes
         const playerCapesOptions: GetPlayerCapesPayloadOptions = {
           player_identifier: term,
@@ -79,7 +112,7 @@ export function CapeBrowser() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [activeAccount]);
 
   useEffect(() => {
     console.log('[CapeBrowser] useEffect triggered. Dependencies:', { currentPage, filters, searchQuery });
@@ -106,7 +139,8 @@ export function CapeBrowser() {
       const hasMajorFilterChanged = 
         filtersWithoutSearch.sortBy !== prevFilters.sortBy ||
         filtersWithoutSearch.timeFrame !== prevFilters.timeFrame ||
-        filtersWithoutSearch.filterHasElytra !== prevFilters.filterHasElytra;
+        filtersWithoutSearch.filterHasElytra !== prevFilters.filterHasElytra ||
+        filtersWithoutSearch.showOwnedOnly !== prevFilters.showOwnedOnly;
   
       if (hasMajorFilterChanged) {
         // If major filter changed, reset search query too
@@ -166,6 +200,38 @@ export function CapeBrowser() {
     }
   };
 
+  const handleDeleteCapeClick = (cape: CosmeticCape) => {
+    setCapeToDelete(cape);
+    setShowDeleteModal(true);
+  };
+  
+  const handleCancelDelete = () => {
+    setCapeToDelete(null);
+    setShowDeleteModal(false);
+  };
+  
+  const handleConfirmDelete = async () => {
+    if (!capeToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteCape(capeToDelete._id);
+      toast.success('Cape deleted successfully!');
+      
+      // Refresh the cape list to show the updated list
+      fetchCapesData(currentPage, filters, searchQuery);
+      
+      // Close the modal
+      setShowDeleteModal(false);
+      setCapeToDelete(null);
+    } catch (err: any) {
+      console.error('Error deleting cape:', err);
+      toast.error(`Failed to delete cape: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleUploadClick = async () => {
     try {
       // Open the file dialog to select a PNG file
@@ -185,16 +251,14 @@ export function CapeBrowser() {
       const filePath = selectedFile as string;
       setPreviewImagePath(filePath);
       
-      // Read file content for preview
+      // Use convertFileSrc to create a URL that can be used by the WebView
       try {
-        console.log('[CapeBrowser] Reading file for preview:', filePath);
-        const fileContent = await readFile(filePath);
-        const blob = new Blob([fileContent], { type: 'image/png' });
-        const imageUrl = URL.createObjectURL(blob);
+        console.log('[CapeBrowser] Creating file URL for preview:', filePath);
+        const imageUrl = convertFileSrc(filePath);
         setPreviewImageUrl(imageUrl);
         setShowPreviewModal(true);
       } catch (err: any) {
-        console.error('Error reading file for preview:', err);
+        console.error('Error creating preview URL:', err);
         toast.error(`Couldn't preview file: ${err.message || 'Unknown error'}`);
         // Even if preview fails, we can still try to upload
         handleConfirmUpload(filePath);
@@ -206,10 +270,7 @@ export function CapeBrowser() {
   };
   
   const handleCancelUpload = () => {
-    // Clean up the preview
-    if (previewImageUrl) {
-      URL.revokeObjectURL(previewImageUrl);
-    }
+    // Clean up - no need to revoke URLs when using convertFileSrc
     setPreviewImagePath(null);
     setPreviewImageUrl(null);
     setShowPreviewModal(false);
@@ -235,10 +296,7 @@ export function CapeBrowser() {
       console.error('Error uploading cape:', err);
       toast.error(`Failed to upload cape: ${err.message || 'Unknown error'}`);
     } finally {
-      // Clean up
-      if (previewImageUrl) {
-        URL.revokeObjectURL(previewImageUrl);
-      }
+      // Clean up - no need to revoke URLs when using convertFileSrc
       setPreviewImagePath(null);
       setPreviewImageUrl(null);
       setIsUploading(false);
@@ -261,12 +319,12 @@ export function CapeBrowser() {
       <div className="h-full flex flex-col items-center justify-center text-red-400 p-5 text-center">
         <p className="font-minecraft text-3xl">Error Loading Capes</p>
         <p className="text-lg mt-2 mb-4 text-white/70">{error}</p>
-        <button 
+        <Button 
           onClick={() => fetchCapesData(currentPage, filters, searchQuery)} 
-          className="font-minecraft lowercase text-2xl px-6 py-2 bg-accent text-accent-foreground rounded hover:bg-accent-hover transition-colors"
+          size="md"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -277,40 +335,42 @@ export function CapeBrowser() {
       <div className="p-3 border-b border-white/10 bg-background-secondary flex flex-wrap items-center justify-between gap-2">
         <div className="font-minecraft text-xl text-white/90 lowercase">Cape Actions</div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             onClick={handleUploadClick}
             disabled={isUploading}
-            className="flex items-center gap-1.5 font-minecraft lowercase px-3 py-1.5 bg-accent hover:bg-accent-hover text-accent-foreground rounded transition-colors"
-            style={{ backgroundColor: `${accentColor.value}` }}
-          >
-            {isUploading ? (
-              <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
-            ) : (
+            size="sm"
+            icon={isUploading ? 
+              <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" /> : 
               <Icon icon="solar:upload-minimalistic-bold" className="w-4 h-4" />
-            )}
-            Upload Cape
-          </button>
-          
-          <button
-            onClick={handleDownloadTemplate}
-            className="flex items-center gap-1.5 font-minecraft lowercase px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+            }
+            className="min-w-0"
           >
-            <Icon icon="solar:download-minimalistic-bold" className="w-4 h-4" />
-            Template
-          </button>
+            Upload Cape
+          </Button>
           
-          <button
+          <Button
+            onClick={handleDownloadTemplate}
+            variant="secondary"
+            size="sm"
+            icon={<Icon icon="solar:download-minimalistic-bold" className="w-4 h-4" />}
+            className="min-w-0"
+          >
+            Template
+          </Button>
+          
+          <Button
             onClick={handleUnequipCape}
             disabled={isUnequipping}
-            className="flex items-center gap-1.5 font-minecraft lowercase px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
-          >
-            {isUnequipping ? (
-              <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
-            ) : (
+            variant="destructive"
+            size="sm"
+            icon={isUnequipping ? 
+              <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" /> : 
               <Icon icon="solar:close-circle-bold" className="w-4 h-4" />
-            )}
+            }
+            className="min-w-0"
+          >
             Unequip Cape
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -332,6 +392,8 @@ export function CapeBrowser() {
             isLoading={isLoading && capes.length > 0} 
             isEquippingCapeId={isEquippingCapeId}
             searchQuery={searchQuery}
+            canDelete={filters.showOwnedOnly}
+            onDeleteCape={handleDeleteCapeClick}
         />
       </div>
 
@@ -339,56 +401,125 @@ export function CapeBrowser() {
         <CapePagination paginationInfo={paginationInfo} onPageChange={handlePageChange} />
       )}
       
-      {/* Cape Preview Modal */}
+      {/* Cape Preview Modal using Modal component */}
       {showPreviewModal && previewImageUrl && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50">
-          <div className="bg-background-secondary rounded-md p-4 w-full max-w-md flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-minecraft text-xl text-white/90 lowercase">Cape Preview</h3>
-              <button 
+        <Modal
+          title="Cape Preview"
+          titleIcon={<Icon icon="solar:cloak-linear" className="w-5 h-5" />}
+          onClose={handleCancelUpload}
+          width="lg"
+          footer={
+            <div className="flex items-center justify-end gap-3">
+              <Button
                 onClick={handleCancelUpload}
-                className="text-white/70 hover:text-white"
-              >
-                <Icon icon="solar:close-circle-bold" className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="bg-black/30 rounded p-3 mb-4 flex items-center justify-center">
-              <img 
-                src={previewImageUrl} 
-                alt="Cape Preview" 
-                className="max-h-64 object-contain"
-              />
-            </div>
-            
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={handleCancelUpload}
-                className="flex-1 font-minecraft lowercase px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                variant="secondary"
+                size="sm"
+                className="min-w-0"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleConfirmUpload()}
                 disabled={isUploading}
-                className="flex-1 font-minecraft lowercase px-3 py-2 bg-accent hover:bg-accent-hover text-accent-foreground rounded transition-colors flex items-center justify-center gap-2"
-                style={{ backgroundColor: `${accentColor.value}` }}
+                size="sm"
+                icon={isUploading ? 
+                  <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" /> : 
+                  <Icon icon="solar:upload-minimalistic-bold" className="w-4 h-4" />
+                }
+                className="min-w-0"
               >
-                {isUploading ? (
-                  <>
-                    <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Icon icon="solar:upload-minimalistic-bold" className="w-4 h-4" />
-                    Upload
-                  </>
-                )}
-              </button>
+                Upload Cape
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6 flex flex-col sm:flex-row gap-6">
+            {/* Left side: 2D preview */}
+            <div className="flex-1 flex flex-col items-center">
+              <h3 className="font-minecraft text-lg text-white/80 mb-2 lowercase">2D Preview</h3>
+              <div className="bg-black/30 rounded p-3 w-full flex items-center justify-center">
+                <img 
+                  src={previewImageUrl} 
+                  alt="Cape Preview" 
+                  className="max-h-64 object-contain"
+                />
+              </div>
+            </div>
+            
+            {/* Right side: 3D preview with Cape3DRenderer */}
+            <div className="flex-1 flex flex-col items-center">
+              <h3 className="font-minecraft text-lg text-white/80 mb-2 lowercase">3D Preview</h3>
+              <div className="bg-black/30 rounded p-3 w-full flex items-center justify-center h-[264px]">
+                <Cape3DRenderer 
+                  imageUrl={previewImageUrl}
+                  width={220}
+                  height={220}
+                  autoRotate={true}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </Modal>
+      )}
+      
+      {/* Delete Cape Confirmation Modal */}
+      {showDeleteModal && capeToDelete && (
+        <Modal
+          title="Delete Cape"
+          titleIcon={<Icon icon="solar:trash-bin-trash-bold" className="w-5 h-5 text-red-500" />}
+          onClose={handleCancelDelete}
+          width="sm"
+          footer={
+            <div className="flex items-center justify-end gap-3">
+              <Button
+                onClick={handleCancelDelete}
+                variant="secondary"
+                size="sm"
+                className="min-w-0"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                variant="destructive"
+                size="sm"
+                icon={isDeleting ? 
+                  <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" /> : 
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                }
+                className="min-w-0"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Cape'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6">
+            <p className="text-white font-minecraft text-lg mb-4">
+              Are you sure you want to delete this cape?
+            </p>
+            <p className="text-white/70 text-md mb-6">
+              This action cannot be undone. The cape will be permanently removed from your account.
+            </p>
+            
+            <div className="bg-black/30 rounded p-4 flex items-center gap-4">
+              {/* Show cape thumbnail */}
+              <div className="w-20 h-20 bg-black/50 rounded flex items-center justify-center overflow-hidden">
+                <img 
+                  src={`https://noriskclient.de/capes/${capeToDelete._id}`} 
+                  alt="Cape to delete" 
+                  className="max-w-full max-h-full object-contain"
+                />
+              </div>
+              
+              <div>
+                <p className="text-white font-minecraft text-md">Cape ID: <span className="text-white/70">{capeToDelete._id}</span></p>
+                <p className="text-white/70 text-sm">Added on: {new Date(capeToDelete.creationDate).toLocaleDateString()}</p>
+              </div>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

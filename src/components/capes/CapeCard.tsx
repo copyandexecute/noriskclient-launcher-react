@@ -5,8 +5,10 @@ import type { CosmeticCape } from '../../types/noriskCapes';
 import { useThemeStore } from '../../store/useThemeStore'; 
 import { Cape3DRenderer } from './Cape3DRenderer';
 import { Button } from '../ui/buttons/Button';
+import { IconButton } from '../ui/buttons/IconButton';
 import { getPlayerProfileByUuidOrName } from '../../services/cape-service';
 import type { MinecraftProfile } from '../../types/minecraft';
+import { Icon } from '@iconify/react';
 
 interface CapeCardProps {
   cape: CosmeticCape;
@@ -15,12 +17,13 @@ interface CapeCardProps {
   isLoading?: boolean;
   index: number; 
   isActuallyVisible?: boolean;
+  onDelete?: (e: React.MouseEvent) => void;
 }
 
 const CARD_MIN_WIDTH = 210;
 const CAPE_MODEL_ASPECT_RATIO = 10 / 16;
 
-export function CapeCard({ cape, onEquip, isSelected, isLoading, index, isActuallyVisible }: CapeCardProps) {
+export function CapeCard({ cape, onEquip, isSelected, isLoading, index, isActuallyVisible, onDelete }: CapeCardProps) {
   const { _id: capeHash, elytra, uses, firstSeen: creatorUuid } = cape;
   const imageUrl = `https://cdn.norisk.gg/capes-staging/prod/${capeHash}.png`;
   const [creatorName, setCreatorName] = useState<string | null>(null);
@@ -74,13 +77,27 @@ export function CapeCard({ cape, onEquip, isSelected, isLoading, index, isActual
           autoRotate={false}
           backgroundColor="transparent"
         />
-         {elytra && (
+         
+        {elytra && (
           <div 
-            className="absolute top-1 right-1 bg-accent text-accent-foreground px-1.5 py-0.5 text-xs font-bold rounded-sm pixelated-text shadow-md uppercase z-10"
+            className="absolute top-1 left-1 bg-accent text-accent-foreground px-1.5 py-0.5 text-xs font-bold rounded-sm pixelated-text shadow-md uppercase z-10"
             title="This cape includes an Elytra texture."
           >
             Elytra
           </div>
+        )}
+         
+        {onDelete && (
+          <IconButton 
+            className="absolute top-1 right-1 z-20 shadow-md opacity-85 hover:opacity-100"
+            size="xs"
+            variant="destructive"
+            icon={<Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />}
+            onClick={onDelete}
+            aria-label="Delete Cape"
+            title="Delete Cape"
+            shadowDepth="short"
+          />
         )}
       </div>
 

@@ -29,9 +29,11 @@ export interface BrowseCapesOptions {
   page?: number;
   page_size?: number;
   sort_by?: string;
+  filter_by_id?: string;
   filter_has_elytra?: boolean;
   filter_creator?: string;
   time_frame?: string;
+  show_owned_only?: boolean;
   norisk_token?: string;
   request_uuid?: string;
 }

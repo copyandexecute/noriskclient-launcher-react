@@ -1,12 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SearchInput } from '../ui/SearchInput'; // Assuming SearchInput is available and styled like in SkinsTab
+import { SearchInput } from '../ui/SearchInput';
+import { Select, type SelectOption } from '../ui/Select';
+import { Checkbox } from '../ui/Checkbox';
+import { Icon } from '@iconify/react';
+import { Button } from '../ui/buttons/Button';
+import { useMinecraftAuthStore } from '../../store/minecraft-auth-store';
 
 export interface CapeFiltersData {
   sortBy?: string;
   filterHasElytra?: boolean;
   timeFrame?: string; // Added for time frame filtering
+  showOwnedOnly?: boolean; // Add filter for showing only owned capes
   // filterCreator and timeFrame can be added back if UI elements are implemented
 }
 
@@ -19,6 +25,7 @@ interface CapeFiltersProps {
 export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: CapeFiltersProps) {
   // Local state for search input value, no longer stored in parent filters
   const [searchInputValue, setSearchInputValue] = useState<string>('');
+  const { activeAccount } = useMinecraftAuthStore();
 
   const handleSearchChange = (value: string) => {
     // Just update local state, don't propagate to parent filters
@@ -33,17 +40,38 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
     }
   };
 
-  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onFilterChange({ ...currentFilters, sortBy: e.target.value || undefined });
+  const handleSortChange = (value: string) => {
+    onFilterChange({ ...currentFilters, sortBy: value || undefined });
   };
 
   const handleElytraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onFilterChange({ ...currentFilters, filterHasElytra: e.target.checked });
   };
 
-  const handleTimeFrameChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onFilterChange({ ...currentFilters, timeFrame: e.target.value || undefined });
+  const handleTimeFrameChange = (value: string) => {
+    onFilterChange({ ...currentFilters, timeFrame: value || undefined });
   };
+
+  const handleOwnedToggle = () => {
+    onFilterChange({ 
+      ...currentFilters, 
+      showOwnedOnly: !currentFilters.showOwnedOnly 
+    });
+  };
+
+  // Sort options for the Select component
+  const sortOptions: SelectOption[] = [
+    { value: '', label: 'Newest', icon: <Icon icon="solar:sort-by-time-linear" className="w-5 h-5" /> },
+    { value: 'oldest', label: 'Oldest', icon: <Icon icon="solar:sort-by-time-down-linear" className="w-5 h-5" /> },
+    { value: 'mostUsed', label: 'Most Used', icon: <Icon icon="solar:heart-bold" className="w-5 h-5" /> },
+  ];
+
+  // Time frame options for the Select component
+  const timeFrameOptions: SelectOption[] = [
+    { value: '', label: 'All Time', icon: <Icon icon="solar:calendar-mark-linear" className="w-5 h-5" /> },
+    { value: 'weekly', label: 'Weekly', icon: <Icon icon="solar:calendar-week-linear" className="w-5 h-5" /> },
+    { value: 'monthly', label: 'Monthly', icon: <Icon icon="solar:calendar-date-linear" className="w-5 h-5" /> },
+  ];
 
   return (
     <div className="p-3 sm:p-4 border-b border-white/10 bg-background-secondary flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
@@ -61,46 +89,48 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
         <label htmlFor="sort-by" className="font-minecraft text-lg text-white/80 lowercase whitespace-nowrap">
           Sort:
         </label>
-        <select 
-          id="sort-by"
+        <Select 
           value={currentFilters.sortBy || ''}
           onChange={handleSortChange}
-          className="bg-black/30 backdrop-blur-md border-2 border-white/20 px-2.5 py-1 text-white font-minecraft text-lg rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200 h-[38px]"
-        >
-          <option value="">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="mostUsed">Most Used</option>
-        </select>
+          options={sortOptions}
+          size="sm"
+          className="w-[160px]"
+        />
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">
         <label htmlFor="time-frame" className="font-minecraft text-lg text-white/80 lowercase whitespace-nowrap">
           Period:
         </label>
-        <select 
-          id="time-frame"
-          value={currentFilters.timeFrame || ''} // Default to '' for "All Time"
+        <Select
+          value={currentFilters.timeFrame || ''}
           onChange={handleTimeFrameChange}
-          className="bg-black/30 backdrop-blur-md border-2 border-white/20 px-2.5 py-1 text-white font-minecraft text-lg rounded focus:border-white/50 focus:ring-0 outline-none transition duration-200 h-[38px]"
-        >
-          <option value="">All Time</option> 
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
-        </select>
+          options={timeFrameOptions}
+          size="sm"
+          className="w-[160px]"
+        />
       </div>
 
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <input 
-          id="filter-elytra"
-          type="checkbox"
-          checked={currentFilters.filterHasElytra || false}
-          onChange={handleElytraChange}
-          className="appearance-none w-4 h-4 sm:w-5 sm:h-5 rounded border-2 border-white/30 bg-black/20 checked:bg-accent checked:border-accent-hover focus:outline-none focus:ring-1 focus:ring-offset-0 focus:ring-accent transition duration-200 cursor-pointer"
-        />
-        <label htmlFor="filter-elytra" className="font-minecraft text-lg text-white/80 lowercase cursor-pointer select-none">
-          Elytra
-        </label>
-      </div>
+      <Checkbox
+        checked={currentFilters.filterHasElytra || false}
+        onChange={handleElytraChange}
+        label="Elytra"
+        customSize="sm"
+        className="pt-1"
+      />
+
+      <Button
+        onClick={handleOwnedToggle}
+        variant={currentFilters.showOwnedOnly ? "default" : "secondary"}
+        size="sm"
+        icon={<Icon icon="solar:user-id-broken" className="w-4 h-4" />}
+        className="min-w-0"
+        disabled={!activeAccount}
+        title={!activeAccount ? "No active Minecraft account" : undefined}
+      >
+        My Capes
+      </Button>
+      
       {/* Placeholder for other filters like creator and timeFrame can be added here if needed */}
     </div>
   );
