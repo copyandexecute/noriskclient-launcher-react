@@ -5,6 +5,7 @@ use crate::state::state_manager::State;
 use log::{debug, error};
 use serde::Deserialize;
 use std::path::PathBuf;
+use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 // Define a struct to hold all parameters for browse_capes
@@ -578,4 +579,88 @@ pub async fn unequip_cape(
     }
 
     result
+}
+
+/// Download a cape template and open the explorer to the file
+///
+/// Downloads the template to the user's download directory and opens the folder
+#[tauri::command]
+pub async fn download_template_and_open_explorer(app_handle: tauri::AppHandle) -> Result<(), CommandError> {
+    debug!("Command called: download_template_and_open_explorer");
+
+    // Get the state manager
+    let state = State::get().await?;
+
+    // Get the is_experimental value from the config state
+    let is_experimental = state.config_manager.is_experimental_mode().await;
+    debug!("Using experimental mode: {}", is_experimental);
+
+    // Set template URL based on experimental mode
+    let template_url = if is_experimental {
+        "https://cdn.norisk.gg/capes-staging/template.png"
+    } else {
+        "https://cdn.norisk.gg/capes/template.png"
+    };
+    debug!("Template URL: {}", template_url);
+
+    // Get user's download directory
+    let user_dirs = directories::UserDirs::new()
+        .ok_or_else(|| CommandError::from(AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Failed to get user directories"
+        ))))?;
+    
+    let downloads_dir = user_dirs.download_dir()
+        .ok_or_else(|| CommandError::from(AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Failed to get downloads directory"
+        ))))?;
+    
+    debug!("Downloads directory: {:?}", downloads_dir);
+
+    // Create the output file path
+    let file_path = downloads_dir.join("nrc_cape_template.png");
+    let file_path_str = file_path.to_string_lossy().to_string();
+    
+    // Download the template using reqwest
+    let response = crate::config::HTTP_CLIENT
+        .get(template_url)
+        .send()
+        .await
+        .map_err(|e| {
+            error!("Error downloading template: {:?}", e);
+            CommandError::from(AppError::RequestError(format!("Error downloading template: {}", e)))
+        })?;
+    
+    // Read response bytes
+    let template_bytes = response
+        .bytes()
+        .await
+        .map_err(|e| {
+            error!("Error reading template bytes: {:?}", e);
+            CommandError::from(AppError::RequestError(format!("Error reading template bytes: {}", e)))
+        })?;
+
+    // Save the template to the file using tokio's async file operations
+    tokio::fs::write(&file_path, &template_bytes)
+        .await
+        .map_err(|e| {
+            error!("Error writing template file: {:?}", e);
+            CommandError::from(AppError::Io(e))
+        })?;
+
+    debug!("Template downloaded to: {:?}", file_path);
+
+    // Use the Tauri opener plugin to reveal the file in the explorer
+    app_handle.opener().reveal_item_in_dir(file_path_str).map_err(|e| {
+        error!("Error revealing file in directory: {:?}", e);
+        CommandError::from(AppError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Error revealing file in directory: {}", e)
+        )))
+    })?;
+
+    debug!("File revealed in directory");
+    debug!("Command completed: download_template_and_open_explorer");
+    Ok(())
 }

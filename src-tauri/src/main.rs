@@ -84,6 +84,7 @@ use commands::path_commands::{get_launcher_directory, resolve_image_path};
 // Import cape commands
 use commands::cape_command::{
     browse_capes, delete_cape, equip_cape, get_player_capes, unequip_cape, upload_cape,
+    download_template_and_open_explorer,
 };
 
 use tauri::Manager;
@@ -344,6 +345,7 @@ async fn main() {
             commands::content_command::install_content_to_profile,
             commands::minecraft_command::get_profile_by_name_or_uuid,
             commands::minecraft_command::add_skin_locally,
+            commands::cape_command::download_template_and_open_explorer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -111,6 +111,16 @@ export const unequipCape = (
 };
 
 /**
+ * Download a cape template PNG and open the containing folder in the file explorer
+ * 
+ * @returns A promise that resolves when the template has been downloaded and the folder is opened
+ */
+export const downloadTemplateAndOpenExplorer = (): Promise<void> => {
+  console.log('[cape-service] Downloading cape template and opening explorer');
+  return invoke('download_template_and_open_explorer');
+};
+
+/**
  * Fetches a Minecraft profile by player name or UUID.
  * Corresponds to the Rust `get_profile_by_name_or_uuid` command.
  *
