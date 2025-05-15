@@ -103,27 +103,33 @@ export function WizardSidebar({
             const isClickable =
               stepNumber <= currentStep || isStepValid(currentStep);
             const isValid = isStepValid(stepNumber);
+            const isCompleted = isPast && isValid;
 
             return (
               <button
                 key={`step-${stepNumber}`}
                 className={`w-full text-left p-3 rounded-md transition-all duration-200 flex items-center gap-3 
-                  border-2 ${isActive ? "border-b-4" : ""}`}
+                  border-2 ${isActive || isCompleted ? "border-b-4" : ""}`}
                 style={{
                   backgroundColor: isActive
                     ? `${accentColor.value}30`
-                    : isPast && isValid
+                    : isCompleted
                       ? `${accentColor.value}15`
                       : "rgba(0,0,0,0.2)",
                   borderColor: isActive
                     ? `${accentColor.value}60`
-                    : isPast && isValid
+                    : isCompleted
                       ? `${accentColor.value}40`
                       : "rgba(255,255,255,0.2)",
-                  borderBottomColor: isActive ? accentColor.value : undefined,
+                  borderBottomColor:
+                    isActive || isCompleted
+                      ? accentColor.value
+                      : "rgba(255,255,255,0.15)",
                   boxShadow: isActive
                     ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
-                    : "none",
+                    : isCompleted
+                      ? `0 3px 0 rgba(0,0,0,0.15), 0 4px 8px rgba(0,0,0,0.1), inset 0 1px 0 ${accentColor.value}15, inset 0 0 0 1px ${accentColor.value}10`
+                      : "none",
                   opacity: isClickable ? 1 : 0.5,
                   transform: isActive ? "translateY(0)" : "translateY(0)",
                   cursor: isClickable ? "pointer" : "not-allowed",
@@ -136,17 +142,17 @@ export function WizardSidebar({
                   style={{
                     backgroundColor: isActive
                       ? `${accentColor.value}40`
-                      : isPast && isValid
+                      : isCompleted
                         ? "rgba(16, 185, 129, 0.3)"
                         : "rgba(255,255,255,0.1)",
                     borderColor: isActive
                       ? `${accentColor.value}70`
-                      : isPast && isValid
+                      : isCompleted
                         ? "rgba(16, 185, 129, 0.6)"
                         : "rgba(255,255,255,0.2)",
                   }}
                 >
-                  {isPast && isValid ? (
+                  {isCompleted ? (
                     <Icon
                       icon="solar:check-circle-bold"
                       className="w-5 h-5 text-green-500"
