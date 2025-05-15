@@ -329,7 +329,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           />
         ))}
 
-        <span className="relative z-10 flex items-center gap-1.5">
+        <span className="relative z-10 flex items-center gap-1.5 lowercase">
           {children}
         </span>
       </div>
