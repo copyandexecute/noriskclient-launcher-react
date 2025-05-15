@@ -132,13 +132,13 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
     // This block can be commented out for testing to prevent actual installation
     /* START INSTALL BLOCK */
     info!("Starting update installation...");
-    /*update
+    update
         .install(bytes) // Use the install method with the downloaded bytes
         .map_err(|e| {
             error!("Update installation failed: {}", e);
             // Convert updater::Error to AppError::Other for install step
             AppError::Other(format!("Updater install error: {}", e))
-        })?;*/
+        })?;
     // Simulate install time if commented out
     #[cfg(debug_assertions)]
     if true { // Change to check if install block IS commented out if needed
@@ -282,6 +282,6 @@ pub async fn check_for_updates(
     }
 
     //TODO: Remove this line when the updater is fully implemented
-    //emit_status(&app_handle, "close", final_message.clone(), None);
+    emit_status(&app_handle, "close", final_message.clone(), None);
     info!("Update check process fully completed (Status: {}). Final Message: {}", final_status, final_message);
 }
