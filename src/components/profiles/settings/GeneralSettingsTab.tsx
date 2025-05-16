@@ -207,7 +207,7 @@ export function GeneralSettingsTab({
               />
               {editedProfile.selected_norisk_pack_id &&
                 noriskPacks[editedProfile.selected_norisk_pack_id] && (
-                  <p className="text-xl text-white/70 mt-2 font-minecraft tracking-wide select-none">
+                  <p className="text-xs text-white/70 mt-2 font-minecraft-ten tracking-wide select-none">
                     {
                       noriskPacks[editedProfile.selected_norisk_pack_id]
                         .description
@@ -221,14 +221,16 @@ export function GeneralSettingsTab({
 
       <Card ref={actionsRef} variant="default" className="mt-6 p-4">
         <div className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[250px]">
-            <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
-              duplicate instance
-            </h3>
-            <p className="text-xl text-white/70 mb-3 font-minecraft tracking-wide select-none">
-              creates a copy of this instance, including worlds, configs, mods,
-              etc.
-            </p>
+          <div className="flex-1 min-w-[250px] flex flex-col justify-between">
+            <div>
+              <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
+                duplicate instance
+              </h3>
+              <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide select-none">
+                creates a copy of this instance, including worlds, configs, mods,
+                etc.
+              </p>
+            </div>
             <Button
               onClick={handleDuplicate}
               disabled={loading}
@@ -253,14 +255,16 @@ export function GeneralSettingsTab({
             </Button>
           </div>
 
-          <div className="flex-1 min-w-[250px]">
-            <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
-              delete instance
-            </h3>
-            <p className="text-xl text-white/70 mb-3 font-minecraft tracking-wide select-none">
-              permanently deletes this instance from your device, including your
-              worlds, configs, and all installed content.
-            </p>
+          <div className="flex-1 min-w-[250px] flex flex-col justify-between">
+            <div>
+              <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
+                delete instance
+              </h3>
+              <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide select-none">
+                permanently deletes this instance from your device, including your
+                worlds, configs, and all installed content.
+              </p>
+            </div>
             <Button
               onClick={handleDelete}
               variant="destructive"
