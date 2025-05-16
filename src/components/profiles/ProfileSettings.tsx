@@ -8,14 +8,12 @@ import { GeneralSettingsTab } from "./settings/GeneralSettingsTab";
 import { InstallationSettingsTab } from "./settings/InstallationSettingsTab";
 import { JavaSettingsTab } from "./settings/JavaSettingsTab";
 import { WindowSettingsTab } from "./settings/WindowSettingsTab";
+import { ExportSettingsTab } from "./settings/ExportSettingsTab";
 import { useProfileStore } from "../../store/profile-store";
 import * as ProfileService from "../../services/profile-service";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/buttons/Button";
-import { StatusMessage } from "../ui/StatusMessage";
 import { useThemeStore } from "../../store/useThemeStore";
-import { Input } from "../ui/Input";
-import { Checkbox } from "../ui/Checkbox";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
 
@@ -24,19 +22,14 @@ interface ProfileSettingsProps {
   onClose: () => void;
 }
 
-type SettingsTab = "general" | "installation" | "java" | "window" | "export";
+type SettingsTab = "general" | "installation" | "java" | "window" | "export_options";
 
 export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const { updateProfile, deleteProfile } = useProfileStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [editedProfile, setEditedProfile] = useState<Profile>({ ...profile });
   const [isSaving, setIsSaving] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isCloning, setIsCloning] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [exportFilename, setExportFilename] = useState(profile.name);
-  const [exportIncludeFiles, setExportIncludeFiles] = useState(true);
-  const [exportOpenFolder, setExportOpenFolder] = useState(true);
   const [systemRam, setSystemRam] = useState<number>(8192);
   const contentRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -116,8 +109,6 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         error: (err) => {
           const errorMessage =
             err instanceof Error ? err.message : String(err);
-          // console.error might still be useful for debugging
-          // console.error("Failed to delete profile:", errorMessage);
           return `Failed to delete profile: ${errorMessage}`;
         },
       })
@@ -125,63 +116,10 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         setIsDeleting(false);
       });
     } catch (err) {
-      // This catch block might be redundant if toast.promise handles all errors
-      // For safety, we can keep a generic toast here or rely on the promise's error handling.
       console.error("Error during delete initiation:", err);
       const errorMessage = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to initiate profile deletion: ${errorMessage}`);
-      setIsDeleting(false); // Ensure this is set if the promise setup itself fails
-    }
-  };
-
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
-      const exportParams = {
-        profile_id: profile.id,
-        file_name: exportFilename || profile.name,
-        include_files: exportIncludeFiles ? undefined : [],
-        open_folder: exportOpenFolder,
-      };
-
-      const exportPath = await ProfileService.exportProfile(exportParams);
-      console.log("Profile exported to:", exportPath);
-
-      toast.success(`Profile successfully exported to: ${exportPath}`);
-
-      setExportFilename(profile.name);
-      setExportIncludeFiles(true);
-      setExportOpenFolder(true);
-    } catch (err) {
-      console.error("Failed to export profile:", err);
-      toast.error("Failed to export profile. Please try again.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleCloneProfile = async () => {
-    try {
-      setIsCloning(true);
-      const copyParams = {
-        source_profile_id: profile.id,
-        new_profile_name: `${profile.name} (Copy)`,
-        include_files: undefined,
-      };
-
-      const newProfileId = await ProfileService.copyProfile(copyParams);
-      console.log("Profile cloned with ID:", newProfileId);
-
-      toast.success(`Profile successfully cloned!`);
-
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (err) {
-      console.error("Failed to clone profile:", err);
-      toast.error("Failed to clone profile. Please try again.");
-    } finally {
-      setIsCloning(false);
+      setIsDeleting(false);
     }
   };
 
@@ -190,108 +128,8 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     { id: "installation", label: "Installation", icon: "solar:download-bold" },
     { id: "java", label: "Java", icon: "solar:code-bold" },
     { id: "window", label: "Window", icon: "solar:widget-bold" },
-    { id: "export", label: "Export", icon: "solar:export-bold" },
+    { id: "export_options", label: "Export", icon: "solar:export-bold" },
   ];
-
-  const renderExportTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-3xl font-minecraft text-white mb-5 lowercase">
-          export profile
-        </h3>
-        <p className="text-xs text-white/70 mb-6 font-minecraft-ten tracking-wide">
-          Export your profile to share with others or back it up. You can
-          include all files or just the profile configuration.
-        </p>
-      </div>
-
-      <Card variant="default" className="p-5 space-y-4">
-        <div className="space-y-2">
-          <label
-            htmlFor="exportFilename"
-            className="block text-3xl text-white font-minecraft mb-3 lowercase"
-          >
-            export filename
-          </label>
-          <Input
-            id="exportFilename"
-            value={exportFilename}
-            onChange={(e) => setExportFilename(e.target.value)}
-            placeholder="Enter filename without extension"
-            className="text-2xl py-3"
-          />
-          <p className="mt-2 text-xs text-white/50 font-minecraft-ten tracking-wide">
-            The .noriskpack extension will be added automatically
-          </p>
-        </div>
-
-        <div className="space-y-2 mt-4">
-          <Checkbox
-            checked={exportIncludeFiles}
-            onChange={(e) => setExportIncludeFiles(e.target.checked)}
-            label="include profile files"
-            description="Include mods, resource packs, and other files in the export"
-            className="text-2xl"
-          />
-        </div>
-
-        <div className="space-y-2 mt-4">
-          <Checkbox
-            checked={exportOpenFolder}
-            onChange={(e) => setExportOpenFolder(e.target.checked)}
-            label="open folder after export"
-            className="text-2xl"
-          />
-        </div>
-      </Card>
-
-      <div className="flex flex-wrap gap-4 pt-4">
-        <Button
-          variant="default"
-          onClick={handleExport}
-          disabled={isExporting || !exportFilename}
-          icon={
-            <Icon icon="solar:export-bold" className="w-6 h-6 text-white" />
-          }
-          size="md"
-          className="text-2xl"
-        >
-          {isExporting ? (
-            <>
-              <Icon
-                icon="solar:refresh-bold"
-                className="w-6 h-6 animate-spin text-white"
-              />
-              <span>exporting...</span>
-            </>
-          ) : (
-            "export profile"
-          )}
-        </Button>
-
-        <Button
-          variant="secondary"
-          onClick={handleCloneProfile}
-          disabled={isCloning}
-          icon={<Icon icon="solar:copy-bold" className="w-5 h-5 text-white" />}
-          size="md"
-          className="text-2xl"
-        >
-          {isCloning ? (
-            <>
-              <Icon
-                icon="solar:refresh-bold"
-                className="w-5 h-5 animate-spin text-white"
-              />
-              <span>cloning...</span>
-            </>
-          ) : (
-            "clone profile"
-          )}
-        </Button>
-      </div>
-    </div>
-  );
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -328,8 +166,8 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             updateProfile={updateProfileData}
           />
         );
-      case "export":
-        return renderExportTab();
+      case "export_options":
+        return <ExportSettingsTab profile={profile} onClose={onClose} />;
       default:
         return null;
     }
@@ -385,7 +223,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           }}
         >
           <div className="p-4">
-            <Card variant="default" className="mb-6 p-3">
+            <Card variant="default" className="mb-6 p-3" withAnimation={isBackgroundAnimationEnabled}>
               <div className="flex items-center gap-2">
                 <Icon
                   icon="solar:settings-bold"

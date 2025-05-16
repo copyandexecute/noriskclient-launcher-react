@@ -15,7 +15,7 @@ export interface FileNode {
     is_dir: boolean;
     
     /** Child nodes (empty for files) */
-    children: FileNode[];
+    children?: FileNode[];
     
     /** File size in bytes (0 for directories) */
     size: number;
