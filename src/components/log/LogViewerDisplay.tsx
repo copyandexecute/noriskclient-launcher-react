@@ -29,6 +29,7 @@ interface LogViewerDisplayProps {
   logLevelsDefinition: readonly LogLevel[];
   scrollableContainerRef?: React.RefObject<HTMLDivElement>;
   isLiveLogs?: boolean;
+  showPadding?: boolean;
 
   isAutoscrollEnabled?: boolean;
   onAutoscrollChange?: (enabled: boolean) => void;
@@ -88,11 +89,14 @@ export function LogViewerDisplay({
   onLogSelect,
 }: LogViewerDisplayProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
   const controlsRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isAnimationEnabled) return;
+    
     if (controlsRef.current) {
       gsap.fromTo(
         controlsRef.current,
@@ -108,7 +112,7 @@ export function LogViewerDisplay({
         { opacity: 1, duration: 0.5, ease: "power2.out", delay: 0.2 },
       );
     }
-  }, []);
+  }, [isAnimationEnabled]);
 
   const getLevelButtonStyle = (level: LogLevel) => {
     if (!levelFilters[level]) {
@@ -329,7 +333,9 @@ export function LogViewerDisplay({
               </div>
             </div>
           ) : (
-            <div className="min-h-full p-3 bg-black/60 font-mono text-sm whitespace-pre-wrap">
+            <div className={cn(
+              "min-h-full bg-black/60 font-mono text-sm whitespace-pre-wrap p-2",
+            )}>
               {displayLines.map((line, index) => (
                 <div
                   key={`${line.id}-${index}`}

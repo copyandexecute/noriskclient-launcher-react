@@ -65,10 +65,13 @@ export function LogWindow() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   const logParserRef = useRef<LogParser | null>(null);
 
   useEffect(() => {
+    if (!isAnimationEnabled) return;
+    
     if (containerRef.current) {
       gsap.fromTo(
         containerRef.current,
@@ -76,7 +79,7 @@ export function LogWindow() {
         { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" },
       );
     }
-  }, []);
+  }, [isAnimationEnabled]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -385,7 +388,7 @@ export function LogWindow() {
     <div
       ref={containerRef}
       className={cn(
-        "flex flex-col h-full text-white font-minecraft p-4",
+        "flex flex-col h-full text-white font-minecraft",
         "transition-colors duration-300",
       )}
       style={{ backgroundColor: `${accentColor.value}10` }}
