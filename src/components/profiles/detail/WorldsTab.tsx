@@ -8,10 +8,16 @@ import { Button } from "../../ui/buttons/Button";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Select } from "../../ui/Select";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { useProfileStore } from "../../../store/profile-store";
 import { SearchInput } from "../../ui/SearchInput";
 import { LoadingState } from "../../ui/LoadingState";
 import { EmptyState } from "../../ui/EmptyState";
 import { gsap } from "gsap";
+import { TagBadge } from "../../ui/TagBadge";
+import { CopyWorldDialog } from "../../modals/CopyWorldDialog";
+import { ConfirmDeleteDialog } from "../../modals/ConfirmDeleteDialog";
+import { toast } from "react-hot-toast";
+import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 // --- Import Real Types ---
 import type {
@@ -19,7 +25,7 @@ import type {
   ServerPingInfo,
   WorldInfo,
 } from "../../../types/minecraft";
-import type { Profile } from "../../../types/profile";
+import type { Profile, CopyWorldParams } from "../../../types/profile";
 import { timeAgo } from "../../../utils/time-utils";
 import * as WorldService from "../../../services/world-service";
 import {
@@ -55,6 +61,9 @@ export function WorldsTab({
   searchQuery = "",
   onLaunchRequest,
 }: WorldsTabProps) {
+  const allProfilesFromStore = useProfileStore((state) => state.profiles);
+  const isLoadingProfilesFromStore = useProfileStore((state) => state.loading);
+
   // --- State ---
   const [worlds, setWorlds] = useState<WorldInfo[]>([]);
   const [servers, setServers] = useState<ServerInfo[]>([]);
@@ -65,10 +74,20 @@ export function WorldsTab({
     Record<string, ServerPingInfo>
   >({});
   const [pingingServers, setPingingServers] = useState<Set<string>>(new Set());
-  // Copy Dialog State (Placeholders - Dialog not implemented)
-  const [, setShowCopyDialog] = useState(false);
-  const [, setWorldToCopy] = useState<WorldInfo | null>(null);
-  const [copyLoading] = useState(false); // TODO: Use this state
+  
+  // --- Copy Dialog State ---
+  const [isCopyWorldDialogOpen, setIsCopyWorldDialogOpen] = useState(false);
+  const [worldToCopy, setWorldToCopy] = useState<WorldInfo | null>(null);
+  const [isCopyingWorld, setIsCopyingWorld] = useState(false);
+  const [copyWorldError, setCopyWorldError] = useState<string | null>(null);
+  // --- End Copy Dialog State ---
+
+  // --- Delete Dialog State ---
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [worldToDelete, setWorldToDelete] = useState<WorldInfo | null>(null);
+  const [isActuallyDeleting, setIsActuallyDeleting] = useState(false);
+  // --- End Delete Dialog State ---
+
   const [deleteLoading, setDeleteLoading] = useState<Record<string, boolean>>(
     {},
   );
@@ -377,43 +396,90 @@ export function WorldsTab({
     [profile?.id, onLaunchRequest],
   );
 
-  const handleOpenCopyDialog = useCallback((world: WorldInfo) => {
-    console.log(`Opening copy dialog for: ${world.folder_name}`);
+  const handleOpenCopyDialog = useCallback(async (world: WorldInfo) => {
     setWorldToCopy(world);
-    setShowCopyDialog(true);
-    notificationStore.error("Copy World dialog not implemented.");
-    setTimeout(() => setShowCopyDialog(false), 500);
+    setCopyWorldError(null);
+    setIsCopyWorldDialogOpen(true);
   }, []);
 
-  const handleDelete = useCallback(
-    async (world: WorldInfo) => {
-      const currentProfileId = profile?.id;
-      if (
-        !currentProfileId ||
-        !window.confirm(`Delete world "${getWorldDisplayName(world)}"?`)
-      )
-        return;
-      console.log(`Deleting world: ${world.folder_name}`);
-      setDeleteLoading((prev) => ({ ...prev, [world.folder_name]: true }));
-      try {
-        await WorldService.deleteWorld(currentProfileId, world.folder_name);
-        notificationStore.success(
-          `World "${getWorldDisplayName(world)}" deleted.`,
-        );
+  const handleCloseCopyDialog = useCallback(() => {
+    setIsCopyWorldDialogOpen(false);
+    setWorldToCopy(null);
+  }, []);
+
+  const handleConfirmCopyWorld = useCallback(async (params: { targetProfileId: string; targetWorldName: string }) => {
+    if (!worldToCopy || !profile?.id) return;
+
+    setIsCopyingWorld(true);
+    setCopyWorldError(null);
+
+    const copyParams: CopyWorldParams = {
+      source_profile_id: profile.id,
+      source_world_folder: worldToCopy.folder_name,
+      target_profile_id: params.targetProfileId,
+      target_world_name: params.targetWorldName,
+    };
+
+    try {
+      await WorldService.copyWorld(copyParams);
+      toast.success(`World '${getWorldDisplayName(worldToCopy)}' copied successfully as '${params.targetWorldName}'!`);
+      if (params.targetProfileId === profile.id) {
         await loadData();
-      } catch (err) {
-        console.error("Delete failed:", err);
-        notificationStore.error(`Delete failed: ${err}`);
-      } finally {
-        setDeleteLoading((prev) => {
-          const n = { ...prev };
-          delete n[world.folder_name];
-          return n;
-        });
       }
-    },
-    [profile?.id, getWorldDisplayName, loadData],
-  );
+    } catch (err) {
+      console.error("Failed to copy world:", err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setCopyWorldError(`Copy failed: ${errorMsg}`);
+      toast.error(`Failed to copy world: ${errorMsg}`);
+    } finally {
+      setIsCopyingWorld(false);
+    }
+  }, [worldToCopy, profile?.id, getWorldDisplayName, loadData, handleCloseCopyDialog]);
+
+  const handleDeleteRequest = useCallback((world: WorldInfo) => {
+    setWorldToDelete(world);
+    setIsDeleteConfirmOpen(true);
+  }, []);
+
+  const handleCloseDeleteConfirmDialog = useCallback(() => {
+    setIsDeleteConfirmOpen(false);
+    setWorldToDelete(null);
+  }, []);
+
+  const handleConfirmActualDelete = useCallback(async () => {
+    if (!worldToDelete || !profile?.id) return;
+
+    setIsActuallyDeleting(true);
+    try {
+      await WorldService.deleteWorld(profile.id, worldToDelete.folder_name);
+      toast.success(`World "${getWorldDisplayName(worldToDelete)}" deleted.`);
+      handleCloseDeleteConfirmDialog();
+      await loadData();
+    } catch (err) {
+      console.error("Delete failed:", err);
+      toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsActuallyDeleting(false);
+    }
+  }, [worldToDelete, profile?.id, getWorldDisplayName, loadData, handleCloseDeleteConfirmDialog]);
+
+  const handleOpenWorldFolder = useCallback(async (world: WorldInfo) => {
+    if (!world?.icon_path) {
+      toast.error("World path is not available.");
+      console.error("Cannot open world folder: Profile path is missing.", profile);
+      return;
+    }
+    // Basic path joining, consider using a library for robust path construction if complex scenarios arise
+    const worldFolderPath = `${world.icon_path}`;
+    try {
+      console.log(`Attempting to open folder: ${worldFolderPath}`);
+      await revealItemInDir(worldFolderPath);
+      toast.success(`Opened folder for '${getWorldDisplayName(world)}'`);
+    } catch (err) {
+      console.error(`Failed to open folder ${worldFolderPath}:`, err);
+      toast.error(`Failed to open folder: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [profile?.path, getWorldDisplayName]);
 
   const handleRefresh = () => {
     loadData();
@@ -582,8 +648,8 @@ export function WorldsTab({
                     key={key}
                     className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors"
                   >
-                    {/* 3D Image Frame */}
-                    <div className="relative w-16 h-16 flex-shrink-0">
+                    {/* Icon Section */}
+                    <div className="relative w-24 h-24 flex-shrink-0">
                       <div
                         className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
                         style={{
@@ -635,59 +701,27 @@ export function WorldsTab({
                       </div>
                     </div>
 
-                    <div className="flex-grow min-w-0">
+                    {/* Middle Section (Description) */}
+                    <div className="flex-grow min-w-0 h-24 flex flex-col overflow-hidden">
+                      {/* Top: Title */}
                       <h3
-                        className="font-minecraft text-2xl lowercase tracking-wide truncate"
+                        className="font-minecraft-ten text-base tracking-wide truncate flex-shrink-0"
                         title={itemDisplayName}
                       >
                         {itemDisplayName}
                       </h3>
-                      {isWorld ? (
-                        <>
-                          <p className="text-white/60 text-xl mt-2">
+
+                      {/* Middle: Subtitle (Last Played / MOTD) - vertically centered */}
+                      <div className="flex-grow flex items-center my-1 overflow-hidden">
+                        {isWorld ? (
+                          <p className="text-white/60 text-xs truncate font-minecraft-ten">
                             {item.last_played
                               ? `Last played: ${timeAgo(item.last_played)}`
                               : "Never played"}
                           </p>
-                          <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
-                            <span>
-                              Mode: {getGameModeString(item.game_mode)}
-                            </span>
-                            <span>
-                              Difficulty: {getDifficultyString(item.difficulty)}
-                            </span>
-                            {item.is_hardcore && (
-                              <span className="text-red-400 font-bold inline-flex items-center gap-1">
-                                <Icon
-                                  icon="solar:skull-bold"
-                                  className="w-4 h-4"
-                                />{" "}
-                                Hardcore
-                              </span>
-                            )}
-                            {item.difficulty_locked && (
-                              <span
-                                title="Difficulty Locked"
-                                className="inline-flex items-center gap-1"
-                              >
-                                <Icon
-                                  icon="solar:lock-bold"
-                                  className="w-4 h-4"
-                                />{" "}
-                                Locked
-                              </span>
-                            )}
-                            {item.version_name && (
-                              <span title={`Version: ${item.version_name}`}>
-                                v: {item.version_name}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
+                        ) : (
                           <div
-                            className="text-white/70 text-xl mt-2 motd-container h-10 overflow-hidden"
+                            className="text-white/70 text-xs motd-container overflow-hidden truncate font-minecraft-ten text-center"
                             title={pingInfo?.description || item.address || ""}
                           >
                             {isPinging ? (
@@ -713,61 +747,118 @@ export function WorldsTab({
                               </span>
                             )}
                           </div>
-                          <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
-                            {isPinging ? (
-                              <span>Pinging...</span>
-                            ) : hasPingError ? (
-                              <span className="text-red-400">Error</span>
-                            ) : pingInfo ? (
-                              <>
-                                <span
-                                  title="Players"
-                                  className="inline-flex items-center gap-2"
-                                >
-                                  <Icon
-                                    icon="solar:users-group-rounded-bold"
-                                    className="w-4 h-4"
-                                  />
-                                  {pingInfo.players_online ?? "-"}/
-                                  {pingInfo.players_max ?? "-"}
-                                </span>
-                                <span
-                                  title="Latency"
-                                  className="inline-flex items-center gap-2"
-                                >
-                                  <Icon
-                                    icon="solar:wifi-bold"
-                                    className="w-4 h-4"
-                                  />
-                                  {pingInfo.latency_ms ?? "-"} ms
-                                </span>
-                                {pingInfo.version_name && (
-                                  <span
-                                    title="Version"
-                                    className="inline-flex items-center gap-2"
-                                  >
-                                    <Icon
-                                      icon="solar:tag-bold"
-                                      className="w-4 h-4"
-                                    />
-                                    {pingInfo.version_name}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <span>Offline / Unknown</span>
+                        )}
+                      </div>
+
+                      {/* Bottom: Tag Badges */}
+                      <div className="flex flex-wrap items-center gap-1 flex-shrink-0">
+                        {isWorld ? (
+                          <>
+                            <TagBadge size="sm" variant="info" withIcon>
+                              <Icon icon="solar:gamepad-bold-duotone" className="w-3 h-3 mr-0.5" />
+                              {getGameModeString(item.game_mode)}
+                            </TagBadge>
+                            <TagBadge size="sm" variant="default" withIcon>
+                              <Icon icon="solar:tuning-square-bold-duotone" className="w-3 h-3 mr-0.5" />
+                              {getDifficultyString(item.difficulty)}
+                            </TagBadge>
+                            {item.is_hardcore && (
+                              <TagBadge variant="destructive" size="sm" withIcon>
+                                <Icon
+                                  icon="solar:skull-bold"
+                                  className="w-3 h-3 mr-0.5"
+                                />
+                                Hardcore
+                              </TagBadge>
                             )}
-                          </div>
-                        </>
-                      )}
+                            {item.difficulty_locked && (
+                              <TagBadge size="sm" withIcon>
+                                <Icon
+                                  icon="solar:lock-bold"
+                                  className="w-3 h-3 mr-0.5"
+                                />
+                                Locked
+                              </TagBadge>
+                            )}
+                            {item.version_name && (
+                              <TagBadge size="sm" withIcon>
+                                <Icon icon="solar:tag-bold" className="w-3 h-3 mr-0.5" />
+                                {item.version_name}
+                              </TagBadge>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {isPinging ? (
+                              <TagBadge size="sm" variant="default">Pinging...</TagBadge>
+                            ) : hasPingError ? (
+                              <TagBadge size="sm" variant="destructive">Error</TagBadge>
+                            ) : pingInfo ? (() => {
+                                let playerCountVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
+                                if (pingInfo.players_online != null) {
+                                  if (pingInfo.players_online > 0) {
+                                    playerCountVariant = 'success';
+                                  } else { // players_online === 0
+                                    playerCountVariant = 'default'; 
+                                  }
+                                }
+
+                                let pingLatencyVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
+                                if (pingInfo.latency_ms != null) {
+                                  if (pingInfo.latency_ms <= 80) {
+                                    pingLatencyVariant = 'success';
+                                  } else if (pingInfo.latency_ms <= 150) {
+                                    pingLatencyVariant = 'default';
+                                  } else if (pingInfo.latency_ms <= 250) {
+                                    pingLatencyVariant = 'warning';
+                                  } else { // > 250
+                                    pingLatencyVariant = 'destructive';
+                                  }
+                                }
+
+                                return (
+                                  <>
+                                    <TagBadge size="sm" withIcon variant={playerCountVariant}>
+                                      <Icon
+                                        icon="solar:users-group-rounded-bold"
+                                        className="w-3 h-3 mr-0.5"
+                                      />
+                                      {pingInfo.players_online ?? "-"}/
+                                      {pingInfo.players_max ?? "-"}
+                                    </TagBadge>
+                                    <TagBadge size="sm" withIcon variant={pingLatencyVariant}>
+                                      <Icon
+                                        icon="solar:wifi-bold"
+                                        className="w-3 h-3 mr-0.5"
+                                      />
+                                      {pingInfo.latency_ms ?? "-"} ms
+                                    </TagBadge>
+                                    {pingInfo.version_name && (
+                                      <TagBadge size="sm" withIcon variant="default">
+                                        <Icon
+                                          icon="solar:tag-bold"
+                                          className="w-3 h-3 mr-0.5"
+                                        />
+                                        {pingInfo.version_name}
+                                      </TagBadge>
+                                    )}
+                                  </>
+                                );
+                              })() : (
+                              <TagBadge size="sm" variant="inactive">Offline / Unknown</TagBadge>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                    {/* Right Section (Buttons) */}
+                    <div className="flex-shrink-0 h-24 flex flex-col items-end justify-center gap-1">
                       <Button
                         onClick={() => handleLaunch(item)}
                         disabled={!isWorld && !item.address}
                         variant="default"
-                        size="md"
+                        size="sm"
                         title={
                           isWorld
                             ? "Play World"
@@ -779,21 +870,28 @@ export function WorldsTab({
                         {isWorld ? "Play" : "Join"}
                       </Button>
                       {isWorld && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                           <IconButton
                             onClick={() => handleOpenCopyDialog(item)}
                             title="Copy World"
-                            disabled={copyLoading}
+                            disabled={isCopyingWorld}
                             icon={<Icon icon="solar:copy-bold" />}
                             variant="secondary"
-                            size="sm"
+                            size="xs"
                           />
                           <IconButton
-                            onClick={() => handleDelete(item)}
+                            onClick={() => handleOpenWorldFolder(item)}
+                            title="Open World Folder"
+                            icon={<Icon icon="solar:folder-open-bold-duotone" />}
+                            variant="secondary"
+                            size="xs"
+                          />
+                          <IconButton
+                            onClick={() => handleDeleteRequest(item)}
                             title="Delete World"
-                            disabled={deleteLoading[item.folder_name]}
+                            disabled={isActuallyDeleting && worldToDelete?.folder_name === item.folder_name}
                             icon={
-                              deleteLoading[item.folder_name] ? (
+                              (isActuallyDeleting && worldToDelete?.folder_name === item.folder_name) ? (
                                 <Icon
                                   icon="solar:refresh-circle-bold-duotone"
                                   className="animate-spin"
@@ -803,7 +901,7 @@ export function WorldsTab({
                               )
                             }
                             variant="destructive"
-                            size="sm"
+                            size="xs"
                           />
                         </div>
                       )}
@@ -815,6 +913,30 @@ export function WorldsTab({
           </div>
         )}
       </div>
+
+      {isCopyWorldDialogOpen && worldToCopy && profile?.id && (
+        <CopyWorldDialog
+          isOpen={isCopyWorldDialogOpen}
+          sourceWorldName={getWorldDisplayName(worldToCopy)}
+          sourceProfileId={profile.id}
+          availableProfiles={allProfilesFromStore}
+          isLoadingProfiles={isLoadingProfilesFromStore}
+          isCopying={isCopyingWorld}
+          onClose={handleCloseCopyDialog}
+          onConfirm={handleConfirmCopyWorld}
+          initialError={copyWorldError}
+        />
+      )}
+
+      {isDeleteConfirmOpen && worldToDelete && (
+        <ConfirmDeleteDialog
+          isOpen={isDeleteConfirmOpen}
+          itemName={getWorldDisplayName(worldToDelete)}
+          onClose={handleCloseDeleteConfirmDialog}
+          onConfirm={handleConfirmActualDelete}
+          isDeleting={isActuallyDeleting}
+        />
+      )}
     </div>
   );
 }

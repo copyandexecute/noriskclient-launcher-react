@@ -47,6 +47,9 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
   ) => {
     const badgeRef = useRef<HTMLDivElement>(null);
     const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
+    );
     const [isHovered, setIsHovered] = useState(false);
     const [isPressed, setIsPressed] = useState(false);
     const [ripples, setRipples] = useState<RippleType[]>([]);
@@ -123,7 +126,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       if (disabled || !isClickable) return;
       setIsPressed(true);
 
-      if (badgeRef.current) {
+      if (badgeRef.current && isBackgroundAnimationEnabled) {
         gsap.to(badgeRef.current, {
           scale: 0.95,
           duration: 0.1,
@@ -136,7 +139,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       if (disabled || !isClickable) return;
       setIsPressed(false);
 
-      if (badgeRef.current) {
+      if (badgeRef.current && isBackgroundAnimationEnabled) {
         gsap.to(badgeRef.current, {
           scale: 1,
           duration: 0.2,
@@ -149,13 +152,17 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       if (disabled) return;
       setIsHovered(true);
 
-      if (badgeRef.current && isClickable) {
+      if (badgeRef.current && isClickable && isBackgroundAnimationEnabled) {
         gsap.to(badgeRef.current, {
           y: -2,
           boxShadow: getShadowStyle(true),
           duration: 0.2,
           ease: "power2.out",
         });
+      } else if (badgeRef.current && isClickable) {
+        // Apply styles directly if animations are disabled
+        badgeRef.current.style.transform = "translateY(-2px)";
+        badgeRef.current.style.boxShadow = getShadowStyle(true);
       }
     };
 
@@ -163,13 +170,17 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       if (disabled) return;
       setIsHovered(false);
 
-      if (badgeRef.current && isClickable) {
+      if (badgeRef.current && isClickable && isBackgroundAnimationEnabled) {
         gsap.to(badgeRef.current, {
           y: 0,
           boxShadow: getShadowStyle(false),
           duration: 0.2,
           ease: "power2.out",
         });
+      } else if (badgeRef.current && isClickable) {
+        // Apply styles directly if animations are disabled
+        badgeRef.current.style.transform = "translateY(0px)";
+        badgeRef.current.style.boxShadow = getShadowStyle(false);
       }
 
       if (isPressed) {
@@ -233,13 +244,13 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     const getSizeStyles = () => {
       switch (size) {
         case "sm":
-          return "px-2 py-1 text-xs rounded-md min-h-[24px]";
+          return "px-2 py-1 text-[0.625em] rounded-md min-h-[15px]";
         case "lg":
           return "px-4 py-1.5 text-base rounded-md min-h-[36px]";
         case "xl":
           return "px-5 py-2 text-lg rounded-md min-h-[44px]";
         default: // 'md'
-          return "px-3 py-1 text-sm rounded-md min-h-[30px]";
+          return "px-2 py-1 text-[0.5em] rounded-md min-h-[15px]";
       }
     };
 
@@ -296,10 +307,10 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           textTransform: "capitalize",
         }}
         onClick={isClickable ? handleRipple : undefined}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
+        onMouseDown={isClickable ? handleMouseDown : undefined}
+        onMouseUp={isClickable ? handleMouseUp : undefined}
+        onMouseEnter={isClickable ? handleMouseEnter : undefined}
+        onMouseLeave={isClickable ? handleMouseLeave : undefined}
         {...props}
       >
         {shadowDepth !== "none" && (
@@ -335,7 +346,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           />
         ))}
 
-        <span className="relative z-10 flex items-center gap-1.5 lowercase">
+        <span className="relative z-10 flex items-center gap-1.5 font-minecraft-ten">
           {children}
         </span>
       </div>
