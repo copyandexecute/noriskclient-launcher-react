@@ -17,6 +17,7 @@ import { TagBadge } from "../../ui/TagBadge";
 import { CopyWorldDialog } from "../../modals/CopyWorldDialog";
 import { ConfirmDeleteDialog } from "../../modals/ConfirmDeleteDialog";
 import { toast } from "react-hot-toast";
+import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 // --- Import Real Types ---
 import type {
@@ -462,6 +463,24 @@ export function WorldsTab({
     }
   }, [worldToDelete, profile?.id, getWorldDisplayName, loadData, handleCloseDeleteConfirmDialog]);
 
+  const handleOpenWorldFolder = useCallback(async (world: WorldInfo) => {
+    if (!world?.icon_path) {
+      toast.error("World path is not available.");
+      console.error("Cannot open world folder: Profile path is missing.", profile);
+      return;
+    }
+    // Basic path joining, consider using a library for robust path construction if complex scenarios arise
+    const worldFolderPath = `${world.icon_path}`;
+    try {
+      console.log(`Attempting to open folder: ${worldFolderPath}`);
+      await revealItemInDir(worldFolderPath);
+      toast.success(`Opened folder for '${getWorldDisplayName(world)}'`);
+    } catch (err) {
+      console.error(`Failed to open folder ${worldFolderPath}:`, err);
+      toast.error(`Failed to open folder: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [profile?.path, getWorldDisplayName]);
+
   const handleRefresh = () => {
     loadData();
     if (onRefresh) {
@@ -857,6 +876,13 @@ export function WorldsTab({
                             title="Copy World"
                             disabled={isCopyingWorld}
                             icon={<Icon icon="solar:copy-bold" />}
+                            variant="secondary"
+                            size="xs"
+                          />
+                          <IconButton
+                            onClick={() => handleOpenWorldFolder(item)}
+                            title="Open World Folder"
+                            icon={<Icon icon="solar:folder-open-bold-duotone" />}
                             variant="secondary"
                             size="xs"
                           />
