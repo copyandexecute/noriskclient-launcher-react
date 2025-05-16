@@ -62,7 +62,7 @@ export function RangeSlider({
   };
 
   useEffect(() => {
-    if (sliderRef.current && !isBackgroundAnimationEnabled) {
+    if (sliderRef.current && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         sliderRef.current,
         { opacity: 0, y: 10 },
@@ -87,7 +87,7 @@ export function RangeSlider({
 
       thumbRef.current.style.left = `calc(${percentage}% - ${thumbOffset}px)`;
 
-      if (valueDisplayRef.current && !isBackgroundAnimationEnabled) {
+      if (valueDisplayRef.current && isBackgroundAnimationEnabled) {
         gsap.to(valueDisplayRef.current, {
           scale: 1.1,
           duration: 0.1,
@@ -103,7 +103,7 @@ export function RangeSlider({
     if (disabled) return;
     setIsHovered(true);
 
-    if (!isBackgroundAnimationEnabled) {
+    if (isBackgroundAnimationEnabled) {
       if (thumbRef.current) {
         gsap.to(thumbRef.current, {
           scale: 1.1,
@@ -126,7 +126,7 @@ export function RangeSlider({
     if (disabled) return;
     setIsHovered(false);
 
-    if (!isBackgroundAnimationEnabled) {
+    if (isBackgroundAnimationEnabled) {
       if (thumbRef.current && !isDragging) {
         gsap.to(thumbRef.current, {
           scale: 1,
@@ -149,7 +149,7 @@ export function RangeSlider({
     if (disabled) return;
     setIsDragging(true);
 
-    if (thumbRef.current && !isBackgroundAnimationEnabled) {
+    if (thumbRef.current && isBackgroundAnimationEnabled) {
       gsap.to(thumbRef.current, {
         scale: 0.95,
         duration: 0.1,
@@ -162,7 +162,7 @@ export function RangeSlider({
     if (disabled) return;
     setIsDragging(false);
 
-    if (thumbRef.current && !isBackgroundAnimationEnabled) {
+    if (thumbRef.current && isBackgroundAnimationEnabled) {
       gsap.to(thumbRef.current, {
         scale: isHovered ? 1.1 : 1,
         duration: 0.2,
@@ -247,9 +247,7 @@ export function RangeSlider({
             backgroundColor: `${accentColor.value}15`,
             borderColor: `${accentColor.value}40`,
             borderBottomColor: accentColor.value,
-            boxShadow: isHovered && !isBackgroundAnimationEnabled
-              ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`
-              : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           }}
           ref={trackRef}
           onMouseEnter={handleMouseEnter}
