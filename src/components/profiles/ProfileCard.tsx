@@ -28,6 +28,7 @@ interface ProfileCardProps {
   onClick: () => void;
   onProfileCloned: () => void;
   onDelete: (profileId: string, profileName: string) => void;
+  onShouldExport: (profile: Profile) => void;
 }
 
 export function ProfileCard({
@@ -36,6 +37,7 @@ export function ProfileCard({
   onClick,
   onProfileCloned,
   onDelete,
+  onShouldExport,
 }: ProfileCardProps) {
   const {
     initializeProfile,
@@ -448,6 +450,12 @@ export function ProfileCard({
     }
   }, []);
 
+  const handleExportFromContextMenu = () => {
+    if (profile) {
+      onShouldExport(profile);
+    }
+  };
+
   return (
     <Card
       ref={cardRef}
@@ -568,6 +576,7 @@ export function ProfileCard({
         onDelete={handleDeleteFromContextMenu}
         onDuplicate={handleDuplicateFromContextMenu}
         onOpenFolder={handleOpenFolder}
+        onExport={handleExportFromContextMenu}
       />
     </Card>
   );

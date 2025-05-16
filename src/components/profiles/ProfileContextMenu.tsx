@@ -23,13 +23,24 @@ interface ProfileContextMenuProps {
   onDelete: (profileId: string, profileName: string) => void;
   onDuplicate: () => void;
   onOpenFolder: () => void;
+  onExport: () => void;
 }
 
 export const ProfileContextMenu = forwardRef<
   HTMLDivElement,
   ProfileContextMenuProps
 >(function ProfileContextMenuComponent(
-  { profile, visible, x, y, onClose, onDelete, onDuplicate, onOpenFolder },
+  {
+    profile,
+    visible,
+    x,
+    y,
+    onClose,
+    onDelete,
+    onDuplicate,
+    onOpenFolder,
+    onExport,
+  },
   ref: ForwardedRef<HTMLDivElement>,
 ) {
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -65,7 +76,7 @@ export const ProfileContextMenu = forwardRef<
     return null;
   }
 
-  const handleAction = (action: () => void) => {
+  const handleAction = (action?: () => void) => {
     console.log("[ContextMenu] handleAction called");
 
     if (menuRef.current) {
@@ -76,12 +87,16 @@ export const ProfileContextMenu = forwardRef<
         duration: 0.15,
         ease: "power2.in",
         onComplete: () => {
-          action();
+          if (typeof action === 'function') {
+            action();
+          }
           onClose();
         },
       });
     } else {
-      action();
+      if (typeof action === 'function') {
+        action();
+      }
       onClose();
     }
   };
@@ -162,6 +177,21 @@ export const ProfileContextMenu = forwardRef<
           />
           <span className="font-minecraft text-xl lowercase text-green-400">
             Open Profile Folder
+          </span>
+        </li>
+        <li
+          className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
+          onClick={() => {
+            console.log("[ContextMenu] Export item clicked");
+            handleAction(onExport);
+          }}
+        >
+          <Icon
+            icon="solar:export-bold"
+            className="w-5 h-5 text-yellow-400"
+          />
+          <span className="font-minecraft text-xl lowercase text-yellow-400">
+            Export Profile
           </span>
         </li>
       </ul>

@@ -165,6 +165,7 @@ export function Modal({
           "relative flex flex-col w-full rounded-lg overflow-hidden",
           "border-2 border-b-4 shadow-2xl",
           widthClasses[width],
+          "max-h-[85vh]"
         )}
         style={{
           backgroundColor: `${accentColor.value}20`,
@@ -220,7 +221,7 @@ export function Modal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
+        <div className="flex-1 overflow-auto custom-scrollbar p-6">{children}</div>
 
         {footer && (
           <div
