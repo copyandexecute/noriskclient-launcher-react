@@ -1,181 +1,243 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Icon } from "@iconify/react";
+import type React from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
-import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
+import { useThemeStore } from "../../store/useThemeStore";
+import { LoadingSpinner } from "./LoadingSpinner";
 
-interface LoadingStateProps {
+interface LoadingStateProps extends React.HTMLAttributes<HTMLDivElement> {
   message?: string;
-  className?: string;
+  variant?:
+    | "default"
+    | "secondary"
+    | "warning"
+    | "destructive"
+    | "info"
+    | "success";
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "inline" | "overlay";
+  shadowDepth?: "default" | "short" | "none";
+  showProgressBar?: boolean;
+  progress?: number;
+  isLoading?: boolean;
 }
 
-export function LoadingState({
-  message = "loading...",
-  className,
-  size = "md",
-  variant = "default",
-}: LoadingStateProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const spinnerRef = useRef<HTMLDivElement>(null);
-  const accentColor = useThemeStore((state) => state.accentColor);
-
-  const sizeConfig = {
-    sm: {
-      container: "p-4",
-      spinner: "w-8 h-8",
-      text: "text-base",
+export const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
+  (
+    {
+      message = "Loading...",
+      className,
+      variant = "default",
+      size = "md",
+      shadowDepth = "default",
+      showProgressBar = true,
+      progress = -1,
+      isLoading = true,
+      ...props
     },
-    md: {
-      container: "p-6",
-      spinner: "w-12 h-12",
-      text: "text-xl",
-    },
-    lg: {
-      container: "p-8",
-      spinner: "w-16 h-16",
-      text: "text-2xl",
-    },
-  };
-
-  useEffect(() => {
-    if (containerRef.current) {
-      gsap.fromTo(
-        containerRef.current,
-        { opacity: 0, y: 20, scale: 0.95 },
-        {
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          duration: 0.5,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (spinnerRef.current) {
-      gsap.to(spinnerRef.current, {
-        rotation: 360,
-        repeat: -1,
-        duration: 1.5,
-        ease: "linear",
-      });
-
-      gsap.to(spinnerRef.current, {
-        scale: 1.1,
-        repeat: -1,
-        yoyo: true,
-        duration: 0.8,
-        ease: "sine.inOut",
-      });
-    }
-  }, []);
-
-  if (variant === "inline") {
-    return (
-      <div
-        ref={containerRef}
-        className={cn("flex items-center gap-3", className)}
-      >
-        <div
-          ref={spinnerRef}
-          className={cn(
-            "flex-shrink-0 text-white",
-            size === "sm" ? "w-4 h-4" : size === "lg" ? "w-6 h-6" : "w-5 h-5",
-          )}
-          style={{ color: accentColor.value }}
-        >
-          <Icon icon="solar:refresh-bold" className="w-full h-full" />
-        </div>
-        {message && (
-          <p
-            className={cn(
-              "font-minecraft text-white lowercase",
-              size === "sm"
-                ? "text-sm"
-                : size === "lg"
-                  ? "text-xl"
-                  : "text-base",
-            )}
-          >
-            {message}
-          </p>
-        )}
-      </div>
+    ref,
+  ) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const progressRef = useRef<HTMLDivElement>(null);
+    const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
     );
-  }
+    const [isVisible, setIsVisible] = useState(isLoading);
 
-  if (variant === "overlay") {
+    const mergedRef = (node: HTMLDivElement) => {
+      if (ref) {
+        if (typeof ref === "function") {
+          ref(node);
+        } else {
+          ref.current = node;
+        }
+      }
+      containerRef.current = node;
+    };
+
+    useEffect(() => {
+      if (containerRef.current && isBackgroundAnimationEnabled) {
+        gsap.set(containerRef.current, { y: 0, opacity: 1 });
+      }
+    }, [isBackgroundAnimationEnabled]);
+
+    useEffect(() => {
+      if (!containerRef.current) return;
+
+      if (isLoading) {
+        setIsVisible(true);
+        gsap.to(containerRef.current, {
+          opacity: 1,
+          duration: 0.3,
+          ease: "power2.out",
+        });
+      } else {
+        gsap.to(containerRef.current, {
+          opacity: 0,
+          duration: 0.3,
+          ease: "power2.in",
+          onComplete: () => setIsVisible(false),
+        });
+      }
+    }, [isLoading]);
+
+    useEffect(() => {
+      if (progressRef.current && progress >= 0 && showProgressBar) {
+        gsap.to(progressRef.current, {
+          width: `${Math.min(100, progress)}%`,
+          duration: 0.4,
+          ease: "power1.out",
+        });
+      }
+    }, [progress, showProgressBar]);
+
+    const getVariantColors = () => {
+      switch (variant) {
+        case "warning":
+          return {
+            main: "#f59e0b",
+            light: "#fbbf24",
+            dark: "#d97706",
+            text: "#fef3c7",
+          };
+        case "destructive":
+          return {
+            main: "#ef4444",
+            light: "#f87171",
+            dark: "#dc2626",
+            text: "#fee2e2",
+          };
+        case "info":
+          return {
+            main: "#3b82f6",
+            light: "#60a5fa",
+            dark: "#2563eb",
+            text: "#dbeafe",
+          };
+        case "success":
+          return {
+            main: "#10b981",
+            light: "#34d399",
+            dark: "#059669",
+            text: "#d1fae5",
+          };
+        case "secondary":
+          return {
+            main: "#6b7280",
+            light: "#9ca3af",
+            dark: "#4b5563",
+            text: "#f3f4f6",
+          };
+        default:
+          return {
+            main: accentColor.value,
+            light: accentColor.hoverValue || accentColor.value,
+            dark: accentColor.value,
+            text: "#ffffff",
+          };
+      }
+    };
+    const getSizeStyles = () => {
+      switch (size) {
+        case "sm":
+          return {
+            container: "p-3",
+            spinner: "sm",
+            text: "text-sm",
+            progressHeight: "h-1.5",
+          };
+        case "lg":
+          return {
+            container: "p-6",
+            spinner: "lg",
+            text: "text-xl",
+            progressHeight: "h-3",
+          };
+        default:
+          return {
+            container: "p-4",
+            spinner: "md",
+            text: "text-base",
+            progressHeight: "h-2",
+          };
+      }
+    };
+
+    const colors = getVariantColors();
+    const sizeStyles = getSizeStyles();
+
+    const getShadowStyle = () => {
+      if (shadowDepth === "none") return "none";
+
+      if (shadowDepth === "short") {
+        return `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`;
+      }
+
+      return `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`;
+    };
+
+    if (!isVisible) return null;
+
     return (
       <div
-        ref={containerRef}
+        ref={mergedRef}
         className={cn(
-          "fixed inset-0 flex flex-col items-center justify-center z-50",
-          "backdrop-blur-sm bg-black/50",
+          "flex flex-col items-center justify-center space-y-4 rounded-md backdrop-blur-md",
+          shadowDepth !== "none" && "border-2 border-b-4",
+          sizeStyles.container,
           className,
         )}
+        style={{
+          backgroundColor: `${colors.main}30`,
+          borderColor: `${colors.main}80`,
+          borderBottomColor: colors.dark,
+          boxShadow: getShadowStyle(),
+        }}
+        {...props}
       >
-        <div
-          ref={spinnerRef}
-          className={cn("mb-4 text-white", sizeConfig[size].spinner)}
-          style={{ color: accentColor.value }}
+        <span
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+          style={{ backgroundColor: `${colors.light}80` }}
+        />
+
+        <LoadingSpinner
+          variant={variant}
+          size={sizeStyles.spinner as any}
+          shadowDepth="none"
+        />
+
+        <p
+          className={cn("text-center tracking-wider", sizeStyles.text)}
+          style={{ color: colors.text }}
         >
-          <Icon icon="solar:refresh-bold" className="w-full h-full" />
-        </div>
-        {message && (
-          <p
+          {message}
+        </p>
+
+        {showProgressBar && (
+          <div
             className={cn(
-              "font-minecraft text-white lowercase",
-              sizeConfig[size].text,
+              "w-full overflow-hidden rounded-full bg-black/20",
+              sizeStyles.progressHeight,
             )}
+            style={{ boxShadow: "inset 0 1px 2px rgba(0,0,0,0.3)" }}
           >
-            {message}
-          </p>
+            <div
+              ref={progressRef}
+              className="h-full rounded-full transition-all"
+              style={{
+                backgroundColor: colors.text,
+                width: progress >= 0 ? `${Math.min(100, progress)}%` : "30%",
+                animation:
+                  progress < 0 ? "loading-bar 2s ease-in-out infinite" : "none",
+              }}
+            ></div>
+          </div>
         )}
       </div>
     );
-  }
+  },
+);
 
-  return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "flex flex-col items-center justify-center rounded-lg",
-        "border-2 border-b-4 shadow-md",
-        sizeConfig[size].container,
-        className,
-      )}
-      style={{
-        backgroundColor: `${accentColor.value}10`,
-        borderColor: `${accentColor.value}60`,
-        borderBottomColor: accentColor.value,
-        boxShadow: `0 8px 0 rgba(0,0,0,0.2), 0 10px 15px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-      }}
-    >
-      <span
-        className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-        style={{ backgroundColor: `${accentColor.value}80` }}
-      />
-
-      <div
-        ref={spinnerRef}
-        className={cn("mb-4 text-white", sizeConfig[size].spinner)}
-        style={{ color: accentColor.value }}
-      >
-        <Icon icon="solar:refresh-bold" className="w-full h-full" />
-      </div>
-
-      <p
-        className={cn(
-          "font-minecraft text-white lowercase",
-          sizeConfig[size].text,
-        )}
-      >
-        {message}
-      </p>
-    </div>
-  );
-}
+LoadingState.displayName = "LoadingState";

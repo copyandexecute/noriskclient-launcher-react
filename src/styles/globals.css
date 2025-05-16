@@ -110,6 +110,51 @@
     animation: ripple 0.85s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    50% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+}
+
+@keyframes loading-bar {
+    0% {
+        width: 0%;
+        margin-left: 0;
+    }
+    50% {
+        width: 70%;
+    }
+    100% {
+        width: 0%;
+        margin-left: 100%;
+    }
+}
+
+@keyframes icon-bounce {
+    0%,
+    100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
 @layer base {
     html,
     body,
@@ -179,7 +224,6 @@
     text-shadow: 0 4px 10px rgba(0, 0, 0, 0.9), 0 0 5px rgba(0, 0, 0, 1);
 }
 
-/* Custom scrollbar utility class */
 .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: var(--accent) rgba(0, 0, 0, 0.2);
