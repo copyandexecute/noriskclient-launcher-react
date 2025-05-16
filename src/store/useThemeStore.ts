@@ -148,6 +148,8 @@ interface ThemeState {
   applyAccentColorToDOM: () => void;
   isBackgroundAnimationEnabled: boolean;
   toggleBackgroundAnimation: () => void;
+  isDetailViewSidebarOnLeft: boolean;
+  toggleDetailViewSidebarPosition: () => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -155,6 +157,7 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       accentColor: ACCENT_COLORS.blue,
       isBackgroundAnimationEnabled: true,
+      isDetailViewSidebarOnLeft: true,
 
       setAccentColor: (color: AccentColor) => {
         set({ accentColor: color });
@@ -176,6 +179,10 @@ export const useThemeStore = create<ThemeState>()(
         set((state) => ({
           isBackgroundAnimationEnabled: !state.isBackgroundAnimationEnabled,
         }));
+      },
+
+      toggleDetailViewSidebarPosition: () => {
+        set((state) => ({ isDetailViewSidebarOnLeft: !state.isDetailViewSidebarOnLeft }));
       },
 
       applyAccentColorToDOM: () => {

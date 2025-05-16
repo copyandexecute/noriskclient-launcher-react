@@ -82,6 +82,8 @@ export function ProfileDetailView({
   const contentRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isSidebarOnLeft = useThemeStore((state) => state.isDetailViewSidebarOnLeft);
+  const toggleSidebarPosition = useThemeStore((state) => state.toggleDetailViewSidebarPosition);
 
   const [tabTransition, setTabTransition] = useState(false);
   const tabTransitionTimer = useRef<NodeJS.Timeout | null>(null);
@@ -278,10 +280,19 @@ export function ProfileDetailView({
   ];
 
   return (
-    <div ref={containerRef} className="h-full flex overflow-hidden">
+    <div
+      ref={containerRef}
+      className={cn(
+        "h-full flex overflow-hidden",
+        isSidebarOnLeft ? "flex-row" : "flex-row-reverse",
+      )}
+    >
       {/* Sidebar */}
       <div
-        className="w-64 h-full flex-shrink-0 border-r backdrop-blur-sm flex flex-col"
+        className={cn(
+          "w-64 h-full flex-shrink-0 backdrop-blur-sm flex flex-col",
+          isSidebarOnLeft ? "border-r" : "border-l",
+        )}
         style={{
           backgroundColor: `${accentColor.value}15`,
           borderColor: `${accentColor.value}30`,
@@ -303,10 +314,10 @@ export function ProfileDetailView({
               <Icon icon="solar:cube-bold" className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-minecraft text-xl text-white truncate">
+              <div className="font-minecraft-ten text-base text-white truncate">
                 {profile.name || profile.id}
               </div>
-              <div className="text-white/60 text-sm">
+              <div className="text-white/60 text-xs font-minecraft-ten">
                 {profile.game_version} {profile.loader && `(${profile.loader})`}
               </div>
             </div>
@@ -353,8 +364,27 @@ export function ProfileDetailView({
 
         {/* Navigation tabs */}
         <div className="p-3 flex-1 overflow-y-auto custom-scrollbar">
-          <div className="text-white/50 text-sm uppercase tracking-wider mb-2 px-2">
-            Navigation
+          <div className="flex items-center justify-between px-2 mb-2">
+            <div className="text-white/50 text-sm uppercase tracking-wider">
+              Navigation
+            </div>
+            <IconButton
+              icon={
+                <Icon
+                  icon={
+                    isSidebarOnLeft
+                      ? "solar:arrow-right-bold"
+                      : "solar:arrow-left-bold"
+                  }
+                  className="w-5 h-5"
+                />
+              }
+              onClick={toggleSidebarPosition}
+              title="Toggle Sidebar Position"
+              size="xs"
+              variant="ghost"
+              className="text-white hover:text-white/80"
+            />
           </div>
           <div className="flex flex-col gap-1">
             {/* Main navigation buttons */}
