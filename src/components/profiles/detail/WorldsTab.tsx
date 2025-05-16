@@ -8,11 +8,14 @@ import { Button } from "../../ui/buttons/Button";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Select } from "../../ui/Select";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { useProfileStore } from "../../../store/profile-store";
 import { SearchInput } from "../../ui/SearchInput";
 import { LoadingState } from "../../ui/LoadingState";
 import { EmptyState } from "../../ui/EmptyState";
 import { gsap } from "gsap";
 import { TagBadge } from "../../ui/TagBadge";
+import { CopyWorldDialog } from "../../modals/CopyWorldDialog";
+import { toast } from "react-hot-toast";
 
 // --- Import Real Types ---
 import type {
@@ -20,7 +23,7 @@ import type {
   ServerPingInfo,
   WorldInfo,
 } from "../../../types/minecraft";
-import type { Profile } from "../../../types/profile";
+import type { Profile, CopyWorldParams } from "../../../types/profile";
 import { timeAgo } from "../../../utils/time-utils";
 import * as WorldService from "../../../services/world-service";
 import {
@@ -56,6 +59,9 @@ export function WorldsTab({
   searchQuery = "",
   onLaunchRequest,
 }: WorldsTabProps) {
+  const allProfilesFromStore = useProfileStore((state) => state.profiles);
+  const isLoadingProfilesFromStore = useProfileStore((state) => state.loading);
+
   // --- State ---
   const [worlds, setWorlds] = useState<WorldInfo[]>([]);
   const [servers, setServers] = useState<ServerInfo[]>([]);
@@ -66,10 +72,14 @@ export function WorldsTab({
     Record<string, ServerPingInfo>
   >({});
   const [pingingServers, setPingingServers] = useState<Set<string>>(new Set());
-  // Copy Dialog State (Placeholders - Dialog not implemented)
-  const [, setShowCopyDialog] = useState(false);
-  const [, setWorldToCopy] = useState<WorldInfo | null>(null);
-  const [copyLoading] = useState(false); // TODO: Use this state
+  
+  // --- Copy Dialog State ---
+  const [isCopyWorldDialogOpen, setIsCopyWorldDialogOpen] = useState(false);
+  const [worldToCopy, setWorldToCopy] = useState<WorldInfo | null>(null);
+  const [isCopyingWorld, setIsCopyingWorld] = useState(false);
+  const [copyWorldError, setCopyWorldError] = useState<string | null>(null);
+  // --- End Copy Dialog State ---
+
   const [deleteLoading, setDeleteLoading] = useState<Record<string, boolean>>(
     {},
   );
@@ -378,13 +388,45 @@ export function WorldsTab({
     [profile?.id, onLaunchRequest],
   );
 
-  const handleOpenCopyDialog = useCallback((world: WorldInfo) => {
-    console.log(`Opening copy dialog for: ${world.folder_name}`);
+  const handleOpenCopyDialog = useCallback(async (world: WorldInfo) => {
     setWorldToCopy(world);
-    setShowCopyDialog(true);
-    notificationStore.error("Copy World dialog not implemented.");
-    setTimeout(() => setShowCopyDialog(false), 500);
+    setCopyWorldError(null);
+    setIsCopyWorldDialogOpen(true);
   }, []);
+
+  const handleCloseCopyDialog = useCallback(() => {
+    setIsCopyWorldDialogOpen(false);
+    setWorldToCopy(null);
+  }, []);
+
+  const handleConfirmCopyWorld = useCallback(async (params: { targetProfileId: string; targetWorldName: string }) => {
+    if (!worldToCopy || !profile?.id) return;
+
+    setIsCopyingWorld(true);
+    setCopyWorldError(null);
+
+    const copyParams: CopyWorldParams = {
+      source_profile_id: profile.id,
+      source_world_folder: worldToCopy.folder_name,
+      target_profile_id: params.targetProfileId,
+      target_world_name: params.targetWorldName,
+    };
+
+    try {
+      await WorldService.copyWorld(copyParams);
+      toast.success(`World '${getWorldDisplayName(worldToCopy)}' copied successfully as '${params.targetWorldName}'!`);
+      if (params.targetProfileId === profile.id) {
+        await loadData();
+      }
+    } catch (err) {
+      console.error("Failed to copy world:", err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setCopyWorldError(`Copy failed: ${errorMsg}`);
+      toast.error(`Failed to copy world: ${errorMsg}`);
+    } finally {
+      setIsCopyingWorld(false);
+    }
+  }, [worldToCopy, profile?.id, getWorldDisplayName, loadData, handleCloseCopyDialog]);
 
   const handleDelete = useCallback(
     async (world: WorldInfo) => {
@@ -398,13 +440,13 @@ export function WorldsTab({
       setDeleteLoading((prev) => ({ ...prev, [world.folder_name]: true }));
       try {
         await WorldService.deleteWorld(currentProfileId, world.folder_name);
-        notificationStore.success(
+        toast.success(
           `World "${getWorldDisplayName(world)}" deleted.`,
         );
         await loadData();
       } catch (err) {
         console.error("Delete failed:", err);
-        notificationStore.error(`Delete failed: ${err}`);
+        toast.error(`Delete failed: ${err}`);
       } finally {
         setDeleteLoading((prev) => {
           const n = { ...prev };
@@ -809,7 +851,7 @@ export function WorldsTab({
                           <IconButton
                             onClick={() => handleOpenCopyDialog(item)}
                             title="Copy World"
-                            disabled={copyLoading}
+                            disabled={isCopyingWorld}
                             icon={<Icon icon="solar:copy-bold" />}
                             variant="secondary"
                             size="xs"
@@ -841,6 +883,20 @@ export function WorldsTab({
           </div>
         )}
       </div>
+
+      {isCopyWorldDialogOpen && worldToCopy && profile?.id && (
+        <CopyWorldDialog
+          isOpen={isCopyWorldDialogOpen}
+          sourceWorldName={getWorldDisplayName(worldToCopy)}
+          sourceProfileId={profile.id}
+          availableProfiles={allProfilesFromStore}
+          isLoadingProfiles={isLoadingProfilesFromStore}
+          isCopying={isCopyingWorld}
+          onClose={handleCloseCopyDialog}
+          onConfirm={handleConfirmCopyWorld}
+          initialError={copyWorldError}
+        />
+      )}
     </div>
   );
 }
