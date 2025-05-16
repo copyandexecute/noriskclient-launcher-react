@@ -69,6 +69,12 @@ export function LogWindow() {
 
   const logParserRef = useRef<LogParser | null>(null);
 
+  // Ref to hold the latest value of isAutoscrollEnabled
+  const isAutoscrollEnabledRef = useRef(isAutoscrollEnabled);
+  useEffect(() => {
+    isAutoscrollEnabledRef.current = isAutoscrollEnabled;
+  }, [isAutoscrollEnabled]);
+
   useEffect(() => {
     if (!isAnimationEnabled) return;
     
@@ -122,11 +128,12 @@ export function LogWindow() {
   }, [initialLoadComplete]);
 
   const scrollToBottom = useCallback(() => {
-    if (scrollableContainerRef.current) {
+    // Check the ref for the most up-to-date autoscroll setting
+    if (isAutoscrollEnabledRef.current && scrollableContainerRef.current) {
       const element = scrollableContainerRef.current;
       element.scrollTop = element.scrollHeight;
     }
-  }, []);
+  }, []); // Dependencies remain empty as ref.current changes don't trigger re-memoization
 
   useEffect(() => {
     if (!processId) {
@@ -188,7 +195,8 @@ export function LogWindow() {
         } finally {
           setIsLoading(false);
           setInitialLoadComplete(true);
-          if (isAutoscrollEnabled) {
+          // scrollToBottom will check the ref
+          if (isAutoscrollEnabledRef.current) { 
             setTimeout(scrollToBottom, 0);
           }
         }
@@ -231,8 +239,8 @@ export function LogWindow() {
               setRawLogContentForCopy((prevRaw) =>
                 prevRaw ? prevRaw + "\n" + rawLine : rawLine,
               );
-
-              if (isAutoscrollEnabled) {
+                // scrollToBottom will check the ref
+              if (isAutoscrollEnabledRef.current) { 
                 setTimeout(scrollToBottom, 0);
               }
             }
@@ -270,7 +278,7 @@ export function LogWindow() {
       setInitialLoadComplete(false);
       setIsLoading(true);
     };
-  }, [processId, isLiveLogs, isAutoscrollEnabled, scrollToBottom]);
+  }, [processId, isLiveLogs, scrollToBottom]);
 
   useEffect(() => {
     const linesAfterLevelFilter = parsedLogLines.filter((line) => {
@@ -285,6 +293,14 @@ export function LogWindow() {
 
     setDisplayLines(linesAfterSearchFilter);
   }, [parsedLogLines, searchTerm, levelFilters]);
+
+  // Effect to handle autoscrolling when displayLines changes
+  useEffect(() => {
+    // Preliminary check based on current state
+    if (isAutoscrollEnabled && displayLines.length > 0) {
+      setTimeout(scrollToBottom, 0);
+    }
+  }, [displayLines, isAutoscrollEnabled, scrollToBottom]);
 
   useEffect(() => {
     return () => {
@@ -340,11 +356,8 @@ export function LogWindow() {
   const handleAutoscrollChange = useCallback(
     (enabled: boolean) => {
       setIsAutoscrollEnabled(enabled);
-      if (enabled) {
-        setTimeout(scrollToBottom, 0);
-      }
     },
-    [scrollToBottom],
+    [],
   );
 
   const handleCopyLog = useCallback(async () => {
