@@ -80,7 +80,7 @@ const FileNodeItem: React.FC<FileNodeItemProps> = ({
     >
       <div 
         className={cn(
-            "node-content flex items-center py-1 pr-2 rounded transition-colors duration-150",
+            "node-content flex items-center py-1 pr-2 transition-colors duration-150",
             {"cursor-pointer": node.is_dir || !checkboxesEnabled || checkboxesEnabled && !node.is_dir },
         )}
         onClick={handleContentDivClick}

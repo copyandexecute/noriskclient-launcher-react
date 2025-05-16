@@ -30,7 +30,6 @@ export function ExportSettingsTab({ profile, onClose }: ExportSettingsTabProps) 
   const [directoryError, setDirectoryError] = useState<string | null>(null);
 
   const [isExporting, setIsExporting] = useState(false);
-  const [isCloning, setIsCloning] = useState(false);
   
   const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -60,54 +59,66 @@ export function ExportSettingsTab({ profile, onClose }: ExportSettingsTabProps) 
     fetchStructure();
   }, [profile.id]);
 
+  const getAllPathsRecursive = (node: FileNode, paths: Set<string>) => {
+    paths.add(node.path);
+    if (node.is_dir && node.children) {
+      for (const child of node.children) {
+        getAllPathsRecursive(child, paths);
+      }
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (!directoryStructure) return;
+    const newSelectedPaths = new Set<string>();
+    // Assuming hideRootNode = true, so we iterate over children of rootNode
+    if (directoryStructure.children) {
+        directoryStructure.children.forEach(childNode => getAllPathsRecursive(childNode, newSelectedPaths));
+    }
+    // If hideRootNode was false, and you wanted to include the root node itself:
+    // getAllPathsRecursive(directoryStructure, newSelectedPaths);
+    setSelectedExportPaths(newSelectedPaths);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedExportPaths(new Set<string>());
+  };
+
   const handleExport = async () => {
     if (!exportFilename.trim()) {
       toast.error("Please enter a filename for the export.");
       return;
     }
-    setIsExporting(true);
-    try {
-      const exportParams = {
-        profile_id: profile.id,
-        file_name: exportFilename,
-        include_files: selectedExportPaths.size > 0 ? Array.from(selectedExportPaths) : undefined,
-        open_folder: exportOpenFolder,
-      };
-      const exportPath = await ProfileService.exportProfile(exportParams);
-      toast.success(`Profile successfully exported to: ${exportPath}`);
-      // Reset filename or other states if needed, e.g., setExportFilename(profile.name.replace(/\s+/g, '_').toLowerCase());
-    } catch (err) {
-      console.error("Failed to export profile:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to export profile: ${message}`);
-    } finally {
-      setIsExporting(false);
-    }
+    
+    const exportPromise = ProfileService.exportProfile({
+      profile_id: profile.id,
+      file_name: exportFilename,
+      include_files: selectedExportPaths.size > 0 ? Array.from(selectedExportPaths) : undefined,
+      open_folder: exportOpenFolder,
+    });
+
+    toast.promise(exportPromise, {
+      loading: `Exporting profile '${exportFilename}'...`,
+      success: (exportPath) => {
+        setIsExporting(false); // Ensure isExporting is reset on success
+        return `Profile successfully exported to: ${exportPath}`;
+      },
+      error: (err) => {
+        setIsExporting(false); // Ensure isExporting is reset on error
+        const message = err instanceof Error ? err.message : String(err);
+        // console.error is still good for detailed logs in developer console
+        console.error("Failed to export profile:", err);
+        return `Failed to export profile: ${message}`;
+      }
+    });
+
+    // Set isExporting to true when the operation starts, 
+    // and let the promise toast handle resetting it or further actions.
+    // It might be better to set it right before the toast.promise if ProfileService.exportProfile is truly async setup
+    setIsExporting(true); 
+    // The setIsExporting(false) will be handled by the success/error callbacks of the toast
   };
 
-  const handleCloneProfile = async () => {
-    setIsCloning(true);
-    try {
-      const copyParams = {
-        source_profile_id: profile.id,
-        new_profile_name: `${profile.name} (Copy)`,
-        // include_files: undefined, // Svelte version used undefined, meaning all files are copied by the backend implicitly
-      };
-      const newProfileId = await ProfileService.copyProfile(copyParams);
-      toast.success(`Profile '${profile.name}' successfully cloned as '${profile.name} (Copy)'!`);
-      // Optionally, close modal or navigate after cloning
-      setTimeout(() => {
-        onClose(); 
-      }, 1500);
-    } catch (err) {
-      console.error("Failed to clone profile:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to clone profile: ${message}`);
-    } finally {
-      setIsCloning(false);
-    }
-  };
-  
   // GSAP animation for the tab content, similar to other tabs
   const contentRef = React.useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -159,7 +170,29 @@ export function ExportSettingsTab({ profile, onClose }: ExportSettingsTabProps) 
             <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide">
                 Choose items to include in the export. If none selected, only profile configuration is exported.
             </p>
-            <Card variant="flat" className="p-3 bg-black/20 border border-white/10 max-h-60 overflow-y-auto custom-scrollbar">
+            <div className="flex gap-2 mb-3">
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleSelectAll} 
+                    disabled={isLoadingDirectory || !directoryStructure}
+                    icon={<Icon icon="solar:check-read-outline" className="w-4 h-4" />}
+                    className="text-xs px-3 py-1.5"
+                >
+                    Select All
+                </Button>
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleDeselectAll} 
+                    disabled={isLoadingDirectory || selectedExportPaths.size === 0}
+                    icon={<Icon icon="solar:close-circle-outline" className="w-4 h-4" />}
+                    className="text-xs px-3 py-1.5"
+                >
+                    Deselect All
+                </Button>
+            </div>
+            <Card variant="flat" className="p-3 bg-black/20 border border-white/10 max-h-80 overflow-y-auto custom-scrollbar">
                  <FileNodeViewer
                     rootNode={directoryStructure}
                     loading={isLoadingDirectory}
@@ -186,45 +219,21 @@ export function ExportSettingsTab({ profile, onClose }: ExportSettingsTabProps) 
             disabled={isExporting}
           />
         </div>
+
+        <div className="mt-6 pt-4 border-t border-white/10">
+            <Button
+              variant="default"
+              onClick={handleExport}
+              disabled={isExporting || !exportFilename.trim() || isLoadingDirectory}
+              icon={<Icon icon="solar:export-bold" className="w-5 h-5" />}
+              size="md"
+              className="text-xl w-full md:w-auto"
+            >
+              Export Profile
+            </Button>
+        </div>
+
       </Card>
-
-      <div className="flex flex-wrap gap-4 pt-2">
-        <Button
-          variant="default"
-          onClick={handleExport}
-          disabled={isExporting || !exportFilename.trim() || isLoadingDirectory}
-          icon={<Icon icon="solar:export-bold" className="w-5 h-5" />}
-          size="md"
-          className="text-xl"
-        >
-          {isExporting ? (
-            <>
-              <Icon icon="solar:refresh-bold" className="w-5 h-5 animate-spin" />
-              <span>Exporting...</span>
-            </>
-          ) : (
-            "Export Profile"
-          )}
-        </Button>
-
-        <Button
-          variant="secondary"
-          onClick={handleCloneProfile}
-          disabled={isCloning}
-          icon={<Icon icon="solar:copy-bold" className="w-5 h-5" />}
-          size="md"
-          className="text-xl"
-        >
-          {isCloning ? (
-            <>
-              <Icon icon="solar:refresh-bold" className="w-5 h-5 animate-spin" />
-              <span>Cloning...</span>
-            </>
-          ) : (
-            "Clone Profile"
-          )}
-        </Button>
-      </div>
     </div>
   );
 } 
