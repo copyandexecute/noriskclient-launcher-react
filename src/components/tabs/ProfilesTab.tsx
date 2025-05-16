@@ -25,6 +25,12 @@ import { Card } from "../ui/Card";
 import { ProfileDetailView } from "../profiles/ProfileDetailView.tsx";
 import { ExportProfileModal } from "../profiles/ExportProfileModal";
 
+// Updated Props interface for ProfilesTab
+interface ProfilesTabProps {
+  currentGroupingCriterion: string; // Changed from initialGroupingCriterion
+  onGroupingChange: (newCriterion: string) => void; // New prop for callback
+}
+
 const groupingOptions = [
   {
     value: "none",
@@ -48,7 +54,7 @@ const groupingOptions = [
   },
 ];
 
-export function ProfilesTab() {
+export function ProfilesTab({ currentGroupingCriterion, onGroupingChange }: ProfilesTabProps) {
   const {
     profiles,
     loading,
@@ -62,9 +68,11 @@ export function ProfilesTab() {
   const tabRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [groupingCriterion, setGroupingCriterion] = useState<string>("none");
   const [showWizard, setShowWizard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
@@ -77,67 +85,48 @@ export function ProfilesTab() {
   );
 
   useEffect(() => {
-    if (tabRef.current) {
-      gsap.fromTo(
-        tabRef.current,
-        { opacity: 0 },
-        {
-          opacity: 1,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (headerRef.current) {
-      gsap.fromTo(
-        headerRef.current,
-        { opacity: 0, y: -20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          delay: 0.1,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (contentRef.current) {
-      gsap.fromTo(
-        contentRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          delay: 0.2,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchGroupingCriterion();
-  }, []);
-
-  const fetchGroupingCriterion = async () => {
-    try {
-      const config = await getLauncherConfig();
-      if (config && config.profile_grouping_criterion) {
-        setGroupingCriterion(config.profile_grouping_criterion);
-      } else {
-        setGroupingCriterion("none");
+    if (isBackgroundAnimationEnabled) {
+      if (tabRef.current) {
+        gsap.fromTo(
+          tabRef.current,
+          { opacity: 0 },
+          {
+            opacity: 1,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
       }
-    } catch (err) {
-      console.error(
-        "Failed to fetch launcher config for grouping criterion:",
-        err,
-      );
-      setGroupingCriterion("none");
+
+      if (headerRef.current) {
+        gsap.fromTo(
+          headerRef.current,
+          { opacity: 0, y: -20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            delay: 0.1,
+            ease: "power2.out",
+          },
+        );
+      }
+
+      if (contentRef.current) {
+        gsap.fromTo(
+          contentRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            delay: 0.2,
+            ease: "power2.out",
+          },
+        );
+      }
     }
-  };
+  }, [isBackgroundAnimationEnabled]);
 
   const allProfiles = profiles;
 
@@ -153,18 +142,18 @@ export function ProfilesTab() {
   });
 
   const groupedProfiles = (() => {
-    if (groupingCriterion === "none") {
+    if (currentGroupingCriterion === "none") {
       return { "All Profiles": initiallyFilteredProfiles };
     }
 
     return initiallyFilteredProfiles.reduce(
       (acc, profile) => {
         let key = "Unknown";
-        if (groupingCriterion === "loader") {
+        if (currentGroupingCriterion === "loader") {
           key = profile.loader?.toString() || "Vanilla";
-        } else if (groupingCriterion === "game_version") {
+        } else if (currentGroupingCriterion === "game_version") {
           key = profile.game_version || "Unknown Version";
-        } else if (groupingCriterion === "group") {
+        } else if (currentGroupingCriterion === "group") {
           key = profile.group || "No Group";
         }
 
@@ -207,7 +196,7 @@ export function ProfilesTab() {
     if (!isASpecial && isBSpecial) return -1;
     if (isASpecial && isBSpecial) return a.localeCompare(b);
 
-    if (groupingCriterion === "game_version") {
+    if (currentGroupingCriterion === "game_version") {
       return compareMinecraftVersions(a, b);
     }
 
@@ -255,17 +244,6 @@ export function ProfilesTab() {
     );
   };
 
-  const handleGroupingChange = async (newCriterion: string) => {
-    setGroupingCriterion(newCriterion);
-    try {
-      await setProfileGroupingPreference(newCriterion);
-      console.log("Grouping preference saved successfully.");
-    } catch (error) {
-      console.error("Failed to save grouping preference:", error);
-      toast.error("Failed to save grouping preference.");
-    }
-  };
-
   const handleShouldExportProfile = (profile: Profile) => {
     setProfileToExport(profile);
     setIsExportModalOpen(true);
@@ -302,8 +280,8 @@ export function ProfilesTab() {
                 className="w-full md:w-auto flex-grow md:flex-grow-0 h-[54px]"
               />
               <Select
-                value={groupingCriterion}
-                onChange={handleGroupingChange}
+                value={currentGroupingCriterion}
+                onChange={onGroupingChange}
                 options={groupingOptions}
                 className="w-full md:w-52"
               />
@@ -348,7 +326,7 @@ export function ProfilesTab() {
               <div className="space-y-6">
                 {sortedGroupKeys.map((groupKey) => (
                   <div key={groupKey}>
-                    {groupingCriterion !== "none" && (
+                    {currentGroupingCriterion !== "none" && (
                       <h2
                         className="text-2xl font-minecraft lowercase text-white mb-3 pb-1 border-b-2"
                         style={{ borderColor: `${accentColor.value}40` }}
@@ -370,7 +348,7 @@ export function ProfilesTab() {
                       ))}
                     </div>
                     {groupedProfiles[groupKey].length === 0 &&
-                      groupingCriterion !== "none" && (
+                      currentGroupingCriterion !== "none" && (
                         <p className="text-neutral-500 italic text-center py-4">
                           No profiles in this group.
                         </p>

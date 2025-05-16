@@ -46,6 +46,9 @@ export function ProfileCard({
     setLaunchError,
   } = useLaunchStateStore();
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -436,7 +439,7 @@ export function ProfileCard({
   };
 
   useEffect(() => {
-    if (cardRef.current) {
+    if (isBackgroundAnimationEnabled && cardRef.current) {
       gsap.fromTo(
         cardRef.current,
         { opacity: 0, y: 20 },
@@ -448,7 +451,7 @@ export function ProfileCard({
         },
       );
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   const handleExportFromContextMenu = () => {
     if (profile) {

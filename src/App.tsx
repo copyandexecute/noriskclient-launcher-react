@@ -23,10 +23,13 @@ import {SkinsTab} from "./components/tabs/SkinsTab.tsx";
 import { refreshNrcDataOnMount } from "./services/nrc-service";
 import { NewsTab } from "./components/tabs/NewsTab.tsx";
 import { StoreTab } from "./components/tabs/StoreTab.tsx";
+import { getLauncherConfig, setProfileGroupingPreference } from "./services/launcher-config-service";
 
 export function App() {
   const [activeTab, setActiveTab] = useState("play");
   const { openCrashModal } = useCrashModalStore();
+  // State for the CURRENT grouping criterion, managed by App.tsx
+  const [currentProfilesGrouping, setCurrentProfilesGrouping] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -90,6 +93,34 @@ export function App() {
     refreshNrcDataOnMount();
   }, []); // Empty dependency array ensures this runs only on mount
 
+  // Effect to fetch initial grouping criterion for ProfilesTab
+  useEffect(() => {
+    getLauncherConfig()
+      .then(config => {
+        if (config && config.profile_grouping_criterion) {
+          setCurrentProfilesGrouping(config.profile_grouping_criterion);
+        } else {
+          setCurrentProfilesGrouping("none"); // Default if not found or no config
+        }
+      })
+      .catch(err => {
+        console.error("Failed to get initial profile grouping from config:", err);
+        setCurrentProfilesGrouping("none"); // Default on error
+      });
+  }, []);
+
+  // Handler for when grouping changes in ProfilesTab
+  const handleProfileGroupingChange = async (newCriterion: string) => {
+    setCurrentProfilesGrouping(newCriterion);
+    try {
+      await setProfileGroupingPreference(newCriterion);
+      console.log("[App.tsx] Grouping preference saved successfully.");
+    } catch (error) {
+      console.error("[App.tsx] Failed to save grouping preference:", error);
+      toast.error("Failed to save grouping preference."); // Toast can be here or handled by ProfilesTab if preferred
+    }
+  };
+
   const handleNavChange = (tabId: string) => {
     setActiveTab(tabId);
   };
@@ -99,7 +130,12 @@ export function App() {
       case "play":
         return <PlayTab />;
       case "profiles":
-        return <ProfilesTab />;
+        return currentProfilesGrouping !== undefined ? (
+          <ProfilesTab 
+            currentGroupingCriterion={currentProfilesGrouping} 
+            onGroupingChange={handleProfileGroupingChange} 
+          />
+        ) : null; // Or a loading indicator
       case "mods":
         return <ModrinthTabV2 />;
       case "skins":
