@@ -23,6 +23,7 @@ import { Button } from "../ui/buttons/Button";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
 import { ProfileDetailView } from "../profiles/ProfileDetailView.tsx";
+import { ExportProfileModal } from "../profiles/ExportProfileModal";
 
 const groupingOptions = [
   {
@@ -68,6 +69,12 @@ export function ProfilesTab() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
   const [showImport, setShowImport] = useState(false);
+
+  // State for Export Modal
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [profileToExport, setProfileToExport] = useState<Profile | null>(
+    null,
+  );
 
   useEffect(() => {
     if (tabRef.current) {
@@ -259,6 +266,11 @@ export function ProfilesTab() {
     }
   };
 
+  const handleShouldExportProfile = (profile: Profile) => {
+    setProfileToExport(profile);
+    setIsExportModalOpen(true);
+  };
+
   return (
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
       {showDetailView && selectedProfile ? (
@@ -353,6 +365,7 @@ export function ProfilesTab() {
                           onClick={() => handleViewProfile(profile)}
                           onProfileCloned={fetchProfiles}
                           onDelete={handleDeleteProfile}
+                          onShouldExport={handleShouldExportProfile}
                         />
                       ))}
                     </div>
@@ -399,6 +412,18 @@ export function ProfilesTab() {
         <ProfileImport
           onClose={() => setShowImport(false)}
           onImportComplete={handleImportComplete}
+        />
+      )}
+
+      {/* Render ExportProfileModal at the ProfilesTab level */}
+      {profileToExport && (
+        <ExportProfileModal
+          profile={profileToExport}
+          isOpen={isExportModalOpen}
+          onClose={() => {
+            setIsExportModalOpen(false);
+            setProfileToExport(null);
+          }}
         />
       )}
     </div>

@@ -42,7 +42,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
     group: null,
     settings: {
       memory: { min: 1024, max: 4096 },
-      resolution: { width: 1280, height: 720 },
+      resolution: { width: 854, height: 480  },
       fullscreen: false,
       custom_jvm_args: null,
       java_path: null,
@@ -87,17 +87,21 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
           const ramMb = await invoke<number>("get_system_ram_mb");
           setSystemRamMb(ramMb);
 
-          const defaultMaxMemory = Math.min(
-            Math.max(Math.floor(ramMb / 4), 2048),
-            8192,
-          );
+          let initialMaxMemory;
+          if (ramMb <= 8192) {
+            initialMaxMemory = Math.min(2048, ramMb);
+          } else {
+            initialMaxMemory = Math.min(4096, ramMb);
+          }
+          initialMaxMemory = Math.max(initialMaxMemory, 1024);
+
           setProfile((prev) => ({
             ...prev,
             settings: {
               ...prev.settings!,
               memory: {
                 min: 1024,
-                max: defaultMaxMemory,
+                max: initialMaxMemory,
               },
             },
           }));

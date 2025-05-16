@@ -90,7 +90,7 @@ export function VersionStep({
         <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
           minecraft version
         </h2>
-        <p className="text-xl text-white/70 font-minecraft tracking-wide">
+        <p className="text-xs text-white/70 font-minecraft-ten tracking-wide">
           Select the Minecraft version for your profile. This will determine
           which mod loaders are available.
         </p>
@@ -127,7 +127,7 @@ export function VersionStep({
             <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
               selected: minecraft {profile.game_version}
             </div>
-            <div className="text-lg text-white/70 tracking-wide lowercase">
+            <div className="text-xs text-white/70 tracking-wide font-minecraft-ten">
               {selectedVersionType === "release"
                 ? "stable release"
                 : selectedVersionType === "snapshot"

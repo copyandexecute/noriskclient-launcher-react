@@ -44,7 +44,7 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
         <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
           profile summary
         </h2>
-        <p className="text-xl text-white/70 font-minecraft tracking-wide">
+        <p className="text-xs text-white/70 font-minecraft-ten tracking-wide">
           Review your profile settings before creating it.
         </p>
       </div>
@@ -111,8 +111,8 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
             >
               <Icon icon="solar:widget-bold" className="w-6 h-6 text-white" />
             </div>
-            <div className="text-xl text-white font-minecraft tracking-wide lowercase">
-              minecraft {profile.game_version}
+            <div className="text-xs text-white font-minecraft-ten tracking-wide">
+              Minecraft {profile.game_version}
             </div>
           </div>
         </Card>
@@ -140,9 +140,9 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
                 }}
               />
             </div>
-            <div className="text-xl text-white font-minecraft tracking-wide lowercase">
+            <div className="text-xs text-white font-minecraft-ten tracking-wide">
               {profile.loader === "vanilla"
-                ? "vanilla (no mods)"
+                ? "Vanilla (no mods)"
                 : `${profile.loader} ${profile.loader_version || ""}`}
             </div>
           </div>
@@ -167,7 +167,7 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
                 className="w-6 h-6 text-white"
               />
             </div>
-            <div className="text-xl text-white font-minecraft tracking-wide lowercase">
+            <div className="text-xs text-white font-minecraft-ten tracking-wide lowercase">
               {profile.settings?.memory?.max} MB (
               {(profile.settings?.memory?.max || 0) / 1024} GB)
             </div>
@@ -215,7 +215,7 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
         >
           <Icon icon="solar:info-circle-bold" className="w-7 h-7 text-white" />
         </div>
-        <div className="text-xl text-white/80 font-minecraft tracking-wide">
+        <div className="text-xs text-white/80 font-minecraft-ten tracking-wide">
           Click "Create Profile" to finish and create your new Minecraft
           profile.
         </div>

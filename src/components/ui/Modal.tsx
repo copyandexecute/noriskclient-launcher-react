@@ -36,6 +36,9 @@ export function Modal({
   const headerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
@@ -44,7 +47,7 @@ export function Modal({
     const header = headerRef.current;
     const closeButton = closeButtonRef.current;
 
-    if (backdrop && content && header) {
+    if (isBackgroundAnimationEnabled && backdrop && content && header) {
       gsap.fromTo(
         backdrop,
         { opacity: 0 },
@@ -104,30 +107,34 @@ export function Modal({
     return () => {
       window.removeEventListener("keydown", handleEscape);
     };
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   const handleClose = () => {
     if (isClosing) return;
     setIsClosing(true);
 
-    const backdrop = modalRef.current;
-    const content = contentRef.current;
+    if (isBackgroundAnimationEnabled) {
+      const backdrop = modalRef.current;
+      const content = contentRef.current;
 
-    if (backdrop && content) {
-      gsap.to(backdrop, {
-        opacity: 0,
-        duration: 0.2,
-        ease: "power2.in",
-      });
+      if (backdrop && content) {
+        gsap.to(backdrop, {
+          opacity: 0,
+          duration: 0.2,
+          ease: "power2.in",
+        });
 
-      gsap.to(content, {
-        y: -30,
-        opacity: 0,
-        scale: 0.95,
-        duration: 0.3,
-        ease: "back.in(1.2)",
-        onComplete: onClose,
-      });
+        gsap.to(content, {
+          y: -30,
+          opacity: 0,
+          scale: 0.95,
+          duration: 0.3,
+          ease: "back.in(1.2)",
+          onComplete: onClose,
+        });
+      } else {
+        onClose();
+      }
     } else {
       onClose();
     }
@@ -165,6 +172,7 @@ export function Modal({
           "relative flex flex-col w-full rounded-lg overflow-hidden",
           "border-2 border-b-4 shadow-2xl",
           widthClasses[width],
+          "max-h-[85vh]"
         )}
         style={{
           backgroundColor: `${accentColor.value}20`,
@@ -220,7 +228,7 @@ export function Modal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
+        <div className="flex-1 overflow-auto custom-scrollbar p-6">{children}</div>
 
         {footer && (
           <div
