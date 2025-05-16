@@ -158,7 +158,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
               </span>
             )}
             {description && (
-              <span className="text-white/60 font-minecraft text-xl lowercase">
+              <span className="text-white/60 font-minecraft-ten text-xs">
                 {description}
               </span>
             )}

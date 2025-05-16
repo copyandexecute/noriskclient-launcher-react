@@ -199,7 +199,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         <h3 className="text-3xl font-minecraft text-white mb-5 lowercase">
           export profile
         </h3>
-        <p className="text-2xl text-white/70 mb-6 font-minecraft tracking-wide">
+        <p className="text-xs text-white/70 mb-6 font-minecraft-ten tracking-wide">
           Export your profile to share with others or back it up. You can
           include all files or just the profile configuration.
         </p>
@@ -220,7 +220,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             placeholder="Enter filename without extension"
             className="text-2xl py-3"
           />
-          <p className="mt-2 text-xl text-white/50 font-minecraft tracking-wide">
+          <p className="mt-2 text-xs text-white/50 font-minecraft-ten tracking-wide">
             The .noriskpack extension will be added automatically
           </p>
         </div>
