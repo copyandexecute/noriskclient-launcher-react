@@ -15,6 +15,7 @@ import { EmptyState } from "../../ui/EmptyState";
 import { gsap } from "gsap";
 import { TagBadge } from "../../ui/TagBadge";
 import { CopyWorldDialog } from "../../modals/CopyWorldDialog";
+import { ConfirmDeleteDialog } from "../../modals/ConfirmDeleteDialog";
 import { toast } from "react-hot-toast";
 
 // --- Import Real Types ---
@@ -79,6 +80,12 @@ export function WorldsTab({
   const [isCopyingWorld, setIsCopyingWorld] = useState(false);
   const [copyWorldError, setCopyWorldError] = useState<string | null>(null);
   // --- End Copy Dialog State ---
+
+  // --- Delete Dialog State ---
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [worldToDelete, setWorldToDelete] = useState<WorldInfo | null>(null);
+  const [isActuallyDeleting, setIsActuallyDeleting] = useState(false);
+  // --- End Delete Dialog State ---
 
   const [deleteLoading, setDeleteLoading] = useState<Record<string, boolean>>(
     {},
@@ -428,35 +435,32 @@ export function WorldsTab({
     }
   }, [worldToCopy, profile?.id, getWorldDisplayName, loadData, handleCloseCopyDialog]);
 
-  const handleDelete = useCallback(
-    async (world: WorldInfo) => {
-      const currentProfileId = profile?.id;
-      if (
-        !currentProfileId ||
-        !window.confirm(`Delete world "${getWorldDisplayName(world)}"?`)
-      )
-        return;
-      console.log(`Deleting world: ${world.folder_name}`);
-      setDeleteLoading((prev) => ({ ...prev, [world.folder_name]: true }));
-      try {
-        await WorldService.deleteWorld(currentProfileId, world.folder_name);
-        toast.success(
-          `World "${getWorldDisplayName(world)}" deleted.`,
-        );
-        await loadData();
-      } catch (err) {
-        console.error("Delete failed:", err);
-        toast.error(`Delete failed: ${err}`);
-      } finally {
-        setDeleteLoading((prev) => {
-          const n = { ...prev };
-          delete n[world.folder_name];
-          return n;
-        });
-      }
-    },
-    [profile?.id, getWorldDisplayName, loadData],
-  );
+  const handleDeleteRequest = useCallback((world: WorldInfo) => {
+    setWorldToDelete(world);
+    setIsDeleteConfirmOpen(true);
+  }, []);
+
+  const handleCloseDeleteConfirmDialog = useCallback(() => {
+    setIsDeleteConfirmOpen(false);
+    setWorldToDelete(null);
+  }, []);
+
+  const handleConfirmActualDelete = useCallback(async () => {
+    if (!worldToDelete || !profile?.id) return;
+
+    setIsActuallyDeleting(true);
+    try {
+      await WorldService.deleteWorld(profile.id, worldToDelete.folder_name);
+      toast.success(`World "${getWorldDisplayName(worldToDelete)}" deleted.`);
+      handleCloseDeleteConfirmDialog();
+      await loadData();
+    } catch (err) {
+      console.error("Delete failed:", err);
+      toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsActuallyDeleting(false);
+    }
+  }, [worldToDelete, profile?.id, getWorldDisplayName, loadData, handleCloseDeleteConfirmDialog]);
 
   const handleRefresh = () => {
     loadData();
@@ -857,11 +861,11 @@ export function WorldsTab({
                             size="xs"
                           />
                           <IconButton
-                            onClick={() => handleDelete(item)}
+                            onClick={() => handleDeleteRequest(item)}
                             title="Delete World"
-                            disabled={deleteLoading[item.folder_name]}
+                            disabled={isActuallyDeleting && worldToDelete?.folder_name === item.folder_name}
                             icon={
-                              deleteLoading[item.folder_name] ? (
+                              (isActuallyDeleting && worldToDelete?.folder_name === item.folder_name) ? (
                                 <Icon
                                   icon="solar:refresh-circle-bold-duotone"
                                   className="animate-spin"
@@ -895,6 +899,16 @@ export function WorldsTab({
           onClose={handleCloseCopyDialog}
           onConfirm={handleConfirmCopyWorld}
           initialError={copyWorldError}
+        />
+      )}
+
+      {isDeleteConfirmOpen && worldToDelete && (
+        <ConfirmDeleteDialog
+          isOpen={isDeleteConfirmOpen}
+          itemName={getWorldDisplayName(worldToDelete)}
+          onClose={handleCloseDeleteConfirmDialog}
+          onConfirm={handleConfirmActualDelete}
+          isDeleting={isActuallyDeleting}
         />
       )}
     </div>
