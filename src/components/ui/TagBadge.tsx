@@ -51,6 +51,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     const [isPressed, setIsPressed] = useState(false);
     const [ripples, setRipples] = useState<RippleType[]>([]);
     const rippleCounter = useRef(0);
+    const isFirstRender = useRef(true);
 
     const isClickable = !!onClick && !disabled;
 
@@ -66,10 +67,15 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     };
 
     useEffect(() => {
+      if (isFirstRender.current) {
+        isFirstRender.current = false;
+        return;
+      }
+
       if (badgeRef.current) {
         gsap.fromTo(
           badgeRef.current,
-          { scale: 0.95, opacity: 0 },
+          { scale: 0.95, opacity: 0.8 },
           {
             scale: 1,
             opacity: 1,
@@ -175,45 +181,45 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       switch (variant) {
         case "destructive":
           return {
-            main: "#ef4444", // red-600
-            light: "#f87171", // red-400
-            dark: "#dc2626", // red-700
-            text: "#fee2e2", // red-100
-            bg: "rgba(239, 68, 68, 0.2)", // red-600 with 20% opacity
+            main: "#ef4444",
+            light: "#f87171",
+            dark: "#dc2626",
+            text: "#fee2e2",
+            bg: "rgba(239, 68, 68, 0.2)",
           };
         case "success":
           return {
-            main: "#10b981", // green-600
-            light: "#34d399", // green-400
-            dark: "#059669", // green-700
-            text: "#d1fae5", // green-100
-            bg: "rgba(16, 185, 129, 0.2)", // green-600 with 20% opacity
+            main: "#10b981",
+            light: "#34d399",
+            dark: "#059669",
+            text: "#d1fae5",
+            bg: "rgba(16, 185, 129, 0.2)",
           };
         case "info":
           return {
-            main: "#3b82f6", // blue-500
-            light: "#60a5fa", // blue-400
-            dark: "#2563eb", // blue-700
-            text: "#dbeafe", // blue-100
-            bg: "rgba(59, 130, 246, 0.2)", // blue-500 with 20% opacity
+            main: "#3b82f6",
+            light: "#60a5fa",
+            dark: "#2563eb",
+            text: "#dbeafe",
+            bg: "rgba(59, 130, 246, 0.2)",
           };
         case "warning":
           return {
-            main: "#f59e0b", // amber-500
-            light: "#fbbf24", // amber-400
-            dark: "#d97706", // amber-600
-            text: "#fef3c7", // amber-100
-            bg: "rgba(245, 158, 11, 0.2)", // amber-500 with 20% opacity
+            main: "#f59e0b",
+            light: "#fbbf24",
+            dark: "#d97706",
+            text: "#fef3c7",
+            bg: "rgba(245, 158, 11, 0.2)",
           };
         case "inactive":
           return {
-            main: "#6b7280", // gray-500
-            light: "#9ca3af", // gray-400
-            dark: "#4b5563", // gray-600
-            text: "#f3f4f6", // gray-100
-            bg: "rgba(107, 114, 128, 0.2)", // gray-500 with 20% opacity
+            main: "#6b7280",
+            light: "#9ca3af",
+            dark: "#4b5563",
+            text: "#f3f4f6",
+            bg: "rgba(107, 114, 128, 0.2)",
           };
-        default: // 'default'
+        default:
           return {
             main: accentColor.value,
             light: accentColor.hoverValue || accentColor.value,
@@ -337,4 +343,4 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
   },
 );
 
-TagBadge.displayName = "TagBadge"; 
+TagBadge.displayName = "TagBadge";

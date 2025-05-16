@@ -1,19 +1,18 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
-import { cn } from '../../../lib/utils';
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
-  ModrinthVersion,
-  ModrinthSearchHit,
   ModrinthGameVersion,
-} from '../../../types/modrinth';
-import type { AccentColor } from '../../../store/useThemeStore';
-import type { ContentInstallStatus } from '../../../types/profile';
-import { Icon } from '@iconify/react';
-import { Button } from '../../ui/buttons/Button';
-import { Input } from '../../ui/Input';
-import { Checkbox } from '../../ui/Checkbox';
-import { ModrinthVersionItemV2 } from './ModrinthVersionItemV2';
+  ModrinthSearchHit,
+  ModrinthVersion,
+} from "../../../types/modrinth";
+import type { AccentColor } from "../../../store/useThemeStore";
+import type { ContentInstallStatus } from "../../../types/profile";
+import { Icon } from "@iconify/react";
+import { Button } from "../../ui/buttons/Button";
+import { Checkbox } from "../../ui/Checkbox";
+import { ModrinthVersionItemV2 } from "./ModrinthVersionItemV2";
 import { Select, type SelectOption } from "../../ui/Select";
 import { TagBadge } from "../../ui/TagBadge";
 import { gsap } from "gsap";
@@ -63,12 +62,28 @@ interface ModrinthVersionListV2Props {
   ) => void;
   onCloseAllDropdowns: (projectId: string) => void;
   onLoadMore: (projectId: string) => void;
-  onInstallClick: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
-  onInstallModpackVersionAsProfileClick?: (project: ModrinthSearchHit, version: ModrinthVersion) => void;
+  onInstallClick: (
+    project: ModrinthSearchHit,
+    version: ModrinthVersion,
+  ) => void;
+  onInstallModpackVersionAsProfileClick?: (
+    project: ModrinthSearchHit,
+    version: ModrinthVersion,
+  ) => void;
   onHoverVersion: (id: string | null) => void;
   selectedProfileId?: string | null;
-  onDeleteClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion) => void;
-  onToggleEnableClick?: (profileId: string, project: ModrinthSearchHit, version: ModrinthVersion, newEnabledState: boolean, sha1Hash: string) => void;
+  onDeleteClick?: (
+    profileId: string,
+    project: ModrinthSearchHit,
+    version: ModrinthVersion,
+  ) => void;
+  onToggleEnableClick?: (
+    profileId: string,
+    project: ModrinthSearchHit,
+    version: ModrinthVersion,
+    newEnabledState: boolean,
+    sha1Hash: string,
+  ) => void;
 }
 
 // --- Component Implementation ---
@@ -115,18 +130,21 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
   // Animation for the container when it mounts
   useEffect(() => {
     if (containerRef.current) {
-      gsap.fromTo(
-        containerRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
+      // Use a more performant animation approach
+      requestAnimationFrame(() => {
+        gsap.fromTo(
+          containerRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
+      });
     }
-  }, []);
+  }, []); // Empty dependency array ensures it only runs once
 
   // Update showFilters state when filters change
   useEffect(() => {
@@ -172,10 +190,13 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
     });
   };
 
-  const filteredVersions = getFilteredVersions(versions);
+  const filteredVersions = useMemo(
+    () => getFilteredVersions(versions),
+    [versions, filters.versionType, filters.gameVersions, filters.loaders],
+  );
 
   // Get available game versions
-  const getAvailableGameVersions = () => {
+  const availableGameVersions = useMemo(() => {
     const allProjectGameVersionsSet = new Set(
       versions.flatMap((v) => v.game_versions),
     );
@@ -202,10 +223,16 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
     return availableGVs.sort((a, b) =>
       b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" }),
     );
-  };
+  }, [
+    versions,
+    uiState?.showAllGameVersions,
+    selectedGameVersionsSidebar,
+    showAllGameVersionsSidebar,
+    gameVersionsData,
+  ]);
 
   // Get available loaders for the current project type
-  const getAvailableLoaders = () => {
+  const availableLoaders = useMemo(() => {
     // Get loaders that are actually used in this project's versions
     const projectLoaders = Array.from(
       new Set(versions.flatMap((v) => v.loaders)),
@@ -213,31 +240,36 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
 
     // Only show loaders that are relevant to this project
     return projectLoaders.sort();
-  };
+  }, [versions]);
 
   // Create game version options
-  const gameVersionOptions: SelectOption[] = [
-    { value: "all", label: "All Game Versions" },
-    ...getAvailableGameVersions().map((gv) => ({
-      value: gv,
-      label: gv,
-      icon: filters.gameVersions.includes(gv) ? (
-        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
-      ) : undefined,
-    })),
-  ];
+  const gameVersionOptions = useMemo(
+    () => [
+      { value: "all", label: "All Game Versions" },
+      ...availableGameVersions.map((gv) => ({
+        value: gv,
+        label: gv,
+        icon: filters.gameVersions.includes(gv) ? (
+          <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+        ) : undefined,
+      })),
+    ],
+    [availableGameVersions, filters.gameVersions],
+  );
 
-  // Create loader options
-  const loaderOptions: SelectOption[] = [
-    { value: "all", label: "All Loaders" },
-    ...getAvailableLoaders().map((loader) => ({
-      value: loader,
-      label: loader,
-      icon: filters.loaders.includes(loader) ? (
-        <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
-      ) : undefined,
-    })),
-  ];
+  const loaderOptions = useMemo(
+    () => [
+      { value: "all", label: "All Loaders" },
+      ...availableLoaders.map((loader) => ({
+        value: loader,
+        label: loader,
+        icon: filters.loaders.includes(loader) ? (
+          <Icon icon="solar:check-circle-bold" className="w-4 h-4" />
+        ) : undefined,
+      })),
+    ],
+    [availableLoaders, filters.loaders],
+  );
 
   // Handle clearing all filters
   const handleClearAllFilters = () => {
@@ -334,7 +366,11 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
               label="Show All Versions"
               checked={uiState?.showAllGameVersions || false}
               onChange={(e) =>
-                onUiStateChange(projectId, "showAllGameVersions", e.target.checked)
+                onUiStateChange(
+                  projectId,
+                  "showAllGameVersions",
+                  e.target.checked,
+                )
               }
               className="text-sm"
             />
@@ -441,7 +477,8 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
               ? installedVersions?.[version.id] || null
               : null;
             const isInstalling = installingVersionStates?.[version.id] || false;
-            const isInstallingModpackVersion = installingModpackVersionStates?.[version.id] || false;
+            const isInstallingModpackVersion =
+              installingModpackVersionStates?.[version.id] || false;
             const isVersionHovered = hoveredVersionId === version.id;
             return (
               <ModrinthVersionItemV2
@@ -456,7 +493,9 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
                 onMouseEnter={() => onHoverVersion(version.id)}
                 onMouseLeave={() => onHoverVersion(null)}
                 onInstallClick={onInstallClick}
-                onInstallModpackVersionAsProfileClick={onInstallModpackVersionAsProfileClick}
+                onInstallModpackVersionAsProfileClick={
+                  onInstallModpackVersionAsProfileClick
+                }
                 selectedProfileId={selectedProfileId}
                 onDeleteClick={onDeleteClick}
                 onToggleEnableClick={onToggleEnableClick}
@@ -495,4 +534,4 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
       )}
     </div>
   );
-}; 
+};

@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ModrinthSearchV2 } from "../modrinth/v2/ModrinthSearchV2"; // Adjusted import path
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Profile } from "../../types/profile";
 import { listProfiles } from "../../services/profile-service";
-import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
+import { LoadingOverlay } from "../ui/LoadingOverlay";
 // import { Card } from "../ui/Card"; // Card might not be directly needed here anymore
 // import { useThemeStore } from "../../store/useThemeStore"; // Theme store might be used by sub-components
 // import { ModrinthFilters } from "../modrinth/ModrinthFilters"; // Filters will be part of ModrinthSearchV2 or a new V2 component
@@ -22,28 +21,60 @@ export function ModrinthTabV2({
   const [refreshKey, setRefreshKey] = useState(0); // May or may not be needed depending on V2 search interaction
   const [profiles, setProfiles] = useState<Profile[]>(initialProfiles);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
-  // const accentColor = useThemeStore((state) => state.accentColor); // If needed, can be passed down or used by children
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   useEffect(() => {
-    const loadProfiles = async () => {
-      try {
-        const fetchedProfiles = await listProfiles();
-        setProfiles(fetchedProfiles);
-        setProfilesLoaded(true);
-      } catch (err) {
-        console.error("Failed to load profiles:", err);
-        setError(
-          `Failed to load profiles: ${err instanceof Error ? err.message : String(err)}`,
-        );
-        setProfilesLoaded(true);
-      }
-    };
+    // Simulate loading progress
+    const progressInterval = setInterval(() => {
+      setLoadingProgress((prev) => {
+        const next = prev + Math.random() * 15;
+        return next > 90 ? 90 : next;
+      });
+    }, 300);
 
+    // Only load profiles if they haven't been loaded yet
     if (initialProfiles.length === 0 && !profilesLoaded) {
-      loadProfiles();
-    } else {
+      const loadProfiles = async () => {
+        try {
+          const fetchedProfiles = await listProfiles();
+          setProfiles(fetchedProfiles);
+          setProfilesLoaded(true);
+
+          // Complete loading after profiles are loaded
+          setLoadingProgress(100);
+          setTimeout(() => setIsLoading(false), 500); // Small delay to show 100% before hiding
+        } catch (err) {
+          console.error("Failed to load profiles:", err);
+          setError(
+            `Failed to load profiles: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          setProfilesLoaded(true);
+          setIsLoading(false);
+        }
+      };
+
+      // Use requestIdleCallback for non-critical loading if available
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(() => {
+          loadProfiles();
+        });
+      } else {
+        // Fallback to setTimeout with a small delay
+        setTimeout(loadProfiles, 10);
+      }
+    } else if (!profilesLoaded) {
+      // If profiles were provided as props, just mark as loaded
       setProfilesLoaded(true);
+
+      // Simulate loading completion
+      setTimeout(() => {
+        setLoadingProgress(100);
+        setTimeout(() => setIsLoading(false), 500);
+      }, 800);
     }
+
+    return () => clearInterval(progressInterval);
   }, [initialProfiles, profilesLoaded]);
 
   const handleInstallSuccess = useCallback(() => {
@@ -53,35 +84,33 @@ export function ModrinthTabV2({
     // listProfiles().then(setProfiles).catch(err => console.error("Failed to refresh profiles after install", err));
   }, []);
 
-  return (
-    <div className="h-full flex flex-col overflow-hidden p-4">
-      {error && <ErrorMessage message={error} />}
+  const loadingMessage = useMemo(() => {
+    const messages = [
+      "Loading mods...",
+      "Preparing content...",
+      "Fetching profiles...",
+      "Almost ready...",
+    ];
+    const index = Math.min(
+      Math.floor(loadingProgress / 25),
+      messages.length - 1,
+    );
+    return messages[index];
+  }, [loadingProgress]);
 
-      {!profilesLoaded ? (
-        <LoadingState message="Loading profiles..." />
-      ) : (
-        <div className="flex-1 overflow-hidden flex space-x-4">
-          <div className="flex-1 overflow-hidden">
-            <ModrinthSearchV2
-              profiles={profiles}
-              onInstallSuccess={handleInstallSuccess}
-              className="h-full"
-            />
-          </div>
-          {/* 
-            Filters are now intended to be part of ModrinthSearchV2 or a new ModrinthFiltersV2.
-            If ModrinthFiltersV2 is separate, it would be placed here or within ModrinthSearchV2 layout.
-            For now, assuming filters are integrated or will be added to ModrinthSearchV2 itself.
-          */}
-          {/* 
-          <div className="w-1/4 max-w-xs flex-shrink-0">
-            <ModrinthFiltersV2 ... /> 
-          </div>
-          */}
-        </div>
-      )}
+  return (
+    <div className="h-full flex flex-col overflow-hidden p-4 relative">
+      <LoadingOverlay
+        isLoading={isLoading}
+        message={loadingMessage}
+        progress={loadingProgress}
+        variant="default"
+        shadowDepth="default"
+      />
+
+      {error && <ErrorMessage message={error} />}
     </div>
   );
 }
 
-export default ModrinthTabV2; 
+export default ModrinthTabV2;
