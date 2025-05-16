@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
-import { StatusMessage } from "../../ui/StatusMessage";
 import { Button } from "../../ui/buttons/Button";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { RangeSlider } from "../../ui/RangeSlider";
@@ -12,6 +11,10 @@ import { TextArea } from "../../ui/TextArea";
 import { Checkbox } from "../../ui/Checkbox";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { toast } from "react-hot-toast";
+import { cn } from "../../../lib/utils";
 
 interface JavaSettingsTabProps {
   editedProfile: Profile;
@@ -19,14 +22,22 @@ interface JavaSettingsTabProps {
   systemRam: number;
 }
 
+// New type for Java Installation
+interface JavaInstallation {
+  path: string;
+  major_version: number;
+  vendor: string;
+  architecture: string;
+  is_default?: boolean; // Optional: if your backend provides this
+}
+
 export function JavaSettingsTab({
   editedProfile,
   updateProfile,
   systemRam,
 }: JavaSettingsTabProps) {
-  const [error] = useState<string | null>(null);
   const [useCustomJava, setUseCustomJava] = useState(
-    !!editedProfile.settings?.java_path,
+    editedProfile.settings?.use_custom_java_path ?? false,
   );
   const [useCustomArgs, setUseCustomArgs] = useState(
     (editedProfile.settings?.custom_jvm_args?.length || 0) > 0,
@@ -39,6 +50,25 @@ export function JavaSettingsTab({
   const javaInstallRef = useRef<HTMLDivElement>(null);
   const memoryRef = useRef<HTMLDivElement>(null);
   const argsRef = useRef<HTMLDivElement>(null);
+
+  // New state variables for Java detection and validation
+  const [detectedJavaInstallations, setDetectedJavaInstallations] = useState<
+    JavaInstallation[]
+  >([]);
+  const [isDetectingJava, setIsDetectingJava] = useState(false);
+  const [javaDetectionError, setJavaDetectionError] = useState<string | null>(
+    null,
+  );
+  const [customJavaPathInput, setCustomJavaPathInput] = useState(
+    editedProfile.settings?.java_path || "",
+  );
+  const [isValidatingJavaPath, setIsValidatingJavaPath] = useState(false);
+  const [validationResult, setValidationResult] = useState<
+    "valid" | "invalid" | "error" | null
+  >(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (isBackgroundAnimationEnabled) {
@@ -56,20 +86,107 @@ export function JavaSettingsTab({
         argsRef.current,
       ].filter(Boolean);
 
-      gsap.fromTo(
-        elements,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          stagger: 0.1,
-          ease: "power2.out",
-          delay: 0.2,
-        },
-      );
+      if (elements.length > 0) {
+        gsap.fromTo(
+          elements,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            stagger: 0.1,
+            ease: "power2.out",
+            delay: 0.2,
+          },
+        );
+      }
     }
   }, [isBackgroundAnimationEnabled]);
+
+  const detectJavaInstallations = async () => {
+    setIsDetectingJava(true);
+    setJavaDetectionError(null);
+    setValidationResult(null);
+    setValidationMessage(null);
+    try {
+      const installations: JavaInstallation[] = await invoke(
+        "detect_java_installations_command",
+      );
+      setDetectedJavaInstallations(installations);
+      if (installations.length === 0) {
+        toast("No Java installations found on your system. You may need to specify the path manually if you use a custom Java setup.");
+      } else if (!customJavaPathInput) {
+        const currentProfileJavaPath = editedProfile.settings?.java_path;
+        const preselected = currentProfileJavaPath 
+            ? installations.find(inst => inst.path === currentProfileJavaPath)
+            : installations.find(inst => inst.is_default) || installations[0];
+        if (preselected) {
+            setCustomJavaPathInput(preselected.path);
+            // await testCustomJavaPath(preselected.path); // Optionally auto-test
+        }
+      }
+    } catch (error) {
+      console.error("Error detecting Java installations:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setJavaDetectionError(errorMessage); // Store for internal reference if needed
+      toast.error(`Failed to detect Java: ${errorMessage}`);
+      setDetectedJavaInstallations([]);
+    } finally {
+      setIsDetectingJava(false);
+    }
+  };
+
+  useEffect(() => {
+    detectJavaInstallations();
+  }, []);
+
+  const browseForJavaPath = async () => {
+    try {
+      const selected = await open({
+        title: "Select Java Executable (javaw.exe, java) or Installation Directory",
+        directory: false, multiple: false,
+      });
+      if (typeof selected === 'string' && selected) {
+        setCustomJavaPathInput(selected);
+        await testCustomJavaPath(selected);
+      }
+    } catch (error) {
+      console.error("Error browsing for Java path:", error);
+      const errorMessage = String(error instanceof Error ? error.message : error);
+      toast.error(`Error browsing for Java: ${errorMessage}`);
+    }
+  };
+
+  const testCustomJavaPath = async (path_to_test?: string) => {
+    const currentPath = path_to_test || customJavaPathInput;
+    if (!currentPath) {
+      toast.error("Please select or enter a Java path to test.");
+      return;
+    }
+    setIsValidatingJavaPath(true);
+    setValidationResult(null); 
+    setValidationMessage(null);
+    try {
+      const isValid: boolean = await invoke("validate_java_path_command", { path: currentPath });
+      if (isValid) {
+        setValidationResult("valid");
+        toast.success("Java path is valid!");
+        updateProfile({ settings: { ...editedProfile.settings, java_path: currentPath, use_custom_java_path: true } });
+      } else {
+        setValidationResult("invalid");
+        toast.error("Invalid Java Path. Check the path or ensure it's a compatible Java version.");
+      }
+    } catch (error: any) {
+      console.error(`Error validating Java path ${currentPath}:`, error);
+      setValidationResult("error");
+      const message = error?.message?.includes("Java path does not exist")
+        ? "Selected Java path does not exist."
+        : error?.message || String(error);
+      toast.error(`Java Validation error: ${message}`);
+    } finally {
+      setIsValidatingJavaPath(false);
+    }
+  };
 
   const recommendedMaxRam = Math.min(Math.floor(systemRam / 2), 16384);
   const memory = editedProfile.settings?.memory || {
@@ -90,10 +207,14 @@ export function JavaSettingsTab({
     updateProfile({ settings: newSettings });
   };
 
-  const handleJavaPathChange = (path: string) => {
-    const newSettings = { ...editedProfile.settings };
-    newSettings.java_path = path;
-    updateProfile({ settings: newSettings });
+  const handleJavaPathInputChange = (newPath: string) => {
+    setCustomJavaPathInput(newPath);
+    setValidationResult(null); 
+  };
+  
+  const handleDetectedJavaListItemClick = (installation: JavaInstallation) => {
+    setCustomJavaPathInput(installation.path);
+    testCustomJavaPath(installation.path); // Auto-test selected detected path
   };
 
   const handleJavaArgsChange = (args: string) => {
@@ -104,29 +225,15 @@ export function JavaSettingsTab({
 
   const handleCustomJavaToggle = (checked: boolean) => {
     setUseCustomJava(checked);
-    const newSettings = { ...editedProfile.settings };
     if (checked) {
-      newSettings.java_path = "";
-    } else {
-      newSettings.java_path = null;
-    }
-    updateProfile({ settings: newSettings });
-
-    if (checked && isBackgroundAnimationEnabled) {
-      const inputContainer =
-        javaInstallRef.current?.querySelector(".custom-java-input");
-      if (inputContainer) {
-        gsap.fromTo(
-          inputContainer,
-          { opacity: 0, height: 0 },
-          {
-            opacity: 1,
-            height: "auto",
-            duration: 0.3,
-            ease: "power2.out",
-          },
-        );
+      if (!customJavaPathInput && detectedJavaInstallations.length > 0) {
+        const defaultOrFirst = detectedJavaInstallations.find(j => j.is_default) || detectedJavaInstallations[0];
+        if (defaultOrFirst) setCustomJavaPathInput(defaultOrFirst.path);
       }
+      updateProfile({ settings: { ...editedProfile.settings, use_custom_java_path: true } });
+    } else {
+      updateProfile({ settings: { ...editedProfile.settings, use_custom_java_path: false } });
+      setValidationResult(null);
     }
   };
 
@@ -134,11 +241,13 @@ export function JavaSettingsTab({
     setUseCustomArgs(checked);
     const newSettings = { ...editedProfile.settings };
     if (checked) {
-      newSettings.custom_jvm_args = [
-        "-XX:+UseG1GC",
-        "-XX:+ParallelRefProcEnabled",
-        "-XX:MaxGCPauseMillis=200",
-      ].join(" ");
+      if (!newSettings.custom_jvm_args) {
+        newSettings.custom_jvm_args = [
+          "-XX:+UseG1GC",
+          "-XX:+ParallelRefProcEnabled",
+          "-XX:MaxGCPauseMillis=200",
+        ].join(" ");
+      }
     } else {
       newSettings.custom_jvm_args = null;
     }
@@ -165,8 +274,6 @@ export function JavaSettingsTab({
 
   return (
     <div ref={tabRef} className="space-y-6 select-none">
-      {error && <StatusMessage type="error" message={error} />}
-
       <div ref={javaInstallRef} className="space-y-4">
         <div>
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
@@ -184,36 +291,93 @@ export function JavaSettingsTab({
           {!useCustomJava && (
             <Card variant="default" className="p-4 mt-3">
               <div className="text-2xl text-white font-minecraft mb-2 lowercase tracking-wide select-none">
-                using default java 21 installation:
+                using launcher default java
               </div>
-              <div className="text-xl text-white/70 font-minecraft break-all lowercase tracking-wide select-none">
-                c:\users\username\appdata\roaming\noriskclient\meta\java_versions\zulu21.38.21-ca-jre21.0.5-win_x64\bin\javaw.exe
+              {/* Consider fetching and displaying the actual default path if available */}
+              <div className="text-xs text-white/70 font-minecraft-ten break-all lowercase tracking-wide select-none">
+                The launcher will use its bundled Java or a system-wide default.
               </div>
             </Card>
           )}
 
           {useCustomJava && (
-            <div className="flex gap-3 mt-3 custom-java-input">
-              <Input
-                value={editedProfile.settings?.java_path || ""}
-                onChange={(e) => handleJavaPathChange(e.target.value)}
-                placeholder="path to java executable"
-                className="flex-1 text-2xl py-3"
-              />
-              <Button
-                variant="secondary"
-                size="md"
-                icon={
-                  <Icon
-                    icon="solar:folder-with-files-bold"
-                    className="w-5 h-5 text-white"
+            <Card variant="default" className="p-5 mt-3 space-y-4 custom-java-input">
+              {isDetectingJava && (
+                <div className="flex items-center text-white/70 font-minecraft">
+                  <Icon icon="solar:refresh-bold" className="w-5 h-5 mr-2 animate-spin" />
+                  <span>Detecting Java installations...</span>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="custom-java-path-input" className="block text-xl text-white/70 font-minecraft mt-3 mb-2 lowercase tracking-wide">
+                  Manual Java Path (javaw.exe or java executable)
+                </label>
+                <div className="flex gap-3">
+                  <Input
+                    id="custom-java-path-input"
+                    value={customJavaPathInput}
+                    onChange={(e) => handleJavaPathInputChange(e.target.value)}
+                    placeholder="Path to java executable (e.g., .../bin/javaw.exe)"
+                    className="flex-1 text-2xl py-3"
                   />
-                }
-                className="text-2xl"
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={browseForJavaPath}
+                    shadowDepth="short"
+                    icon={<Icon icon="solar:folder-with-files-bold" className="w-5 h-5 text-white" />}
+                    className="text-2xl"
+                    aria-label="Browse for Java executable"
+                  >
+                    Browse
+                  </Button>
+                </div>
+              </div>
+              
+              {detectedJavaInstallations.length > 0 && !isDetectingJava && (
+                <div className="space-y-2 pt-2">
+                  <h4 className="text-xl text-white/70 font-minecraft mb-2 lowercase tracking-wide">
+                    Detected Java Installations (click to use):
+                  </h4>
+                  <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pr-2">
+                    {detectedJavaInstallations.map(java => (
+                      <button
+                        key={java.path}
+                        onClick={() => handleDetectedJavaListItemClick(java)}
+                        title={java.path}
+                        className={cn(
+                          "w-full text-left p-2 border-2 transition-all duration-150 font-minecraft-ten text-xs rounded-md",
+                          customJavaPathInput === java.path 
+                            ? "bg-accent/30 border-accent text-white"
+                            : "bg-black/20 border-white/20 hover:bg-black/30 hover:border-white/40 text-white/80"
+                        )}
+                        style={customJavaPathInput === java.path ? {
+                           borderColor: accentColor.value, 
+                           backgroundColor: `${accentColor.value}20` 
+                        } : {}}
+                      >
+                        <span className="block truncate">{java.path}</span>
+                        <span className="block text-xs opacity-70 font-minecraft-ten truncate">
+                          (v{java.major_version} - {java.vendor} - {java.architecture})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Button
+                variant="default"
+                size="md"
+                onClick={() => testCustomJavaPath()}
+                disabled={isValidatingJavaPath || !customJavaPathInput}
+                icon={ isValidatingJavaPath ? <Icon icon="solar:refresh-bold" className="w-5 h-5 animate-spin" /> : <Icon icon="solar:test-tube-bold" className="w-5 h-5"/> }
+                className="text-2xl mt-2 w-full sm:w-auto"
               >
-                browse
+                {isValidatingJavaPath ? "Testing..." : "Test & Use Path"}
               </Button>
-            </div>
+            </Card>
           )}
         </div>
       </div>
@@ -232,10 +396,10 @@ export function JavaSettingsTab({
               step={512}
               valueLabel={`${memory.max} MB (${(memory.max / 1024).toFixed(1)} GB)`}
               minLabel="512 MB"
-              maxLabel={`${systemRam} MB`}
+              maxLabel={`${systemRam} MB (${(systemRam / 1024).toFixed(1)} GB)`}
             />
 
-            <div className="mt-3 text-xl text-white/70 tracking-wide select-none">
+            <div className="mt-3 text-xl text-white/70 tracking-wide select-none font-minecraft">
               recommended: {recommendedMaxRam} MB (
               {(recommendedMaxRam / 1024).toFixed(1)} GB)
             </div>
@@ -265,6 +429,9 @@ export function JavaSettingsTab({
                 placeholder="enter java arguments..."
                 className="w-full min-h-[100px] text-2xl"
               />
+               <p className="mt-2 text-base text-white/50 font-minecraft tracking-wide">
+                Arguments should be separated by spaces. Example: -Xmx4G -XX:+UseG1GC
+              </p>
             </div>
           )}
         </div>
