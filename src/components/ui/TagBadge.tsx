@@ -244,7 +244,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     const getSizeStyles = () => {
       switch (size) {
         case "sm":
-          return "px-2 py-1 text-xs rounded-md min-h-[24px]";
+          return "px-2 py-1 text-[0.625em] rounded-md min-h-[15px]";
         case "lg":
           return "px-4 py-1.5 text-base rounded-md min-h-[36px]";
         case "xl":

@@ -12,6 +12,7 @@ import { SearchInput } from "../../ui/SearchInput";
 import { LoadingState } from "../../ui/LoadingState";
 import { EmptyState } from "../../ui/EmptyState";
 import { gsap } from "gsap";
+import { TagBadge } from "../../ui/TagBadge";
 
 // --- Import Real Types ---
 import type {
@@ -582,8 +583,8 @@ export function WorldsTab({
                     key={key}
                     className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors"
                   >
-                    {/* 3D Image Frame */}
-                    <div className="relative w-16 h-16 flex-shrink-0">
+                    {/* Icon Section */}
+                    <div className="relative w-24 h-24 flex-shrink-0">
                       <div
                         className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
                         style={{
@@ -635,59 +636,27 @@ export function WorldsTab({
                       </div>
                     </div>
 
-                    <div className="flex-grow min-w-0">
+                    {/* Middle Section (Description) */}
+                    <div className="flex-grow min-w-0 h-24 flex flex-col overflow-hidden">
+                      {/* Top: Title */}
                       <h3
-                        className="font-minecraft text-2xl lowercase tracking-wide truncate"
+                        className="font-minecraft-ten text-base tracking-wide truncate flex-shrink-0"
                         title={itemDisplayName}
                       >
                         {itemDisplayName}
                       </h3>
-                      {isWorld ? (
-                        <>
-                          <p className="text-white/60 text-xl mt-2">
+
+                      {/* Middle: Subtitle (Last Played / MOTD) - vertically centered */}
+                      <div className="flex-grow flex items-center my-1 overflow-hidden">
+                        {isWorld ? (
+                          <p className="text-white/60 text-xs truncate font-minecraft-ten">
                             {item.last_played
                               ? `Last played: ${timeAgo(item.last_played)}`
                               : "Never played"}
                           </p>
-                          <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
-                            <span>
-                              Mode: {getGameModeString(item.game_mode)}
-                            </span>
-                            <span>
-                              Difficulty: {getDifficultyString(item.difficulty)}
-                            </span>
-                            {item.is_hardcore && (
-                              <span className="text-red-400 font-bold inline-flex items-center gap-1">
-                                <Icon
-                                  icon="solar:skull-bold"
-                                  className="w-4 h-4"
-                                />{" "}
-                                Hardcore
-                              </span>
-                            )}
-                            {item.difficulty_locked && (
-                              <span
-                                title="Difficulty Locked"
-                                className="inline-flex items-center gap-1"
-                              >
-                                <Icon
-                                  icon="solar:lock-bold"
-                                  className="w-4 h-4"
-                                />{" "}
-                                Locked
-                              </span>
-                            )}
-                            {item.version_name && (
-                              <span title={`Version: ${item.version_name}`}>
-                                v: {item.version_name}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
+                        ) : (
                           <div
-                            className="text-white/70 text-xl mt-2 motd-container h-10 overflow-hidden"
+                            className="text-white/70 text-xs motd-container overflow-hidden truncate font-minecraft-ten text-center"
                             title={pingInfo?.description || item.address || ""}
                           >
                             {isPinging ? (
@@ -713,61 +682,118 @@ export function WorldsTab({
                               </span>
                             )}
                           </div>
-                          <div className="text-white/50 text-lg mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
-                            {isPinging ? (
-                              <span>Pinging...</span>
-                            ) : hasPingError ? (
-                              <span className="text-red-400">Error</span>
-                            ) : pingInfo ? (
-                              <>
-                                <span
-                                  title="Players"
-                                  className="inline-flex items-center gap-2"
-                                >
-                                  <Icon
-                                    icon="solar:users-group-rounded-bold"
-                                    className="w-4 h-4"
-                                  />
-                                  {pingInfo.players_online ?? "-"}/
-                                  {pingInfo.players_max ?? "-"}
-                                </span>
-                                <span
-                                  title="Latency"
-                                  className="inline-flex items-center gap-2"
-                                >
-                                  <Icon
-                                    icon="solar:wifi-bold"
-                                    className="w-4 h-4"
-                                  />
-                                  {pingInfo.latency_ms ?? "-"} ms
-                                </span>
-                                {pingInfo.version_name && (
-                                  <span
-                                    title="Version"
-                                    className="inline-flex items-center gap-2"
-                                  >
-                                    <Icon
-                                      icon="solar:tag-bold"
-                                      className="w-4 h-4"
-                                    />
-                                    {pingInfo.version_name}
-                                  </span>
-                                )}
-                              </>
-                            ) : (
-                              <span>Offline / Unknown</span>
+                        )}
+                      </div>
+
+                      {/* Bottom: Tag Badges */}
+                      <div className="flex flex-wrap items-center gap-1 flex-shrink-0">
+                        {isWorld ? (
+                          <>
+                            <TagBadge size="sm" variant="info" withIcon>
+                              <Icon icon="solar:gamepad-bold-duotone" className="w-3 h-3 mr-0.5" />
+                              {getGameModeString(item.game_mode)}
+                            </TagBadge>
+                            <TagBadge size="sm" variant="default" withIcon>
+                              <Icon icon="solar:tuning-square-bold-duotone" className="w-3 h-3 mr-0.5" />
+                              {getDifficultyString(item.difficulty)}
+                            </TagBadge>
+                            {item.is_hardcore && (
+                              <TagBadge variant="destructive" size="sm" withIcon>
+                                <Icon
+                                  icon="solar:skull-bold"
+                                  className="w-3 h-3 mr-0.5"
+                                />
+                                Hardcore
+                              </TagBadge>
                             )}
-                          </div>
-                        </>
-                      )}
+                            {item.difficulty_locked && (
+                              <TagBadge size="sm" withIcon>
+                                <Icon
+                                  icon="solar:lock-bold"
+                                  className="w-3 h-3 mr-0.5"
+                                />
+                                Locked
+                              </TagBadge>
+                            )}
+                            {item.version_name && (
+                              <TagBadge size="sm" withIcon>
+                                <Icon icon="solar:tag-bold" className="w-3 h-3 mr-0.5" />
+                                {item.version_name}
+                              </TagBadge>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {isPinging ? (
+                              <TagBadge size="sm" variant="default">Pinging...</TagBadge>
+                            ) : hasPingError ? (
+                              <TagBadge size="sm" variant="destructive">Error</TagBadge>
+                            ) : pingInfo ? (() => {
+                                let playerCountVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
+                                if (pingInfo.players_online != null) {
+                                  if (pingInfo.players_online > 0) {
+                                    playerCountVariant = 'success';
+                                  } else { // players_online === 0
+                                    playerCountVariant = 'default'; 
+                                  }
+                                }
+
+                                let pingLatencyVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
+                                if (pingInfo.latency_ms != null) {
+                                  if (pingInfo.latency_ms <= 80) {
+                                    pingLatencyVariant = 'success';
+                                  } else if (pingInfo.latency_ms <= 150) {
+                                    pingLatencyVariant = 'default';
+                                  } else if (pingInfo.latency_ms <= 250) {
+                                    pingLatencyVariant = 'warning';
+                                  } else { // > 250
+                                    pingLatencyVariant = 'destructive';
+                                  }
+                                }
+
+                                return (
+                                  <>
+                                    <TagBadge size="sm" withIcon variant={playerCountVariant}>
+                                      <Icon
+                                        icon="solar:users-group-rounded-bold"
+                                        className="w-3 h-3 mr-0.5"
+                                      />
+                                      {pingInfo.players_online ?? "-"}/
+                                      {pingInfo.players_max ?? "-"}
+                                    </TagBadge>
+                                    <TagBadge size="sm" withIcon variant={pingLatencyVariant}>
+                                      <Icon
+                                        icon="solar:wifi-bold"
+                                        className="w-3 h-3 mr-0.5"
+                                      />
+                                      {pingInfo.latency_ms ?? "-"} ms
+                                    </TagBadge>
+                                    {pingInfo.version_name && (
+                                      <TagBadge size="sm" withIcon variant="default">
+                                        <Icon
+                                          icon="solar:tag-bold"
+                                          className="w-3 h-3 mr-0.5"
+                                        />
+                                        {pingInfo.version_name}
+                                      </TagBadge>
+                                    )}
+                                  </>
+                                );
+                              })() : (
+                              <TagBadge size="sm" variant="inactive">Offline / Unknown</TagBadge>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-3 flex-shrink-0">
+                    {/* Right Section (Buttons) */}
+                    <div className="flex-shrink-0 h-24 flex flex-col items-end justify-center gap-1">
                       <Button
                         onClick={() => handleLaunch(item)}
                         disabled={!isWorld && !item.address}
                         variant="default"
-                        size="md"
+                        size="sm"
                         title={
                           isWorld
                             ? "Play World"
@@ -779,14 +805,14 @@ export function WorldsTab({
                         {isWorld ? "Play" : "Join"}
                       </Button>
                       {isWorld && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                           <IconButton
                             onClick={() => handleOpenCopyDialog(item)}
                             title="Copy World"
                             disabled={copyLoading}
                             icon={<Icon icon="solar:copy-bold" />}
                             variant="secondary"
-                            size="sm"
+                            size="xs"
                           />
                           <IconButton
                             onClick={() => handleDelete(item)}
@@ -803,7 +829,7 @@ export function WorldsTab({
                               )
                             }
                             variant="destructive"
-                            size="sm"
+                            size="xs"
                           />
                         </div>
                       )}
