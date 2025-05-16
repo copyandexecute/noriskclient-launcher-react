@@ -39,11 +39,14 @@ export function Select({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   const selectedOption = options.find((option) => option.value === value);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         containerRef.current,
         { scale: 0.95, opacity: 0 },
@@ -60,7 +63,7 @@ export function Select({
   const handleClick = () => {
     if (disabled) return;
 
-    if (triggerRef.current) {
+    if (triggerRef.current && isBackgroundAnimationEnabled) {
       gsap.to(triggerRef.current, {
         scale: 0.95,
         duration: 0.1,
@@ -82,7 +85,7 @@ export function Select({
     if (disabled) return;
     setIsHovered(true);
 
-    if (triggerRef.current) {
+    if (triggerRef.current && isBackgroundAnimationEnabled) {
       gsap.to(triggerRef.current, {
         y: -3,
         boxShadow: `0 7px 0 rgba(0,0,0,0.25), 0 9px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
@@ -96,7 +99,7 @@ export function Select({
     if (disabled) return;
     setIsHovered(false);
 
-    if (triggerRef.current) {
+    if (triggerRef.current && isBackgroundAnimationEnabled) {
       gsap.to(triggerRef.current, {
         y: 0,
         boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
@@ -110,7 +113,7 @@ export function Select({
     onChange(optionValue);
     setIsOpen(false);
 
-    if (triggerRef.current) {
+    if (triggerRef.current && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         triggerRef.current,
         { scale: 0.95 },
@@ -147,14 +150,8 @@ export function Select({
           backgroundColor: `${accentColor.value}${isHovered || isOpen ? "40" : "30"}`,
           borderColor: `${accentColor.value}${isHovered || isOpen ? "70" : "60"}`,
           borderBottomColor: accentColor.value,
-          boxShadow:
-            isOpen || isHovered
-              ? `0 7px 0 rgba(0,0,0,0.25), 0 9px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
-              : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          transform:
-            (isHovered || isOpen) && !disabled
-              ? "translateY(-3px)"
-              : "translateY(0)",
+          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          transform: "translateY(0)",
           filter:
             (isHovered || isOpen) && !disabled
               ? "brightness(1.1)"
