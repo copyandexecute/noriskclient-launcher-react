@@ -19,8 +19,16 @@ export async function killMinecraft(profileId: string): Promise<void> {
   return invoke<void>("kill_minecraft", { profileId });
 }
 
-export async function launch(profileId: string): Promise<void> {
-  return invoke<void>("launch_profile", { id: profileId });
+export async function launch(
+  id: string,
+  quickPlaySingleplayer?: string, 
+  quickPlayMultiplayer?: string
+): Promise<void> {
+  return invoke<void>("launch_profile", { 
+    id, 
+    quickPlaySingleplayer, 
+    quickPlayMultiplayer 
+  });
 }
 
 export async function abort(profileId: string): Promise<void> {

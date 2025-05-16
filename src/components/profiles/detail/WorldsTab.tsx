@@ -18,6 +18,7 @@ import { CopyWorldDialog } from "../../modals/CopyWorldDialog";
 import { ConfirmDeleteDialog } from "../../modals/ConfirmDeleteDialog";
 import { toast } from "react-hot-toast";
 import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { LaunchButton } from "../../ui/buttons/LaunchButton";
 
 // --- Import Real Types ---
 import type {
@@ -375,24 +376,6 @@ export function WorldsTab({
     searchQuery,
     localSearchQuery,
   ]);
-
-  const handleLaunch = useCallback(
-    (item: DisplayItem) => {
-      const currentProfileId = profile?.id;
-      if (!currentProfileId || !onLaunchRequest) return;
-      if (item.type === "world")
-        onLaunchRequest({
-          profileId: currentProfileId,
-          quickPlaySingleplayer: item.folder_name,
-        });
-      else if (item.type === "server" && item.address)
-        onLaunchRequest({
-          profileId: currentProfileId,
-          quickPlayMultiplayer: item.address,
-        });
-    },
-    [profile?.id, onLaunchRequest],
-  );
 
   const handleOpenCopyDialog = useCallback(async (world: WorldInfo) => {
     setWorldToCopy(world);
@@ -797,21 +780,15 @@ export function WorldsTab({
 
                     {/* Right Section (Buttons) */}
                     <div className="flex-shrink-0 h-24 flex flex-col items-end justify-center gap-1">
-                      <Button
-                        onClick={() => handleLaunch(item)}
-                        disabled={!isWorld && !item.address}
-                        variant="default"
+                      <LaunchButton
+                        id={profile.id}
+                        name={isWorld ? getWorldDisplayName(item) : getServerDisplayName(item)}
                         size="sm"
-                        title={
-                          isWorld
-                            ? "Play World"
-                            : item.address
-                              ? "Join Server"
-                              : "Address missing"
-                        }
-                      >
-                        {isWorld ? "Play" : "Join"}
-                      </Button>
+                        buttonText={isWorld ? "Play" : "Join"}
+                        disabled={!isWorld && !item.address}
+                        quickPlaySingleplayer={isWorld ? item.folder_name : undefined}
+                        quickPlayMultiplayer={!isWorld && item.address ? item.address : undefined}
+                      />
                       {isWorld && (
                         <div className="flex gap-1">
                           <IconButton
