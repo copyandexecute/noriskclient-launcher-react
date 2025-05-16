@@ -214,7 +214,7 @@ export function ExportSettingsTab({
                     variant="ghost" 
                     size="sm" 
                     onClick={handleSelectAll} 
-                    disabled={isLoadingDirectory || !directoryStructure}
+                    disabled={isLoadingDirectory || !directoryStructure || !directoryStructure.children || directoryStructure.children.length === 0}
                     icon={<Icon icon="solar:check-read-outline" className="w-4 h-4" />}
                     className="text-xs px-3 py-1.5"
                 >
@@ -231,7 +231,7 @@ export function ExportSettingsTab({
                     Deselect All
                 </Button>
             </div>
-            <Card variant="flat" className="p-3 bg-black/20 border border-white/10 max-h-64 overflow-y-auto custom-scrollbar">
+            <Card variant="flat" className="p-3 bg-black/20 border border-white/10 max-h-64 min-h-64 overflow-y-auto custom-scrollbar">
                  <FileNodeViewer
                     rootNode={directoryStructure}
                     loading={isLoadingDirectory}
