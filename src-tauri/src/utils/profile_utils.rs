@@ -1115,26 +1115,38 @@ fn add_dir_to_zip<'a>(
             .map_err(|e| AppError::Io(e))?;
 
         while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
-            let path = entry.path();
+            let path = entry.path(); // Absolute path of the current file/directory
 
-            // Create relative path from root - this ensures proper directory structure in the zip
-            let rel_path = path
+            // Create relative path from root_dir - this ensures proper directory structure in the zip
+            // And normalize path separators to forward slashes for zip compatibility.
+            let rel_path_str = path
                 .strip_prefix(root_dir)
-                .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?
+                .map_err(|e| AppError::Other(format!(
+                    "Path prefix error stripping {:?} from {:?}: {}", 
+                    root_dir, 
+                    path, 
+                    e
+                )))?
                 .to_string_lossy()
-                .to_string();
+                .to_string()
+                .replace('\\', "/"); // Normalize to forward slashes
 
             if path.is_dir() {
-                // For directories, first add an empty directory entry (if not root)
-                if !rel_path.is_empty() {
-                    // Skip root directory
-                    let dir_path = if rel_path.ends_with('/') {
-                        rel_path.clone()
-                    } else {
-                        format!("{}/", rel_path)
-                    };
+                // For directories, ensure the entry name ends with a forward slash.
+                let dir_entry_name = if rel_path_str.is_empty() { // Should not happen if root_dir itself is not added directly with empty name
+                    // Potentially skip adding the root dir itself as an explicit entry if it's meant to be implicit
+                    // Or handle as needed, e.g., if zipping contents *of* root_dir, rel_path_str might be empty for root_dir's direct children's parent dir entry
+                    // For now, if rel_path_str is empty for a dir, it implies we are at the root_dir itself, which shouldn't be added as named entry.
+                    // We only add named entries for children.
+                    String::new() // Placeholder, logic below skips if empty
+                } else if rel_path_str.ends_with('/') {
+                    rel_path_str.clone()
+                } else {
+                    format!("{}/", rel_path_str)
+                };
 
-                    let dir_builder = ZipEntryBuilder::new(dir_path.into(), Compression::Stored);
+                if !dir_entry_name.is_empty() { // Only add non-empty directory names
+                    let dir_builder = ZipEntryBuilder::new(dir_entry_name.into(), Compression::Stored);
                     writer
                         .write_entry_whole(dir_builder, &[])
                         .await
@@ -1144,11 +1156,15 @@ fn add_dir_to_zip<'a>(
                 }
 
                 // Then recursively add its contents
-                add_dir_to_zip(writer, root_dir, &path).await?;
+                add_dir_to_zip(writer, root_dir, &path).await?; // Pass original absolute path for recursion
             } else {
                 // For files, read the content and add it
                 let file_data = fs::read(&path).await.map_err(|e| AppError::Io(e))?;
-                let file_builder = ZipEntryBuilder::new(rel_path.into(), Compression::Deflate);
+                // Ensure rel_path_str is not empty for a file (should always be the case if not zipping root_dir itself as an entry)
+                if rel_path_str.is_empty(){
+                    return Err(AppError::Other(format!("Attempted to add file with empty relative path: {:?}", path)));
+                }
+                let file_builder = ZipEntryBuilder::new(rel_path_str.into(), Compression::Deflate);
 
                 writer
                     .write_entry_whole(file_builder, &file_data)

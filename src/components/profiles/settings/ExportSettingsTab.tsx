@@ -21,7 +21,7 @@ interface ExportSettingsTabProps {
 }
 
 export function ExportSettingsTab({ profile, onClose }: ExportSettingsTabProps) {
-  const [exportFilename, setExportFilename] = useState(profile.name.replace(/\s+/g, '_').toLowerCase());
+  const [exportFilename, setExportFilename] = useState(profile.name);
   const [selectedExportPaths, setSelectedExportPaths] = useState<Set<string>>(new Set());
   const [exportOpenFolder, setExportOpenFolder] = useState(true);
   
