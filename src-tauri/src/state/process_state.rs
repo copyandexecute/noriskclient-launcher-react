@@ -735,18 +735,21 @@ impl ProcessManager {
                 .await
                 .map_err(AppError::Io)?;
 
-            let mut line_buffer = String::new();
+            let mut byte_buffer = Vec::new();
             loop {
                 let current_stream_pos = read_from_pos + bytes_actually_read;
                 if current_stream_pos >= current_size {
                     break;
                 }
+                byte_buffer.clear();
 
-                match reader.read_line(&mut line_buffer).await {
+                match reader.read_until(b'\n', &mut byte_buffer).await {
                     Ok(0) => break,
                     Ok(bytes) => {
                         let bytes_u64 = bytes as u64;
-                        let trimmed_line = line_buffer.trim_end();
+                        
+                        let line_string = String::from_utf8_lossy(&byte_buffer);
+                        let trimmed_line = line_string.trim_end();
 
                         if !trimmed_line.is_empty() {
                             log::trace!("Sending line for {}: {}", process_id, trimmed_line);
@@ -764,7 +767,6 @@ impl ProcessManager {
                         }
 
                         bytes_actually_read += bytes_u64;
-                        line_buffer.clear();
 
                         if read_from_pos + bytes_actually_read > current_size {
                             log::warn!(
@@ -776,9 +778,13 @@ impl ProcessManager {
                         }
                     }
                     Err(e) => {
-                        log::error!("Error reading line from log file {:?}: {}", log_path, e);
-                        bytes_actually_read = current_size - read_from_pos;
-                        break;
+                        log::error!("Error reading bytes from log file {:?}: {}", log_path, e);
+                        if current_size > read_from_pos {
+                             bytes_actually_read = current_size - read_from_pos;
+                        } else {
+                            log::warn!("Attempting to advance log position to end of current file size due to read error.");
+                        }
+                        break; 
                     }
                 }
             }
