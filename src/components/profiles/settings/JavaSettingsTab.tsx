@@ -188,11 +188,13 @@ export function JavaSettingsTab({
     }
   };
 
-  const recommendedMaxRam = Math.min(Math.floor(systemRam / 2), 16384);
-  const memory = editedProfile.settings?.memory || {
-    min: 1024,
-    max: recommendedMaxRam,
-  };
+  let recommendedMaxRam;
+  if (systemRam <= 8192) {
+    recommendedMaxRam = Math.min(2048, systemRam);
+  } else {
+    recommendedMaxRam = Math.min(4096, systemRam);
+  }
+  const memory = editedProfile.settings?.memory || { min: 1024, max: recommendedMaxRam };
 
   const handleMemoryChange = (value: number) => {
     const newSettings = { ...editedProfile.settings };
@@ -396,12 +398,10 @@ export function JavaSettingsTab({
               step={512}
               valueLabel={`${memory.max} MB (${(memory.max / 1024).toFixed(1)} GB)`}
               minLabel="512 MB"
-              maxLabel={`${systemRam} MB (${(systemRam / 1024).toFixed(1)} GB)`}
+              maxLabel={`${systemRam} MB`}
             />
-
-            <div className="mt-3 text-xl text-white/70 tracking-wide select-none font-minecraft">
-              recommended: {recommendedMaxRam} MB (
-              {(recommendedMaxRam / 1024).toFixed(1)} GB)
+            <div className="mt-3 text-xs text-white/70 tracking-wide font-minecraft-ten">
+              Recommended: {recommendedMaxRam} MB ({(recommendedMaxRam / 1024).toFixed(1)} GB)
             </div>
           </Card>
         </div>

@@ -35,6 +35,9 @@ export function RangeSlider({
   className,
 }: RangeSliderProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const sliderRef = useRef<HTMLDivElement>(null);
@@ -47,22 +50,19 @@ export function RangeSlider({
     sm: {
       track: "h-4",
       thumb: "h-6 w-6",
-      text: "text-sm",
     },
     md: {
       track: "h-6",
       thumb: "h-8 w-8",
-      text: "text-base",
     },
     lg: {
       track: "h-8",
       thumb: "h-10 w-10",
-      text: "text-lg",
     },
   };
 
   useEffect(() => {
-    if (sliderRef.current) {
+    if (sliderRef.current && !isBackgroundAnimationEnabled) {
       gsap.fromTo(
         sliderRef.current,
         { opacity: 0, y: 10 },
@@ -74,7 +74,7 @@ export function RangeSlider({
         },
       );
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   const percentage = ((value - min) / (max - min)) * 100;
 
@@ -82,12 +82,12 @@ export function RangeSlider({
     if (progressRef.current && thumbRef.current) {
       progressRef.current.style.width = `${percentage}%`;
 
-      const thumbSize = size === "sm" ? 6 : size === "lg" ? 10 : 8;
-      const thumbOffset = thumbSize / 2;
+      const thumbSizePx = size === "sm" ? 24 : size === "lg" ? 40 : 32;
+      const thumbOffset = thumbSizePx / (size === "sm" ? 4 : size === "lg" ? 4 : 4);
 
       thumbRef.current.style.left = `calc(${percentage}% - ${thumbOffset}px)`;
 
-      if (valueDisplayRef.current) {
+      if (valueDisplayRef.current && !isBackgroundAnimationEnabled) {
         gsap.to(valueDisplayRef.current, {
           scale: 1.1,
           duration: 0.1,
@@ -97,27 +97,28 @@ export function RangeSlider({
         });
       }
     }
-  }, [percentage, size]);
+  }, [percentage, size, isBackgroundAnimationEnabled]);
 
   const handleMouseEnter = () => {
     if (disabled) return;
     setIsHovered(true);
 
-    if (thumbRef.current) {
-      gsap.to(thumbRef.current, {
-        scale: 1.1,
-        boxShadow: "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)",
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
-
-    if (trackRef.current) {
-      gsap.to(trackRef.current, {
-        boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
-        duration: 0.2,
-        ease: "power2.out",
-      });
+    if (!isBackgroundAnimationEnabled) {
+      if (thumbRef.current) {
+        gsap.to(thumbRef.current, {
+          scale: 1.1,
+          boxShadow: "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)",
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
+      if (trackRef.current) {
+        gsap.to(trackRef.current, {
+          boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
     }
   };
 
@@ -125,21 +126,22 @@ export function RangeSlider({
     if (disabled) return;
     setIsHovered(false);
 
-    if (thumbRef.current && !isDragging) {
-      gsap.to(thumbRef.current, {
-        scale: 1,
-        boxShadow: "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)",
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
-
-    if (trackRef.current) {
-      gsap.to(trackRef.current, {
-        boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        duration: 0.2,
-        ease: "power2.out",
-      });
+    if (!isBackgroundAnimationEnabled) {
+      if (thumbRef.current && !isDragging) {
+        gsap.to(thumbRef.current, {
+          scale: 1,
+          boxShadow: "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)",
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
+      if (trackRef.current) {
+        gsap.to(trackRef.current, {
+          boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          duration: 0.2,
+          ease: "power2.out",
+        });
+      }
     }
   };
 
@@ -147,7 +149,7 @@ export function RangeSlider({
     if (disabled) return;
     setIsDragging(true);
 
-    if (thumbRef.current) {
+    if (thumbRef.current && !isBackgroundAnimationEnabled) {
       gsap.to(thumbRef.current, {
         scale: 0.95,
         duration: 0.1,
@@ -160,7 +162,7 @@ export function RangeSlider({
     if (disabled) return;
     setIsDragging(false);
 
-    if (thumbRef.current) {
+    if (thumbRef.current && !isBackgroundAnimationEnabled) {
       gsap.to(thumbRef.current, {
         scale: isHovered ? 1.1 : 1,
         duration: 0.2,
@@ -175,12 +177,11 @@ export function RangeSlider({
         handleMouseUp();
       }
     };
-
     document.addEventListener("mouseup", handleGlobalMouseUp);
     return () => {
       document.removeEventListener("mouseup", handleGlobalMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, isBackgroundAnimationEnabled]);
 
   return (
     <div
@@ -195,8 +196,7 @@ export function RangeSlider({
         <div className="text-center mb-3">
           <span
             className={cn(
-              "text-white font-minecraft lowercase tracking-wide",
-              sizeConfig[size].text,
+              "text-white font-minecraft-ten text-xs tracking-wide"
             )}
           >
             {valueLabel}
@@ -210,8 +210,7 @@ export function RangeSlider({
             {minLabel && (
               <span
                 className={cn(
-                  "text-white/70 font-minecraft lowercase",
-                  sizeConfig[size].text,
+                  "text-white/70 font-minecraft-ten text-xs"
                 )}
               >
                 {minLabel}
@@ -220,8 +219,7 @@ export function RangeSlider({
             <span
               ref={valueDisplayRef}
               className={cn(
-                "text-white font-minecraft lowercase",
-                sizeConfig[size].text,
+                "text-white font-minecraft-ten text-xs"
               )}
             >
               {value}
@@ -229,8 +227,7 @@ export function RangeSlider({
             {maxLabel && (
               <span
                 className={cn(
-                  "text-white/70 font-minecraft lowercase",
-                  sizeConfig[size].text,
+                  "text-white/70 font-minecraft-ten text-xs"
                 )}
               >
                 {maxLabel}
@@ -250,7 +247,7 @@ export function RangeSlider({
             backgroundColor: `${accentColor.value}15`,
             borderColor: `${accentColor.value}40`,
             borderBottomColor: accentColor.value,
-            boxShadow: isHovered
+            boxShadow: isHovered && !isBackgroundAnimationEnabled
               ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`
               : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           }}
