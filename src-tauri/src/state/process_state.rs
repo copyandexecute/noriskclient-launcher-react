@@ -748,6 +748,7 @@ impl ProcessManager {
                     Ok(bytes) => {
                         let bytes_u64 = bytes as u64;
                         
+                        //TODO ö,ä... richtig parsen
                         let line_string = String::from_utf8_lossy(&byte_buffer);
                         let trimmed_line = line_string.trim_end();
 

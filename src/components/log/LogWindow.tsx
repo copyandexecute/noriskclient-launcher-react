@@ -15,7 +15,7 @@ import {
 } from "../../services/log-service";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
@@ -87,6 +87,8 @@ export function LogWindow() {
     }
   }, [isAnimationEnabled]);
 
+  const [cachedLogFilePath, setCachedLogFilePath] = useState<string | null>(null);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get("processId");
@@ -147,6 +149,34 @@ export function LogWindow() {
       }
       return;
     }
+
+    // Cache log file path as soon as we have a process ID
+    const cacheLogFilePath = async () => {
+      try {
+        const processes = await ProcessService.getRunningProcesses();
+        const currentProcess = processes.find((p) => p.id === processId);
+        
+        if (currentProcess) {
+          const profileId = currentProcess.profile_id;
+          const logFiles = await getProfileLogFiles(profileId);
+          
+          if (logFiles.length > 0) {
+            const logFilePath = 
+              logFiles.find((p) => p.toLowerCase().endsWith("latest.log")) ||
+              logFiles[0];
+            
+            console.log(`[LogWindow] Cached log file path: ${logFilePath}`);
+            setCachedLogFilePath(logFilePath);
+          }
+        }
+      } catch (err) {
+        console.error("[LogWindow] Failed to cache log file path:", err);
+        // Don't show an error to the user, just log it
+      }
+    };
+    
+    // Try to cache the log file path right away
+    cacheLogFilePath();
 
     if (isLiveLogs) {
       console.log(
@@ -317,6 +347,30 @@ export function LogWindow() {
   const handleOpenFolderForProcess = useCallback(async () => {
     if (!processId) return;
 
+    // If we already have a cached path, use it directly
+    if (cachedLogFilePath) {
+      try {
+        await revealItemInDir(cachedLogFilePath);
+        return;
+      } catch (err: any) {
+        console.error("[LogWindow] Error opening cached logs file:", err);
+        
+        // Try to open the parent directory instead
+        try {
+          // Extract the directory path (everything before the last slash)
+          const dirPath = cachedLogFilePath.split(/[\\/]/).slice(0, -1).join('/');
+          if (dirPath) {
+            console.log(`[LogWindow] Trying to open parent directory instead: ${dirPath}`);
+            await revealItemInDir(dirPath);
+            return;
+          }
+        } catch (dirErr: any) {
+          console.error("[LogWindow] Error opening parent directory:", dirErr);
+        }
+        // If the cached path fails, continue with the normal path lookup
+      }
+    }
+
     console.log(`[LogWindow] Opening folder for process: ${processId}`);
     setError(null);
 
@@ -325,6 +379,27 @@ export function LogWindow() {
       const currentProcess = processes.find((p) => p.id === processId);
 
       if (!currentProcess) {
+        if (cachedLogFilePath) {
+          try {
+            await revealItemInDir(cachedLogFilePath);
+            return;
+          } catch (err: any) {
+            console.error("[LogWindow] Error opening cached logs file:", err);
+            
+            // Try to open the parent directory instead
+            try {
+              // Extract the directory path (everything before the last slash)
+              const dirPath = cachedLogFilePath.split(/[\\/]/).slice(0, -1).join('/');
+              if (dirPath) {
+                console.log(`[LogWindow] Trying to open parent directory instead: ${dirPath}`);
+                await revealItemInDir(dirPath);
+                return;
+              }
+            } catch (dirErr: any) {
+              console.error("[LogWindow] Error opening parent directory:", dirErr);
+            }
+          }
+        }
         throw new Error(`Process ${processId} not found.`);
       }
 
@@ -338,13 +413,16 @@ export function LogWindow() {
       const filePathToOpen =
         logFiles.find((p) => p.toLowerCase().endsWith("latest.log")) ||
         logFiles[0];
-
-      await openLogFileDirectory(filePathToOpen);
+      
+      // Cache the file path for future use
+      setCachedLogFilePath(filePathToOpen);
+      
+      await revealItemInDir(filePathToOpen);
     } catch (err: any) {
       console.error("[LogWindow] Error opening logs folder:", err);
       setError(err?.message ?? "Failed to open logs folder");
     }
-  }, [processId]);
+  }, [processId, cachedLogFilePath]);
 
   const handleLevelFilterChange = useCallback(
     (level: LogLevel, checked: boolean) => {
