@@ -114,7 +114,7 @@ export function GeneralStep({
         <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
           profile details
         </h2>
-        <p className="text-xl text-white/70 font-minecraft tracking-wide">
+        <p className="text-xs text-white/70 font-minecraft-ten tracking-wide">
           Enter basic information about your Minecraft profile.
         </p>
       </div>
@@ -173,14 +173,21 @@ export function GeneralStep({
             minLabel="1 GB"
             maxLabel={`${(systemRamMb / 1024).toFixed(1)} GB`}
           />
-          <p className="text-lg text-white/60 mt-3 font-minecraft tracking-wide">
-            Recommended:{" "}
-            {Math.min(Math.max(Math.floor(systemRamMb / 4), 2048), 8192)} MB (
-            {(
-              Math.min(Math.max(Math.floor(systemRamMb / 4), 2048), 8192) / 1024
-            ).toFixed(1)}{" "}
-            GB)
-          </p>
+          {(() => {
+            let recommendedDisplayRam;
+            if (systemRamMb <= 8192) {
+              recommendedDisplayRam = Math.min(2048, systemRamMb);
+            } else {
+              recommendedDisplayRam = Math.min(4096, systemRamMb);
+            }
+            recommendedDisplayRam = Math.max(recommendedDisplayRam, 1024); // Ensure at least 1024
+
+            return (
+              <p className="text-xs text-white/60 mt-3 font-minecraft-ten tracking-wide">
+                Recommended: {recommendedDisplayRam} MB ({(recommendedDisplayRam / 1024).toFixed(1)} GB)
+              </p>
+            );
+          })()}
         </div>
 
         <div>
@@ -214,7 +221,7 @@ export function GeneralStep({
               {profile.selected_norisk_pack_id &&
                 noriskPacks[profile.selected_norisk_pack_id] && (
                   <Card variant="flat" className="mt-4 p-4">
-                    <p className="text-xl text-white/80 font-minecraft tracking-wide">
+                    <p className="text-xs text-white/80 font-minecraft-ten tracking-wide">
                       {noriskPacks[profile.selected_norisk_pack_id].description}
                     </p>
                   </Card>

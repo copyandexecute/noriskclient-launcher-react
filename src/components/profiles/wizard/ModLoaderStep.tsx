@@ -246,7 +246,7 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
         <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
           mod loader
         </h2>
-        <p className="text-xl text-white/70 font-minecraft tracking-wide">
+        <p className="text-xs text-white/70 font-minecraft-ten tracking-wide">
           Choose a mod loader for your Minecraft profile. Some loaders may not
           be compatible with Minecraft {profile.game_version}.
         </p>
@@ -364,8 +364,8 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
             <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
               {profile.loader} {profile.loader_version}
             </div>
-            <div className="text-lg text-white/70 tracking-wide lowercase">
-              for minecraft {profile.game_version}
+            <div className="text-xs text-white/70 tracking-wide font-minecraft-ten">
+              For Minecraft {profile.game_version}
             </div>
           </div>
         </Card>
@@ -434,8 +434,10 @@ function ModLoaderCard({
           (e.target as HTMLImageElement).src = "/icons/minecraft.png";
         }}
       />
-      <span className="font-minecraft text-xl lowercase mb-1">{name}</span>
-      <span className="text-sm text-white/60 text-center">{description}</span>
+      <span className="font-minecraft-ten text-xl mb-1">{name}</span>
+      <span className="text-xs text-white/60 text-center font-minecraft-ten">
+        {description}
+      </span>
       {!isCompatible && (
         <span className="text-sm text-red-400 mt-1">not compatible</span>
       )}
