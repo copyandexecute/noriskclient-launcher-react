@@ -228,7 +228,7 @@ export function Modal({
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar p-6">{children}</div>
+        <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
 
         {footer && (
           <div

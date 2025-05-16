@@ -359,7 +359,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
       width="xl"
       footer={renderFooter()}
     >
-      <div className="flex h-[600px] overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
         <WizardSidebar
           currentStep={step}
           totalSteps={totalSteps}
