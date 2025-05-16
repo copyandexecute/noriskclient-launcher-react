@@ -52,6 +52,7 @@ export function WindowSettingsTab({
   }, [isBackgroundAnimationEnabled]);
 
   const resolutionPresets = [
+    { width: 854, height: 480, label: "Default" },
     { width: 1280, height: 720, label: "720p" },
     { width: 1920, height: 1080, label: "1080p" },
     { width: 2560, height: 1440, label: "1440p" },
@@ -97,7 +98,7 @@ export function WindowSettingsTab({
         <h3 className="text-3xl font-minecraft text-white mb-2 lowercase">
           window settings
         </h3>
-        <p className="text-xl text-white/70 mb-4 font-minecraft tracking-wide select-none">
+        <p className="text-xs text-white/70 mb-4 font-minecraft-ten tracking-wide select-none">
           configure how minecraft's window appears on your screen.
         </p>
       </div>
