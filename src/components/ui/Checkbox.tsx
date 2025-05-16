@@ -17,6 +17,9 @@ export interface CheckboxProps
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   ({ className, label, description, customSize = "md", ...props }, ref) => {
     const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
+    );
     const checkboxRef = useRef<HTMLDivElement>(null);
     const labelRef = useRef<HTMLLabelElement>(null);
     const [isHovered, setIsHovered] = useState(false);
@@ -28,7 +31,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     };
 
     useEffect(() => {
-      if (labelRef.current) {
+      if (labelRef.current && isBackgroundAnimationEnabled) {
         gsap.fromTo(
           labelRef.current,
           { scale: 0.95, opacity: 0 },
@@ -46,7 +49,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       if (props.disabled) return;
       setIsHovered(true);
 
-      if (checkboxRef.current) {
+      if (checkboxRef.current && isBackgroundAnimationEnabled) {
         gsap.to(checkboxRef.current, {
           y: -2,
           boxShadow: `0 4px 0 rgba(0,0,0,0.25), 0 6px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
@@ -60,7 +63,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       if (props.disabled) return;
       setIsHovered(false);
 
-      if (checkboxRef.current) {
+      if (checkboxRef.current && isBackgroundAnimationEnabled) {
         gsap.to(checkboxRef.current, {
           y: 0,
           boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
@@ -73,7 +76,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (props.disabled) return;
 
-      if (checkboxRef.current) {
+      if (checkboxRef.current && isBackgroundAnimationEnabled) {
         gsap.to(checkboxRef.current, {
           scale: 0.9,
           duration: 0.1,
@@ -129,13 +132,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
               borderBottomColor: props.checked
                 ? accentColor.dark
                 : `${accentColor.value}${isHovered ? "90" : "80"}`,
-              boxShadow: isHovered
-                ? `0 4px 0 rgba(0,0,0,0.25), 0 6px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
-                : `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-              transform:
-                isHovered && !props.disabled
-                  ? "translateY(-2px)"
-                  : "translateY(0)",
+              boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+              transform: "translateY(0)",
             }}
           >
             {props.checked && (

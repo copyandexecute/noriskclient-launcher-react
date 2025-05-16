@@ -312,7 +312,7 @@ export function JavaSettingsTab({
               )}
 
               <div>
-                <label htmlFor="custom-java-path-input" className="block text-xl text-white/70 font-minecraft mt-3 mb-2 lowercase tracking-wide">
+                <label htmlFor="custom-java-path-input" className="block text-xs text-white/70 font-minecraft-ten mt-3 mb-2 tracking-wide">
                   Manual Java Path (javaw.exe or java executable)
                 </label>
                 <div className="flex gap-3">
@@ -339,7 +339,7 @@ export function JavaSettingsTab({
               
               {detectedJavaInstallations.length > 0 && !isDetectingJava && (
                 <div className="space-y-2 pt-2">
-                  <h4 className="text-xl text-white/70 font-minecraft mb-2 lowercase tracking-wide">
+                  <h4 className="text-xs text-white/70 font-minecraft-ten mb-2 tracking-wide">
                     Detected Java Installations (click to use):
                   </h4>
                   <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pr-2">

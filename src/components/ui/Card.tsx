@@ -28,6 +28,9 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
 ) {
   const cardRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   // Merge refs
   const mergedRef = (node: HTMLDivElement) => {
@@ -42,7 +45,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   };
 
   useEffect(() => {
-    if (withAnimation && cardRef.current) {
+    if (withAnimation && isBackgroundAnimationEnabled && cardRef.current) {
       gsap.fromTo(
         cardRef.current,
         { scale: 0.95, opacity: 0 },
@@ -54,10 +57,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         },
       );
     }
-  }, [withAnimation]);
+  }, [withAnimation, isBackgroundAnimationEnabled]);
 
   const handleMouseEnter = () => {
-    if (onClick && cardRef.current) {
+    if (onClick && isBackgroundAnimationEnabled && cardRef.current) {
       gsap.to(cardRef.current, {
         y: -5,
         boxShadow:
@@ -71,7 +74,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   };
 
   const handleMouseLeave = () => {
-    if (onClick && cardRef.current) {
+    if (onClick && isBackgroundAnimationEnabled && cardRef.current) {
       gsap.to(cardRef.current, {
         y: 0,
         boxShadow: getBoxShadow(),
