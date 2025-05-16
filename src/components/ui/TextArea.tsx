@@ -17,9 +17,12 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
     const [isHovered, setIsHovered] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
     const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
+    );
 
     useEffect(() => {
-      if (containerRef.current) {
+      if (containerRef.current && isBackgroundAnimationEnabled) {
         gsap.fromTo(
           containerRef.current,
           { scale: 0.98, opacity: 0 },
@@ -31,11 +34,11 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
           },
         );
       }
-    }, []);
+    }, [isBackgroundAnimationEnabled]);
 
     const handleFocus = () => {
       setIsFocused(true);
-      if (containerRef.current) {
+      if (containerRef.current && isBackgroundAnimationEnabled) {
         gsap.to(containerRef.current, {
           y: -5,
           boxShadow: error
@@ -49,7 +52,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
 
     const handleBlur = () => {
       setIsFocused(false);
-      if (containerRef.current) {
+      if (containerRef.current && isBackgroundAnimationEnabled) {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -65,7 +68,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       if (props.disabled) return;
       setIsHovered(true);
 
-      if (!isFocused && containerRef.current) {
+      if (!isFocused && containerRef.current && isBackgroundAnimationEnabled) {
         gsap.to(containerRef.current, {
           y: -3,
           boxShadow: error
@@ -81,7 +84,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       if (props.disabled) return;
       setIsHovered(false);
 
-      if (!isFocused && containerRef.current) {
+      if (!isFocused && containerRef.current && isBackgroundAnimationEnabled) {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -92,6 +95,32 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         });
       }
     };
+
+    const staticBoxShadow = error
+      ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
+      : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`;
+
+    let currentBoxShadow = staticBoxShadow;
+    if (isBackgroundAnimationEnabled) {
+      if (isFocused) {
+        currentBoxShadow = error 
+          ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
+          : `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
+      } else if (isHovered) {
+        currentBoxShadow = error 
+          ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
+          : `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`;
+      }
+    }
+
+    let currentTransform = "translateY(0)";
+    if (isBackgroundAnimationEnabled) {
+      if (isFocused) {
+        currentTransform = "translateY(-5px)";
+      } else if (isHovered) {
+        currentTransform = "translateY(-3px)";
+      }
+    }
 
     return (
       <div className="w-full">
@@ -110,16 +139,8 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
               ? "rgba(239, 68, 68, 0.6)"
               : `${accentColor.value}60`,
             borderBottomColor: error ? "rgb(185, 28, 28)" : accentColor.value,
-            boxShadow: isFocused
-              ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.4)" : `${accentColor.value}40`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}`
-              : isHovered
-                ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.3)" : `${accentColor.value}30`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.15)" : `${accentColor.value}15`}`
-                : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.1)" : `${accentColor.value}10`}`,
-            transform: isFocused
-              ? "translateY(-5px)"
-              : isHovered
-                ? "translateY(-3px)"
-                : "translateY(0)",
+            boxShadow: currentBoxShadow,
+            transform: currentTransform,
           }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
@@ -135,7 +156,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
 
           <textarea
             ref={ref}
-            className="w-full min-h-[100px] bg-transparent border-none outline-none p-3 text-white font-minecraft text-2xl placeholder:text-white/50 lowercase resize-y custom-scrollbar"
+            className="w-full min-h-[100px] bg-transparent border-none outline-none p-3 text-white font-minecraft-ten text-xs placeholder:text-white/50 resize-y custom-scrollbar"
             onFocus={handleFocus}
             onBlur={handleBlur}
             {...props}

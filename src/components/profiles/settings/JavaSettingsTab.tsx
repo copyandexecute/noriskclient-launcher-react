@@ -429,7 +429,7 @@ export function JavaSettingsTab({
                 placeholder="enter java arguments..."
                 className="w-full min-h-[100px] text-2xl"
               />
-               <p className="mt-2 text-base text-white/50 font-minecraft tracking-wide">
+               <p className="mt-2 text-xs text-white/50 font-minecraft-ten tracking-wide">
                 Arguments should be separated by spaces. Example: -Xmx4G -XX:+UseG1GC
               </p>
             </div>
