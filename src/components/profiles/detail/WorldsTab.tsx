@@ -91,12 +91,9 @@ export function WorldsTab({
   const [deleteLoading, setDeleteLoading] = useState<Record<string, boolean>>(
     {},
   );
-  const [activeTab, setActiveTab] = useState<"all" | "worlds" | "servers">(
-    "servers",
-  );
-  const [sortOrder, setSortOrder] = useState<"recent" | "name">("recent");
   const [localSearchQuery, setLocalSearchQuery] = useState("");
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +105,7 @@ export function WorldsTab({
   }, [searchQuery]);
 
   useEffect(() => {
-    if (containerRef.current && isActive) {
+    if (containerRef.current && isActive && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         containerRef.current,
         { opacity: 0, y: 20 },
@@ -119,8 +116,10 @@ export function WorldsTab({
           ease: "power2.out",
         },
       );
+    } else if (containerRef.current && isActive && !isBackgroundAnimationEnabled) {
+      gsap.set(containerRef.current, { opacity: 1, y: 0 });
     }
-  }, [isActive]);
+  }, [isActive, isBackgroundAnimationEnabled]);
 
   const getWorldDisplayName = useCallback((world: WorldInfo): string => {
     return world.display_name || world.folder_name;
@@ -193,13 +192,7 @@ export function WorldsTab({
 
       let filteredItems: DisplayItem[] = [];
 
-      if (activeTab === "all") {
-        filteredItems = [...typedWorlds, ...typedServers];
-      } else if (activeTab === "worlds") {
-        filteredItems = [...typedWorlds];
-      } else if (activeTab === "servers") {
-        filteredItems = [...typedServers];
-      }
+      filteredItems = [...typedWorlds, ...typedServers];
 
       // Apply search filter
       const effectiveSearchQuery = searchQuery || localSearchQuery;
@@ -214,14 +207,16 @@ export function WorldsTab({
       }
 
       filteredItems.sort((a, b) => {
-        if (sortOrder === "recent") {
-          if (a.type === "world" && b.type === "world") {
-            return (b.last_played ?? 0) - (a.last_played ?? 0);
-          } else if (a.type === "world" && b.type === "server") {
-            return -1;
-          } else if (a.type === "server" && b.type === "world") {
-            return 1;
-          }
+        if (a.type === "world" && b.type === "world") {
+          return (b.last_played ?? 0) - (a.last_played ?? 0);
+        } else if (a.type === "world" && b.type === "server") {
+          return -1;
+        } else if (a.type === "server" && b.type === "world") {
+          return 1;
+        } else if (a.type === "server" && b.type === "server") {
+          const nameA_server = getServerDisplayName(a).toLowerCase();
+          const nameB_server = getServerDisplayName(b).toLowerCase();
+          return nameA_server.localeCompare(nameB_server);
         }
 
         const nameA =
@@ -240,8 +235,6 @@ export function WorldsTab({
     [
       getServerDisplayName,
       getWorldDisplayName,
-      activeTab,
-      sortOrder,
       searchQuery,
       localSearchQuery,
     ],
@@ -327,7 +320,7 @@ export function WorldsTab({
 
       if (worldsResult.status === "fulfilled") {
         currentWorlds = worldsResult.value;
-        setWorlds(currentWorlds);
+        // setWorlds(currentWorlds); // Defer state update slightly
       } else {
         console.error("Worlds Error:", worldsResult.reason);
         errorMessages.push(`Worlds: ${worldsResult.reason}`);
@@ -336,7 +329,7 @@ export function WorldsTab({
 
       if (serversResult.status === "fulfilled") {
         currentServers = serversResult.value;
-        setServers(currentServers);
+        // setServers(currentServers); // Defer state update slightly
       } else {
         console.error("Servers Error:", serversResult.reason);
         errorMessages.push(`Servers: ${serversResult.reason}`);
@@ -345,19 +338,26 @@ export function WorldsTab({
 
       if (loadError) {
         setError(errorMessages.join("; "));
-        setDisplayItems([]);
+        setWorlds([]); // Ensure worlds state is cleared on error
+        setServers([]); // Ensure servers state is cleared on error
+        // setDisplayItems([]); // updateDisplayItems will handle this based on empty worlds/servers
       } else {
-        updateDisplayItems(currentWorlds, currentServers);
+        // Set raw data state first
+        setWorlds(currentWorlds);
+        setServers(currentServers);
+        // Then ping. updateDisplayItems will be triggered by the useEffect that watches worlds/servers.
         pingAllServers(currentServers);
       }
     } catch (err) {
       console.error("Unexpected load error:", err);
       setError(`Unexpected error: ${err}`);
-      setDisplayItems([]);
+      setWorlds([]);
+      setServers([]);
+      // setDisplayItems([]);
     } finally {
       setLoading(false);
     }
-  }, [profile?.id, updateDisplayItems, pingAllServers]);
+  }, [profile?.id, pingAllServers]); // Corrected dependencies
 
   useEffect(() => {
     loadData();
@@ -368,8 +368,6 @@ export function WorldsTab({
       updateDisplayItems(worlds, servers);
     }
   }, [
-    activeTab,
-    sortOrder,
     profile?.id,
     updateDisplayItems,
     worlds,
@@ -506,66 +504,21 @@ export function WorldsTab({
             <SearchInput
               value={localSearchQuery}
               onChange={setLocalSearchQuery}
-              placeholder={`search ${activeTab === "all" ? "worlds & servers" : activeTab}...`}
+              placeholder={`search worlds & servers...`}
             />
           </div>
         )}
 
         <div className="flex items-center gap-4 ml-auto">
           <div className="flex items-center gap-2">
-            <Select
-              value={sortOrder}
-              onChange={(value) => setSortOrder(value as "recent" | "name")}
-              options={[
-                { value: "recent", label: "Recent" },
-                { value: "name", label: "Name" },
-              ]}
-              className="w-40"
-            />
-
             <Button
-              variant="secondary"
-              size="sm"
-              icon={<Icon icon="solar:filter-bold" />}
-              onClick={() =>
-                setActiveTab(
-                  activeTab === "all"
-                    ? "servers"
-                    : activeTab === "servers"
-                      ? "worlds"
-                      : "all",
-                )
-              }
-            >
-              {activeTab === "all"
-                ? "All"
-                : activeTab === "servers"
-                  ? "Servers"
-                  : "Worlds"}
-            </Button>
-
-            <Button
-              onClick={() => {
-                if (activeTab === "servers" || activeTab === "all") {
-                  pingAllServers(servers);
-                } else {
-                  handleRefresh();
-                }
-              }}
+              onClick={handleRefresh}
               disabled={
-                (activeTab === "servers" || activeTab === "all") &&
-                (pingingServers.size > 0 ||
-                  servers.filter((s) => s.address).length === 0)
+                pingingServers.size > 0 ||
+                servers.filter((s) => s.address).length === 0
               }
               variant="secondary"
               size="sm"
-              icon={
-                pingingServers.size > 0 ? (
-                  <Icon icon="solar:refresh-bold" className="animate-spin" />
-                ) : (
-                  <Icon icon="solar:refresh-bold" />
-                )
-              }
             >
               refresh
             </Button>
@@ -596,33 +549,23 @@ export function WorldsTab({
           borderColor: `${accentColor.value}20`,
         }}
       >
-        {loading ? (
-          <LoadingState
-            message={`loading ${activeTab === "all" ? "worlds & servers" : activeTab}...`}
-          />
-        ) : displayItems.length === 0 ? (
+        {/* Removed the explicit LoadingState card. Loading is indicated by the refresh button spinner. */}
+        {/* Show EmptyState only if NOT loading AND displayItems is actually empty. */}
+        {(!loading && displayItems.length === 0) ? (
           <EmptyState
-            icon={
-              activeTab === "worlds"
-                ? "solar:planet-bold"
-                : activeTab === "servers"
-                  ? "solar:server-bold"
-                  : "solar:planet-bold"
-            }
+            icon={"solar:planet-bold"} 
             message={
               effectiveSearchQuery
-                ? `no ${activeTab === "all" ? "worlds or servers" : activeTab} match your search`
-                : `no ${activeTab === "all" ? "worlds or servers" : activeTab} found`
+                ? `no worlds or servers match your search` 
+                : `no worlds or servers found` 
             }
             description={
-              activeTab === "servers"
-                ? "Add servers in the Minecraft game menu"
-                : activeTab === "worlds"
-                  ? "Create a new world in Minecraft"
-                  : "Create worlds or add servers in Minecraft"
+                "Create worlds or add servers in Minecraft" 
             }
           />
         ) : (
+          // Show the list structure. It will be populated if displayItems has entries.
+          // If loading and displayItems is empty (initial load), it will render an empty list shell.
           <div className="h-full overflow-y-auto custom-scrollbar">
             <ul className="divide-y divide-white/10">
               {displayItems.map((item) => {
