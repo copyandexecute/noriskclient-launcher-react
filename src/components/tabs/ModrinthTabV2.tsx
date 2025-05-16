@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ModrinthSearchV2 } from "../modrinth/v2/ModrinthSearchV2"; // Adjusted import path
 import type { Profile } from "../../types/profile";
 import { listProfiles } from "../../services/profile-service";
 import { ErrorMessage } from "../ui/ErrorMessage";
@@ -84,6 +85,18 @@ export function ModrinthTabV2({
     // listProfiles().then(setProfiles).catch(err => console.error("Failed to refresh profiles after install", err));
   }, []);
 
+  // Memoize the ModrinthSearchV2 component to prevent unnecessary re-renders
+  const memoizedSearch = useMemo(
+    () => (
+      <ModrinthSearchV2
+        profiles={profiles}
+        onInstallSuccess={handleInstallSuccess}
+        className="h-full"
+      />
+    ),
+    [profiles, handleInstallSuccess],
+  );
+
   const loadingMessage = useMemo(() => {
     const messages = [
       "Loading mods...",
@@ -109,6 +122,20 @@ export function ModrinthTabV2({
       />
 
       {error && <ErrorMessage message={error} />}
+
+      <div className="flex-1 overflow-hidden flex space-x-4">
+        <div className="flex-1 overflow-hidden">{memoizedSearch}</div>
+        {/*
+          Filters are now intended to be part of ModrinthSearchV2 or a new ModrinthFiltersV2.
+          If ModrinthFiltersV2 is separate, it would be placed here or within ModrinthSearchV2 layout.
+          For now, assuming filters are integrated or will be added to ModrinthSearchV2 itself.
+        */}
+        {/*
+        <div className="w-1/4 max-w-xs flex-shrink-0">
+          <ModrinthFiltersV2 ... />
+        </div>
+        */}
+      </div>
     </div>
   );
 }
