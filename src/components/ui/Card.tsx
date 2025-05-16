@@ -9,7 +9,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 interface CardProps {
   children: ReactNode;
   className?: string;
-  variant?: "default" | "elevated" | "flat";
+  variant?: "default" | "elevated" | "flat" | "secondary";
   withAnimation?: boolean;
   onClick?: (e: React.MouseEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -32,7 +32,6 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     (state) => state.isBackgroundAnimationEnabled,
   );
 
-  // Merge refs
   const mergedRef = (node: HTMLDivElement) => {
     if (ref) {
       if (typeof ref === "function") {
@@ -90,6 +89,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         return `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
       case "flat":
         return "none";
+      case "secondary":
+        return `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)`;
       default:
         return `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
     }
@@ -99,6 +100,8 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     switch (variant) {
       case "flat":
         return "border border-white/10";
+      case "secondary":
+        return "border-2 border-b-4";
       default:
         return "border-2 border-b-4";
     }
@@ -114,11 +117,22 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         className,
       )}
       style={{
-        backgroundColor: `${accentColor.value}20`,
+        backgroundColor:
+          variant === "secondary"
+            ? "rgba(107, 114, 128, 0.2)"
+            : `${accentColor.value}20`,
         borderColor:
-          variant === "flat" ? "transparent" : `${accentColor.value}60`,
+          variant === "flat"
+            ? "transparent"
+            : variant === "secondary"
+              ? "rgba(107, 114, 128, 0.6)"
+              : `${accentColor.value}60`,
         borderBottomColor:
-          variant === "flat" ? "transparent" : accentColor.value,
+          variant === "flat"
+            ? "transparent"
+            : variant === "secondary"
+              ? "rgba(75, 85, 99, 1)"
+              : accentColor.value,
         boxShadow: getBoxShadow(),
       }}
       onClick={onClick}
@@ -129,7 +143,12 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       {variant !== "flat" && (
         <span
           className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-          style={{ backgroundColor: `${accentColor.value}80` }}
+          style={{
+            backgroundColor:
+              variant === "secondary"
+                ? "rgba(156, 163, 175, 0.8)"
+                : `${accentColor.value}80`,
+          }}
         />
       )}
       {children}
