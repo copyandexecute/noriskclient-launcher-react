@@ -47,8 +47,16 @@ export async function deleteProfile(id: string): Promise<void> {
   return invoke<void>("delete_profile", { id });
 }
 
-export async function launchProfile(id: string): Promise<void> {
-  return invoke<void>("launch_profile", { id });
+export async function launchProfile(
+  id: string,
+  quickPlaySingleplayer?: string, 
+  quickPlayMultiplayer?: string
+): Promise<void> {
+  return invoke<void>("launch_profile", { 
+    id, 
+    quickPlaySingleplayer, 
+    quickPlayMultiplayer 
+  });
 }
 
 export async function abortProfileLaunch(profileId: string): Promise<void> {
