@@ -37,12 +37,13 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const [exportFilename, setExportFilename] = useState(profile.name);
   const [exportIncludeFiles, setExportIncludeFiles] = useState(true);
   const [exportOpenFolder, setExportOpenFolder] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [systemRam, setSystemRam] = useState<number>(8192);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   useEffect(() => {
     ProfileService.getSystemRamMb()
@@ -53,29 +54,24 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   }, []);
 
   useEffect(() => {
-    if (contentRef.current) {
+    if (isBackgroundAnimationEnabled && contentRef.current) {
       gsap.fromTo(
         contentRef.current,
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
       );
     }
-  }, [activeTab]);
+  }, [activeTab, isBackgroundAnimationEnabled]);
 
   useEffect(() => {
-    if (sidebarRef.current) {
+    if (isBackgroundAnimationEnabled && sidebarRef.current) {
       gsap.fromTo(
         sidebarRef.current,
         { opacity: 0, x: -20 },
         { opacity: 1, x: 0, duration: 0.4, ease: "power2.out" },
       );
     }
-  }, []);
-
-  useEffect(() => {
-    setError(null);
-    setSuccessMessage(null);
-  }, [activeTab]);
+  }, [isBackgroundAnimationEnabled]);
 
   const updateProfileData = (updates: Partial<Profile>) => {
     setEditedProfile((prev) => ({ ...prev, ...updates }));
@@ -84,9 +80,6 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      setError(null);
-      setSuccessMessage(null);
-
       await updateProfile(profile.id, {
         name: editedProfile.name,
         game_version: editedProfile.game_version,
@@ -99,14 +92,11 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         description: editedProfile.description,
       });
 
-      setSuccessMessage("Profile saved successfully!");
+      toast.success("Profile saved successfully!");
 
-      setTimeout(() => {
-        onClose();
-      }, 1500);
     } catch (err) {
       console.error("Failed to save profile:", err);
-      setError("Failed to save profile. Please try again.");
+      toast.error("Failed to save profile. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -115,9 +105,6 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const handleDelete = async () => {
     try {
       setIsDeleting(true);
-      setError(null);
-      setSuccessMessage(null);
-
       const deletePromise = deleteProfile(profile.id);
 
       toast.promise(deletePromise, {
@@ -128,29 +115,28 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         },
         error: (err) => {
           const errorMessage =
-            err instanceof Error ? err.message : String(err.message);
-          setError(`Failed to delete profile: ${errorMessage}`);
+            err instanceof Error ? err.message : String(err);
+          // console.error might still be useful for debugging
+          // console.error("Failed to delete profile:", errorMessage);
           return `Failed to delete profile: ${errorMessage}`;
         },
+      })
+      .finally(() => {
+        setIsDeleting(false);
       });
     } catch (err) {
+      // This catch block might be redundant if toast.promise handles all errors
+      // For safety, we can keep a generic toast here or rely on the promise's error handling.
       console.error("Error during delete initiation:", err);
       const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(`Failed to initiate profile deletion: ${errorMessage}`);
       toast.error(`Failed to initiate profile deletion: ${errorMessage}`);
-    } finally {
-      if (toast.error) {
-        setIsDeleting(false);
-      }
+      setIsDeleting(false); // Ensure this is set if the promise setup itself fails
     }
   };
 
   const handleExport = async () => {
     try {
       setIsExporting(true);
-      setError(null);
-      setSuccessMessage(null);
-
       const exportParams = {
         profile_id: profile.id,
         file_name: exportFilename || profile.name,
@@ -161,14 +147,14 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       const exportPath = await ProfileService.exportProfile(exportParams);
       console.log("Profile exported to:", exportPath);
 
-      setSuccessMessage(`Profile successfully exported to: ${exportPath}`);
+      toast.success(`Profile successfully exported to: ${exportPath}`);
 
       setExportFilename(profile.name);
       setExportIncludeFiles(true);
       setExportOpenFolder(true);
     } catch (err) {
       console.error("Failed to export profile:", err);
-      setError("Failed to export profile. Please try again.");
+      toast.error("Failed to export profile. Please try again.");
     } finally {
       setIsExporting(false);
     }
@@ -177,9 +163,6 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const handleCloneProfile = async () => {
     try {
       setIsCloning(true);
-      setError(null);
-      setSuccessMessage(null);
-
       const copyParams = {
         source_profile_id: profile.id,
         new_profile_name: `${profile.name} (Copy)`,
@@ -189,14 +172,14 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       const newProfileId = await ProfileService.copyProfile(copyParams);
       console.log("Profile cloned with ID:", newProfileId);
 
-      setSuccessMessage(`Profile successfully cloned!`);
+      toast.success(`Profile successfully cloned!`);
 
       setTimeout(() => {
         onClose();
       }, 1500);
     } catch (err) {
       console.error("Failed to clone profile:", err);
-      setError("Failed to clone profile. Please try again.");
+      toast.error("Failed to clone profile. Please try again.");
     } finally {
       setIsCloning(false);
     }
@@ -311,14 +294,6 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   );
 
   const renderTabContent = () => {
-    if (error) {
-      return <StatusMessage type="error" message={error} />;
-    }
-
-    if (successMessage) {
-      return <StatusMessage type="success" message={successMessage} />;
-    }
-
     switch (activeTab) {
       case "general":
         return (
@@ -447,7 +422,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
                     }}
                     onClick={() => {
                       if (activeTab !== tab.id) {
-                        if (contentRef.current) {
+                        if (isBackgroundAnimationEnabled && contentRef.current) {
                           gsap.to(contentRef.current, {
                             opacity: 0,
                             y: 20,
@@ -493,11 +468,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             className="flex-1 p-5 overflow-y-auto custom-scrollbar"
             ref={contentRef}
           >
-            {error && <StatusMessage type="error" message={error} />}
-            {successMessage && (
-              <StatusMessage type="success" message={successMessage} />
-            )}
-            {!error && !successMessage && renderTabContent()}
+            {renderTabContent()}
           </div>
         </div>
       </div>

@@ -5,12 +5,12 @@ import type { Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
 import { Icon } from "@iconify/react";
 import { useThemeStore } from "../../../store/useThemeStore";
-import { StatusMessage } from "../../ui/StatusMessage";
 import { Button } from "../../ui/buttons/Button";
 import { Input } from "../../ui/Input";
 import { Select } from "../../ui/Select";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
+import { toast } from "react-hot-toast";
 
 interface GeneralSettingsTabProps {
   profile: Profile;
@@ -38,65 +38,69 @@ export function GeneralSettingsTab({
     {},
   );
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [cloneSuccess, setCloneSuccess] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const tabRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (tabRef.current) {
-      gsap.fromTo(
-        tabRef.current,
-        { opacity: 0 },
-        { opacity: 1, duration: 0.4, ease: "power2.out" },
-      );
-    }
+    if (isBackgroundAnimationEnabled) {
+      if (tabRef.current) {
+        gsap.fromTo(
+          tabRef.current,
+          { opacity: 0 },
+          { opacity: 1, duration: 0.4, ease: "power2.out" },
+        );
+      }
 
-    if (formRef.current) {
-      gsap.fromTo(
-        formRef.current.children,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          stagger: 0.1,
-          ease: "power2.out",
-          delay: 0.2,
-        },
-      );
-    }
+      if (formRef.current) {
+        gsap.fromTo(
+          formRef.current.children,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            stagger: 0.1,
+            ease: "power2.out",
+            delay: 0.2,
+          },
+        );
+      }
 
-    if (actionsRef.current) {
-      gsap.fromTo(
-        actionsRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-          delay: 0.4,
-        },
-      );
+      if (actionsRef.current) {
+        gsap.fromTo(
+          actionsRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+            delay: 0.4,
+          },
+        );
+      }
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   useEffect(() => {
     const loadNoriskPacks = async () => {
       try {
         setLoading(true);
-        setError(null);
         const packsData = await invoke<{ packs: Record<string, NoriskPack> }>(
           "get_norisk_packs",
         );
         setNoriskPacks(packsData.packs);
       } catch (err) {
         console.error("Failed to load NoRisk packs:", err);
-        setError(
-          `failed to load norisk packs: ${err instanceof Error ? err.message : String(err)}`,
+        toast.error(
+          `Failed to load NoRisk packs: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
         );
       } finally {
         setLoading(false);
@@ -111,8 +115,7 @@ export function GeneralSettingsTab({
       onDelete();
     } else {
       setConfirmDelete(true);
-
-      if (actionsRef.current) {
+      if (isBackgroundAnimationEnabled && actionsRef.current) {
         const deleteButton =
           actionsRef.current.querySelector("button:last-child");
         if (deleteButton) {
@@ -125,7 +128,6 @@ export function GeneralSettingsTab({
           });
         }
       }
-
       setTimeout(() => setConfirmDelete(false), 10000);
     }
   };
@@ -133,8 +135,6 @@ export function GeneralSettingsTab({
   const handleDuplicate = async () => {
     try {
       setLoading(true);
-      setError(null);
-      setCloneSuccess(null);
 
       await invoke("copy_profile", {
         params: {
@@ -144,12 +144,13 @@ export function GeneralSettingsTab({
         },
       });
 
-      setCloneSuccess("profile duplicated successfully!");
-      setTimeout(() => setCloneSuccess(null), 3000);
+      toast.success("Profile duplicated successfully!");
     } catch (err) {
       console.error("Failed to duplicate profile:", err);
-      setError(
-        `failed to duplicate profile: ${err instanceof Error ? err.message : String(err)}`,
+      toast.error(
+        `Failed to duplicate profile: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       );
     } finally {
       setLoading(false);
@@ -165,9 +166,6 @@ export function GeneralSettingsTab({
 
   return (
     <div ref={tabRef} className="space-y-6 select-none">
-      {error && <StatusMessage type="error" message={error} />}
-      {cloneSuccess && <StatusMessage type="success" message={cloneSuccess} />}
-
       <div ref={formRef} className="space-y-6">
         <div>
           <label className="block text-3xl font-minecraft text-white mb-2 lowercase">

@@ -32,39 +32,44 @@ export function JavaSettingsTab({
     (editedProfile.settings?.custom_jvm_args?.length || 0) > 0,
   );
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const tabRef = useRef<HTMLDivElement>(null);
   const javaInstallRef = useRef<HTMLDivElement>(null);
   const memoryRef = useRef<HTMLDivElement>(null);
   const argsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (tabRef.current) {
+    if (isBackgroundAnimationEnabled) {
+      if (tabRef.current) {
+        gsap.fromTo(
+          tabRef.current,
+          { opacity: 0 },
+          { opacity: 1, duration: 0.4, ease: "power2.out" },
+        );
+      }
+
+      const elements = [
+        javaInstallRef.current,
+        memoryRef.current,
+        argsRef.current,
+      ].filter(Boolean);
+
       gsap.fromTo(
-        tabRef.current,
-        { opacity: 0 },
-        { opacity: 1, duration: 0.4, ease: "power2.out" },
+        elements,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.1,
+          ease: "power2.out",
+          delay: 0.2,
+        },
       );
     }
-
-    const elements = [
-      javaInstallRef.current,
-      memoryRef.current,
-      argsRef.current,
-    ].filter(Boolean);
-
-    gsap.fromTo(
-      elements,
-      { opacity: 0, y: 20 },
-      {
-        opacity: 1,
-        y: 0,
-        duration: 0.4,
-        stagger: 0.1,
-        ease: "power2.out",
-        delay: 0.2,
-      },
-    );
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   const recommendedMaxRam = Math.min(Math.floor(systemRam / 2), 16384);
   const memory = editedProfile.settings?.memory || {
@@ -107,7 +112,7 @@ export function JavaSettingsTab({
     }
     updateProfile({ settings: newSettings });
 
-    if (checked) {
+    if (checked && isBackgroundAnimationEnabled) {
       const inputContainer =
         javaInstallRef.current?.querySelector(".custom-java-input");
       if (inputContainer) {
@@ -139,7 +144,7 @@ export function JavaSettingsTab({
     }
     updateProfile({ settings: newSettings });
 
-    if (checked) {
+    if (checked && isBackgroundAnimationEnabled) {
       const textareaContainer = argsRef.current?.querySelector(
         ".custom-args-textarea",
       );

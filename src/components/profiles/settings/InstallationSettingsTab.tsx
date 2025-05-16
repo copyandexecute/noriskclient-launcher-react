@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import type { MinecraftVersion } from "../../../types/minecraft";
+import type { ModLoader } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
 import { StatusMessage } from "../../ui/StatusMessage";
 import { useThemeStore } from "../../../store/useThemeStore";
@@ -39,6 +40,9 @@ export function InstallationSettingsTab({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const tabRef = useRef<HTMLDivElement>(null);
   const currentInstallRef = useRef<HTMLDivElement>(null);
   const versionTypesRef = useRef<HTMLDivElement>(null);
@@ -72,43 +76,45 @@ export function InstallationSettingsTab({
     const currentLoader = editedProfile.loader || "vanilla";
 
     if (previousLoader !== currentLoader) {
-      if (currentLoader !== "vanilla" && loaderVersionRef.current) {
+      if (currentLoader !== "vanilla" && loaderVersionRef.current && isBackgroundAnimationEnabled) {
         scrollToLoaderVersion();
       }
 
       setPreviousLoader(currentLoader);
     }
-  }, [editedProfile.loader]);
+  }, [editedProfile.loader, previousLoader, isBackgroundAnimationEnabled]);
 
   useEffect(() => {
-    if (tabRef.current) {
+    if (isBackgroundAnimationEnabled) {
+      if (tabRef.current) {
+        gsap.fromTo(
+          tabRef.current,
+          { opacity: 0 },
+          { opacity: 1, duration: 0.4, ease: "power2.out" },
+        );
+      }
+
+      const elements = [
+        currentInstallRef.current,
+        versionTypesRef.current,
+        versionsRef.current,
+        platformsRef.current,
+      ].filter(Boolean);
+
       gsap.fromTo(
-        tabRef.current,
-        { opacity: 0 },
-        { opacity: 1, duration: 0.4, ease: "power2.out" },
+        elements,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.1,
+          ease: "power2.out",
+          delay: 0.2,
+        },
       );
     }
-
-    const elements = [
-      currentInstallRef.current,
-      versionTypesRef.current,
-      versionsRef.current,
-      platformsRef.current,
-    ].filter(Boolean);
-
-    gsap.fromTo(
-      elements,
-      { opacity: 0, y: 20 },
-      {
-        opacity: 1,
-        y: 0,
-        duration: 0.4,
-        stagger: 0.1,
-        ease: "power2.out",
-        delay: 0.2,
-      },
-    );
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   useEffect(() => {
     async function fetchMinecraftVersions() {
@@ -247,56 +253,88 @@ export function InstallationSettingsTab({
   const handleVersionTypeClick = (type: VersionType) => {
     if (selectedVersionType !== type) {
       setSelectedVersionType(type);
-
-      if (versionsRef.current) {
-        gsap.fromTo(
-          versionsRef.current,
-          { opacity: 0.5, y: 10 },
-          { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
+      if (isBackgroundAnimationEnabled && versionTypesRef.current) {
+        const activeLabel = versionTypesRef.current.querySelector(
+          `.version-type-${type}`,
         );
+        const allLabels = versionTypesRef.current.querySelectorAll("span[role='button']");
+
+        if (activeLabel) {
+          gsap.to(activeLabel, {
+            backgroundColor: `${accentColor.value}40`,
+            borderColor: accentColor.value,
+            color: "#ffffff",
+            duration: 0.3,
+            ease: "power2.out",
+          });
+        }
+
+        allLabels.forEach((label) => {
+          if (label !== activeLabel) {
+            gsap.to(label, {
+              backgroundColor: "rgba(255,255,255,0.05)",
+              borderColor: "rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.7)",
+              duration: 0.3,
+              ease: "power2.out",
+            });
+          }
+        });
       }
     }
   };
 
+  const handleGameVersionClick = (versionId: string) => {
+    updateProfile({ game_version: versionId, loader_version: null });
+    if (isBackgroundAnimationEnabled) {
+      scrollToPlatforms();
+    }
+  };
+
+  const handleLoaderClick = (loaderName: string) => {
+    const newLoader = (editedProfile.loader === loaderName ? "vanilla" : loaderName) as ModLoader;
+    updateProfile({ loader: newLoader, loader_version: null });
+
+    if (newLoader !== "vanilla" && isBackgroundAnimationEnabled) {
+      scrollToLoaderVersion();
+    }
+  };
+
   const scrollToPlatforms = () => {
-    if (platformsRef.current && scrollContainerRef.current) {
-      const platformsRect = platformsRef.current.getBoundingClientRect();
-      const containerRect = scrollContainerRef.current.getBoundingClientRect();
-
-      const scrollTarget =
-        platformsRef.current.offsetTop -
-        containerRect.height / 2 +
-        platformsRect.height / 2;
-
+    if (!platformsRef.current || !scrollContainerRef.current) return;
+    if (isBackgroundAnimationEnabled) {
       gsap.to(scrollContainerRef.current, {
-        scrollTop: scrollTarget,
         duration: 0.5,
-        ease: "power2.inOut",
-        delay: 0.1,
+        scrollTo: {
+          y: platformsRef.current.offsetTop - scrollContainerRef.current.offsetTop - 20,
+          autoKill: true,
+        },
+        ease: "power2.out",
       });
+      gsap.fromTo(
+        platformsRef.current,
+        { scale: 0.98, opacity: 0.5 },
+        { scale: 1, opacity: 1, duration: 0.4, ease: "power2.out" },
+      );
     }
   };
 
   const scrollToLoaderVersion = () => {
-    if (loaderVersionRef.current && scrollContainerRef.current) {
-      setTimeout(() => {
-        const loaderVersionTop =
-          loaderVersionRef.current.getBoundingClientRect().top;
-        const containerTop =
-          scrollContainerRef.current.getBoundingClientRect().top;
-
-        const relativePosition = loaderVersionTop - containerTop;
-
-        const currentScroll = scrollContainerRef.current.scrollTop;
-
-        const newScrollPosition = currentScroll + relativePosition - 50;
-
-        gsap.to(scrollContainerRef.current, {
-          scrollTop: newScrollPosition,
-          duration: 0.5,
-          ease: "power2.inOut",
-        });
-      }, 100);
+    if (!loaderVersionRef.current || !scrollContainerRef.current) return;
+    if (isBackgroundAnimationEnabled) {
+      gsap.to(scrollContainerRef.current, {
+        duration: 0.5,
+        scrollTo: {
+          y: loaderVersionRef.current.offsetTop - scrollContainerRef.current.offsetTop - 20,
+          autoKill: true,
+        },
+        ease: "power2.out",
+      });
+      gsap.fromTo(
+        loaderVersionRef.current,
+        { scale: 0.98, opacity: 0.5 },
+        { scale: 1, opacity: 1, duration: 0.4, ease: "power2.out" },
+      );
     }
   };
 
@@ -407,38 +445,7 @@ export function InstallationSettingsTab({
                         }
                         size="md"
                         className="cursor-pointer text-center text-xl"
-                        onClick={() => {
-                          const newVersion = version;
-                          const currentLoader = editedProfile.loader;
-
-                          const isCompatible = isModLoaderCompatible(
-                            currentLoader,
-                            newVersion,
-                          );
-
-                          updateProfile({
-                            game_version: newVersion,
-                            loader: isCompatible ? currentLoader : "vanilla",
-                            loader_version: isCompatible
-                              ? editedProfile.loader_version
-                              : null,
-                          });
-
-                          if (platformsRef.current) {
-                            gsap.fromTo(
-                              platformsRef.current,
-                              { opacity: 0.5, y: 10 },
-                              {
-                                opacity: 1,
-                                y: 0,
-                                duration: 0.3,
-                                ease: "power2.out",
-                              },
-                            );
-                          }
-
-                          scrollToPlatforms();
-                        }}
+                        onClick={() => handleGameVersionClick(version)}
                       >
                         {version}
                       </Label>
@@ -487,34 +494,7 @@ export function InstallationSettingsTab({
                       ? accentColor.value
                       : "transparent",
                   }}
-                  onClick={() => {
-                    if (isCompatible && !isSelected) {
-                      gsap.fromTo(
-                        `.platform-${loader.name}`,
-                        { scale: 0.95 },
-                        {
-                          scale: 1,
-                          duration: 0.3,
-                          ease: "elastic.out(1.2, 0.4)",
-                        },
-                      );
-
-                      const wasVanilla = editedProfile.loader === "vanilla";
-                      const willBeVanilla = loader.name === "vanilla";
-
-                      updateProfile({
-                        loader: loader.name as Profile["loader"],
-                        loader_version: null,
-                      });
-                      if (
-                        !wasVanilla &&
-                        !willBeVanilla &&
-                        loaderVersionRef.current
-                      ) {
-                        scrollToLoaderVersion();
-                      }
-                    }
-                  }}
+                  onClick={() => handleLoaderClick(loader.name)}
                   disabled={!isCompatible}
                 >
                   <img
