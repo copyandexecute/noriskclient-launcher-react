@@ -48,6 +48,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const [ripples, setRipples] = useState<RippleType[]>([]);
     const rippleCounter = useRef(0);
     const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
+    );
     const [isPressed, setIsPressed] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
@@ -63,7 +66,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     useEffect(() => {
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         gsap.fromTo(
           buttonRef.current,
           { scale: 0.95, opacity: 0 },
@@ -75,7 +78,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           },
         );
       }
-    }, []);
+    }, [isBackgroundAnimationEnabled]);
 
     const handleRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
       if (disabled) return;
@@ -114,7 +117,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (disabled) return;
       setIsPressed(true);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         gsap.to(buttonRef.current, {
           scale: 0.95,
           duration: 0.1,
@@ -127,7 +130,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (disabled) return;
       setIsPressed(false);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         gsap.to(buttonRef.current, {
           scale: 1,
           duration: 0.2,
@@ -140,7 +143,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (disabled) return;
       setIsHovered(true);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         const part1Y = shadowDepth === 'short' ? '7px' : '13px';
         const part2Y = shadowDepth === 'short' ? '10px' : '16px';
         const part2Blur = shadowDepth === 'short' ? '15px' : '20px'; 
@@ -161,7 +164,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (disabled) return;
       setIsHovered(false);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         const part1Y = shadowDepth === 'short' ? '4px' : '8px';
         const part2Y = shadowDepth === 'short' ? '6px' : '10px';
         const part2Blur = shadowDepth === 'short' ? '10px' : '15px';
@@ -307,7 +310,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           boxShadow: initialBoxShadow,
           color: colors.text,
           transform:
-            isHovered && !disabled ? "translateY(-5px)" : "translateY(0)",
+            isHovered && !disabled && isBackgroundAnimationEnabled 
+              ? "translateY(-5px)" 
+              : "translateY(0)",
           filter: isHovered && !disabled ? "brightness(1.2)" : "brightness(1)",
         }}
         {...props}
