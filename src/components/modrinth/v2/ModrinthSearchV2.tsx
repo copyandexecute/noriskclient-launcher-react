@@ -1430,6 +1430,7 @@ export function ModrinthSearchV2({
       try {
         const updatedProfiles = await ProfileService.listProfiles();
         setInternalProfiles(updatedProfiles);
+        useProfileStore.getState().fetchProfiles();
       } catch (profileError) {
         console.error("Failed to refresh profiles list internally:", profileError);
       }
@@ -1491,6 +1492,7 @@ export function ModrinthSearchV2({
       try {
         const updatedProfiles = await ProfileService.listProfiles();
         setInternalProfiles(updatedProfiles);
+        useProfileStore.getState().fetchProfiles();
       } catch (profileError) {
         console.error("Failed to refresh profiles list internally:", profileError);
       }
