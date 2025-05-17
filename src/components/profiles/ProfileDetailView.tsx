@@ -20,43 +20,6 @@ import { DataPacksTab } from "./detail/DataPacksTab";
 import { ShaderPacksTabV2 } from "./detail/v2/ShaderPacksTabV2";
 import { DataPacksTabV2 } from "./detail/v2/DataPacksTabV2";
 
-function TabTransitionLoader() {
-  const loaderRef = useRef<HTMLDivElement>(null);
-  const accentColor = useThemeStore((state) => state.accentColor);
-
-  useEffect(() => {
-    if (loaderRef.current) {
-      gsap.fromTo(
-        loaderRef.current,
-        { opacity: 0 },
-        {
-          opacity: 1,
-          duration: 0.3,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, []);
-
-  return (
-    <div
-      ref={loaderRef}
-      className="absolute inset-0 bg-black/30 backdrop-blur-sm flex flex-col items-center justify-center z-10"
-    >
-      <div className="relative w-16 h-16 mb-4">
-        <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
-        <div
-          className="absolute inset-0 border-4 border-t-white/80 rounded-full animate-spin"
-          style={{ borderTopColor: accentColor.value }}
-        ></div>
-      </div>
-      <div className="font-minecraft text-2xl text-white/80 tracking-wide lowercase">
-        Loading content...
-      </div>
-    </div>
-  );
-}
-
 interface ProfileDetailViewProps {
   profile: Profile;
   onClose: () => void;
@@ -92,8 +55,6 @@ export function ProfileDetailView({
   const toggleSidebarPosition = useThemeStore((state) => state.toggleDetailViewSidebarPosition);
   const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
-  const [tabTransition, setTabTransition] = useState(false);
-  const tabTransitionTimer = useRef<NodeJS.Timeout | null>(null);
   const subMenuRef = useRef<HTMLDivElement>(null);
   const subItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const prevActiveMainTab = useRef<MainTabType | null>(null);
@@ -120,15 +81,7 @@ export function ProfileDetailView({
   }, [activeMainTab, activeContentType]);
 
   useEffect(() => {
-    return () => {
-      if (tabTransitionTimer.current) {
-        clearTimeout(tabTransitionTimer.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (contentRef.current && activeMainTab === 'content' && !tabTransition && isBackgroundAnimationEnabled) {
+    if (contentRef.current && activeMainTab === 'content' && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         contentRef.current,
         { opacity: 0, scale: 0.98 },
@@ -143,7 +96,7 @@ export function ProfileDetailView({
     } else if (contentRef.current && activeMainTab === 'content') {
       gsap.set(contentRef.current, { opacity: 1, scale: 1 });
     }
-  }, [activeContentType, activeMainTab, tabTransition, isBackgroundAnimationEnabled, contentRef]);
+  }, [activeContentType, activeMainTab, isBackgroundAnimationEnabled, contentRef]);
 
   const handleBrowseContent = (contentType: string) => {
     setBrowseContentType(contentType);
@@ -164,16 +117,6 @@ export function ProfileDetailView({
 
   const handleMainTabChange = (tab: MainTabType) => {
     if (activeMainTab === tab) return;
-
-    setTabTransition(true);
-
-    if (tabTransitionTimer.current) {
-      clearTimeout(tabTransitionTimer.current);
-    }
-
-    tabTransitionTimer.current = setTimeout(() => {
-      setTabTransition(false);
-    }, 600);
 
     setActiveMainTab(tab);
   };
@@ -452,34 +395,31 @@ export function ProfileDetailView({
             backgroundColor: `${accentColor.value}08`,
           }}
         >
-          {tabTransition && <TabTransitionLoader />}
-          {!tabTransition && (
-            <>
-              {activeMainTab === "content" && !profile.is_standard_version && (
-                <>
-                  {activeContentType === "modsv2" && <ModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
-                  {activeContentType === "resourcepacksv2" && <ResourcePacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
-                  {activeContentType === "shaderpacksv2" && (
-                    <ShaderPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
-                  )}
-                  {activeContentType === "datapacksv2" && (
-                    <DataPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
-                  )}
-                  {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
-                </>
-              )}
-              {activeMainTab === "browse" && !profile.is_standard_version && (
-                <BrowseTab
-                  profile={currentProfile}
-                  initialContentType={browseContentType}
-                  onRefresh={handleRefresh}
-                  parentTransitionActive={false}
-                />
-              )}
-              {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
-              {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
-            </>
-          )}
+          <>
+            {activeMainTab === "content" && !profile.is_standard_version && (
+              <>
+                {activeContentType === "modsv2" && <ModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                {activeContentType === "resourcepacksv2" && <ResourcePacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                {activeContentType === "shaderpacksv2" && (
+                  <ShaderPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                )}
+                {activeContentType === "datapacksv2" && (
+                  <DataPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                )}
+                {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+              </>
+            )}
+            {activeMainTab === "browse" && !profile.is_standard_version && (
+              <BrowseTab
+                profile={currentProfile}
+                initialContentType={browseContentType}
+                onRefresh={handleRefresh}
+                parentTransitionActive={false}
+              />
+            )}
+            {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
+            {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
+          </>
         </div>
       </div>
     </div>

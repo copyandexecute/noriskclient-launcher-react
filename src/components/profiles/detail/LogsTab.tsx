@@ -264,13 +264,7 @@ export function LogsTab({
 
   return (
     <div ref={containerRef} className="h-full flex flex-col select-none p-4">
-      <div
-        className="h-full flex flex-col overflow-hidden rounded-lg border backdrop-blur-sm"
-        style={{
-          backgroundColor: `${accentColor.value}08`,
-          borderColor: `${accentColor.value}20`,
-        }}
-      >
+      <div className="h-full flex flex-col">
         <LogViewerDisplay
           isLoading={isLoadingList || isLoadingContent}
           error={errorList || errorContent}
@@ -290,6 +284,7 @@ export function LogsTab({
           onLogSelect={handleLogSelect}
           logLevelsDefinition={LOG_LEVELS}
           scrollableContainerRef={scrollableContainerRef}
+          isInsideLogWindow={false}
         />
       </div>
     </div>

@@ -46,6 +46,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     const [ripples, setRipples] = useState<RippleType[]>([]);
     const rippleCounter = useRef(0);
     const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
     const [isPressed, setIsPressed] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
@@ -61,7 +62,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     };
 
     useEffect(() => {
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         gsap.fromTo(
           buttonRef.current,
           { scale: 0.95, opacity: 0 },
@@ -73,7 +74,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
           },
         );
       }
-    }, []);
+    }, [isBackgroundAnimationEnabled]);
 
     const handleRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
       if (disabled) return;
@@ -112,7 +113,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (disabled) return;
       setIsPressed(true);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         gsap.to(buttonRef.current, {
           scale: 0.92,
           duration: 0.1,
@@ -125,7 +126,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (disabled) return;
       setIsPressed(false);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         gsap.to(buttonRef.current, {
           scale: 1,
           duration: 0.2,
@@ -138,7 +139,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (disabled) return;
       setIsHovered(true);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         const part1Y = shadowDepth === 'short' ? '7px' : '13px';
         const part2Y = shadowDepth === 'short' ? '10px' : '16px';
         const part2Blur = shadowDepth === 'short' ? '15px' : '20px';
@@ -159,7 +160,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (disabled) return;
       setIsHovered(false);
 
-      if (buttonRef.current) {
+      if (buttonRef.current && isBackgroundAnimationEnabled) {
         const part1Y = shadowDepth === 'short' ? '4px' : '8px';
         const part2Y = shadowDepth === 'short' ? '6px' : '10px';
         const part2Blur = shadowDepth === 'short' ? '10px' : '15px';
