@@ -71,6 +71,7 @@ export function GlobalToaster() {
         backgroundColor: "rgba(var(--accent-rgb), 0.3)",
         borderColor: "rgba(var(--accent-rgb), 0.8)",
         borderBottomColor: "var(--accent)",
+        borderRadius: "0px",
         duration: 0.3,
       });
     });
@@ -94,7 +95,7 @@ export function GlobalToaster() {
             borderColor: "rgba(var(--accent-rgb), 0.8)",
             borderBottomColor: "var(--accent)",
             color: "#f0f0f0",
-            borderRadius: "4px",
+            borderRadius: "0px",
             minWidth: "290px",
           },
           success: {
@@ -103,7 +104,7 @@ export function GlobalToaster() {
               borderColor: "rgba(16, 185, 129, 0.8)",
               borderBottomColor: "#059669",
               color: "#d1fae5",
-              borderRadius: "4px",
+              borderRadius: "0px",
             },
             iconTheme: {
               primary: "#059669",
@@ -116,7 +117,7 @@ export function GlobalToaster() {
               borderColor: "rgba(239, 68, 68, 0.8)",
               borderBottomColor: "#dc2626",
               color: "#fee2e2",
-              borderRadius: "4px",
+              borderRadius: "0px",
             },
             iconTheme: {
               primary: "#dc2626",
