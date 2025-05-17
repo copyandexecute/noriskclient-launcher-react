@@ -30,6 +30,7 @@ export function RunningInstancesIndicator({
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   const [viewingLogsId, setViewingLogsId] = useState<string | null>(null);
+  const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
   const buttonRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -238,29 +239,32 @@ export function RunningInstancesIndicator({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden"
+                          className="w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden"
                           style={{
-                            backgroundColor: `${accentColor.value}30`,
-                            borderWidth: "2px",
-                            borderStyle: "solid",
-                            borderColor: `${accentColor.value}60`,
+                            // backgroundColor: `${accentColor.value}30`, // Removed background
+                            // borderWidth: "2px", // Removed border
+                            // borderStyle: "solid", // Removed border
+                            // borderColor: `${accentColor.value}60`, // Removed border
                           }}
                         >
-                          {process.profile_image_url ? (
+                          {(process.profile_image_url && !imageLoadErrors.has(process.id)) ? (
                             <img
                               src={process.profile_image_url}
                               alt={process.profile_name || "Profile Icon"}
                               className="w-full h-full object-cover"
+                              onError={() => {
+                                setImageLoadErrors(prev => new Set(prev).add(process.id));
+                              }}
                             />
                           ) : (
                             <img
-                              src="/img/icons/minecraft.png"
+                              src="/icons/minecraft.png"
                               alt="Minecraft Default Icon"
-                              className="w-6 h-6"
+                              className="w-8 h-8"
                             />
                           )}
                         </div>
-                        <div className="h-9 flex flex-col justify-center">
+                        <div className="h-12 flex flex-col justify-center">
                           <p
                             className="text-xl font-minecraft text-white truncate mb-0 leading-none"
                             title={process.profile_name || process.profile_id}
