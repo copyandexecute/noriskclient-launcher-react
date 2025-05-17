@@ -48,6 +48,7 @@ import {
 import type { ContentInstallStatus } from '../../../types/profile'; // For the extended status
 
 import { useProfileStore } from '../../../store/profile-store'; // Hinzufügen des ProfileStore Imports
+import { Virtuoso } from 'react-virtuoso'; // Import Virtuoso
 
 // Remove any other stray imports of uninstallContentFromProfile below this point
 
@@ -63,6 +64,7 @@ export interface ModrinthSearchV2Props {
   className?: string;
   selectedProfileId?: string; // Optional ID of pre-selected profile
   initialSidebarVisible?: boolean; // New prop for initial sidebar visibility
+  overrideDisplayContext?: "detail" | "standalone"; // New prop
 }
 
 const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'];
@@ -82,6 +84,7 @@ export function ModrinthSearchV2({
   className = '',
   selectedProfileId,
   initialSidebarVisible = true, // Default to true if not provided
+  overrideDisplayContext, // Destructure new prop
 }: ModrinthSearchV2Props) {
   const searchResultsAreaRef = useRef<HTMLDivElement>(null); // Ref for the scrollable area
   const [searchTerm, setSearchTerm] = useState('');
@@ -1915,6 +1918,7 @@ export function ModrinthSearchV2({
           onRemoveClientRequiredTag={removeClientRequiredTag}
           onRemoveServerRequiredTag={removeServerRequiredTag}
           onClearAllFilters={clearAllFilters}
+          overrideDisplayContext={overrideDisplayContext} // Pass down
         />
 
         {/* Search Results Area (scrollable within the left content area) */}
@@ -1927,57 +1931,88 @@ export function ModrinthSearchV2({
             <p className="p-4 text-center text-gray-400">No results found. Try adjusting filters or search term.</p>
           )}
 
-          {searchResults.map((hit) => {
-            const projectVersions = expandedVersions[hit.project_id];
-            const displayedCount = numDisplayedVersions[hit.project_id] || initialDisplayCount;
-            const currentProjectInstallStatus = selectedProfile ? installedProjects[hit.project_id] : null;
-            const currentVersionFilters = versionFilters[hit.project_id] || { gameVersions: [], loaders: [], versionType: 'all' };
-            const currentVersionDropdownUIState = versionDropdownUIState[hit.project_id] || { showAllGameVersions: false, gameVersionSearchTerm: '' };
-            const currentOpenVersionDropdowns = openVersionDropdowns[hit.project_id] || { type: false, gameVersion: false, loader: false };
+          {searchResults.length > 0 && (
+            <Virtuoso
+              style={{ height: '100%' }} // Ensure Virtuoso takes full height of its container
+              data={searchResults}
+              endReached={loadMoreResults}
+              itemContent={(index, hit) => {
+                const projectVersions = expandedVersions[hit.project_id];
+                const displayedCount = numDisplayedVersions[hit.project_id] || initialDisplayCount;
+                const currentProjectInstallStatus = selectedProfile ? installedProjects[hit.project_id] : null;
+                const currentVersionFilters = versionFilters[hit.project_id] || { gameVersions: [], loaders: [], versionType: 'all' };
+                const currentVersionDropdownUIState = versionDropdownUIState[hit.project_id] || { showAllGameVersions: false, gameVersionSearchTerm: '' };
+                const currentOpenVersionDropdowns = openVersionDropdowns[hit.project_id] || { type: false, gameVersion: false, loader: false };
 
-            return (
-              <ModrinthProjectCardV2
-                key={hit.project_id}
-                hit={hit}
-                accentColor={accentColor}
-                installStatus={currentProjectInstallStatus}
-                isQuickInstalling={quickInstallingProjects[hit.project_id] || false} // Pass loading state
-                isInstallingModpackAsProfile={installingModpackAsProfile[hit.project_id] || false} // Pass new loading state
-                installingVersionStates={installingVersion} // Pass the whole record for version install states
-                installingModpackVersionStates={installingModpackVersion} // Pass new state for modpack versions
-                onQuickInstallClick={quickInstall}
-                onInstallModpackAsProfileClick={handleInstallModpackAsProfile}
-                onInstallModpackVersionAsProfileClick={handleInstallModpackVersionAsProfile}
-                onToggleVersionsClick={toggleProjectVersions}
-                isExpanded={Array.isArray(projectVersions) && projectVersions.length > 0}
-                isLoadingVersions={projectVersions === 'loading'}
-                projectVersions={projectVersions}
-                displayedCount={displayedCount}
-                versionFilters={currentVersionFilters}
-                versionDropdownUIState={currentVersionDropdownUIState}
-                openVersionDropdowns={currentOpenVersionDropdowns}
-                installedVersions={installedVersions}
-                selectedProfile={selectedProfile}
-                selectedProfileId={selectedProfile?.id}
-                hoveredVersionId={hoveredVersionId}
-                gameVersionsData={gameVersionsData}
-                showAllGameVersionsSidebar={showAllGameVersionsSidebar}
-                selectedGameVersionsSidebar={selectedGameVersions}
-                onVersionFilterChange={handleVersionFilterChange}
-                onVersionUiStateChange={handleVersionDropdownUIChange}
-                onToggleVersionDropdown={toggleVersionDropdown}
-                onCloseAllVersionDropdowns={closeAllVersionDropdowns}
-                onLoadMoreVersions={loadMoreProjectVersions}
-                onInstallVersionClick={handleDirectInstall} // Changed from openInstallModal
-                onHoverVersion={setHoveredVersionId}
-                onDeleteVersionClick={handleDeleteVersionFromProfile}
-                onToggleEnableClick={handleToggleEnableVersion} // Pass the new handler
-              />
-            );
-          })}
+                return (
+                  <ModrinthProjectCardV2
+                    key={hit.project_id} // Virtuoso manages keys, but good practice if used elsewhere
+                    hit={hit}
+                    accentColor={accentColor}
+                    installStatus={currentProjectInstallStatus}
+                    isQuickInstalling={quickInstallingProjects[hit.project_id] || false} // Pass loading state
+                    isInstallingModpackAsProfile={installingModpackAsProfile[hit.project_id] || false} // Pass new loading state
+                    installingVersionStates={installingVersion} // Pass the whole record for version install states
+                    installingModpackVersionStates={installingModpackVersion} // Pass new state for modpack versions
+                    onQuickInstallClick={quickInstall}
+                    onInstallModpackAsProfileClick={handleInstallModpackAsProfile}
+                    onInstallModpackVersionAsProfileClick={handleInstallModpackVersionAsProfile}
+                    onToggleVersionsClick={toggleProjectVersions}
+                    isExpanded={Array.isArray(projectVersions) && projectVersions.length > 0}
+                    isLoadingVersions={projectVersions === 'loading'}
+                    projectVersions={projectVersions}
+                    displayedCount={displayedCount}
+                    versionFilters={currentVersionFilters}
+                    versionDropdownUIState={currentVersionDropdownUIState}
+                    openVersionDropdowns={currentOpenVersionDropdowns}
+                    installedVersions={installedVersions}
+                    selectedProfile={selectedProfile}
+                    selectedProfileId={selectedProfile?.id}
+                    hoveredVersionId={hoveredVersionId}
+                    gameVersionsData={gameVersionsData}
+                    // showAllGameVersionsSidebar={showAllGameVersionsSidebar} // This seems to be main filter, not per card
+                    // selectedGameVersionsSidebar={selectedGameVersions} // This seems to be main filter, not per card
+                    showAllGameVersionsSidebar={showAllGameVersionsSidebar} // Pass main filter state
+                    selectedGameVersionsSidebar={selectedGameVersions} // Pass main filter state
+                    onVersionFilterChange={handleVersionFilterChange}
+                    onVersionUiStateChange={handleVersionDropdownUIChange}
+                    onToggleVersionDropdown={toggleVersionDropdown}
+                    onCloseAllVersionDropdowns={closeAllVersionDropdowns}
+                    onLoadMoreVersions={loadMoreProjectVersions}
+                    onInstallVersionClick={handleDirectInstall} // Changed from openInstallModal
+                    onHoverVersion={setHoveredVersionId}
+                    onDeleteVersionClick={handleDeleteVersionFromProfile}
+                    onToggleEnableClick={handleToggleEnableVersion} // Pass the new handler
+                  />
+                );
+              }}
+              // Optional: if you want a footer for loading or "no more items"
+              components={{
+                Footer: () => {
+                  if (loading && searchResults.length > 0) { // Show loading indicator only when loading more, not initial load
+                    return (
+                      <div className="p-4 text-center">
+                        Loading more items...
+                      </div>
+                    );
+                  }
+                  if (!loading && searchResults.length > 0 && searchResults.length >= totalHits) {
+                     return (
+                      <div className="p-4 text-center text-sm text-gray-400">
+                        No more results.
+                      </div>
+                    );
+                  }
+                  return null;
+                },
+              }}
+            />
+          )}
           
-          {/* Load More button - Ensure it's always visible when there are more results */}
-          {!loading && searchResults.length > 0 && searchResults.length < totalHits && (
+          {/* Load More button - Retained for cases where Virtuoso might not trigger endReached correctly, or as fallback.
+              Virtuoso's endReached should ideally handle this. Consider removing if endReached is reliable.
+           */}
+          {!loading && searchResults.length > 0 && searchResults.length < totalHits && !Virtuoso && ( // Conditionally render if not using Virtuoso, or as fallback
             <Button 
               onClick={loadMoreResults}
               variant="ghost" // Changed from default to ghost

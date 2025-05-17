@@ -41,6 +41,7 @@ export interface ModrinthSearchControlsV2Props {
   onRemoveClientRequiredTag: () => void;
   onRemoveServerRequiredTag: () => void;
   onClearAllFilters: () => void;
+  overrideDisplayContext?: "detail" | "standalone";
 }
 
 export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> = ({
@@ -68,12 +69,14 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
   onRemoveClientRequiredTag,
   onRemoveServerRequiredTag,
   onClearAllFilters,
+  overrideDisplayContext,
 }) => {
-  const displayContext = useDisplayContextStore((state) => state.context);
+  const globalDisplayContext = useDisplayContextStore((state) => state.context);
+  const effectiveDisplayContext = overrideDisplayContext || globalDisplayContext;
   const accentColor = useThemeStore((state) => state.accentColor);
   const filtersContainerRef = useRef<HTMLDivElement>(null);
 
-  const isDetailView = displayContext === "detail";
+  const isDetailView = effectiveDisplayContext === "detail";
   const buttonSize = isDetailView
     ? isSidebarVisible
       ? "xs"

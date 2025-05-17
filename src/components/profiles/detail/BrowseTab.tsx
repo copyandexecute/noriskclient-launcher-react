@@ -6,7 +6,6 @@ import { useThemeStore } from "../../../store/useThemeStore";
 import { useDisplayContextStore } from "../../../store/useDisplayContextStore";
 import { Icon } from "@iconify/react";
 import { Card } from "../../ui/Card";
-import { gsap } from "gsap";
 import { ModrinthSearchV2 } from "../../modrinth/v2/ModrinthSearchV2";
 
 interface BrowseTabProps {
@@ -35,21 +34,6 @@ export function BrowseTab({
       setDisplayContext("standalone");
     };
   }, [setDisplayContext]);
-
-  useEffect(() => {
-    if (containerRef.current && !parentTransitionActive) {
-      gsap.fromTo(
-        containerRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [parentTransitionActive]);
 
   const getProjectType = () => {
     switch (initialContentType) {
@@ -136,6 +120,7 @@ export function BrowseTab({
           selectedProfileId={profile.id}
           className="h-full"
           initialSidebarVisible={false}
+          overrideDisplayContext="detail"
         />
       </div>
     </div>
