@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { Icon } from '@iconify/react'; // For default icons if needed
 import { Checkbox } from '../../../ui/Checkbox'; // Assuming Checkbox is in ui folder
 
@@ -47,15 +47,21 @@ export function GenericDetailListItem({
   accentColor = '#FFFFFF', // Default accent if not provided
 }: GenericDetailListItemProps) {
 
+  const [isHovered, setIsHovered] = useState(false);
+
   // Determine default icon if none provided (example)
   const defaultIcon = <Icon icon="solar:box-bold-duotone" className="w-10 h-10 text-white/30" />;
   const displayIconNode = iconNode || defaultIcon;
 
   return (
     <div 
-      className="relative flex items-center p-3 bg-[var(--background-color-dark)] hover:bg-[var(--background-color-light)] transition-colors duration-150 rounded-lg border border-transparent focus-within:border-[var(--accent-color-soft)] group"
-      // Consider adding dynamic border color based on accentColor or selection state
-      // style={{ borderColor: isSelected ? `${accentColor}80` : 'transparent' }}
+      className="relative flex items-center p-3 transition-colors duration-150 rounded-lg border group focus-within:border-[var(--accent-color-soft)]"
+      style={{
+        backgroundColor: isHovered ? `${accentColor}15` : `${accentColor}08`,
+        borderColor: isHovered ? `${accentColor}40` : `${accentColor}20`,
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Checkbox Area */}
       <div className="mr-3 flex-shrink-0 self-center" onClick={(e) => e.stopPropagation()}>

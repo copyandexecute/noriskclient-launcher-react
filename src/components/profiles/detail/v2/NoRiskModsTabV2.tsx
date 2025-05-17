@@ -576,19 +576,18 @@ export function NoRiskModsTabV2({ profile, onRefreshRequired }: NoRiskModsTabV2P
       </div>
       
       <div 
-        className="h-px w-full my-1.5"
+        className="h-px w-full my-1"
         style={{ backgroundColor: `${accentColor.value}30` }} 
       />
 
-      <div className="flex items-center justify-between w-full">
+      <div className="flex items-center justify-between w-full min-h-14">
         <Checkbox
-          customSize="md" 
+          customSize="md"
           checked={areAllFilteredSelected}
           onChange={(e) => handleSelectAllToggle(e.target.checked)}
-          disabled={isBatchToggling || isLoading || isRefreshingPacks || filteredMods.length === 0 || !profile.selected_norisk_pack_id}
-          label={selectedModIds.size > 0 ? `${selectedModIds.size} selected` : "Select All Visible"}
-          title={areAllFilteredSelected ? "Deselect all visible" : (filteredMods.length === 0 || !profile.selected_norisk_pack_id ? "No mods to select" : "Select all visible")}
-          className="self-start"
+          disabled={filteredMods.length === 0 || isBatchToggling || isLoading}
+          label={selectedModIds.size > 0 ? `${selectedModIds.size} selected` : "Select All"}
+          title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
         />
         <div className="flex items-center gap-2">
           {selectedModIds.size > 0 && !!profile.selected_norisk_pack_id && (

@@ -799,43 +799,42 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
             className="!h-9 !w-9 flex-shrink-0 ml-auto"
         />
       </div>
-      {updateError && (
-        <div className="p-2 text-sm flex items-center gap-2 my-1 rounded-md border" style={{ backgroundColor: `rgba(220, 38, 38, 0.1)`, borderColor: `rgba(220, 38, 38, 0.3)`, color: `rgb(252, 165, 165)` }}>
-          <Icon icon="solar:danger-triangle-bold" className="w-4 h-4 text-red-400 flex-shrink-0" />
-          <span className="font-minecraft">Update Error: {updateError}</span>
-        </div>
-      )}
+      {/* {updateError && ( ... )} */}
+      {/* Always show this section, regardless of resourcePacks.length */}
       <>
-        <div className="h-px w-full my-1" style={{ backgroundColor: `${accentColor.value}30` }} />
-        <div className="flex items-center justify-between w-full">
-            <Checkbox
-              customSize="md" 
-              checked={areAllFilteredSelected}
-              onChange={(e) => handleSelectAllToggle(e.target.checked)}
+        <div 
+          className="h-px w-full my-1"
+          style={{ backgroundColor: `${accentColor.value}30` }} 
+        />
+        <div className="flex items-center justify-between w-full min-h-14">
+          <Checkbox
+            customSize="md" 
+            checked={areAllFilteredSelected}
+            onChange={(e) => handleSelectAllToggle(e.target.checked)}
             disabled={filteredResourcePacks.length === 0 || isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll}
             label={selectedPackIds.size > 0 ? `${selectedPackIds.size} selected` : "Select All"}
-              title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
-              className="self-start"
-            />
+            title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
+          />
           <div className="flex items-center gap-2">
             {selectedPackIds.size > 0 && (
               <>
                 <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll} icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
                   {isBatchToggling ? "Toggling..." : `Toggle (${selectedPackIds.size})`}
-                  </Button>
+                </Button>
                 <Button size="sm" variant="destructive" onClick={() => { setIsBatchDeleteConfirmActive(true); setIsConfirmDeleteDialogOpen(true);}} disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll} icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
                   {isBatchDeleting ? "Deleting..." : `Delete (${selectedPackIds.size})`}
-                  </Button>
-                </>
-              )}
+                </Button>
+              </>
+            )}
             {Object.keys(resourcePackUpdates).length > 0 && (
               <Button size="sm" variant="success" onClick={handleUpdateAllAvailableResourcePacks} disabled={isUpdatingAll || isLoading || isBatchToggling || isBatchDeleting || checkingUpdates} icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} className={selectedPackIds.size > 0 ? "ml-2" : ""}>
-                {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(resourcePackUpdates).length})`}
-                </Button>
-              )}
-            </div>
+              {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(resourcePackUpdates).length})`}
+            </Button>
+          )}
           </div>
-        </>
+        </div>
+      </>
+      {/* End of always shown section */}
     </div>
   );
 

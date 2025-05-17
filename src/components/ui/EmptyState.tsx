@@ -29,47 +29,48 @@ export function EmptyState({
   const containerRef = useRef<HTMLDivElement>(null);
   const iconRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   useEffect(() => {
-    if (containerRef.current) {
-      gsap.fromTo(
-        containerRef.current,
-        { opacity: 0, y: 20, scale: 0.95 },
-        {
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          duration: 0.5,
-          ease: "power2.out",
-        },
-      );
-    }
+    if (isBackgroundAnimationEnabled) {
+      if (containerRef.current) {
+        gsap.fromTo(
+          containerRef.current,
+          { opacity: 0, y: 20, scale: 0.95 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.5,
+            ease: "power2.out",
+          },
+        );
+      }
 
-    if (iconRef.current) {
-      // Initial animation
-      gsap.fromTo(
-        iconRef.current,
-        { scale: 0.8, opacity: 0 },
-        {
-          scale: 1,
-          opacity: 1,
-          duration: 0.6,
-          delay: 0.2,
-          ease: "elastic.out(1.2, 0.5)",
-        },
-      );
-
-      // Continuous subtle animation - smaller movement to prevent layout shifts
-      gsap.to(iconRef.current, {
-        y: -3,
-        scale: 1.03,
-        repeat: -1,
-        yoyo: true,
-        duration: 1.5,
-        ease: "sine.inOut",
-      });
+      if (iconRef.current) {
+        // Initial animation
+        gsap.fromTo(
+          iconRef.current,
+          { scale: 0.8, opacity: 0 },
+          {
+            scale: 1,
+            opacity: 1,
+            duration: 0.6,
+            delay: 0.2,
+            ease: "elastic.out(1.2, 0.5)",
+          },
+        );
+      }
+    } else {
+      // Animations are disabled, set elements to their final state
+      if (containerRef.current) {
+        gsap.set(containerRef.current, { opacity: 1, y: 0, scale: 1 });
+      }
+      if (iconRef.current) {
+        gsap.set(iconRef.current, { opacity: 1, scale: 1 });
+      }
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   return (
     <div

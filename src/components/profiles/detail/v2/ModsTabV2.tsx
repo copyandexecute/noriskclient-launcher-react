@@ -918,7 +918,7 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
             className="h-px w-full my-1"
             style={{ backgroundColor: `${accentColor.value}30` }} 
           />
-          <div className="flex items-center justify-between w-full"> {/* Wrapper for SelectAll and Batch Actions */}
+          <div className="flex items-center justify-between w-full min-h-14"> {/* Wrapper for SelectAll and Batch Actions - User set min-h-14 */}
             <Checkbox
               customSize="md" 
               checked={areAllFilteredSelected}
@@ -926,7 +926,6 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
               disabled={filteredMods.length === 0 || isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll}
               label={selectedModIds.size > 0 ? `${selectedModIds.size} selected` : "Select All"}
               title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
-              className="self-start"
             />
             <div className="flex items-center gap-2"> {/* Wrapper for batch actions and Update All */}
               {selectedModIds.size > 0 && (

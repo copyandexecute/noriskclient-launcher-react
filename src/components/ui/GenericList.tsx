@@ -6,6 +6,7 @@ import { ReactNode, useEffect } from "react";
 import Skeleton, { SkeletonTheme } from 'react-loading-skeleton';
 import 'react-loading-skeleton/dist/skeleton.css'; // Import skeleton styles
 import { preloadIcons } from "../../lib/icon-utils"; // Assuming this is the correct path
+import { Virtuoso } from 'react-virtuoso';
 
 const GENERIC_LIST_DEFAULT_ICONS = [
   "solar:danger-triangle-bold", // Default error icon
@@ -171,11 +172,20 @@ export function GenericList<T>({
             borderColor: `${effectiveAccentColor}20`,
         }}
         >
-        <div className="h-full overflow-y-auto custom-scrollbar">
-            <ul className={ulClassName}>
-            {items.map((item, index) => renderItem(item, index))}
-            </ul>
-        </div>
+        <Virtuoso
+            style={{ height: '100%' }} 
+            data={items}
+            itemContent={(index, item) => {
+                // The renderItem prop is expected to return a ReactNode, typically the <li> or list item component itself.
+                // We might need to wrap what renderItem returns if it doesn't include LI itself.
+                // However, GenericDetailListItem itself is likely an LI or behaves like one.
+                return renderItem(item, index);
+            }}
+            className="custom-scrollbar" // Apply custom scrollbar style if Virtuoso's default scroll container needs it
+            // Removed custom List component to use Virtuoso's default, which is a div.
+            // The ulClassName styling (like divide-y) will need to be handled differently,
+            // possibly by applying bottom borders to items rendered by renderItem if that's what divide-y was doing.
+          />
         </div>
     );
   }

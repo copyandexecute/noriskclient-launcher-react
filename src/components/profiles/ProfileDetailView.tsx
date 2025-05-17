@@ -60,7 +60,7 @@ export function ProfileDetailView({
   const prevActiveMainTab = useRef<MainTabType | null>(null);
 
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         containerRef.current,
         { opacity: 0, y: 20 },
@@ -71,8 +71,10 @@ export function ProfileDetailView({
           ease: "power2.out",
         },
       );
+    } else if (containerRef.current) {
+      gsap.set(containerRef.current, { opacity: 1, y: 0 });
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -124,30 +126,32 @@ export function ProfileDetailView({
   const handleContentTypeChange = (type: ContentSubType) => {
     if (activeContentType === type) return;
 
-    gsap.to(`#dot-${activeContentType}`, {
-      scale: 0.8,
-      opacity: 0.5,
-      duration: 0.3,
-      ease: "power2.out",
-    });
+    if (isBackgroundAnimationEnabled) {
+      gsap.to(`#dot-${activeContentType}`, {
+        scale: 0.8,
+        opacity: 0.5,
+        duration: 0.3,
+        ease: "power2.out",
+      });
 
-    gsap.fromTo(
-      `#dot-${type}`,
-      { scale: 0.8, opacity: 0.5 },
-      {
-        scale: 1.2,
-        opacity: 1,
-        duration: 0.4,
-        ease: "elastic.out(1, 0.5)",
-        onComplete: () => {
-          gsap.to(`#dot-${type}`, {
-            scale: 1,
-            duration: 0.2,
-            ease: "power2.out",
-          });
+      gsap.fromTo(
+        `#dot-${type}`,
+        { scale: 0.8, opacity: 0.5 },
+        {
+          scale: 1.2,
+          opacity: 1,
+          duration: 0.4,
+          ease: "elastic.out(1, 0.5)",
+          onComplete: () => {
+            gsap.to(`#dot-${type}`, {
+              scale: 1,
+              duration: 0.2,
+              ease: "power2.out",
+            });
+          },
         },
-      },
-    );
+      );
+    }
 
     setActiveContentType(type);
   };

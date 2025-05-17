@@ -579,19 +579,22 @@ export function DataPacksTabV2({ profile, onRefreshRequired }: DataPacksTabV2Pro
           onClick={fetchDataPacksData} disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
           variant="secondary" size="sm" title={isLoading ? "Refreshing..." : "Refresh Data Packs"} className="!h-9 !w-9 flex-shrink-0 ml-auto" />
       </div>
-      {updateError && (
-        <div className="p-2 text-sm flex items-center gap-2 my-1 rounded-md border" style={{ backgroundColor: `rgba(220, 38, 38, 0.1)`, borderColor: `rgba(220, 38, 38, 0.3)`, color: `rgb(252, 165, 165)` }}>
-          <Icon icon="solar:danger-triangle-bold" className="w-4 h-4 text-red-400 flex-shrink-0" />
-          <span className="font-minecraft">Update Error: {updateError}</span>
-        </div>
-      )}
+      {/* {updateError && ( ... )} */}
+      {/* Always show this section, regardless of dataPacks.length */}
       <>
-        <div className="h-px w-full my-1" style={{ backgroundColor: `${accentColor.value}30` }} />
-        <div className="flex items-center justify-between w-full">
-            <Checkbox customSize="md" checked={areAllFilteredSelected} onChange={(e) => handleSelectAllToggle(e.target.checked)}
+        <div 
+          className="h-px w-full my-1"
+          style={{ backgroundColor: `${accentColor.value}30` }} 
+        />
+        <div className="flex items-center justify-between w-full min-h-14">
+          <Checkbox
+            customSize="md" 
+            checked={areAllFilteredSelected}
+            onChange={(e) => handleSelectAllToggle(e.target.checked)}
             disabled={filteredDataPacks.length === 0 || isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll}
             label={selectedPackIds.size > 0 ? `${selectedPackIds.size} selected` : "Select All"}
-            title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"} className="self-start" />
+            title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
+          />
           <div className="flex items-center gap-2">
             {selectedPackIds.size > 0 && (
               <>
@@ -605,12 +608,13 @@ export function DataPacksTabV2({ profile, onRefreshRequired }: DataPacksTabV2Pro
             )}
             {Object.keys(dataPackUpdates).length > 0 && (
               <Button size="sm" variant="success" onClick={handleUpdateAllAvailableDataPacks} disabled={isUpdatingAll || isLoading || isBatchToggling || isBatchDeleting || checkingUpdates} icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} className={selectedPackIds.size > 0 ? "ml-2" : ""}>
-                {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(dataPackUpdates).length})`}
-              </Button>
+              {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(dataPackUpdates).length})`}
+            </Button>
             )}
           </div>
         </div>
       </>
+      {/* End of always shown section */}
     </div>
   );
 

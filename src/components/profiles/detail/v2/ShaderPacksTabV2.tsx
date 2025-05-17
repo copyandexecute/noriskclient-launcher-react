@@ -529,16 +529,19 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
       {/* Show horizontal divider and select all only if there are items, or if some are selected */} 
       {/* This logic might be further refined based on UX for V2 tabs */} 
       <>
-        <div className="h-px w-full my-1" style={{ backgroundColor: `${accentColor.value}30` }} />
-        <div className="flex items-center justify-between w-full">
+        <div 
+          className="h-px w-full my-1"
+          style={{ backgroundColor: `${accentColor.value}30` }} 
+        />
+        <div className="flex items-center justify-between w-full min-h-14">
           <Checkbox
             customSize="md" 
             checked={areAllFilteredSelected}
             onChange={(e) => handleSelectAllToggle(e.target.checked)}
-            disabled={filteredShaderPacks.length === 0 /* || isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll */}
+            disabled={filteredShaderPacks.length === 0 || isBatchToggling || isLoading || checkingUpdates /* Add other relevant disabled states */}
             label={selectedPackIds.size > 0 ? `${selectedPackIds.size} selected` : "Select All"}
             title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
-            className="self-start"
+            // className="self-start" // Ensure this is removed or commented out
           />
           <div className="flex items-center gap-2">
             {/* Placeholder for batch action buttons */}
