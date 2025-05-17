@@ -14,6 +14,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
 import { TagBadge, type TagBadgeProps } from "../ui/TagBadge";
+import { Virtuoso } from 'react-virtuoso';
 
 interface LogViewerDisplayProps {
   isLoading: boolean;
@@ -93,8 +94,19 @@ export function LogViewerDisplay({
   const accentColor = useThemeStore((state) => state.accentColor);
   const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
+  const [frozenLogLines, setFrozenLogLines] = useState<ParsedLogLine[] | null>(null);
   const controlsRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isAutoscrollEnabled) {
+      setFrozenLogLines(null);
+    } else {
+      if (frozenLogLines === null) {
+        setFrozenLogLines([...displayLines]);
+      }
+    }
+  }, [isAutoscrollEnabled, displayLines, frozenLogLines]);
 
   const headerBgColor = isInsideLogWindow ? `${accentColor.value}1A` : `${accentColor.value}10`;
   const headerBorderColor = isInsideLogWindow ? `${accentColor.value}3A` : `${accentColor.value}30`;
@@ -143,6 +155,8 @@ export function LogViewerDisplay({
     }
   };
 
+  const linesForVirtuoso = frozenLogLines !== null ? frozenLogLines : displayLines;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full bg-black/30 backdrop-awd-sm">
@@ -178,7 +192,7 @@ export function LogViewerDisplay({
     );
   }
 
-  if (!(isLiveLogs && parsedLogLinesCount === 0) && parsedLogLinesCount === 0) {
+  if (!(isLiveLogs && parsedLogLinesCount === 0) && linesForVirtuoso.length === 0 && searchTerm === "" && Object.values(levelFilters).every(v => v)) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -334,7 +348,7 @@ export function LogViewerDisplay({
           ref={scrollableContainerRef}
         >
           <div ref={contentRef} className="h-full">
-            {displayLines.length === 0 ? (
+            {linesForVirtuoso.length === 0 ? (
               <div className="p-4 h-full flex items-center justify-center">
                 <div className="text-center">
                   <Icon
@@ -347,13 +361,20 @@ export function LogViewerDisplay({
                 </div>
               </div>
             ) : (
-              <div className={cn(
-                "min-h-full bg-black/60 font-mono text-sm whitespace-pre-wrap p-2",
-              )}>
-                {displayLines.map((line, index) => (
+              <Virtuoso
+                style={{ height: '100%' }}
+                data={linesForVirtuoso}
+                followOutput={isAutoscrollEnabled ? 'smooth' : false}
+                className={cn(
+                  "custom-scrollbar",
+                  "min-h-full bg-black/60 font-mono text-sm whitespace-pre-wrap",
+                  "p-2",
+                  "overflow-x-hidden"
+                )}
+                itemContent={(index, line) => (
                   <div
                     key={`${line.id}-${index}`}
-                    className="flex flex-nowrap items-start mb-1"
+                    className="flex flex-nowrap items-start"
                   >
                     {line.timestamp ? (
                       <>
@@ -366,29 +387,27 @@ export function LogViewerDisplay({
                           </span>
                         </span>
                         <span
-                          className={`flex-1 min-w-0 break-words ${
-                            line.level === "ERROR" || line.level === "WARN"
-                              ? getLevelColorClass(line.level)
-                              : "text-white/90"
-                          }`}
+                          className={`flex-1 min-w-0 break-words ${line.level === "ERROR" || line.level === "WARN"
+                            ? getLevelColorClass(line.level)
+                            : "text-white/90"
+                            }`}
                         >
                           {line.text}
                         </span>
                       </>
                     ) : (
                       <span
-                        className={`flex-1 min-w-0 pl-1 break-words ${
-                          line.level === "ERROR" || line.level === "WARN"
-                            ? getLevelColorClass(line.level)
-                            : "text-white/90"
-                        }`}
+                        className={`flex-1 min-w-0 pl-1 break-words ${line.level === "ERROR" || line.level === "WARN"
+                          ? getLevelColorClass(line.level)
+                          : "text-white/90"
+                          }`}
                       >
                         {line.text}
                       </span>
                     )}
                   </div>
-                ))}
-              </div>
+                )}
+              />
             )}
           </div>
         </div>
@@ -403,7 +422,7 @@ export function LogViewerDisplay({
       >
         <div className="text-white/70 font-minecraft-ten text-xs">
           {searchTerm || Object.values(levelFilters).some((v) => !v)
-            ? `${displayLines.length} of ${parsedLogLinesCount} lines matching filters`
+            ? `${linesForVirtuoso.length} of ${parsedLogLinesCount} lines matching filters`
             : `${parsedLogLinesCount} lines`}
         </div>
 

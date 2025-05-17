@@ -32,7 +32,7 @@ type StateEventPayload =
   | MinecraftOutputPayload
   | { event_type: string; [key: string]: any };
 
-const MAX_LOG_LINES = 1000;
+const MAX_LOG_LINES = 5000;
 
 export function LogWindow() {
   const [processId, setProcessId] = useState<string | null>(null);
