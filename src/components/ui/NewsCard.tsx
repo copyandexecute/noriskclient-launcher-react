@@ -5,21 +5,15 @@ import { forwardRef, useEffect, useRef } from "react";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
 import { useThemeStore } from "../../store/useThemeStore";
-import { Button } from "./buttons/Button";
-import { Icon } from "@iconify/react";
 
 interface NewsCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string;
   imageUrl: string;
   postUrl: string;
-  onReadMore?: (url: string, e: React.MouseEvent) => void;
 }
 
 export const NewsCard = forwardRef<HTMLDivElement, NewsCardProps>(
-  (
-    { className, title, imageUrl, postUrl, onReadMore, onClick, ...props },
-    ref,
-  ) => {
+  ({ className, title, imageUrl, postUrl, onClick, ...props }, ref) => {
     const cardRef = useRef<HTMLDivElement>(null);
     const accentColor = useThemeStore((state) => state.accentColor);
 
@@ -48,13 +42,6 @@ export const NewsCard = forwardRef<HTMLDivElement, NewsCardProps>(
         );
       }
     }, []);
-
-    const handleReadMore = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (onReadMore && postUrl !== "#") {
-        onReadMore(postUrl, e);
-      }
-    };
 
     return (
       <div
@@ -119,19 +106,6 @@ export const NewsCard = forwardRef<HTMLDivElement, NewsCardProps>(
               target.src = "/placeholder.svg";
             }}
           />
-
-          <div className="absolute bottom-3 right-3">
-            <Button
-              onClick={handleReadMore}
-              disabled={postUrl === "#"}
-              variant="default"
-              size="xs"
-              icon={<Icon icon="solar:arrow-right-bold" />}
-              iconPosition="right"
-            >
-              READ MORE
-            </Button>
-          </div>
         </div>
       </div>
     );

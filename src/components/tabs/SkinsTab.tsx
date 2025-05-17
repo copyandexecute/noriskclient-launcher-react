@@ -22,6 +22,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { RadioButton } from "../ui/RadioButton";
+import { Skeleton } from "../ui/Skeleton";
+import { SkeletonSkinCard } from "../ui/SkeletonSkinCard.tsx";
 
 const SkinPreview = memo(
   ({
@@ -438,6 +440,7 @@ export function SkinsTab() {
   const [search, setSearch] = useState<string>("");
   const [currentSkinId, setCurrentSkinId] = useState<string | null>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const debouncedSearch = useDebounce(search, 250);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -493,21 +496,52 @@ export function SkinsTab() {
 
   const loadLocalSkins = useCallback(async () => {
     setLocalSkinsLoading(true);
+
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current);
+    }
+
+    const startTime = Date.now();
+
     try {
       const skins = await MinecraftSkinService.getAllSkins();
-      setLocalSkins(skins);
-      console.log(`Loaded ${skins.length} local skins`);
 
-      if (selectedSkinId) {
-        const selectedSkin = skins.find((skin) => skin.id === selectedSkinId);
-        if (selectedSkin) {
-          setSelectedLocalSkin(selectedSkin);
+      const elapsedTime = Date.now() - startTime;
+      const minimumLoadingTime = 1200;
+
+      if (elapsedTime < minimumLoadingTime) {
+        loadingTimerRef.current = setTimeout(() => {
+          setLocalSkins(skins);
+          console.log(`Loaded ${skins.length} local skins`);
+
+          if (selectedSkinId) {
+            const selectedSkin = skins.find(
+              (skin) => skin.id === selectedSkinId,
+            );
+            if (selectedSkin) {
+              setSelectedLocalSkin(selectedSkin);
+            }
+          }
+
+          setLocalSkinsLoading(false);
+          loadingTimerRef.current = null;
+        }, minimumLoadingTime - elapsedTime);
+      } else {
+        setLocalSkins(skins);
+        console.log(`Loaded ${skins.length} local skins`);
+
+        if (selectedSkinId) {
+          const selectedSkin = skins.find((skin) => skin.id === selectedSkinId);
+          if (selectedSkin) {
+            setSelectedLocalSkin(selectedSkin);
+          }
         }
+
+        setLocalSkinsLoading(false);
       }
     } catch (err) {
       console.error("Error loading local skins:", err);
       setLocalSkinsError(err instanceof Error ? err.message : String(err));
-    } finally {
       setLocalSkinsLoading(false);
     }
   }, [selectedSkinId]);
@@ -522,6 +556,12 @@ export function SkinsTab() {
     if (!activeAccount && !accountLoading) {
       initializeAccounts();
     }
+
+    return () => {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+      }
+    };
   }, [
     activeAccount,
     loadSkinData,
@@ -684,6 +724,20 @@ export function SkinsTab() {
     return skin.id === currentSkinId;
   };
 
+  const renderSkeletonGrid = () => {
+    return (
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <SkeletonSkinCard
+            key={`skeleton-${index}`}
+            index={index}
+            skinVariant={index % 2 === 0 ? "classic" : "slim"}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <Card
@@ -696,7 +750,7 @@ export function SkinsTab() {
             value={search}
             onChange={setSearch}
             placeholder="Search skins..."
-            className="w-96 h-[54px]"
+            className="w-full md:w-auto flex-grow md:flex-grow-0 h-[54px]"
           />
         </div>
 
@@ -718,9 +772,20 @@ export function SkinsTab() {
       <TabContent>
         <div className="p-5 space-y-8 overflow-y-auto flex-grow scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
           {accountLoading ? (
-            <p className="text-white/70 italic font-minecraft text-xl text-center py-10">
-              Loading account data...
-            </p>
+            <div className="space-y-4">
+              <Skeleton
+                variant="text"
+                height={28}
+                width="50%"
+                className="mx-auto"
+              />
+              <Skeleton
+                variant="text"
+                height={20}
+                width="70%"
+                className="mx-auto"
+              />
+            </div>
           ) : accountError ? (
             <StatusMessage
               type="error"
@@ -734,57 +799,52 @@ export function SkinsTab() {
           ) : (
             <>
               <div className="space-y-5 text-center">
-                {localSkinsLoading && !editingSkin && (
-                  <p className="text-white/70 italic font-minecraft text-lg">
-                    Loading local skins...
-                  </p>
-                )}
-                {localSkinsError && !editingSkin && (
+                {localSkinsLoading && !editingSkin ? (
+                  renderSkeletonGrid()
+                ) : localSkinsError && !editingSkin ? (
                   <StatusMessage
                     type="error"
                     className="font-minecraft text-lg"
                     message={localSkinsError}
                   />
-                )}
-                {!localSkinsLoading &&
+                ) : !localSkinsLoading &&
                   localSkins.length === 0 &&
                   !localSkinsError &&
-                  !editingSkin && (
-                    <p className="text-white/70 italic font-minecraft text-lg">
-                      No local skins found. Upload skins to add them to your
-                      library.
-                    </p>
-                  )}
-                {!localSkinsLoading &&
+                  !editingSkin ? (
+                  <p className="text-white/70 italic font-minecraft text-lg">
+                    No local skins found. Upload skins to add them to your
+                    library.
+                  </p>
+                ) : !localSkinsLoading &&
                   localSkins.length > 0 &&
                   filteredSkins.length === 0 &&
                   !localSkinsError &&
-                  !editingSkin && (
-                    <p className="text-white/70 italic font-minecraft text-lg">
-                      No skins match your search. Try a different search term.
-                    </p>
-                  )}
-
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-                  {filteredSkins.map((skin, index) => (
-                    <SkinPreview
-                      key={skin.id}
-                      skin={skin}
-                      index={index}
-                      loading={loading}
-                      localSkinsLoading={localSkinsLoading}
-                      selectedLocalSkin={selectedLocalSkin}
-                      isApplied={isSkinApplied(skin)}
-                      onClick={applyLocalSkin}
-                      onEditSkin={startEditSkin}
-                      onDeleteSkin={handleDeleteSkin}
+                  !editingSkin ? (
+                  <p className="text-white/70 italic font-minecraft text-lg">
+                    No skins match your search. Try a different search term.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                    {filteredSkins.map((skin, index) => (
+                      <SkinPreview
+                        key={skin.id}
+                        skin={skin}
+                        index={index}
+                        loading={loading}
+                        localSkinsLoading={localSkinsLoading}
+                        selectedLocalSkin={selectedLocalSkin}
+                        isApplied={isSkinApplied(skin)}
+                        onClick={applyLocalSkin}
+                        onEditSkin={startEditSkin}
+                        onDeleteSkin={handleDeleteSkin}
+                      />
+                    ))}
+                    <AddSkinCard
+                      index={filteredSkins.length + 1}
+                      onClick={() => startEditSkin(null, undefined)}
                     />
-                  ))}
-                  <AddSkinCard
-                    index={filteredSkins.length + 1}
-                    onClick={() => startEditSkin(null, undefined)}
-                  />
-                </div>
+                  </div>
+                )}
               </div>
             </>
           )}

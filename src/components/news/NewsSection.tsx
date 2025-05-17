@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
 import { fetchNewsAndChangelogs } from "../../services/nrc-service";
@@ -11,6 +11,7 @@ import { cn } from "../../lib/utils";
 import { NewsCard } from "../ui/NewsCard";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Label } from "../ui/Label";
+import { Skeleton } from "../ui/Skeleton";
 
 interface NewsSectionProps {
   className?: string;
@@ -23,13 +24,26 @@ export function NewsSection({ className }: NewsSectionProps) {
   const [error, setError] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
 
-  const loadNews = async () => {
+  const loadNews = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     console.log("[NewsSection] Fetching news...");
+
+    const startTime = Date.now();
+
     try {
       const fetchedPosts = await fetchNewsAndChangelogs();
       console.log(`[NewsSection] Fetched ${fetchedPosts.length} posts.`);
+
+      const elapsedTime = Date.now() - startTime;
+      const minimumLoadingTime = 1000;
+
+      if (elapsedTime < minimumLoadingTime) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, minimumLoadingTime - elapsedTime),
+        );
+      }
+
       setPosts(fetchedPosts);
     } catch (err) {
       console.error("[NewsSection] Error fetching news:", err);
@@ -39,11 +53,11 @@ export function NewsSection({ className }: NewsSectionProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadNews();
-  }, []);
+  }, [loadNews]);
 
   useEffect(() => {
     if (posts.length > 0 && !isLoading) {
@@ -88,12 +102,18 @@ export function NewsSection({ className }: NewsSectionProps) {
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="flex items-center justify-center p-2">
-          <Icon
-            icon="pixel:spinner-solid"
-            className="w-8 h-8 animate-spin text-white/70"
-          />
-          <span className="ml-3 text-white/70">Loading news...</span>
+        <div className="flex flex-col space-y-4 w-full">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="w-full">
+              <Skeleton variant="text" height={28} className="mb-1" />
+              <Skeleton
+                variant="image"
+                height={0}
+                width="100%"
+                className="aspect-square"
+              />
+            </div>
+          ))}
         </div>
       );
     }
@@ -173,7 +193,6 @@ export function NewsSection({ className }: NewsSectionProps) {
                     repeat: 1,
                   });
                 }}
-                onReadMore={handleOpenPost}
               />
             </div>
           );
