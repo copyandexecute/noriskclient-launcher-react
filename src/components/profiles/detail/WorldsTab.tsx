@@ -6,19 +6,42 @@ import { Icon } from "@iconify/react";
 import motdParser from "@sfirew/minecraft-motd-parser";
 import { Button } from "../../ui/buttons/Button";
 import { IconButton } from "../../ui/buttons/IconButton";
-import { Select } from "../../ui/Select";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { useProfileStore } from "../../../store/profile-store";
 import { SearchInput } from "../../ui/SearchInput";
-import { LoadingState } from "../../ui/LoadingState";
-import { EmptyState } from "../../ui/EmptyState";
 import { gsap } from "gsap";
 import { TagBadge } from "../../ui/TagBadge";
 import { CopyWorldDialog } from "../../modals/CopyWorldDialog";
 import { ConfirmDeleteDialog } from "../../modals/ConfirmDeleteDialog";
 import { toast } from "react-hot-toast";
-import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { LaunchButton } from "../../ui/buttons/LaunchButton";
+import { GenericList } from "../../ui/GenericList";
+import { GenericListItem } from "../../ui/GenericListItem";
+import { preloadIcons } from "../../../lib/icon-utils";
+
+// --- Icons to preload for WorldsTab ---
+const WORLDS_TAB_ICONS_TO_PRELOAD = [
+  // Placeholders
+  "solar:planet-bold",
+  "solar:server-bold",
+  // Tag Badges (World)
+  "solar:gamepad-bold-duotone",
+  "solar:tuning-square-bold-duotone",
+  "solar:skull-bold",
+  "solar:lock-bold",
+  "solar:tag-bold", // Also used for server version
+  // Tag Badges (Server)
+  "solar:users-group-rounded-bold",
+  "solar:wifi-bold",
+  // Action Buttons (World)
+  "solar:copy-bold",
+  "solar:folder-open-bold-duotone",
+  "solar:trash-bin-trash-bold",
+  // Common / Dynamic states
+  "solar:refresh-circle-bold-duotone", // For loading states in buttons
+  // Note: LaunchButton icons are internal to it. GenericList preloads its own defaults.
+];
 
 // --- Import Real Types ---
 import type {
@@ -51,7 +74,7 @@ interface WorldsTabProps {
   }) => void;
 }
 
-type DisplayItem =
+export type DisplayItem =
   | (WorldInfo & { type: "world" })
   | (ServerInfo & { type: "server" });
 
@@ -76,6 +99,9 @@ export function WorldsTab({
   >({});
   const [pingingServers, setPingingServers] = useState<Set<string>>(new Set());
   
+  // --- Config --- 
+  // const MIN_LOADING_TIME_MS = 300; // Removed
+
   // --- Copy Dialog State ---
   const [isCopyWorldDialogOpen, setIsCopyWorldDialogOpen] = useState(false);
   const [worldToCopy, setWorldToCopy] = useState<WorldInfo | null>(null);
@@ -97,6 +123,11 @@ export function WorldsTab({
   const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Preload icons when component mounts
+  useEffect(() => {
+    preloadIcons(WORLDS_TAB_ICONS_TO_PRELOAD);
+  }, []);
 
   // Use parent's search query if provided
   useEffect(() => {
@@ -300,15 +331,18 @@ export function WorldsTab({
       setError(null);
       setServerPings({});
       setPingingServers(new Set());
+      setLoading(false);
       return;
     }
+
     console.log(`[WorldsTab] Loading data for profile: ${currentProfileId}`);
     setLoading(true);
     setError(null);
-    setServerPings({});
-    setPingingServers(new Set());
-
+    
     try {
+      setServerPings({});
+      setPingingServers(new Set());
+
       const [worldsResult, serversResult] = await Promise.allSettled([
         WorldService.getWorldsForProfile(currentProfileId),
         WorldService.getServersForProfile(currentProfileId),
@@ -356,9 +390,9 @@ export function WorldsTab({
       setServers([]);
       // setDisplayItems([]);
     } finally {
-      setLoading(false);
+      setLoading(false); // Set loading to false directly
     }
-  }, [profile?.id, pingAllServers]); // Corrected dependencies
+  }, [profile?.id, pingAllServers]); // Removed MIN_LOADING_TIME_MS from dependencies
 
   useEffect(() => {
     loadData();
@@ -471,6 +505,266 @@ export function WorldsTab({
 
   const effectiveSearchQuery = searchQuery || localSearchQuery;
 
+  // --- Render Item Function for GenericList ---
+  const renderDisplayItem = useCallback((item: DisplayItem) => {
+    const isWorld = item.type === "world";
+    const key = isWorld
+      ? item.folder_name
+      : item.address || item.name || Math.random().toString();
+    const pingInfo =
+      !isWorld && item.address ? serverPings[item.address] : null;
+    const isPinging =
+      !isWorld && item.address
+        ? pingingServers.has(item.address)
+        : false;
+    const hasPingError = !!pingInfo?.error;
+    const worldIconSrc = isWorld ? getWorldIconSrc(item) : null;
+    const serverIconSrc = !isWorld ? getServerIconSrc(item) : null;
+    const itemDisplayName = isWorld
+      ? getWorldDisplayName(item)
+      : getServerDisplayName(item);
+
+    const iconNode = (
+      <div
+        className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
+        style={{
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}30`,
+          borderBottomColor: `${accentColor.value}50`,
+          boxShadow: `0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20`,
+        }}
+      >
+        {isWorld ? (
+          worldIconSrc ? (
+            <img
+              src={worldIconSrc || "/placeholder.svg"}
+              alt={`${itemDisplayName} icon`}
+              className="w-full h-full object-cover image-pixelated"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <Icon
+                icon="solar:planet-bold"
+                className="w-10 h-10 text-white/50"
+              />
+            </div>
+          )
+        ) : serverIconSrc ? (
+          <img
+            src={serverIconSrc || "/placeholder.svg"}
+            alt={`${itemDisplayName} icon`}
+            className="w-full h-full object-cover image-pixelated"
+            loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Icon
+              icon="solar:server-bold"
+              className="w-10 h-10 text-white/50"
+            />
+          </div>
+        )}
+      </div>
+    );
+
+    const contentNode = (
+      <>
+        {/* Top: Title */}
+        <h3
+          className="font-minecraft-ten text-base tracking-wide truncate flex-shrink-0"
+          title={itemDisplayName}
+        >
+          {itemDisplayName}
+        </h3>
+
+        {/* Middle: Subtitle (Last Played / MOTD) - vertically centered */}
+        <div className="flex-grow flex items-center my-1 overflow-hidden">
+          {isWorld ? (
+            <p className="text-white/60 text-xs truncate font-minecraft-ten">
+              {item.last_played
+                ? `Last played: ${timeAgo(item.last_played)}`
+                : "Never played"}
+            </p>
+          ) : (
+            <div
+              className="text-white/70 text-xs motd-container overflow-hidden truncate font-minecraft-ten text-center"
+              title={pingInfo?.description || item.address || ""}
+            >
+              {isPinging ? (
+                <span className="italic text-white/50">Pinging...</span>
+              ) : hasPingError ? (
+                <span className="text-red-400 italic">
+                  Error: {pingInfo?.error}
+                </span>
+              ) : pingInfo ? (
+                <span
+                  dangerouslySetInnerHTML={{
+                    __html: parseMotdToHtml(
+                      pingInfo?.description_json || pingInfo?.description,
+                    ),
+                  }}
+                />
+              ) : (
+                <span className="italic text-white/50">
+                  {item.address || "Address missing"}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom: Tag Badges */}
+        <div className="flex flex-wrap items-center gap-1 flex-shrink-0">
+          {isWorld ? (
+            <>
+              <TagBadge size="sm" variant="info" iconElement={<Icon icon="solar:gamepad-bold-duotone" />}>
+                {getGameModeString(item.game_mode)}
+              </TagBadge>
+              <TagBadge size="sm" variant="default" iconElement={<Icon icon="solar:tuning-square-bold-duotone" />}>
+                {getDifficultyString(item.difficulty)}
+              </TagBadge>
+              {item.is_hardcore && (
+                <TagBadge variant="destructive" size="sm" iconElement={<Icon icon="solar:skull-bold" />}>
+                  Hardcore
+                </TagBadge>
+              )}
+              {item.difficulty_locked && (
+                <TagBadge size="sm" iconElement={<Icon icon="solar:lock-bold" />}>
+                  Locked
+                </TagBadge>
+              )}
+              {item.version_name && (
+                <TagBadge size="sm" iconElement={<Icon icon="solar:tag-bold" />}>
+                  {item.version_name}
+                </TagBadge>
+              )}
+            </>
+          ) : (
+            <>
+              {isPinging ? (
+                <TagBadge size="sm" variant="default">Pinging...</TagBadge>
+              ) : hasPingError ? (
+                <TagBadge size="sm" variant="destructive">Error</TagBadge>
+              ) : pingInfo ? (() => {
+                  let playerCountVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
+                  if (pingInfo.players_online != null) {
+                    if (pingInfo.players_online > 0) playerCountVariant = 'success';
+                    else playerCountVariant = 'default'; 
+                  }
+                  let pingLatencyVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
+                  if (pingInfo.latency_ms != null) {
+                    if (pingInfo.latency_ms <= 80) pingLatencyVariant = 'success';
+                    else if (pingInfo.latency_ms <= 150) pingLatencyVariant = 'default';
+                    else if (pingInfo.latency_ms <= 250) pingLatencyVariant = 'warning';
+                    else pingLatencyVariant = 'destructive';
+                  }
+                  return (
+                    <>
+                      <TagBadge size="sm" variant={playerCountVariant} iconElement={<Icon icon="solar:users-group-rounded-bold" />}>
+                        {pingInfo.players_online ?? "-"}/{pingInfo.players_max ?? "-"}
+                      </TagBadge>
+                      <TagBadge size="sm" variant={pingLatencyVariant} iconElement={<Icon icon="solar:wifi-bold" />}>
+                        {pingInfo.latency_ms ?? "-"} ms
+                      </TagBadge>
+                      {pingInfo.version_name && (
+                        <TagBadge size="sm" variant="default" iconElement={<Icon icon="solar:tag-bold" />}>
+                          {pingInfo.version_name}
+                        </TagBadge>
+                      )}
+                    </>
+                  );
+                })() : (
+                <TagBadge size="sm" variant="inactive">Offline / Unknown</TagBadge>
+              )}
+            </>
+          )}
+        </div>
+      </>
+    );
+
+    const actionsNode = (
+      <>
+        <LaunchButton
+          id={profile.id}
+          name={itemDisplayName}
+          size="sm"
+          buttonText={isWorld ? "Play" : "Join"}
+          disabled={!isWorld && !item.address}
+          quickPlaySingleplayer={isWorld ? item.folder_name : undefined}
+          quickPlayMultiplayer={!isWorld && item.address ? item.address : undefined}
+        />
+        {isWorld && (
+          <div className="flex gap-1">
+            <IconButton
+              onClick={() => handleOpenCopyDialog(item)}
+              title="Copy World"
+              disabled={isCopyingWorld}
+              icon={<Icon icon="solar:copy-bold" />}
+              variant="secondary"
+              size="xs"
+            />
+            <IconButton
+              onClick={() => handleOpenWorldFolder(item)}
+              title="Open World Folder"
+              icon={<Icon icon="solar:folder-open-bold-duotone" />}
+              variant="secondary"
+              size="xs"
+            />
+            <IconButton
+              onClick={() => handleDeleteRequest(item)}
+              title="Delete World"
+              disabled={isActuallyDeleting && worldToDelete?.folder_name === item.folder_name}
+              icon={
+                (isActuallyDeleting && worldToDelete?.folder_name === item.folder_name) ? (
+                  <Icon icon="solar:refresh-circle-bold-duotone" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:trash-bin-trash-bold" />
+                )
+              }
+              variant="destructive"
+              size="xs"
+            />
+          </div>
+        )}
+      </>
+    );
+
+    return (
+      <GenericListItem
+        key={key}
+        icon={iconNode}
+        content={contentNode}
+        actions={actionsNode}
+      />
+    );
+  }, [
+    accentColor.value,
+    getWorldDisplayName,
+    getWorldIconSrc,
+    getServerDisplayName,
+    getServerIconSrc,
+    serverPings,
+    pingingServers,
+    parseMotdToHtml,
+    handleOpenCopyDialog, 
+    handleOpenWorldFolder, 
+    handleDeleteRequest,
+    isCopyingWorld,
+    isActuallyDeleting,
+    worldToDelete,
+    profile.id,
+    getGameModeString,
+    getDifficultyString,
+    timeAgo
+  ]);
+
   return (
     <div ref={containerRef} className="h-full flex flex-col select-none p-4">
       {/* Action bar with transparent styling */}
@@ -497,342 +791,39 @@ export function WorldsTab({
             <Button
               onClick={handleRefresh}
               disabled={
+                loading ||
                 pingingServers.size > 0 ||
-                servers.filter((s) => s.address).length === 0
+                (servers.filter((s) => s.address).length === 0 && displayItems.filter(item => item.type === 'server').length > 0)
               }
               variant="secondary"
               size="sm"
             >
-              refresh
+              {loading ? (
+                 <Icon icon="solar:refresh-circle-bold-duotone" className="w-4 h-4 animate-spin" />
+              ) : "refresh"}
             </Button>
           </div>
         </div>
       </div>
 
-      {error && (
-        <div
-          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
-          style={{
-            backgroundColor: `rgba(220, 38, 38, 0.1)`,
-            borderColor: `rgba(220, 38, 38, 0.3)`,
-          }}
-        >
-          <Icon
-            icon="solar:danger-triangle-bold"
-            className="w-5 h-5 text-red-400"
-          />
-          <span className="text-white font-minecraft text-lg">{error}</span>
-        </div>
-      )}
-
-      <div
-        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
-        style={{
-          backgroundColor: `${accentColor.value}08`,
-          borderColor: `${accentColor.value}20`,
-        }}
-      >
-        {/* Removed the explicit LoadingState card. Loading is indicated by the refresh button spinner. */}
-        {/* Show EmptyState only if NOT loading AND displayItems is actually empty. */}
-        {(!loading && displayItems.length === 0) ? (
-          <EmptyState
-            icon={"solar:planet-bold"} 
-            message={
-              effectiveSearchQuery
-                ? `no worlds or servers match your search` 
-                : `no worlds or servers found` 
-            }
-            description={
-                "Create worlds or add servers in Minecraft" 
-            }
-          />
-        ) : (
-          // Show the list structure. It will be populated if displayItems has entries.
-          // If loading and displayItems is empty (initial load), it will render an empty list shell.
-          <div className="h-full overflow-y-auto custom-scrollbar">
-            <ul className="divide-y divide-white/10">
-              {displayItems.map((item) => {
-                const isWorld = item.type === "world";
-                const key = isWorld
-                  ? item.folder_name
-                  : item.address || item.name || Math.random().toString();
-                const pingInfo =
-                  !isWorld && item.address ? serverPings[item.address] : null;
-                const isPinging =
-                  !isWorld && item.address
-                    ? pingingServers.has(item.address)
-                    : false;
-                const hasPingError = !!pingInfo?.error;
-                const worldIconSrc = isWorld ? getWorldIconSrc(item) : null;
-                const serverIconSrc = !isWorld ? getServerIconSrc(item) : null;
-                const itemDisplayName = isWorld
-                  ? getWorldDisplayName(item)
-                  : getServerDisplayName(item);
-
-                return (
-                  <li
-                    key={key}
-                    className="p-4 flex items-start gap-4 hover:bg-white/5 transition-colors"
-                  >
-                    {/* Icon Section */}
-                    <div className="relative w-24 h-24 flex-shrink-0">
-                      <div
-                        className="absolute inset-0 border-2 border-b-4 overflow-hidden rounded-md"
-                        style={{
-                          backgroundColor: `${accentColor.value}15`,
-                          borderColor: `${accentColor.value}30`,
-                          borderBottomColor: `${accentColor.value}50`,
-                          boxShadow: `0 2px 4px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20`,
-                        }}
-                      >
-                        {isWorld ? (
-                          worldIconSrc ? (
-                            <img
-                              src={worldIconSrc || "/placeholder.svg"}
-                              alt=""
-                              className="w-full h-full object-cover image-pixelated"
-                              loading="lazy"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Icon
-                                icon="solar:planet-bold"
-                                className="w-10 h-10 text-white/50"
-                              />
-                            </div>
-                          )
-                        ) : serverIconSrc ? (
-                          <img
-                            src={serverIconSrc || "/placeholder.svg"}
-                            alt=""
-                            className="w-full h-full object-cover image-pixelated"
-                            loading="lazy"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Icon
-                              icon="solar:server-bold"
-                              className="w-10 h-10 text-white/50"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Middle Section (Description) */}
-                    <div className="flex-grow min-w-0 h-24 flex flex-col overflow-hidden">
-                      {/* Top: Title */}
-                      <h3
-                        className="font-minecraft-ten text-base tracking-wide truncate flex-shrink-0"
-                        title={itemDisplayName}
-                      >
-                        {itemDisplayName}
-                      </h3>
-
-                      {/* Middle: Subtitle (Last Played / MOTD) - vertically centered */}
-                      <div className="flex-grow flex items-center my-1 overflow-hidden">
-                        {isWorld ? (
-                          <p className="text-white/60 text-xs truncate font-minecraft-ten">
-                            {item.last_played
-                              ? `Last played: ${timeAgo(item.last_played)}`
-                              : "Never played"}
-                          </p>
-                        ) : (
-                          <div
-                            className="text-white/70 text-xs motd-container overflow-hidden truncate font-minecraft-ten text-center"
-                            title={pingInfo?.description || item.address || ""}
-                          >
-                            {isPinging ? (
-                              <span className="italic text-white/50">
-                                Pinging...
-                              </span>
-                            ) : hasPingError ? (
-                              <span className="text-red-400 italic">
-                                Error: {pingInfo?.error}
-                              </span>
-                            ) : pingInfo ? (
-                              <span
-                                dangerouslySetInnerHTML={{
-                                  __html: parseMotdToHtml(
-                                    pingInfo?.description_json ||
-                                      pingInfo?.description,
-                                  ),
-                                }}
-                              />
-                            ) : (
-                              <span className="italic text-white/50">
-                                {item.address || "Address missing"}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Bottom: Tag Badges */}
-                      <div className="flex flex-wrap items-center gap-1 flex-shrink-0">
-                        {isWorld ? (
-                          <>
-                            <TagBadge size="sm" variant="info" withIcon>
-                              <Icon icon="solar:gamepad-bold-duotone" className="w-3 h-3 mr-0.5" />
-                              {getGameModeString(item.game_mode)}
-                            </TagBadge>
-                            <TagBadge size="sm" variant="default" withIcon>
-                              <Icon icon="solar:tuning-square-bold-duotone" className="w-3 h-3 mr-0.5" />
-                              {getDifficultyString(item.difficulty)}
-                            </TagBadge>
-                            {item.is_hardcore && (
-                              <TagBadge variant="destructive" size="sm" withIcon>
-                                <Icon
-                                  icon="solar:skull-bold"
-                                  className="w-3 h-3 mr-0.5"
-                                />
-                                Hardcore
-                              </TagBadge>
-                            )}
-                            {item.difficulty_locked && (
-                              <TagBadge size="sm" withIcon>
-                                <Icon
-                                  icon="solar:lock-bold"
-                                  className="w-3 h-3 mr-0.5"
-                                />
-                                Locked
-                              </TagBadge>
-                            )}
-                            {item.version_name && (
-                              <TagBadge size="sm" withIcon>
-                                <Icon icon="solar:tag-bold" className="w-3 h-3 mr-0.5" />
-                                {item.version_name}
-                              </TagBadge>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            {isPinging ? (
-                              <TagBadge size="sm" variant="default">Pinging...</TagBadge>
-                            ) : hasPingError ? (
-                              <TagBadge size="sm" variant="destructive">Error</TagBadge>
-                            ) : pingInfo ? (() => {
-                                let playerCountVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
-                                if (pingInfo.players_online != null) {
-                                  if (pingInfo.players_online > 0) {
-                                    playerCountVariant = 'success';
-                                  } else { // players_online === 0
-                                    playerCountVariant = 'default'; 
-                                  }
-                                }
-
-                                let pingLatencyVariant: "default" | "success" | "info" | "inactive" | "destructive" | "warning" = 'inactive';
-                                if (pingInfo.latency_ms != null) {
-                                  if (pingInfo.latency_ms <= 80) {
-                                    pingLatencyVariant = 'success';
-                                  } else if (pingInfo.latency_ms <= 150) {
-                                    pingLatencyVariant = 'default';
-                                  } else if (pingInfo.latency_ms <= 250) {
-                                    pingLatencyVariant = 'warning';
-                                  } else { // > 250
-                                    pingLatencyVariant = 'destructive';
-                                  }
-                                }
-
-                                return (
-                                  <>
-                                    <TagBadge size="sm" withIcon variant={playerCountVariant}>
-                                      <Icon
-                                        icon="solar:users-group-rounded-bold"
-                                        className="w-3 h-3 mr-0.5"
-                                      />
-                                      {pingInfo.players_online ?? "-"}/
-                                      {pingInfo.players_max ?? "-"}
-                                    </TagBadge>
-                                    <TagBadge size="sm" withIcon variant={pingLatencyVariant}>
-                                      <Icon
-                                        icon="solar:wifi-bold"
-                                        className="w-3 h-3 mr-0.5"
-                                      />
-                                      {pingInfo.latency_ms ?? "-"} ms
-                                    </TagBadge>
-                                    {pingInfo.version_name && (
-                                      <TagBadge size="sm" withIcon variant="default">
-                                        <Icon
-                                          icon="solar:tag-bold"
-                                          className="w-3 h-3 mr-0.5"
-                                        />
-                                        {pingInfo.version_name}
-                                      </TagBadge>
-                                    )}
-                                  </>
-                                );
-                              })() : (
-                              <TagBadge size="sm" variant="inactive">Offline / Unknown</TagBadge>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Right Section (Buttons) */}
-                    <div className="flex-shrink-0 h-24 flex flex-col items-end justify-center gap-1">
-                      <LaunchButton
-                        id={profile.id}
-                        name={isWorld ? getWorldDisplayName(item) : getServerDisplayName(item)}
-                        size="sm"
-                        buttonText={isWorld ? "Play" : "Join"}
-                        disabled={!isWorld && !item.address}
-                        quickPlaySingleplayer={isWorld ? item.folder_name : undefined}
-                        quickPlayMultiplayer={!isWorld && item.address ? item.address : undefined}
-                      />
-                      {isWorld && (
-                        <div className="flex gap-1">
-                          <IconButton
-                            onClick={() => handleOpenCopyDialog(item)}
-                            title="Copy World"
-                            disabled={isCopyingWorld}
-                            icon={<Icon icon="solar:copy-bold" />}
-                            variant="secondary"
-                            size="xs"
-                          />
-                          <IconButton
-                            onClick={() => handleOpenWorldFolder(item)}
-                            title="Open World Folder"
-                            icon={<Icon icon="solar:folder-open-bold-duotone" />}
-                            variant="secondary"
-                            size="xs"
-                          />
-                          <IconButton
-                            onClick={() => handleDeleteRequest(item)}
-                            title="Delete World"
-                            disabled={isActuallyDeleting && worldToDelete?.folder_name === item.folder_name}
-                            icon={
-                              (isActuallyDeleting && worldToDelete?.folder_name === item.folder_name) ? (
-                                <Icon
-                                  icon="solar:refresh-circle-bold-duotone"
-                                  className="animate-spin"
-                                />
-                              ) : (
-                                <Icon icon="solar:trash-bin-trash-bold" />
-                              )
-                            }
-                            variant="destructive"
-                            size="xs"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-      </div>
+      <GenericList<DisplayItem>
+        items={displayItems}
+        renderItem={renderDisplayItem}
+        isLoading={loading}
+        error={error}
+        searchQuery={effectiveSearchQuery}
+        accentColor={accentColor.value}
+        emptyStateIcon={"solar:planet-bold"} 
+        emptyStateMessage={
+          effectiveSearchQuery
+            ? `no worlds or servers match your search` 
+            : `no worlds or servers found` 
+        }
+        emptyStateDescription={
+            "Create worlds or add servers in Minecraft" 
+        }
+        loadingItemCount={5}
+      />
 
       {isCopyWorldDialogOpen && worldToCopy && profile?.id && (
         <CopyWorldDialog

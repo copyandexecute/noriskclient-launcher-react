@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
-import { ContentTab } from "./detail/ContentTab";
 import { WorldsTab } from "./detail/WorldsTab";
 import { LogsTab } from "./detail/LogsTab";
 import { BrowseTab } from "./detail/BrowseTab";
@@ -13,6 +12,13 @@ import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
+import { ModsTabV2 } from "./detail/v2/ModsTabV2";
+import { ResourcePacksTabV2 } from "./detail/v2/ResourcePacksTabV2";
+import { NoRiskModsTabV2 } from "./detail/v2/NoRiskModsTabV2";
+import { ShaderPacksTab } from "./detail/ShaderPacksTab";
+import { DataPacksTab } from "./detail/DataPacksTab";
+import { ShaderPacksTabV2 } from "./detail/v2/ShaderPacksTabV2";
+import { DataPacksTabV2 } from "./detail/v2/DataPacksTabV2";
 
 function TabTransitionLoader() {
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -57,13 +63,13 @@ interface ProfileDetailViewProps {
   onEdit: () => void;
 }
 
-type MainTabType = "content" | "browse" | "worlds" | "logs";
+type MainTabType = "content" | "browse" | "worlds" | "logs" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
 type ContentSubType =
-  | "mods"
-  | "resourcepacks"
-  | "shaderpacks"
-  | "datapacks"
-  | "norisk";
+  | "modsv2"
+  | "resourcepacksv2"
+  | "shaderpacksv2"
+  | "datapacksv2"
+  | "noriskv2";
 
 export function ProfileDetailView({
   profile,
@@ -74,7 +80,7 @@ export function ProfileDetailView({
     profile.is_standard_version ? "logs" : "content",
   );
   const [activeContentType, setActiveContentType] =
-    useState<ContentSubType>("mods");
+    useState<ContentSubType>("modsv2");
   const [currentProfile, setCurrentProfile] = useState<Profile>(profile);
   const [browseContentType, setBrowseContentType] = useState<string>("mods");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -84,6 +90,7 @@ export function ProfileDetailView({
   const accentColor = useThemeStore((state) => state.accentColor);
   const isSidebarOnLeft = useThemeStore((state) => state.isDetailViewSidebarOnLeft);
   const toggleSidebarPosition = useThemeStore((state) => state.toggleDetailViewSidebarPosition);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   const [tabTransition, setTabTransition] = useState(false);
   const tabTransitionTimer = useRef<NodeJS.Timeout | null>(null);
@@ -120,53 +127,23 @@ export function ProfileDetailView({
     };
   }, []);
 
-  // Animation for submenu appearance/disappearance
   useEffect(() => {
-    if (prevActiveMainTab.current !== activeMainTab) {
-      if (activeMainTab === "content" && subMenuRef.current) {
-        // Animate the vertical line first
-        const verticalLine = subMenuRef.current.querySelector(
-          ".vertical-line",
-        ) as HTMLElement;
-        if (verticalLine) {
-          gsap.fromTo(
-            verticalLine,
-            { scaleY: 0, opacity: 0 },
-            {
-              scaleY: 1,
-              opacity: 1,
-              duration: 0.4,
-              ease: "power2.out",
-              transformOrigin: "top",
-            },
-          );
-        }
-
-        // Then animate each subitem with staggered delay
-        if (subItemsRef.current.length > 0) {
-          gsap.fromTo(
-            subItemsRef.current.filter(Boolean),
-            {
-              x: -10,
-              opacity: 0,
-              scale: 0.95,
-            },
-            {
-              x: 0,
-              opacity: 1,
-              scale: 1,
-              duration: 0.4,
-              stagger: 0.05,
-              ease: "back.out(1.2)",
-              delay: 0.15,
-            },
-          );
-        }
-      }
-
-      prevActiveMainTab.current = activeMainTab;
+    if (contentRef.current && activeMainTab === 'content' && !tabTransition && isBackgroundAnimationEnabled) {
+      gsap.fromTo(
+        contentRef.current,
+        { opacity: 0, scale: 0.98 },
+        {
+          opacity: 1,
+          scale: 1,
+          duration: 0.3,
+          ease: "power2.out",
+          key: activeContentType,
+        },
+      );
+    } else if (contentRef.current && activeMainTab === 'content') {
+      gsap.set(contentRef.current, { opacity: 1, scale: 1 });
     }
-  }, [activeMainTab]);
+  }, [activeContentType, activeMainTab, tabTransition, isBackgroundAnimationEnabled, contentRef]);
 
   const handleBrowseContent = (contentType: string) => {
     setBrowseContentType(contentType);
@@ -204,7 +181,6 @@ export function ProfileDetailView({
   const handleContentTypeChange = (type: ContentSubType) => {
     if (activeContentType === type) return;
 
-    // Animate the active indicator dot
     gsap.to(`#dot-${activeContentType}`, {
       scale: 0.8,
       opacity: 0.5,
@@ -230,50 +206,41 @@ export function ProfileDetailView({
       },
     );
 
-    setTabTransition(true);
-
-    if (tabTransitionTimer.current) {
-      clearTimeout(tabTransitionTimer.current);
-    }
-
-    tabTransitionTimer.current = setTimeout(() => {
-      setTabTransition(false);
-    }, 600);
-
     setActiveContentType(type);
   };
 
   const mainTabs = profile.is_standard_version
     ? [
-        { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
-        { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
-      ]
+      { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+      { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
+      { id: "content", label: "Content", icon: "solar:widget-bold" },
+    ]
     : [
-        { id: "content", label: "Content", icon: "solar:widget-bold" },
-        { id: "browse", label: "Browse", icon: "solar:magnifer-bold" },
-        { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
-        { id: "logs", label: "Logs", icon: "solar:code-bold" },
-      ];
+      { id: "content", label: "Content", icon: "solar:widget-bold" },
+      { id: "browse", label: "Browse", icon: "solar:magnifer-bold" },
+      { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+      { id: "logs", label: "Logs", icon: "solar:code-bold" },
+    ];
 
   const contentSubTabs = [
-    { id: "mods" as ContentSubType, label: "Mods", icon: "solar:bolt-bold" },
+    { id: "modsv2" as ContentSubType, label: "Mods", icon: "solar:bolt-bold" },
     {
-      id: "resourcepacks" as ContentSubType,
+      id: "resourcepacksv2" as ContentSubType,
       label: "Resource Packs",
       icon: "solar:gallery-bold",
     },
     {
-      id: "shaderpacks" as ContentSubType,
+      id: "shaderpacksv2" as ContentSubType,
       label: "Shaders",
       icon: "solar:sun-bold",
     },
     {
-      id: "datapacks" as ContentSubType,
+      id: "datapacksv2" as ContentSubType,
       label: "Data Packs",
       icon: "solar:database-bold",
     },
     {
-      id: "norisk" as ContentSubType,
+      id: "noriskv2" as ContentSubType,
       label: "NoRisk Mods",
       icon: "solar:shield-check-bold",
     },
@@ -437,9 +404,9 @@ export function ProfileDetailView({
                               style={
                                 activeContentType === subTab.id
                                   ? {
-                                      backgroundColor: accentColor.value,
-                                      boxShadow: `0 0 8px ${accentColor.value}80`,
-                                    }
+                                    backgroundColor: accentColor.value,
+                                    boxShadow: `0 0 8px ${accentColor.value}80`,
+                                  }
                                   : {}
                               }
                             ></div>
@@ -460,7 +427,7 @@ export function ProfileDetailView({
                                 className={cn(
                                   "w-5 h-5 transition-transform duration-300",
                                   activeContentType === subTab.id &&
-                                    "scale-110",
+                                  "scale-110",
                                 )}
                               />
                               <span>{subTab.label}</span>
@@ -485,26 +452,34 @@ export function ProfileDetailView({
             backgroundColor: `${accentColor.value}08`,
           }}
         >
-          {activeMainTab === "content" && !profile.is_standard_version && (
-            <ContentTab
-              profile={currentProfile}
-              onRefresh={handleRefresh}
-              onBrowse={handleBrowseContent}
-              activeContentType={activeContentType}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
+          {tabTransition && <TabTransitionLoader />}
+          {!tabTransition && (
+            <>
+              {activeMainTab === "content" && !profile.is_standard_version && (
+                <>
+                  {activeContentType === "modsv2" && <ModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                  {activeContentType === "resourcepacksv2" && <ResourcePacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                  {activeContentType === "shaderpacksv2" && (
+                    <ShaderPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                  )}
+                  {activeContentType === "datapacksv2" && (
+                    <DataPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                  )}
+                  {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                </>
+              )}
+              {activeMainTab === "browse" && !profile.is_standard_version && (
+                <BrowseTab
+                  profile={currentProfile}
+                  initialContentType={browseContentType}
+                  onRefresh={handleRefresh}
+                  parentTransitionActive={false}
+                />
+              )}
+              {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
+              {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
+            </>
           )}
-          {activeMainTab === "browse" && !profile.is_standard_version && (
-            <BrowseTab
-              profile={currentProfile}
-              initialContentType={browseContentType}
-              onRefresh={handleRefresh}
-              parentTransitionActive={tabTransition}
-            />
-          )}
-          {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
-          {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
         </div>
       </div>
     </div>

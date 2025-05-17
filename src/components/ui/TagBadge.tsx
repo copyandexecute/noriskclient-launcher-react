@@ -9,6 +9,7 @@ import { gsap } from "gsap";
 interface TagBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
+  iconElement?: React.ReactNode;
   variant?:
     | "default"
     | "success"
@@ -17,7 +18,6 @@ interface TagBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
     | "destructive"
     | "warning";
   size?: "sm" | "md" | "lg" | "xl";
-  withIcon?: boolean;
   onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
   disabled?: boolean;
   shadowDepth?: "default" | "short" | "none";
@@ -35,9 +35,9 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     {
       children,
       className,
+      iconElement,
       variant = "default",
       size = "md",
-      withIcon = false,
       onClick,
       disabled = false,
       shadowDepth = "short",
@@ -160,7 +160,6 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           ease: "power2.out",
         });
       } else if (badgeRef.current && isClickable) {
-        // Apply styles directly if animations are disabled
         badgeRef.current.style.transform = "translateY(-2px)";
         badgeRef.current.style.boxShadow = getShadowStyle(true);
       }
@@ -178,7 +177,6 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           ease: "power2.out",
         });
       } else if (badgeRef.current && isClickable) {
-        // Apply styles directly if animations are disabled
         badgeRef.current.style.transform = "translateY(0px)";
         badgeRef.current.style.boxShadow = getShadowStyle(false);
       }
@@ -254,18 +252,18 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       }
     };
 
-    const getShadowStyle = (isHovered: boolean) => {
+    const getShadowStyle = (isHoveredState: boolean) => {
       if (shadowDepth === "none") return "none";
 
       const colors = getVariantStyles();
 
       if (shadowDepth === "short") {
-        return isHovered
+        return isHoveredState
           ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 8px rgba(0,0,0,0.25), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
           : `0 2px 0 rgba(0,0,0,0.15), 0 3px 5px rgba(0,0,0,0.2), inset 0 1px 0 ${colors.light}30, inset 0 0 0 1px ${colors.main}15`;
       }
 
-      return isHovered
+      return isHoveredState
         ? `0 6px 0 rgba(0,0,0,0.2), 0 8px 12px rgba(0,0,0,0.3), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
         : `0 4px 0 rgba(0,0,0,0.15), 0 5px 8px rgba(0,0,0,0.25), inset 0 1px 0 ${colors.light}30, inset 0 0 0 1px ${colors.main}15`;
     };
@@ -281,7 +279,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           "inline-flex items-center justify-center relative overflow-hidden",
           sizeStyles,
           "font-medium backdrop-blur-sm transition-all duration-150",
-          withIcon ? "gap-1.5" : "",
+          iconElement ? "gap-x-1.5" : "",
           isClickable ? "cursor-pointer" : "",
           disabled ? "opacity-50 cursor-not-allowed" : "",
           shadowDepth !== "none" && "border-2",
@@ -346,7 +344,12 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           />
         ))}
 
-        <span className="relative z-10 flex items-center gap-1.5 font-minecraft-ten">
+        {iconElement && (
+          <span className="flex-shrink-0 w-3 h-3 flex items-center justify-center">
+            {iconElement}
+          </span>
+        )}
+        <span className="relative z-10 flex items-center font-minecraft-ten">
           {children}
         </span>
       </div>

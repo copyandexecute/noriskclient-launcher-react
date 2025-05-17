@@ -14,6 +14,7 @@ import { useThemeStore } from "../../../store/useThemeStore";
 import { ContentTable } from "../../ui/ContentTable";
 import { Button } from "../../ui/buttons/Button";
 import { gsap } from "gsap";
+import { toast } from "react-hot-toast";
 
 interface ShaderPacksTabProps {
   profile: Profile;
@@ -252,6 +253,7 @@ export function ShaderPacksTab({
 
     try {
       const shouldBeEnabled = pack.is_disabled === true;
+      const packFileName = pack.filename || "Selected pack";
 
       console.log(
         `Toggling pack ${pack.filename}, currently disabled: ${pack.is_disabled}, setting enabled to: ${shouldBeEnabled}`,
@@ -262,6 +264,8 @@ export function ShaderPacksTab({
         enabled: shouldBeEnabled,
       });
 
+      toast.success(`Shader pack "${packFileName}" ${shouldBeEnabled ? 'enabled' : 'disabled'}.`);
+
       setShaderPacks((packs) =>
         packs.map((p) =>
           p.filename === packId ? { ...p, is_disabled: !shouldBeEnabled } : p,
@@ -270,10 +274,9 @@ export function ShaderPacksTab({
 
       fetchShaderPacks();
     } catch (err) {
+      const packFileName = pack?.filename || "Selected pack";
       console.error("Failed to toggle pack enabled state:", err);
-      setShaderPacksError(
-        `Failed to toggle pack: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Failed to toggle "${packFileName}": ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoadingOperation(false);
     }

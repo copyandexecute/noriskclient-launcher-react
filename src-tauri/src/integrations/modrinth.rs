@@ -131,34 +131,37 @@ pub struct ModrinthProject {
     pub slug: String,
     pub project_type: ModrinthProjectType, // Reuse existing enum
     pub team: String,                      // The ID of the team that has ownership of this project
+    pub organization: Option<String>,      // Added: Can be null
     pub title: String,
     pub description: String, // Short description
     pub body: String,        // Long description
-    // pub body_url: Option<String>, // Deprecated
+    pub body_url: Option<String>, // Ensured Option: Can be null
     pub published: String,        // ISO 8601
     pub updated: String,          // ISO 8601
     pub approved: Option<String>, // ISO 8601
+    pub queued: Option<String>,   // Added: Can be null
     pub status: String,           // e.g., "approved"
-    // pub requested_status: Option<String>,
+    pub requested_status: Option<String>, // Ensured Option: Can be null
     pub moderator_message: Option<ModrinthModeratorMessage>,
-    pub license: ModrinthLicense, // Reuse existing struct
+    pub license: ModrinthLicense, 
     pub client_side: String,      // "required", "optional", "unsupported", "unknown"
     pub server_side: String,      // "required", "optional", "unsupported", "unknown"
     pub downloads: u64,
     pub followers: u64,
     pub categories: Vec<String>,
+    #[serde(default)] // Added default in case it's missing or empty
+    pub additional_categories: Option<Vec<String>>, // Added: Can be an array or missing
     pub versions: Vec<String>,    // List of version IDs
     pub icon_url: Option<String>, // The field we often need
-    pub color: Option<u32>,
-    // pub thread_id: Option<String>,
-    // pub monetization_status: Option<String>,
+    pub color: Option<i32>,
+    pub thread_id: Option<String>, // Ensured Option: Can be present as string or null
+    pub monetization_status: Option<String>, // Ensured Option: Can be present as string or null
     pub issues_url: Option<String>,
     pub source_url: Option<String>,
     pub wiki_url: Option<String>,
     pub discord_url: Option<String>,
-    pub donation_urls: Option<Vec<ModrinthDonationUrl>>, // Reuse existing struct
-    pub gallery: Vec<ModrinthGalleryImage>,              // Reuse existing struct
-    // Custom fields observed but not strictly in doc example
+    pub donation_urls: Option<Vec<ModrinthDonationUrl>>, 
+    pub gallery: Vec<ModrinthGalleryImage>,              
     #[serde(default)]
     pub game_versions: Option<Vec<String>>,
     #[serde(default)]
@@ -192,7 +195,8 @@ pub struct ModrinthGalleryImage {
     pub title: Option<String>,
     pub description: Option<String>,
     pub created: String, // ISO 8601
-    pub ordering: u32,
+    pub ordering: i32,
+    pub raw_url: Option<String>, // Added: Can be present as string or null
 }
 
 // --- End Structures for Bulk Project Lookup ---
@@ -993,21 +997,49 @@ pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProje
             status,
             error_text
         );
-        // We could check for 404, but the API might just return an empty list or partial results for valid IDs mixed with invalid ones.
-        // It's probably best to return a general error here.
         return Err(AppError::Other(format!(
             "Modrinth API returned error {} getting bulk project details: {}",
             status, error_text
         )));
     }
 
-    // The response is a JSON array of Project objects.
-    let projects = response.json::<Vec<ModrinthProject>>().await.map_err(|e| {
+    // Read the response body as text first for debugging
+    let response_body_text = response.text().await.map_err(|e| {
         AppError::RequestError(format!(
-            "Failed to parse Modrinth bulk projects response: {}",
+            "Failed to read Modrinth bulk projects response body as text: {}",
             e
         ))
-    })?; // Use appropriate error type
+    })?;
+
+    // Prepare a version of the body for logging, possibly truncated if too long
+    let logged_response_body_display: String;
+    const MAX_RAW_BODY_LOG_LENGTH: usize = 5000; // Corrected back to 5000
+
+    if response_body_text.len() > MAX_RAW_BODY_LOG_LENGTH {
+        logged_response_body_display = format!(
+            "{}... (body truncated, original length: {})",
+            &response_body_text[..MAX_RAW_BODY_LOG_LENGTH],
+            response_body_text.len()
+        );
+    } else {
+        logged_response_body_display = response_body_text.clone();
+    }
+
+    log::debug!(
+        "Modrinth bulk projects raw response body: {}",
+        logged_response_body_display
+    );
+
+    // Now parse the original, full text
+    let projects = serde_json::from_str::<Vec<ModrinthProject>>(&response_body_text).map_err(|e| {
+        let error_message = format!(
+            "Failed to parse Modrinth bulk projects response: {}. Body (logged version): {}",
+            e,
+            logged_response_body_display
+        );
+        log::error!("JSON Parsing Error in get_multiple_projects: {}", error_message); // Added explicit error log
+        AppError::RequestError(error_message)
+    })?;
 
     log::info!(
         "Successfully retrieved details for {} projects.",
