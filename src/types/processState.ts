@@ -30,4 +30,5 @@ export interface ProcessMetadata {
   modloader_version?: string | null;
   norisk_pack?: string | null;
   profile_name?: string | null;
+  profile_image_url?: string | null;
 }
