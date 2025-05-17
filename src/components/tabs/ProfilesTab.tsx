@@ -3,33 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
-
 import { useProfileStore } from "../../store/profile-store";
 import { SearchInput } from "../ui/SearchInput";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
-import {
-  getLauncherConfig,
-  setProfileGroupingPreference,
-} from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
 import { ProfileImport } from "../profiles/ProfileImport";
-import { ProfileSettings } from "../profiles/ProfileSettings.tsx";
-import { ProfileWizard } from "../profiles/ProfileWizard.tsx";
+import { ProfileSettings } from "../profiles/ProfileSettings";
+import { ProfileWizard } from "../profiles/ProfileWizard";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/buttons/Button";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
-import { ProfileDetailView } from "../profiles/ProfileDetailView.tsx";
+import { ProfileDetailView } from "../profiles/ProfileDetailView";
 import { ExportProfileModal } from "../profiles/ExportProfileModal";
-
-// Updated Props interface for ProfilesTab
-interface ProfilesTabProps {
-  currentGroupingCriterion: string; // Changed from initialGroupingCriterion
-  onGroupingChange: (newCriterion: string) => void; // New prop for callback
-}
+import { useOutletContext } from "react-router-dom";
+import type { ProfilesTabContext } from "../../App";
 
 const groupingOptions = [
   {
@@ -54,7 +45,10 @@ const groupingOptions = [
   },
 ];
 
-export function ProfilesTab({ currentGroupingCriterion, onGroupingChange }: ProfilesTabProps) {
+export function ProfilesTab() {
+  const { currentGroupingCriterion, onGroupingChange } =
+    useOutletContext<ProfilesTabContext>();
+
   const {
     profiles,
     loading,
@@ -80,9 +74,7 @@ export function ProfilesTab({ currentGroupingCriterion, onGroupingChange }: Prof
 
   // State for Export Modal
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [profileToExport, setProfileToExport] = useState<Profile | null>(
-    null,
-  );
+  const [profileToExport, setProfileToExport] = useState<Profile | null>(null);
 
   useEffect(() => {
     if (isBackgroundAnimationEnabled) {
@@ -231,17 +223,15 @@ export function ProfilesTab({ currentGroupingCriterion, onGroupingChange }: Prof
   ) => {
     const deletePromise = useProfileStore.getState().deleteProfile(profileId);
 
-    toast.promise(
-      deletePromise,
-      {
-        loading: `Deleting profile '${profileName}'...`,
-        success: () => {
-          fetchProfiles(); // Refresh profiles list on success
-          return `Profile '${profileName}' deleted successfully!`;
-        },
-        error: (err) => `Failed to delete profile: ${err instanceof Error ? err.message : String(err.message)}`,
-      }
-    );
+    toast.promise(deletePromise, {
+      loading: `Deleting profile '${profileName}'...`,
+      success: () => {
+        fetchProfiles();
+        return `Profile '${profileName}' deleted successfully!`;
+      },
+      error: (err) =>
+        `Failed to delete profile: ${err instanceof Error ? err.message : String(err.message)}`,
+    });
   };
 
   const handleShouldExportProfile = (profile: Profile) => {
@@ -393,7 +383,6 @@ export function ProfilesTab({ currentGroupingCriterion, onGroupingChange }: Prof
         />
       )}
 
-      {/* Render ExportProfileModal at the ProfilesTab level */}
       {profileToExport && (
         <ExportProfileModal
           profile={profileToExport}
