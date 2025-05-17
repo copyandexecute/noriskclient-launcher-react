@@ -58,7 +58,7 @@ export function GenericDetailListItem({
       // style={{ borderColor: isSelected ? `${accentColor}80` : 'transparent' }}
     >
       {/* Checkbox Area */}
-      <div className="mr-3 flex-shrink-0 self-start mt-1" onClick={(e) => e.stopPropagation()}>
+      <div className="mr-3 flex-shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           customSize="sm"
           checked={isSelected}

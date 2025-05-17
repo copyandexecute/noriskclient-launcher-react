@@ -16,6 +16,7 @@ import { ModrinthVersionItemV2 } from "./ModrinthVersionItemV2";
 import { Select, type SelectOption } from "../../ui/Select";
 import { TagBadge } from "../../ui/TagBadge";
 import { gsap } from "gsap";
+import { useThemeStore } from "../../../store/useThemeStore";
 
 // --- Define Props for the new component ---
 interface ModrinthVersionListV2Props {
@@ -118,6 +119,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   // Create Select options for version type
   const versionTypeOptions: SelectOption[] = [
@@ -129,7 +131,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
 
   // Animation for the container when it mounts
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && isAnimationEnabled) {
       // Use a more performant animation approach
       requestAnimationFrame(() => {
         gsap.fromTo(
@@ -144,7 +146,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
         );
       });
     }
-  }, []); // Empty dependency array ensures it only runs once
+  }, [isAnimationEnabled]);
 
   // Update showFilters state when filters change
   useEffect(() => {
@@ -283,18 +285,12 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
     <div ref={containerRef} className="p-3 relative">
       {/* Header with version filters - New design */}
       <div
-        className="mb-4 p-3 rounded-md border-2 border-b-4 backdrop-blur-md"
+        className="mb-4 p-3 rounded-lg border backdrop-blur-sm"
         style={{
-          borderColor: `${accentColor.value}60`,
-          borderBottomColor: accentColor.value,
           backgroundColor: `${accentColor.value}10`,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          borderColor: `${accentColor.value}30`,
         }}
       >
-        <span
-          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-          style={{ backgroundColor: `${accentColor.value}80` }}
-        />
         <div className="flex flex-wrap gap-2 items-center">
           {/* Version Type Select */}
           <div className="relative">
@@ -387,6 +383,15 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
               }}
             >
               <div className="flex items-center gap-1.5 p-2">
+                <TagBadge
+                  variant="destructive"
+                  className="cursor-pointer hover:brightness-110 transition-all flex-shrink-0 flex items-center"
+                  onClick={handleClearAllFilters}
+                >
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-3 h-3 mr-1.5" />
+                  <span>Clear All</span>
+                </TagBadge>
+
                 {filters.versionType !== "all" && (
                   <TagBadge className="inline-flex whitespace-nowrap">
                     Type: {filters.versionType}
@@ -454,17 +459,6 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
                 ))}
               </div>
             </div>
-
-            <TagBadge
-              variant="destructive"
-              className="cursor-pointer hover:brightness-110 transition-all flex-shrink-0 h-[48px] flex items-center"
-              onClick={handleClearAllFilters}
-              withIcon
-              size="lg"
-            >
-              <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-              <span>Clear All</span>
-            </TagBadge>
           </div>
         )}
       </div>
@@ -506,7 +500,7 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
           {filteredVersions.length > displayedCount && (
             <Button
               onClick={() => onLoadMore(projectId)}
-              variant="secondary"
+              variant="ghost"
               size="xs"
               shadowDepth="short"
               className="w-full mt-2 text-xs"
@@ -525,10 +519,6 @@ export const ModrinthVersionListV2: React.FC<ModrinthVersionListV2Props> = ({
             backgroundColor: `${accentColor.value}15`,
           }}
         >
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{ backgroundColor: `${accentColor.value}80` }}
-          />
           No versions match the selected filters.
         </div>
       )}

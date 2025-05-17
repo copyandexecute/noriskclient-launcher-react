@@ -187,8 +187,6 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
     onDeleteVersionClick,
     onToggleEnableClick,
   }) => {
-    const [isHovered, setIsHovered] = useState(false);
-
     useEffect(() => {
       preloadIcons([
         "solar:download-minimalistic-bold",
@@ -199,12 +197,9 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
 
     return (
       <div
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "relative overflow-hidden transition-colors duration-150 rounded-md mb-3",
-          "border-2 border-b-4",
-          "backdrop-blur-md",
+          "p-4 flex flex-col gap-4 transition-colors",
+          "relative overflow-hidden rounded-lg border backdrop-blur-sm",
           installStatus?.is_installed &&
             !installStatus?.is_included_in_norisk_pack &&
             "border-l-green-500",
@@ -213,282 +208,184 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
             "border-l-blue-500",
           installStatus?.is_installed &&
             installStatus?.is_included_in_norisk_pack &&
-            "border-l-blue-500 border-t-4 border-t-blue-500",
+            "border-l-blue-500",
         )}
         style={{
-          borderColor: `${accentColor.value}80`,
-          borderBottomColor: accentColor.value,
-          boxShadow:
-            "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
-          backgroundColor: isHovered
-            ? `${accentColor.value}45`
-            : `${accentColor.value}30`,
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
         }}
       >
-        <div className={cn("relative z-10 p-4")}>
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{ backgroundColor: `${accentColor.value}80` }}
-          />
-          <div className="flex flex-row space-x-4">
-            <div
-              className="flex-shrink-0 w-24 h-24 border rounded-md"
-              style={{
-                borderColor: `${accentColor.value}80`,
-              }}
-            >
-              {hit.icon_url ? (
-                <img
-                  src={hit.icon_url || "/placeholder.svg"}
-                  alt={`${hit.title} icon`}
-                  className="w-full h-full object-cover rounded-md"
-                />
-              ) : (
-                <div className="w-full h-full bg-gray-700 flex items-center justify-center rounded-md">
-                  <span className="text-gray-500 text-3xl">?</span>
-                </div>
-              )}
+        <div className="flex flex-row items-start gap-4 w-full">
+          <div
+            className="relative w-24 h-24 flex-shrink-0 rounded-md overflow-hidden border"
+            style={{
+              borderColor: `${accentColor.value}30`,
+              backgroundColor: `${accentColor.value}10`,
+            }}
+          >
+            {hit.icon_url ? (
+              <img
+                src={hit.icon_url || "/placeholder.svg"}
+                alt={`${hit.title} icon`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gray-700/50 flex items-center justify-center">
+                <span className="text-gray-500 text-3xl">?</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-grow min-w-0 h-24 flex flex-col justify-between overflow-hidden">
+            <div className="space-y-1">
+              <div className="flex flex-row items-baseline space-x-1.5">
+                <a
+                  href={`https://modrinth.com/${hit.project_type}/${hit.slug}`}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    try {
+                      await openExternalUrl(
+                        `https://modrinth.com/${hit.project_type}/${hit.slug}`,
+                      );
+                    } catch (error) {
+                      console.error("Failed to open external URL:", error);
+                      toast.error("Could not open link in browser.");
+                    }
+                  }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-lg font-semibold text-[color:var(--accent)] truncate font-minecraft-ten normal-case flex-shrink-0 hover:underline cursor-pointer"
+                  style={{ color: accentColor.value }}
+                  title={`Open ${hit.title} on Modrinth`}
+                >
+                  {hit.title}
+                </a>
+                {hit.author && (
+                  <p className="text-xs text-gray-400 truncate font-minecraft-ten flex-shrink min-w-0">
+                    by {hit.author}
+                  </p>
+                )}
+              </div>
+              <p className="text-xs text-gray-300 line-clamp-2 md:line-clamp-2 font-minecraft-ten leading-tight">
+                {hit.description}
+              </p>
             </div>
 
-            <div className="flex-grow min-w-0 flex flex-col justify-between">
-              <div className="space-y-1.5">
-                <div className="flex flex-row items-baseline space-x-1.5">
-                  <a
-                    href={`https://modrinth.com/${hit.project_type}/${hit.slug}`}
-                    onClick={async (e) => {
-                      e.preventDefault();
-                      try {
-                        await openExternalUrl(
-                          `https://modrinth.com/${hit.project_type}/${hit.slug}`,
-                        );
-                      } catch (error) {
-                        console.error("Failed to open external URL:", error);
-                        toast.error("Could not open link in browser.");
-                      }
-                    }}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-base font-semibold text-[color:var(--accent)] truncate font-minecraft-ten normal-case flex-shrink-0 hover:underline cursor-pointer"
-                    style={{ color: accentColor.value }}
-                    title={`Open ${hit.title} on Modrinth`}
-                  >
-                    {hit.title}
-                  </a>
-                  {hit.author && (
-                    <p className="text-[10px] text-gray-400 truncate font-minecraft-ten flex-shrink min-w-0">
-                      by {hit.author}
-                    </p>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-300 line-clamp-2 md:line-clamp-2 font-minecraft-ten leading-tight">
-                  {hit.description}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1 mt-1 overflow-hidden whitespace-nowrap">
-                {installStatus && (
-                  <>
-                    {installStatus.is_installed && (
-                      <TagBadge variant="success">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-3 w-3 mr-0.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        Installed
-                      </TagBadge>
-                    )}
-                    {installStatus.is_included_in_norisk_pack && (
-                      <TagBadge
-                        variant={
-                          installStatus.norisk_pack_item_details?.is_enabled ===
-                          false
-                            ? "inactive"
-                            : "info"
-                        }
+            <div className="flex items-center gap-1 mt-1 overflow-hidden whitespace-nowrap">
+              {installStatus && (
+                <>
+                  {installStatus.is_installed && (
+                    <TagBadge variant="success">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 mr-0.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
                       >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-3 w-3 mr-0.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M13 10V3L4 14h7v7l9-11h-7z"
-                          />
-                        </svg>
-                        In NoRisk Pack
-                      </TagBadge>
-                    )}
-                  </>
-                )}
-                {hit.categories &&
-                  hit.categories.length > 0 &&
-                  hit.categories
-                    .slice(0, 5)
-                    .map((category) => (
-                      <TagBadge key={category}>
-                        {category.replace(/-/g, " ")}
-                      </TagBadge>
-                    ))}
-              </div>
-            </div>
-
-            <div className="flex-shrink-0 w-40 flex flex-col justify-between items-end">
-              <div className="flex items-center space-x-2 text-[10px] text-gray-400 font-minecraft-ten">
-                <span className="flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-3.5 w-3.5 inline-block mr-0.5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />
-                  </svg>
-                  {hit.downloads.toLocaleString()}
-                </span>
-                <span className="flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-3.5 w-3.5 inline-block mr-0.5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {hit.follows.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex items-center space-x-1 w-full mt-auto">
-                {hit.project_type === "modpack" ? (
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onInstallModpackAsProfileClick) {
-                        onInstallModpackAsProfileClick(hit);
-                      } else {
-                        console.warn(
-                          "onInstallModpackAsProfileClick is not defined for modpack",
-                        );
-                        onQuickInstallClick(hit);
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      Installed
+                    </TagBadge>
+                  )}
+                  {installStatus.is_included_in_norisk_pack && (
+                    <TagBadge
+                      variant={
+                        installStatus.norisk_pack_item_details?.is_enabled ===
+                        false
+                          ? "inactive"
+                          : "info"
                       }
-                    }}
-                    size="xs"
-                    variant={
-                      isInstallingModpackAsProfile ? "secondary" : "success"
-                    }
-                    className="min-w-0 flex-grow"
-                    shadowDepth="short"
-                    icon={
-                      isInstallingModpackAsProfile ? (
-                        <svg
-                          className="animate-spin h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <Icon
-                          icon="solar:download-minimalistic-bold"
-                          className="h-4 w-4"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3 w-3 mr-0.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M13 10V3L4 14h7v7l9-11h-7z"
                         />
-                      )
-                    }
-                    iconPosition="left"
-                    disabled={isInstallingModpackAsProfile || isQuickInstalling}
-                  >
-                    {isInstallingModpackAsProfile
-                      ? "Installing..."
-                      : "Quick Install"}
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onQuickInstallClick(hit);
-                    }}
-                    size="xs"
-                    variant={isQuickInstalling ? "secondary" : "success"}
-                    className="min-w-0 flex-grow"
-                    shadowDepth="short"
-                    icon={
-                      isQuickInstalling ? (
-                        <svg
-                          className="animate-spin h-4 w-4 text-white"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <Icon
-                          icon="solar:download-minimalistic-bold"
-                          className="h-4 w-4"
-                        />
-                      )
-                    }
-                    iconPosition="left"
-                    disabled={isQuickInstalling}
-                  >
-                    {isQuickInstalling ? "Installing..." : "Quick Install"}
-                  </Button>
-                )}
-                <IconButton
+                      </svg>
+                      In NoRisk Pack
+                    </TagBadge>
+                  )}
+                </>
+              )}
+              {hit.categories &&
+                hit.categories.length > 0 &&
+                hit.categories
+                  .slice(0, 5)
+                  .map((category) => (
+                    <TagBadge key={category}>
+                      {category.replace(/-/g, " ")}
+                    </TagBadge>
+                  ))}
+            </div>
+          </div>
+
+          <div className="flex-shrink-0 h-24 flex flex-col items-end justify-center gap-1.5">
+            <div className="flex items-center space-x-2 text-xs text-gray-400 font-minecraft-ten">
+              <span className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 inline-block mr-0.5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />
+                </svg>
+                {hit.downloads.toLocaleString()}
+              </span>
+              <span className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 inline-block mr-0.5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                {hit.follows.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center space-x-1 w-full mt-auto">
+              {hit.project_type === "modpack" ? (
+                <Button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onToggleVersionsClick(hit.project_id);
+                    if (onInstallModpackAsProfileClick) {
+                      onInstallModpackAsProfileClick(hit);
+                    } else {
+                      console.warn(
+                        "onInstallModpackAsProfileClick is not defined for modpack",
+                      );
+                      onQuickInstallClick(hit);
+                    }
                   }}
-                  size="xs"
+                  size="sm"
+                  variant={
+                    isInstallingModpackAsProfile ? "secondary" : "success"
+                  }
+                  className="min-w-0 flex-grow"
                   shadowDepth="short"
-                  variant="default"
                   icon={
-                    isLoadingVersions ? (
+                    isInstallingModpackAsProfile ? (
                       <svg
-                        className="animate-spin h-3.5 w-3.5 text-white"
+                        className="animate-spin h-4 w-4 text-white"
                         xmlns="http://www.w3.org/2000/svg"
                         fill="none"
                         viewBox="0 0 24 24"
@@ -509,20 +406,108 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                       </svg>
                     ) : (
                       <Icon
-                        icon={
-                          isExpanded
-                            ? "solar:alt-arrow-up-bold"
-                            : "solar:alt-arrow-down-bold"
-                        }
-                        className="w-3.5 h-3.5"
+                        icon="solar:download-minimalistic-bold"
+                        className="h-4 w-4"
                       />
                     )
                   }
-                  disabled={isLoadingVersions}
-                  title={isExpanded ? "Hide Versions" : "Show Versions"}
-                  className="flex-shrink-0"
-                />
-              </div>
+                  iconPosition="left"
+                  disabled={isInstallingModpackAsProfile || isQuickInstalling}
+                >
+                  {isInstallingModpackAsProfile
+                    ? "Installing..."
+                    : "Install"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onQuickInstallClick(hit);
+                  }}
+                  size="sm"
+                  variant={isQuickInstalling ? "secondary" : "success"}
+                  className="min-w-0 flex-grow"
+                  shadowDepth="short"
+                  icon={
+                    isQuickInstalling ? (
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                    ) : (
+                      <Icon
+                        icon="solar:download-minimalistic-bold"
+                        className="h-4 w-4"
+                      />
+                    )
+                  }
+                  iconPosition="left"
+                  disabled={isQuickInstalling}
+                >
+                  {isQuickInstalling ? "Installing..." : "Install"}
+                </Button>
+              )}
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleVersionsClick(hit.project_id);
+                }}
+                size="sm"
+                shadowDepth="short"
+                variant="default"
+                icon={
+                  isLoadingVersions ? (
+                    <svg
+                      className="animate-spin h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                  ) : (
+                    <Icon
+                      icon={
+                        isExpanded
+                          ? "solar:alt-arrow-up-bold"
+                          : "solar:alt-arrow-down-bold"
+                      }
+                      className="w-4 h-4"
+                    />
+                  )
+                }
+                disabled={isLoadingVersions}
+                title={isExpanded ? "Hide Versions" : "Show Versions"}
+                className="flex-shrink-0"
+              />
             </div>
           </div>
         </div>

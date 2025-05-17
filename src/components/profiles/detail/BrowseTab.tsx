@@ -135,6 +135,7 @@ export function BrowseTab({
           profiles={[profile]}
           selectedProfileId={profile.id}
           className="h-full"
+          initialSidebarVisible={false}
         />
       </div>
     </div>

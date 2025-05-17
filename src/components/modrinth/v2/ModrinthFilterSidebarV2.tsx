@@ -95,22 +95,13 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
   return (
     <div 
       className={cn(
-        "relative overflow-hidden transition-all duration-300 rounded-md",
-        "border-2 border-b-4",
-        "backdrop-blur-md",
-        "mb-3"
+        "relative overflow-hidden transition-all duration-300 rounded-lg border backdrop-blur-sm"
       )}
       style={{
-        borderColor: `${accentColor.value}60`,
-        borderBottomColor: accentColor.value, 
-        boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-        backgroundColor: `${accentColor.value}30`,
+        backgroundColor: `${accentColor.value}10`,
+        borderColor: `${accentColor.value}30`,
       }}
     >
-      <span
-        className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-        style={{ backgroundColor: `${accentColor.value}80` }}
-      /> 
       <button
         ref={buttonRef}
         onClick={toggleAccordion}
@@ -121,19 +112,19 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
           "relative z-10"
         )}
         style={{
-          borderBottomColor: isOpen ? `${accentColor.value}40` : 'transparent', 
+          borderBottomColor: isOpen ? `${accentColor.value}20` : 'transparent',
         }}
       >
         <div className="flex items-center gap-2">
           <span className="truncate mr-2">{title}</span>
-          {activeCount > 0 && (
+          {/* {activeCount > 0 && (
             <div
               className="flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold"
               style={{ backgroundColor: accentColor.value }}
             >
               {activeCount}
             </div>
-          )}
+          )} */}
         </div>
         <Icon 
           icon={isOpen ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} 
@@ -197,20 +188,14 @@ const FilterOption = ({
       ref={buttonRef}
       onClick={handleClick}
       className={cn(
-        "w-full flex items-center justify-between p-1.5 text-base font-minecraft transition-all duration-200 cursor-pointer rounded-md mb-1.5",
-        "border-2 border-b-4",
-        isSelected
-          ? "bg-white/15 text-white border-white/30"
-          : "bg-white/5 text-gray-300 border-white/10 hover:bg-white/10",
+        "w-full flex items-center justify-between p-1.5 text-base font-minecraft transition-colors duration-200 cursor-pointer rounded-md mb-1.5 border",
+        !isSelected && "text-gray-300 hover:brightness-[1.15]" // Default text color for unselected, and hover effect
       )}
       style={{
-        borderColor: isSelected ? `${accentColor.value}60` : undefined,
-        borderBottomColor: isSelected ? accentColor.value : undefined,
-        color: isSelected ? accentColor.value : undefined,
-        boxShadow: isSelected
-          ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
-          : "0 2px 0 rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.05)",
-        transform: isSelected ? "translateY(-2px)" : "translateY(0)",
+        backgroundColor: isSelected ? `${accentColor.value}2E` : `${accentColor.value}12`, // Approx 18% and 7% opacity
+        borderColor: isSelected ? `${accentColor.value}59` : `${accentColor.value}29`,    // Approx 35% and 16% opacity
+        color: isSelected ? accentColor.value : undefined, // Accent text color for selected, inherit for unselected
+        // Removed boxShadow and transform properties
       }}
     >
       <span className="flex items-center flex-grow text-left">
@@ -330,15 +315,17 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
     <div 
       ref={sidebarRef}
       className={cn(
-        "filters-sidebar w-1/4 max-w-[15rem] flex-shrink-0 overflow-y-auto p-2 h-full", 
-        "hide-scrollbar"
+        "filters-sidebar w-1/4 max-w-[15rem] flex-shrink-0 overflow-y-auto h-full",
+        "hide-scrollbar rounded-lg border backdrop-blur-sm"
       )}
       style={{
+        backgroundColor: `${accentColor.value}08`,
+        borderColor: `${accentColor.value}20`,
         scrollbarWidth: "none",
         msOverflowStyle: "none",
       }}
     >
-      <div className="space-y-3 pt-1">
+      <div className="">
         <AccordionItem 
           title="Game Version" 
           defaultOpen={totalGameVersionFilters > 0}
@@ -362,7 +349,7 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
               />
             </div>
 
-            <div className="max-h-40 overflow-y-auto space-y-1 pr-1 hide-scrollbar">
+            <div className="space-y-1 pr-1 overflow-y-auto hide-scrollbar max-h-96">
               {displayedGameVersions.map((gv) => (
                 <FilterOption
                   key={gv.version}
@@ -403,7 +390,7 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
             defaultOpen={dynamicGroupCounts[categoriesGroup.headerValue] > 0}
             activeCount={dynamicGroupCounts[categoriesGroup.headerValue]}
           >
-            <div className="max-h-60 overflow-y-auto space-y-1 pr-1 hide-scrollbar">
+            <div className="space-y-1 pr-1 overflow-y-auto hide-scrollbar max-h-96">
               {categoriesGroup.options.length > 0 ? categoriesGroup.options.map(cat => (
                 <FilterOption
                   key={cat.name}
@@ -425,7 +412,7 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
           defaultOpen={totalLoaderFilters > 0}
           activeCount={totalLoaderFilters}
         >
-          <div className="max-h-40 overflow-y-auto space-y-1 pr-1 hide-scrollbar">
+          <div className="space-y-1 pr-1 overflow-y-auto hide-scrollbar max-h-96">
             {availableLoaders.map(loader => {
               const fullLoaderData = allLoadersData.find(l => l.name === loader.name);
               return (
@@ -451,7 +438,7 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
             defaultOpen={dynamicGroupCounts[group.headerValue] > 0}
             activeCount={dynamicGroupCounts[group.headerValue]}
           >
-            <div className="max-h-60 overflow-y-auto space-y-1 pr-1 hide-scrollbar"> 
+            <div className="space-y-1 pr-1 overflow-y-auto hide-scrollbar max-h-96"> 
               {group.options.length > 0 ? group.options.map(cat => (
                 <FilterOption
                   key={cat.name}

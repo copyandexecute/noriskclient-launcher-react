@@ -1918,7 +1918,7 @@ export function ModrinthSearchV2({
         />
 
         {/* Search Results Area (scrollable within the left content area) */}
-        <div ref={searchResultsAreaRef} className="search-results-area flex-1 overflow-y-auto p-4 space-y-3">
+        <div ref={searchResultsAreaRef} className="search-results-area flex-1 overflow-y-auto"> {/* Removed p-4 */}
           {/* {loading && searchResults.length === 0 && <p className="p-4 text-center">Loading initial results...</p>} REMOVED */}
           {searchResults.length === 0 && !loading && error && (
             <p className="p-4 text-red-500 text-center">Error: {error}</p>
@@ -1980,7 +1980,7 @@ export function ModrinthSearchV2({
           {!loading && searchResults.length > 0 && searchResults.length < totalHits && (
             <Button 
               onClick={loadMoreResults}
-              variant="default"
+              variant="ghost" // Changed from default to ghost
               size="md"
               className="w-full mt-4"
               disabled={loading}

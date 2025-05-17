@@ -70,39 +70,38 @@ export const ModrinthVersionItemV2 = React.memo<ModrinthVersionItemV2Props>(
     const isFirstRender = useIsFirstRender();
 
     const handleMouseEnterLocal = () => {
-      setIsCardHovered(true);
       onMouseEnter(version.id);
     };
 
     const handleMouseLeaveLocal = () => {
-      setIsCardHovered(false);
       onMouseLeave();
     };
 
     useEffect(() => {
-      if (cardRef.current) {
-        if (isFirstRender) return;
+      // GSAP animation is removed as the style will be more static like GenericList
+      // if (cardRef.current) {
+      //   if (isFirstRender) return;
 
-        if (isCardHovered) {
-          gsap.to(cardRef.current, {
-            backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}60`,
-            y: -3,
-            boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
-            duration: 0.2,
-            ease: "power2.out",
-          });
-        } else {
-          gsap.to(cardRef.current, {
-            backgroundColor: `${accentColor.value}08`,
-            borderColor: `${accentColor.value}30`,
-            y: 0,
-            boxShadow: `0 2px 0 rgba(0,0,0,0.1), 0 3px 5px rgba(0,0,0,0.1)`,
-            duration: 0.2,
-            ease: "power2.out",
-          });
-        }
-      }
+      //   if (isCardHovered) { // isCardHovered is also effectively removed for this
+      //     gsap.to(cardRef.current, {
+      //       backgroundColor: `${accentColor.value}15`,
+      //       borderColor: `${accentColor.value}60`,
+      //       y: -3,
+      //       boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+      //       duration: 0.2,
+      //       ease: "power2.out",
+      //     });
+      //   } else {
+      //     gsap.to(cardRef.current, {
+      //       backgroundColor: `${accentColor.value}08`,
+      //       borderColor: `${accentColor.value}30`,
+      //       y: 0,
+      //       boxShadow: `0 2px 0 rgba(0,0,0,0.1), 0 3px 5px rgba(0,0,0,0.1)`,
+      //       duration: 0.2,
+      //       ease: "power2.out",
+      //     });
+      //   }
+      // }
     }, [isCardHovered, accentColor, isFirstRender]);
 
     const handleButtonClick = () => {
@@ -259,8 +258,8 @@ export const ModrinthVersionItemV2 = React.memo<ModrinthVersionItemV2Props>(
         onMouseEnter={handleMouseEnterLocal}
         onMouseLeave={handleMouseLeaveLocal}
         className={cn(
-          "relative overflow-hidden transition-all duration-200 rounded-md backdrop-blur-sm",
-          "border-2",
+          "relative overflow-hidden transition-colors duration-150 rounded-md backdrop-blur-sm",
+          "border",
           showInstallBorder &&
             versionStatus?.is_installed &&
             "border-l-green-500 border-l-4",
@@ -268,23 +267,12 @@ export const ModrinthVersionItemV2 = React.memo<ModrinthVersionItemV2Props>(
             !versionStatus?.is_installed &&
             versionStatus?.is_included_in_norisk_pack &&
             "border-l-blue-500 border-l-4",
-          "cursor-pointer",
         )}
         style={{
-          backgroundColor: isCardHovered
-            ? `${accentColor.value}15`
-            : `${accentColor.value}08`,
-          borderColor: isCardHovered
-            ? `${accentColor.value}60`
-            : `${accentColor.value}30`,
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
         }}
       >
-        {isCardHovered && (
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{ backgroundColor: `${accentColor.value}80` }}
-          />
-        )}
         <div className="relative z-10 p-2.5">
           <div className="flex flex-col space-y-2">
             <div className="flex justify-between items-baseline gap-2">
