@@ -479,33 +479,35 @@ export function LogWindow() {
     <div
       ref={containerRef}
       className={cn(
-        "flex flex-col h-full text-white font-minecraft",
+        "flex flex-col h-full text-white font-minecraft p-4",
         "transition-colors duration-300",
       )}
-      style={{ backgroundColor: `${accentColor.value}10` }}
+      style={{
+        backgroundImage: `linear-gradient(to bottom right, #${accentColor.value}CC, #${accentColor.value}88)`,
+        boxShadow: `0 0 15px 5px #${accentColor.value}20`
+      }}
     >
-      <Card className="h-full flex flex-col overflow-hidden">
-        <LogViewerDisplay
-          isLoading={isLoading}
-          error={error}
-          displayLines={displayLines}
-          parsedLogLinesCount={parsedLogLines.length}
-          searchTerm={searchTerm}
-          levelFilters={levelFilters}
-          copied={copied}
-          onSearchChange={handleSearchChange}
-          onLevelFilterChange={handleLevelFilterChange}
-          onCopyLog={handleCopyLog}
-          logLevelsDefinition={LOG_LEVELS}
-          onOpenFolder={handleOpenFolderForProcess}
-          onUploadLog={handleUploadLogForProcess}
-          onOpenUploadUrl={handleOpenUploadUrl}
-          isAutoscrollEnabled={isAutoscrollEnabled}
-          onAutoscrollChange={handleAutoscrollChange}
-          scrollableContainerRef={scrollableContainerRef}
-          isLiveLogs={isLiveLogs}
-        />
-      </Card>
+      <LogViewerDisplay
+        isLoading={isLoading}
+        error={error}
+        displayLines={displayLines}
+        parsedLogLinesCount={parsedLogLines.length}
+        searchTerm={searchTerm}
+        levelFilters={levelFilters}
+        copied={copied}
+        onSearchChange={handleSearchChange}
+        onLevelFilterChange={handleLevelFilterChange}
+        onCopyLog={handleCopyLog}
+        logLevelsDefinition={LOG_LEVELS}
+        onOpenFolder={handleOpenFolderForProcess}
+        onUploadLog={handleUploadLogForProcess}
+        onOpenUploadUrl={handleOpenUploadUrl}
+        isAutoscrollEnabled={isAutoscrollEnabled}
+        onAutoscrollChange={handleAutoscrollChange}
+        scrollableContainerRef={scrollableContainerRef}
+        isLiveLogs={isLiveLogs}
+        isInsideLogWindow={true}
+      />
     </div>
   );
 }

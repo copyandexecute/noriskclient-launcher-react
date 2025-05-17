@@ -822,7 +822,7 @@ export function WorldsTab({
         emptyStateDescription={
             "Create worlds or add servers in Minecraft" 
         }
-        loadingItemCount={5}
+        loadingItemCount={0}
       />
 
       {isCopyWorldDialogOpen && worldToCopy && profile?.id && (

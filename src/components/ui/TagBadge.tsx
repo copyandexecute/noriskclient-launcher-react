@@ -6,7 +6,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
 
-interface TagBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface TagBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
   iconElement?: React.ReactNode;
