@@ -4,6 +4,7 @@ import React from 'react';
 import { cn } from '../../lib/utils';
 import { SkinViewer } from './SkinViewer';
 import { LaunchButton } from './LaunchButton';
+import { useThemeStore } from '../../store/useThemeStore';
 
 interface PlayerActionsDisplayProps {
   skinUrl: string;
@@ -18,6 +19,7 @@ interface PlayerActionsDisplayProps {
     profileId: string; 
   }>;
   className?: string;
+  displayMode?: 'playerName' | 'logo';
 }
 
 export function PlayerActionsDisplay({
@@ -27,20 +29,44 @@ export function PlayerActionsDisplay({
   onLaunchVersionChange,
   launchButtonVersions,
   className,
+  displayMode = 'playerName',
 }: PlayerActionsDisplayProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
+  const dropShadowX = '2px';
+  const dropShadowY = '4px';
+  const dropShadowBlur = '6px';
+  const commonDropShadowStyle = `drop-shadow(${dropShadowX} ${dropShadowY} ${dropShadowBlur} ${accentColor.value})`;
+
   return (
     <div className={cn("flex flex-col items-center", className)}>
-      <h2 className="font-minecraft text-6xl text-center text-white mb-2 lowercase font-normal">
-        {playerName || "no account"}
-      </h2>
+      {displayMode === 'logo' ? (
+        <img
+          src="norisk_logo_color.png"
+          alt="NoRisk Logo"
+          className="h-48 sm:h-56 md:h-64 mb-[-80px] sm:mb-[-100px] md:mb-[-120px] relative z-0"
+          style={{
+            imageRendering: "pixelated",
+            filter: commonDropShadowStyle
+          }}
+        />
+      ) : (
+        <h2 className="font-minecraft text-6xl text-center text-white mb-2 lowercase font-normal">
+          {playerName || "no account"}
+        </h2>
+      )}
 
-      <div className="relative w-full max-w-[500px]">
+      <div className={cn(
+        "relative w-full max-w-[500px] flex flex-col items-center",
+        displayMode === 'logo' && "z-10"
+      )}>
         <SkinViewer
           skinUrl={skinUrl}
           playerName={playerName?.toString()}
           width={200}
           height={450}
           className="bg-transparent"
+          style={{ filter: commonDropShadowStyle }}
         />
 
         <div className="absolute bottom-8 left-0 right-0 flex justify-center px-4">

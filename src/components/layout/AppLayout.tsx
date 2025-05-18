@@ -21,6 +21,7 @@ import { NebulaGrid } from ".././effects/NebulaGrid";
 import { NebulaVoxels } from ".././effects/NebulaVoxels";
 import { NebulaLightning } from ".././effects/NebulaLightning";
 import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
+import { RetroGridEffect } from "../effects/RetroGridEffect";
 import * as ConfigService from "../../services/launcher-config-service";
 
 const navItems = [
@@ -53,11 +54,9 @@ export function AppLayout({
   const minimizeRef = useRef<HTMLDivElement>(null);
   const maximizeRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLDivElement>(null);
-  const accentColor = useThemeStore((state) => state.accentColor);
-
   const { currentEffect } = useBackgroundEffectStore();
   const { qualityLevel } = useQualitySettingsStore();
-  const { isBackgroundAnimationEnabled } = useThemeStore();
+  const { isBackgroundAnimationEnabled, accentColor: themeAccentColor } = useThemeStore();
 
   const getComplementaryBackground = () => {
     const hexToRgb = (hex: string) => {
@@ -71,7 +70,7 @@ export function AppLayout({
         : { r: 34, g: 34, b: 34 };
     };
 
-    const rgb = hexToRgb(accentColor.value);
+    const rgb = hexToRgb(themeAccentColor.value);
 
     const darkR = Math.floor(rgb.r * 0.1);
     const darkG = Math.floor(rgb.g * 0.1);
@@ -229,6 +228,19 @@ export function AppLayout({
             frequencyY={2}
           />
         );
+      case BACKGROUND_EFFECTS.RETRO_GRID:
+        const hexToRgbaWithLowOpacity = (hex: string) => {
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, 0.01)`;
+        };
+        return (
+          <div 
+            className="absolute inset-0"
+            style={{ backgroundColor: hexToRgbaWithLowOpacity(themeAccentColor.value) }}
+          ></div>
+        );
       default:
         return (
           <div className="absolute inset-0 bg-red-500/20">
@@ -247,11 +259,11 @@ export function AppLayout({
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundImage: `linear-gradient(to bottom right, ${backgroundColor}, rgba(0,0,0,0.9))`,
-        borderColor: `${accentColor.value}30`,
-        boxShadow: `0 0 15px ${accentColor.value}30, inset 0 0 10px ${accentColor.value}20`,
+        borderColor: `${themeAccentColor.value}30`,
+        boxShadow: `0 0 15px ${themeAccentColor.value}30, inset 0 0 10px ${themeAccentColor.value}20`,
       }}
     >
-      <BorderGlowEffects accentColor={accentColor.value} />
+      <BorderGlowEffects accentColor={themeAccentColor.value} />
 
       <VerticalNavbar
         items={navItems}

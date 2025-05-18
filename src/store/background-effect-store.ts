@@ -10,6 +10,7 @@ export const BACKGROUND_EFFECTS = {
   NEBULA_VOXELS: "nebula_voxels",
   NEBULA_LIGHTNING: "nebula_lightning",
   NEBULA_LIQUID_CHROME: "nebula_liquid_chrome",
+  RETRO_GRID: "retro_grid",
 };
 
 interface BackgroundEffectState {

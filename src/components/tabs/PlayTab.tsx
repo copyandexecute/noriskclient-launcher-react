@@ -3,13 +3,13 @@
 import { useEffect } from "react";
 import { VersionInfo } from "../launcher/VersionInfo";
 import { NewsSection } from "../news/NewsSection";
-import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { useProfileStore } from "../../store/profile-store";
 import { Checkbox } from "../ui/Checkbox";
 import { useThemeStore } from "../../store/useThemeStore";
 import { PlayerActionsDisplay } from "../launcher/PlayerActionsDisplay";
+import { RetroGridEffect } from "../effects/RetroGridEffect";
 
 export function PlayTab() {
   const {
@@ -21,7 +21,7 @@ export function PlayTab() {
   } = useProfileStore();
 
   const { activeAccount } = useMinecraftAuthStore();
-  const { isBackgroundAnimationEnabled, toggleBackgroundAnimation } = useThemeStore();
+  const { isBackgroundAnimationEnabled, toggleBackgroundAnimation, accentColor } = useThemeStore();
 
   useEffect(() => {
     if (!storeSelectedProfile && profiles.length > 0) {
@@ -49,27 +49,30 @@ export function PlayTab() {
     : `https://crafatar.com/skins/606e2ff0-ed77-4842-9d6c-e1d3321c7838`;
 
   return (
-    <div className="flex h-full">
-      <div className="flex-grow flex flex-col items-center justify-center p-8 relative">
-        {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
-
-        <VersionInfo
-          profileId={currentDisplayProfile?.id || ""}
-          className="absolute top-6 left-6 z-10"
+    <div className="flex h-full relative">
+      <div className="flex-grow flex flex-col items-center justify-center p-8 relative z-10 overflow-hidden">
+        <RetroGridEffect 
+          renderMode="both"
+          isAnimationEnabled={isBackgroundAnimationEnabled}
+          customGridLineColor={`${accentColor.value}80`}
         />
 
-        <PlayerActionsDisplay 
-              skinUrl={skinUrl}
-          playerName={activeAccount?.minecraft_username || activeAccount?.username}
-          launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
-          onLaunchVersionChange={handleVersionChange}
-          launchButtonVersions={versions}
-          className="z-10"
-        />
+        <div className="relative z-10">
+          {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
 
+          <PlayerActionsDisplay
+            displayMode="logo"
+            skinUrl={skinUrl}
+            playerName={activeAccount?.minecraft_username || activeAccount?.username}
+            launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
+            onLaunchVersionChange={handleVersionChange}
+            launchButtonVersions={versions}
+            className=""
+          />
+        </div>
       </div>
 
-      <NewsSection className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col" />
+      <NewsSection className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col relative z-10" />
 
       <div className="absolute bottom-4 left-4 z-20">
         <Checkbox

@@ -9,6 +9,7 @@ interface SkinViewerProps {
   width?: number;
   height?: number;
   className?: string;
+  style?: React.CSSProperties; // Style-Prop hinzugefügt
   // autoRotate und enableZoom sind nicht mehr relevant für statische Bilder
 }
 
@@ -20,6 +21,7 @@ export function SkinViewer({
   width = 300, // Wird als CSS-Style für das img-Tag verwendet
   height = 400, // Wird als CSS-Style für das img-Tag verwendet
   className,
+  style, // Style-Prop destrukturieren
 }: SkinViewerProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
@@ -50,7 +52,7 @@ export function SkinViewer({
           "flex items-center justify-center bg-gray-700/50 rounded-md",
           className
         )}
-        style={{ width, height }}
+        style={{ width, height, ...style }} // Style hier auch für den Fehlerfall anwenden (optional)
       >
         <span className="text-gray-500 text-3xl">?</span> {/* Placeholder bei Fehler */}
       </div>
@@ -64,7 +66,10 @@ export function SkinViewer({
       width={width}
       height={height}
       className={cn("object-contain rounded-md", className)} // object-contain, damit Skin nicht verzerrt wird
-      style={{ imageRendering: "pixelated" }} // Wichtig für Minecraft-Skins
+      style={{ 
+        imageRendering: "pixelated",
+        ...style // Übergebene Styles hier mergen
+      }} // Wichtig für Minecraft-Skins
       onError={handleError}
     />
   );

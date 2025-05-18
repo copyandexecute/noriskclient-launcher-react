@@ -87,6 +87,11 @@ export function SettingsTab() {
       name: "Liquid Chrome",
       icon: "solar:liquid-bold",
     },
+    {
+      id: BACKGROUND_EFFECTS.RETRO_GRID,
+      name: "Retro Grid",
+      icon: "solar:squares-four-bold",
+    },
   ];
 
   const qualityOptions: { value: QualityLevel; label: string; icon: string }[] =
