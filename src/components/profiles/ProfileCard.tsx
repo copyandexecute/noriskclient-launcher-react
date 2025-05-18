@@ -38,7 +38,7 @@ export function ProfileCard({
     initializeProfile,
     getProfileState,
   } = useLaunchStateStore();
-  const accentColor = useThemeStore((state) => state.accentColor.value);
+  const accentColorValue = useThemeStore((state) => state.accentColor.value);
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -224,11 +224,13 @@ export function ProfileCard({
   return (
     <div
       ref={cardRef}
-      className="relative flex items-center p-3 transition-colors duration-150 rounded-lg border group focus-within:border-[var(--accent-color-soft)] w-full select-none"
+      className="relative flex items-center p-3 transition-colors duration-150 rounded-lg border-2 group focus-within:border-[var(--accent-color-soft)] w-full select-none"
       style={{
-        backgroundColor: isHovered ? `${accentColor}1A` : `${accentColor}0D`,
-        borderColor: isHovered ? `${accentColor}3A` : `${accentColor}26`,
-        '--accent-color-soft': `${accentColor}99`,
+        backgroundColor: isHovered 
+          ? `rgba(${parseInt(accentColorValue.slice(1, 3), 16)}, ${parseInt(accentColorValue.slice(3, 5), 16)}, ${parseInt(accentColorValue.slice(5, 7), 16)}, 0.1)` 
+          : 'transparent',
+        borderColor: isHovered ? `${accentColorValue}7A` : `${accentColorValue}26`,
+        '--accent-color-soft': `${accentColorValue}99`,
       } as React.CSSProperties}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -238,9 +240,9 @@ export function ProfileCard({
       <div
         className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden mr-4 border-2 border-b-4 flex items-center justify-center"
         style={{
-          backgroundColor: `${accentColor}1A`,
-          borderColor: `${accentColor}3A`,
-          borderBottomColor: `${accentColor}59`,
+          backgroundColor: `${accentColorValue}1A`,
+          borderColor: `${accentColorValue}3A`,
+          borderBottomColor: `${accentColorValue}59`,
         }}
       >
         {profileIconSrc ? (

@@ -36,7 +36,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       size = "md",
       disabled = false,
       icon,
-      shadowDepth = "default",
+      shadowDepth = "short",
       onClick,
       ...props
     },

@@ -122,13 +122,14 @@ export function VerticalNavbar({
       <div
         ref={navRef}
         className={cn(
-          "flex flex-col items-center py-6 w-24 bg-black/50 backdrop-blur-lg",
+          "flex flex-col items-center py-6 w-24 backdrop-blur-lg",
           className,
         )}
         style={{
+          backgroundColor: `rgba(${parseInt(accentColor.value.slice(1, 3), 16)}, ${parseInt(accentColor.value.slice(3, 5), 16)}, ${parseInt(accentColor.value.slice(5, 7), 16)}, 0.2)`,
           borderRight: `2px solid ${accentColor.value}60`,
           borderLeft: `2px solid ${accentColor.value}60`,
-          boxShadow: `0 0 15px ${accentColor.value}30 inset`,
+          boxShadow: `0 0 10px ${accentColor.value}30 inset`,
         }}
       >
         <div className="mb-12">

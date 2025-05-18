@@ -289,8 +289,11 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
 
   return (
     <div
-      className="h-20 flex-shrink-0 border-b-2 bg-black/40 backdrop-blur-lg flex items-center justify-between px-8 z-10"
-      style={{ borderColor: `${accentColor.value}40` }}
+      className="h-20 flex-shrink-0 border-b-2 backdrop-blur-lg flex items-center justify-between px-8 z-10"
+      style={{
+        borderColor: `${accentColor.value}40`,
+        backgroundColor: `rgba(${parseInt(accentColor.value.slice(1, 3), 16)}, ${parseInt(accentColor.value.slice(3, 5), 16)}, ${parseInt(accentColor.value.slice(5, 7), 16)}, 0.01)`
+      }}
       data-tauri-drag-region
     >
       <div className="flex items-center gap-4" data-tauri-drag-region>

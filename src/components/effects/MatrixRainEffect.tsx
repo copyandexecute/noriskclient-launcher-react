@@ -190,7 +190,14 @@ export default function MatrixRainEffect({
   }, [opacity, speed, accentColor.value, isBackgroundAnimationEnabled]);
 
   if (!isBackgroundAnimationEnabled) {
-    return null;
+    return (
+      <div
+        className={cn("absolute inset-0 w-full h-full", className)}
+        style={{
+          backgroundColor: '#121212',
+        }}
+      />
+    );
   }
 
   return (
