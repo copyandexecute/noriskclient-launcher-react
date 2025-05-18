@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { useThemeStore } from '../../store/useThemeStore';
 
@@ -12,6 +12,12 @@ interface ThemedSurfaceProps {
   surfaceRef?: React.Ref<HTMLDivElement>;
   alwaysActive?: boolean;
   baseColorHex?: string;
+  borderVisibility?: {
+    top?: boolean;
+    bottom?: boolean;
+    left?: boolean;
+    right?: boolean;
+  };
 }
 
 export function ThemedSurface({ 
@@ -22,8 +28,10 @@ export function ThemedSurface({
   surfaceRef, 
   alwaysActive = false,
   baseColorHex,
+  borderVisibility,
 }: ThemedSurfaceProps) {
   const accentColorValue = useThemeStore((state) => state.accentColor.value);
+  const [isSurfaceHovered, setIsSurfaceHovered] = useState(false);
 
   const isValidHex = (hex: string | undefined): hex is string => {
     if (!hex) return false;
@@ -42,6 +50,13 @@ export function ThemedSurface({
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
+  const {
+    top: showTopBorder = true,
+    bottom: showBottomBorder = true,
+    left: showLeftBorder = true,
+    right: showRightBorder = true,
+  } = borderVisibility || {};
+
   const styles = {
     '--surface-bg-default': parseHexToRgba(effectiveBaseColor, 0.03),
     '--surface-bg-hover': parseHexToRgba(effectiveBaseColor, 0.1),
@@ -50,19 +65,43 @@ export function ThemedSurface({
     '--surface-border-focus-within': `${effectiveBaseColor}99`,
   } as React.CSSProperties;
 
+  const getBorderClass = (
+    showBorderConfig: boolean, 
+    borderDirection: 't' | 'b' | 'l' | 'r'
+  ) => {
+    if (showBorderConfig) {
+      return alwaysActive
+        ? `border-${borderDirection}-[var(--surface-border-hover)]`
+        : `border-${borderDirection}-[var(--surface-border-default)] hover:border-${borderDirection}-[var(--surface-border-hover)] focus-within:border-${borderDirection}-[var(--surface-border-focus-within)]`;
+    } else if (isSurfaceHovered) {
+      return `border-${borderDirection}-[var(--surface-border-hover)]`;
+    }
+    return `border-${borderDirection}-transparent`;
+  };
+
   return (
     <div
       ref={surfaceRef}
       className={cn(
-        "relative p-3 transition-colors duration-150 rounded-lg border-2 group w-full select-none",
+        "relative p-3 transition-colors duration-150 w-full select-none rounded-lg",
         alwaysActive 
-          ? "bg-[var(--surface-bg-hover)] border-[var(--surface-border-hover)]"
-          : "bg-[var(--surface-bg-default)] hover:bg-[var(--surface-bg-hover)] border-[var(--surface-border-default)] hover:border-[var(--surface-border-hover)] focus-within:border-[var(--surface-border-focus-within)]",
+          ? "bg-[var(--surface-bg-hover)]"
+          : "bg-[var(--surface-bg-default)] hover:bg-[var(--surface-bg-hover)]",
+        
+        (showTopBorder || showBottomBorder || showLeftBorder || showRightBorder || isSurfaceHovered) && "border-2",
+
+        getBorderClass(showTopBorder, 't'),
+        getBorderClass(showBottomBorder, 'b'),
+        getBorderClass(showLeftBorder, 'l'),
+        getBorderClass(showRightBorder, 'r'),
+
         className
       )}
       style={styles}
       onClick={onClick}
       onContextMenu={onContextMenu}
+      onMouseEnter={() => setIsSurfaceHovered(true)}
+      onMouseLeave={() => setIsSurfaceHovered(false)}
     >
       {children}
     </div>
