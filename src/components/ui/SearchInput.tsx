@@ -6,6 +6,7 @@ import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
+import { ThemedSurface } from "./ThemedSurface";
 
 interface SearchInputProps {
   value: string;
@@ -16,7 +17,7 @@ interface SearchInputProps {
   loading?: boolean;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "minimal" | "filled";
+  variant?: "default" | "minimal" | "filled" | "themed-surface";
 }
 
 export function SearchInput({
@@ -42,22 +43,26 @@ export function SearchInput({
       text: "text-sm",
       icon: "w-3 h-3",
       padding: "px-2",
+      surfacePadding: "!p-0",
     },
     md: {
       container: "h-10",
       text: "text-base",
       icon: "w-4 h-4",
       padding: "px-3",
+      surfacePadding: "!p-0",
     },
     lg: {
       container: "h-12",
       text: "text-lg",
       icon: "w-5 h-5",
       padding: "px-4",
+      surfacePadding: "!p-0",
     },
   };
 
   useEffect(() => {
+    if (variant === "themed-surface") return;
     if (containerRef.current) {
       gsap.fromTo(
         containerRef.current,
@@ -70,16 +75,15 @@ export function SearchInput({
         },
       );
     }
-  }, []);
+  }, [variant]);
 
   const handleFocus = () => {
-    if (disabled) return;
+    if (disabled || variant === "themed-surface") return;
     setIsFocused(true);
-
     if (containerRef.current) {
       gsap.to(containerRef.current, {
         y: -5,
-        boxShadow: `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+        boxShadow: variantStyles.focusShadow,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -87,13 +91,12 @@ export function SearchInput({
   };
 
   const handleBlur = () => {
-    if (disabled) return;
+    if (disabled || variant === "themed-surface") return;
     setIsFocused(false);
-
     if (containerRef.current) {
       gsap.to(containerRef.current, {
         y: 0,
-        boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        boxShadow: variantStyles.shadow,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -101,13 +104,12 @@ export function SearchInput({
   };
 
   const handleMouseEnter = () => {
-    if (disabled) return;
+    if (disabled || variant === "themed-surface") return;
     setIsHovered(true);
-
     if (!isFocused && containerRef.current) {
       gsap.to(containerRef.current, {
         y: -3,
-        boxShadow: `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+        boxShadow: variantStyles.hoverShadow,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -115,13 +117,12 @@ export function SearchInput({
   };
 
   const handleMouseLeave = () => {
-    if (disabled) return;
+    if (disabled || variant === "themed-surface") return;
     setIsHovered(false);
-
     if (!isFocused && containerRef.current) {
       gsap.to(containerRef.current, {
         y: 0,
-        boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        boxShadow: variantStyles.shadow,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -147,69 +148,74 @@ export function SearchInput({
       case "minimal":
         return {
           bg: "transparent",
-          border: "border-b-2 border-white/30 rounded-none",
+          borderClass: "border-b-2 border-white/30 rounded-none",
+          borderColorStyle: undefined,
+          borderBottomColorStyle: undefined,
           shadow: "shadow-none",
           hoverShadow: "shadow-none",
           focusShadow: "shadow-none",
+          containerTransform: "translateY(0)",
+          applyTopSpan: false,
         };
       case "filled":
         return {
-          bg: `${accentColor.value}40`,
-          border: "border-none rounded-md",
+          bg: `${accentColor.value}20`,
+          borderClass: "border-none rounded-md",
+          borderColorStyle: undefined,
+          borderBottomColorStyle: undefined,
           shadow: `shadow-inner shadow-black/20`,
           hoverShadow: `shadow-inner shadow-black/30`,
           focusShadow: `shadow-inner shadow-black/30`,
+          containerTransform: "translateY(0)",
+          applyTopSpan: false,
+        };
+      case "themed-surface":
+        return {
+          bg: "transparent",
+          borderClass: "border-none",
+          borderColorStyle: undefined,
+          borderBottomColorStyle: undefined,
+          shadow: "shadow-none",
+          hoverShadow: "shadow-none",
+          focusShadow: "shadow-none",
+          containerTransform: "translateY(0)",
+          applyTopSpan: false,
         };
       default:
+        const currentShadow = isFocused
+          ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
+          : isHovered
+            ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`
+            : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`;
         return {
           bg: `${accentColor.value}30`,
-          border: "border-2 border-b-4 rounded-md",
-          shadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          borderClass: "border-2 border-b-4 rounded-md",
+          borderColorStyle: `${accentColor.value}60`,
+          borderBottomColorStyle: accentColor.value,
+          shadow: currentShadow,
           hoverShadow: `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
           focusShadow: `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+          containerTransform: isFocused ? "translateY(-5px)" : isHovered ? "translateY(-3px)" : "translateY(0)",
+          applyTopSpan: true,
         };
     }
   };
 
   const variantStyles = getVariantStyles();
 
-  return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "relative flex items-center transition-all duration-200",
-        variantStyles.border,
-        sizeConfig[size].container,
-        disabled && "opacity-50 cursor-not-allowed",
-        className,
-      )}
-      style={{
-        backgroundColor: variantStyles.bg,
-        borderColor:
-          variant === "default" ? `${accentColor.value}60` : undefined,
-        borderBottomColor:
-          variant === "default" ? accentColor.value : undefined,
-        boxShadow: variantStyles.shadow,
-        transform: isFocused
-          ? "translateY(-5px)"
-          : isHovered
-            ? "translateY(-3px)"
-            : "translateY(0)",
-      }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {variant === "default" && (
+  const inputContent = (
+    <>
+      {variantStyles.applyTopSpan && (
         <span
           className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
           style={{ backgroundColor: `${accentColor.value}80` }}
         />
       )}
-
       <div
         className={cn(
-          "flex items-center justify-center w-10 h-full text-white",
+          "flex items-center justify-center h-full text-white",
           sizeConfig[size].padding,
+          variant === "themed-surface" ? "" : "w-10"
         )}
       >
         {loading ? (
@@ -233,7 +239,8 @@ export function SearchInput({
         className={cn(
           "flex-1 h-full bg-transparent border-none outline-none text-white font-minecraft placeholder:text-white/50 lowercase",
           sizeConfig[size].text,
-          sizeConfig[size].padding,
+          sizeConfig[size].padding.replace("px-", "pr-"),
+          variant === "themed-surface" ? "pl-0" : sizeConfig[size].padding.replace("px-", "pl-"),
         )}
         onFocus={handleFocus}
         onBlur={handleBlur}
@@ -244,8 +251,9 @@ export function SearchInput({
           type="button"
           onClick={handleClear}
           className={cn(
-            "flex items-center justify-center w-8 h-full transition-opacity duration-200 hover:opacity-80 text-white",
-            sizeConfig[size].padding,
+            "flex items-center justify-center h-full transition-opacity duration-200 hover:opacity-80 text-white",
+            sizeConfig[size].padding.replace("px-", "px-"),
+            variant === "themed-surface" ? "w-auto" : "w-8"
           )}
           tabIndex={-1}
         >
@@ -263,8 +271,9 @@ export function SearchInput({
           disabled={disabled || loading}
           className={cn(
             "flex items-center justify-center h-full transition-opacity duration-200 hover:opacity-80 text-white",
-            sizeConfig[size].padding,
-            "border-l border-white/20",
+            sizeConfig[size].padding.replace("px-", "px-"),
+            variant === "themed-surface" ? "border-l-0" : "border-l border-white/20",
+            variant === "themed-surface" ? "w-auto" : ""
           )}
         >
           <Icon
@@ -273,6 +282,42 @@ export function SearchInput({
           />
         </button>
       )}
+    </>
+  );
+
+  if (variant === "themed-surface") {
+    return (
+      <ThemedSurface 
+        className={cn(sizeConfig[size].surfacePadding, className)}
+      >
+        <div className={cn("flex items-center w-full", sizeConfig[size].container)}>
+         {inputContent}
+        </div>
+      </ThemedSurface>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative flex items-center transition-all duration-200",
+        variantStyles.borderClass,
+        sizeConfig[size].container,
+        disabled && "opacity-50 cursor-not-allowed",
+        className
+      )}
+      style={{
+        backgroundColor: variantStyles.bg,
+        borderColor: variantStyles.borderColorStyle,
+        borderBottomColor: variantStyles.borderBottomColorStyle,
+        boxShadow: variantStyles.shadow,
+        transform: variantStyles.containerTransform,
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {inputContent}
     </div>
   );
 }

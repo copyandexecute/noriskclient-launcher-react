@@ -122,6 +122,7 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
             onChange={onSearchTermChange}
             placeholder={`Search for ${projectType}s...`}
             className={`flex-grow h-[48px]`}
+            variant="themed-surface"
           />
           
           <Select
