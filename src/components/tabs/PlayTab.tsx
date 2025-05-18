@@ -10,6 +10,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { useThemeStore } from "../../store/useThemeStore";
 import { PlayerActionsDisplay } from "../launcher/PlayerActionsDisplay";
 import { RetroGridEffect } from "../effects/RetroGridEffect";
+import { useBackgroundEffectStore, BACKGROUND_EFFECTS } from "../../store/background-effect-store";
 
 export function PlayTab() {
   const {
@@ -22,6 +23,7 @@ export function PlayTab() {
 
   const { activeAccount } = useMinecraftAuthStore();
   const { isBackgroundAnimationEnabled, toggleBackgroundAnimation, accentColor } = useThemeStore();
+  const { currentEffect } = useBackgroundEffectStore();
 
   useEffect(() => {
     if (!storeSelectedProfile && profiles.length > 0) {
@@ -51,17 +53,24 @@ export function PlayTab() {
   return (
     <div className="flex h-full relative">
       <div className="flex-grow flex flex-col items-center justify-center p-8 relative z-10 overflow-hidden">
-        <RetroGridEffect 
-          renderMode="both"
-          isAnimationEnabled={isBackgroundAnimationEnabled}
-          customGridLineColor={`${accentColor.value}80`}
+        {currentEffect === BACKGROUND_EFFECTS.RETRO_GRID && (
+          <RetroGridEffect
+            renderMode="both"
+            isAnimationEnabled={isBackgroundAnimationEnabled}
+            customGridLineColor={`${accentColor.value}80`}
+          />
+        )}
+
+        <VersionInfo
+          profileId={currentDisplayProfile?.id || ""}
+          className="absolute top-6 left-6 z-10"
         />
 
         <div className="relative z-10">
           {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
 
           <PlayerActionsDisplay
-            displayMode="logo"
+            displayMode="playerName"
             skinUrl={skinUrl}
             playerName={activeAccount?.minecraft_username || activeAccount?.username}
             launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
