@@ -38,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       disabled = false,
       icon,
       iconPosition = "left",
-      shadowDepth = "default",
+      shadowDepth = "short",
       onClick,
       ...props
     },

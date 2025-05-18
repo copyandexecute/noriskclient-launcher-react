@@ -1,11 +1,10 @@
 "use client";
-
-import type React from "react";
 import { useMemo } from "react";
-import Lightning from "./Lightning";
+import { Lightning } from "./Lightning";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
-interface AccentLightningProps {
+interface NebulaLightningProps {
   speed?: number;
   intensity?: number;
   size?: number;
@@ -14,15 +13,21 @@ interface AccentLightningProps {
   className?: string;
 }
 
-const AccentLightning: React.FC<AccentLightningProps> = ({
+export function NebulaLightning({
   speed = 0.8,
   intensity = 1.2,
   size = 1.5,
   xOffset = 0,
   opacity = 0.7,
   className = "",
-}) => {
+}: NebulaLightningProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { qualityLevel } = useQualitySettingsStore();
+
+  const qualityMultiplier =
+    qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+  const adjustedSpeed = speed * qualityMultiplier;
+  const adjustedIntensity = intensity * qualityMultiplier;
 
   const hue = useMemo(() => {
     const hexToRgb = (hex: string) => {
@@ -78,13 +83,11 @@ const AccentLightning: React.FC<AccentLightningProps> = ({
     <div className={`absolute inset-0 ${className}`} style={{ opacity }}>
       <Lightning
         hue={hue}
-        speed={speed}
-        intensity={intensity}
+        speed={adjustedSpeed}
+        intensity={adjustedIntensity}
         size={size}
         xOffset={xOffset}
       />
     </div>
   );
-};
-
-export default AccentLightning;
+}

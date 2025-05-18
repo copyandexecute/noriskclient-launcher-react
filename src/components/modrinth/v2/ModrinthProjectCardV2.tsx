@@ -17,6 +17,7 @@ import { ModrinthVersionListV2 } from "./ModrinthVersionListV2";
 import { openExternalUrl } from "../../../services/tauri-service";
 import { toast } from "react-hot-toast";
 import { preloadIcons } from "../../../lib/icon-utils";
+import { ThemedSurface } from "../../ui/ThemedSurface";
 
 type Profile = any;
 
@@ -77,6 +78,7 @@ interface VersionListPassthroughProps {
     newEnabledState: boolean,
     sha1Hash: string,
   ) => void;
+  itemIndex?: number;
 }
 
 export interface ModrinthProjectCardV2Props
@@ -148,6 +150,7 @@ export interface ModrinthProjectCardV2Props
     newEnabledState: boolean,
     sha1Hash: string,
   ) => void;
+  itemIndex?: number;
 }
 
 export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
@@ -186,6 +189,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
     selectedProfileId,
     onDeleteVersionClick,
     onToggleEnableClick,
+    itemIndex,
   }) => {
     useEffect(() => {
       preloadIcons([
@@ -196,10 +200,11 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
     }, []);
 
     return (
-      <div
+      <ThemedSurface
+        baseColorHex={accentColor.value}
         className={cn(
           "p-4 flex flex-col gap-4 transition-colors",
-          "relative overflow-hidden rounded-lg border backdrop-blur-sm",
+          "relative overflow-hidden",
           installStatus?.is_installed &&
             !installStatus?.is_included_in_norisk_pack &&
             "border-l-green-500",
@@ -209,10 +214,13 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
           installStatus?.is_installed &&
             installStatus?.is_included_in_norisk_pack &&
             "border-l-blue-500",
+          "backdrop-blur-sm"
         )}
-        style={{
-          backgroundColor: `${accentColor.value}08`,
-          borderColor: `${accentColor.value}20`,
+        borderVisibility={{
+          top: itemIndex === 0,
+          bottom: true,
+          left: true,
+          right: true,
         }}
       >
         <div className="flex flex-row items-start gap-4 w-full">
@@ -470,7 +478,8 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                 }}
                 size="sm"
                 shadowDepth="short"
-                variant="default"
+                colorScheme="default"
+                displayVariant="button"
                 icon={
                   isLoadingVersions ? (
                     <svg
@@ -547,7 +556,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
               onToggleEnableClick={onToggleEnableClick}
             />
           )}
-      </div>
+      </ThemedSurface>
     );
   },
 );

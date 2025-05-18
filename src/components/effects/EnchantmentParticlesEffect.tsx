@@ -1,14 +1,16 @@
 "use client";
 
-import type React from "react";
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
 interface EnchantmentParticlesEffectProps {
   opacity?: number;
   className?: string;
   particleCount?: number;
   interactive?: boolean;
+  speed?: number;
+  forceEnable?: boolean;
 }
 
 interface Particle {
@@ -24,20 +26,26 @@ interface Particle {
   character: string;
 }
 
-const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
+export function EnchantmentParticlesEffect({
   opacity = 0.5,
   className,
   particleCount = 150,
   interactive = true,
-}) => {
+  speed = 1,
+  forceEnable = false,
+}: EnchantmentParticlesEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { accentColor } = useThemeStore();
+  const { accentColor, isBackgroundAnimationEnabled } = useThemeStore();
   const particlesRef = useRef<Particle[]>([]);
   const mouseRef = useRef<{ x: number | null; y: number | null }>({
     x: null,
     y: null,
   });
   const animationFrameRef = useRef<number>();
+  const { qualityLevel } = useQualitySettingsStore();
+
+  // This is the key line - we need to respect forceEnable
+  const shouldRender = forceEnable || isBackgroundAnimationEnabled;
 
   const hexToRgba = (hex: string, alpha: number) => {
     const r = Number.parseInt(hex.slice(1, 3), 16);
@@ -47,11 +55,19 @@ const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
   };
 
   useEffect(() => {
+    if (!shouldRender) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const context = canvas.getContext("2d");
     if (!context) return;
+
+    // Adjust based on quality level
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedParticleCount = Math.floor(particleCount * qualityMultiplier);
+    const adjustedSpeed = speed * qualityMultiplier;
 
     const enchantmentChars = [
       "⍑",
@@ -90,7 +106,7 @@ const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
 
     const initParticles = () => {
       particlesRef.current = [];
-      for (let i = 0; i < particleCount; i++) {
+      for (let i = 0; i < adjustedParticleCount; i++) {
         createParticle(
           Math.random() * canvas.width,
           Math.random() * canvas.height,
@@ -107,8 +123,10 @@ const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
       const particle: Particle = {
         x,
         y,
-        vx: randomVelocity ? (Math.random() - 0.5) * 0.5 : 0,
-        vy: randomVelocity ? -Math.random() * 1 - 0.5 : -1 - Math.random(),
+        vx: randomVelocity ? (Math.random() - 0.5) * 0.5 * adjustedSpeed : 0,
+        vy: randomVelocity
+          ? -Math.random() * 1 - 0.5 * adjustedSpeed
+          : -1 - Math.random() * adjustedSpeed,
         size: Math.random() * 12 + 8,
         alpha: Math.random() * 0.6 + 0.2,
         color: hexToRgba(accentColor.value, 1),
@@ -157,7 +175,7 @@ const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
         particle.x += particle.vx;
         particle.y += particle.vy;
 
-        particle.x += Math.sin(particle.life * 0.05) * 0.2;
+        particle.x += Math.sin(particle.life * 0.05) * 0.2 * adjustedSpeed;
 
         particle.vy *= 0.99;
 
@@ -200,7 +218,32 @@ const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [accentColor.value, opacity, particleCount, interactive]);
+  }, [
+    accentColor.value,
+    opacity,
+    particleCount,
+    interactive,
+    speed,
+    qualityLevel,
+    shouldRender,
+  ]);
+
+  if (!shouldRender) {
+    return (
+      <div
+        className={className}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+        }}
+      />
+    );
+  }
 
   return (
     <canvas
@@ -216,6 +259,4 @@ const EnchantmentParticlesEffect: React.FC<EnchantmentParticlesEffectProps> = ({
       }}
     />
   );
-};
-
-export default EnchantmentParticlesEffect;
+}

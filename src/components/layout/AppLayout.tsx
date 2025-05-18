@@ -12,14 +12,15 @@ import {
   BACKGROUND_EFFECTS,
   useBackgroundEffectStore,
 } from "../../store/background-effect-store";
-import MatrixRainEffect from ".././effects/MatrixRainEffect";
-import EnchantmentParticlesEffect from ".././effects/EnchantmentParticlesEffect";
-import AccentWaves from ".././effects/AccentWaves";
-import AccentParticles from ".././effects/AccentParticles";
-import AccentGrid from ".././effects/AccentGrid";
-import AccentVoxels from ".././effects/AccentVoxels";
-import AccentLightning from ".././effects/AccentLightning";
-import AccentLiquidChrome from ".././effects/AccentLiquidChrome";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
+import { MatrixRainEffect } from ".././effects/MatrixRainEffect";
+import { EnchantmentParticlesEffect } from ".././effects/EnchantmentParticlesEffect";
+import { NebulaWaves } from ".././effects/NebulaWaves";
+import { NebulaParticles } from ".././effects/NebulaParticles";
+import { NebulaGrid } from ".././effects/NebulaGrid";
+import { NebulaVoxels } from ".././effects/NebulaVoxels";
+import { NebulaLightning } from ".././effects/NebulaLightning";
+import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
 import * as ConfigService from "../../services/launcher-config-service";
 
 const navItems = [
@@ -54,12 +55,11 @@ export function AppLayout({
   const closeRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
 
-  // Get the current background effect from our store
   const { currentEffect } = useBackgroundEffectStore();
+  const { qualityLevel } = useQualitySettingsStore();
+  const { isBackgroundAnimationEnabled } = useThemeStore();
 
-  // Function to create a dark background color that complements the accent color
   const getComplementaryBackground = () => {
-    // Convert hex to RGB
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
       return result
@@ -68,18 +68,15 @@ export function AppLayout({
             g: Number.parseInt(result[2], 16),
             b: Number.parseInt(result[3], 16),
           }
-        : { r: 34, g: 34, b: 34 }; // Default to #222 if parsing fails
+        : { r: 34, g: 34, b: 34 };
     };
 
     const rgb = hexToRgb(accentColor.value);
 
-    // Create a very dark version of the accent color (10% of original)
-    // This ensures it's dark enough for readability but still has a hint of the accent
     const darkR = Math.floor(rgb.r * 0.1);
     const darkG = Math.floor(rgb.g * 0.1);
     const darkB = Math.floor(rgb.b * 0.1);
 
-    // Ensure the background is not too bright (max 30 per channel)
     const finalR = Math.min(darkR, 30);
     const finalG = Math.min(darkG, 30);
     const finalB = Math.min(darkB, 30);
@@ -87,8 +84,20 @@ export function AppLayout({
     return `rgb(${finalR}, ${finalG}, ${finalB})`;
   };
 
-  // Get the background color
   const backgroundColor = getComplementaryBackground();
+
+  const getQualityParams = () => {
+    switch (qualityLevel) {
+      case "low":
+        return { particleCount: 30, opacity: 0.2, speed: 0.5 };
+      case "high":
+        return { particleCount: 80, opacity: 0.4, speed: 1.5 };
+      default:
+        return { particleCount: 50, opacity: 0.3, speed: 1 };
+    }
+  };
+
+  const qualityParams = getQualityParams();
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -111,7 +120,6 @@ export function AppLayout({
 
     const setupWindowControls = async () => {
       try {
-        // Try to import Tauri API, but don't fail if not available (for web development)
         const tauriModule = await import("@tauri-apps/api/window").catch(
           () => null,
         );
@@ -138,7 +146,6 @@ export function AppLayout({
             );
           }
         } else {
-          // Fallback for web development
           console.log(
             "Tauri API not available, window controls will be decorative only",
           );
@@ -156,38 +163,78 @@ export function AppLayout({
   const renderBackgroundEffect = () => {
     switch (currentEffect) {
       case BACKGROUND_EFFECTS.MATRIX_RAIN:
-        return <MatrixRainEffect />;
-      case BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES:
-        return <EnchantmentParticlesEffect opacity={0.3} />;
-      case BACKGROUND_EFFECTS.ACCENT_WAVES:
-        return <AccentWaves opacity={0.2} speed={1} />;
-      case BACKGROUND_EFFECTS.ACCENT_PARTICLES:
-        return <AccentParticles opacity={0.3} particleCount={50} speed={1} />;
-      case BACKGROUND_EFFECTS.ACCENT_GRID:
-        return <AccentGrid opacity={0.15} speed={1} gridSize={30} />;
-      case BACKGROUND_EFFECTS.ACCENT_VOXELS:
-        return <AccentVoxels opacity={0.2} cubeCount={30} speed={1} />;
-      case BACKGROUND_EFFECTS.ACCENT_LIGHTNING:
         return (
-          <AccentLightning
-            opacity={0.7}
-            speed={0.8}
-            intensity={1.2}
+          <MatrixRainEffect
+            speed={qualityParams.speed}
+            opacity={qualityParams.opacity}
+            forceEnable={true}
+          />
+        );
+      case BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES:
+        return (
+          <EnchantmentParticlesEffect
+            opacity={qualityParams.opacity}
+            particleCount={qualityParams.particleCount}
+            speed={qualityParams.speed}
+            forceEnable={true}
+          />
+        );
+      case BACKGROUND_EFFECTS.NEBULA_WAVES:
+        return (
+          <NebulaWaves
+            opacity={qualityParams.opacity}
+            speed={qualityParams.speed}
+          />
+        );
+      case BACKGROUND_EFFECTS.NEBULA_PARTICLES:
+        return (
+          <NebulaParticles
+            opacity={qualityParams.opacity}
+            particleCount={qualityParams.particleCount}
+            speed={qualityParams.speed}
+          />
+        );
+      case BACKGROUND_EFFECTS.NEBULA_GRID:
+        return (
+          <NebulaGrid
+            opacity={qualityParams.opacity}
+            speed={qualityParams.speed}
+            gridSize={30}
+          />
+        );
+      case BACKGROUND_EFFECTS.NEBULA_VOXELS:
+        return (
+          <NebulaVoxels
+            opacity={qualityParams.opacity}
+            cubeCount={qualityParams.particleCount}
+            speed={qualityParams.speed}
+          />
+        );
+      case BACKGROUND_EFFECTS.NEBULA_LIGHTNING:
+        return (
+          <NebulaLightning
+            opacity={qualityParams.opacity * 2}
+            speed={qualityParams.speed}
+            intensity={qualityParams.speed * 1.2}
             size={1.5}
           />
         );
-      case BACKGROUND_EFFECTS.ACCENT_LIQUID_CHROME:
+      case BACKGROUND_EFFECTS.NEBULA_LIQUID_CHROME:
         return (
-          <AccentLiquidChrome
-            opacity={0.7}
-            speed={0.2}
+          <NebulaLiquidChrome
+            opacity={qualityParams.opacity * 2}
+            speed={qualityParams.speed * 0.2}
             amplitude={0.5}
             frequencyX={3}
             frequencyY={2}
           />
         );
       default:
-        return <MatrixRainEffect />;
+        return (
+          <div className="absolute inset-0 bg-red-500/20">
+            Unknown effect: {currentEffect}
+          </div>
+        );
     }
   };
 
@@ -289,20 +336,28 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
 
   return (
     <div
-      className="h-20 flex-shrink-0 border-b-2 bg-black/40 backdrop-blur-lg flex items-center justify-between px-8 z-10"
-      style={{ borderColor: `${accentColor.value}40` }}
+      className="h-20 flex-shrink-0 border-b-2 backdrop-blur-lg flex items-center justify-between px-8 z-10"
+      style={{
+        borderColor: `${accentColor.value}40`,
+        backgroundColor: `rgba(${Number.parseInt(accentColor.value.slice(1, 3), 16)}, ${Number.parseInt(
+          accentColor.value.slice(3, 5),
+          16,
+        )}, ${Number.parseInt(accentColor.value.slice(5, 7), 16)}, 0.01)`,
+      }}
       data-tauri-drag-region
     >
       <div className="flex items-center gap-4" data-tauri-drag-region>
-        <h1
-          className="font-minecraft text-4xl tracking-wider text-white font-bold uppercase text-shadow"
-          data-tauri-drag-region
-        >
-          <span className="text-white">noriskclient</span>
-          <span className="text-white/70 font-minecraft-ten text-[8px] font-normal ml-2">
+        <div className="flex flex-col items-start">
+          <h1
+            className="font-minecraft text-4xl tracking-wider text-white font-bold lowercase text-shadow"
+            data-tauri-drag-region
+          >
+            noriskclient
+          </h1>
+          <span className="text-white/70 font-minecraft-ten text-[8px] font-normal -mt-2.5">
             {appVersion || "v?.?.?"}
           </span>
-        </h1>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">

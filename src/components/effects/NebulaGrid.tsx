@@ -2,22 +2,24 @@
 
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
-interface AccentGridProps {
+interface NebulaGridProps {
   opacity?: number;
   speed?: number;
   gridSize?: number;
   className?: string;
 }
 
-export default function AccentGrid({
+export function NebulaGrid({
   opacity = 0.15,
   speed = 1,
   gridSize = 30,
   className = "",
-}: AccentGridProps) {
+}: NebulaGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { qualityLevel } = useQualitySettingsStore();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,6 +30,16 @@ export default function AccentGrid({
 
     let animationFrameId: number;
     let time = 0;
+
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedSpeed = speed * qualityMultiplier;
+    const adjustedGridSize =
+      qualityLevel === "low"
+        ? gridSize * 1.5
+        : qualityLevel === "high"
+          ? gridSize * 0.7
+          : gridSize;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -55,12 +67,12 @@ export default function AccentGrid({
 
       ctx.clearRect(0, 0, width, height);
 
-      const cellSize = gridSize;
+      const cellSize = adjustedGridSize;
       const cols = Math.ceil(width / cellSize) + 1;
       const rows = Math.ceil(height / cellSize) + 1;
 
-      const offsetX = (time * speed * 0.5) % cellSize;
-      const offsetY = (time * speed * 0.3) % cellSize;
+      const offsetX = (time * adjustedSpeed * 0.5) % cellSize;
+      const offsetY = (time * adjustedSpeed * 0.3) % cellSize;
 
       for (let y = 0; y < rows; y++) {
         const posY = y * cellSize - offsetY;
@@ -96,7 +108,8 @@ export default function AccentGrid({
           const posY = y * cellSize - offsetY;
 
           const pulse =
-            0.5 + 0.5 * Math.sin(x * 0.5 + y * 0.5 + time * 0.003 * speed);
+            0.5 +
+            0.5 * Math.sin(x * 0.5 + y * 0.5 + time * 0.003 * adjustedSpeed);
           const dotSize = 2 * pulse;
           const dotOpacity = opacity * pulse;
 
@@ -120,7 +133,7 @@ export default function AccentGrid({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, opacity, speed, gridSize]);
+  }, [accentColor.value, opacity, speed, gridSize, qualityLevel]);
 
   return (
     <canvas

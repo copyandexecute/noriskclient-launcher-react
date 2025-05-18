@@ -1946,7 +1946,8 @@ export function ModrinthSearchV2({
 
                 return (
                   <ModrinthProjectCardV2
-                    key={hit.project_id} // Virtuoso manages keys, but good practice if used elsewhere
+                    key={hit.project_id}
+                    itemIndex={index} // Pass Virtuoso index as itemIndex
                     hit={hit}
                     accentColor={accentColor}
                     installStatus={currentProjectInstallStatus}

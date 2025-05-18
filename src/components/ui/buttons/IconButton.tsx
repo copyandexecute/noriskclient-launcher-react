@@ -5,10 +5,11 @@ import { forwardRef, useEffect, useRef, useState } from "react";
 import { cn } from "../../../lib/utils";
 import { gsap } from "gsap";
 import { useThemeStore } from "../../../store/useThemeStore";
+import { ThemedSurface } from "../ThemedSurface";
 
 interface IconButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?:
+  colorScheme?:
     | "default"
     | "secondary"
     | "ghost"
@@ -16,6 +17,7 @@ interface IconButtonProps
     | "destructive"
     | "info"
     | "success";
+  displayVariant?: "button" | "ghost" | "themed-surface";
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   icon: React.ReactNode;
   shadowDepth?: "default" | "short";
@@ -32,11 +34,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   (
     {
       className,
-      variant = "default",
+      colorScheme = "default",
+      displayVariant = "button",
       size = "md",
       disabled = false,
       icon,
-      shadowDepth = "default",
+      shadowDepth = "short",
       onClick,
       ...props
     },
@@ -139,7 +142,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (disabled) return;
       setIsHovered(true);
 
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
+      if (buttonRef.current && isBackgroundAnimationEnabled && displayVariant === 'button' && colorScheme !== 'ghost') {
         const part1Y = shadowDepth === 'short' ? '7px' : '13px';
         const part2Y = shadowDepth === 'short' ? '10px' : '16px';
         const part2Blur = shadowDepth === 'short' ? '15px' : '20px';
@@ -147,9 +150,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         gsap.to(buttonRef.current, {
           y: -5,
           boxShadow:
-            variant === "ghost"
-              ? "none"
-              : `0 ${part1Y} 0 rgba(0,0,0,0.25), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.4)`,
+            `0 ${part1Y} 0 rgba(0,0,0,0.25), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.4)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -160,7 +161,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (disabled) return;
       setIsHovered(false);
 
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
+      if (buttonRef.current && isBackgroundAnimationEnabled && displayVariant === 'button' && colorScheme !== 'ghost') {
         const part1Y = shadowDepth === 'short' ? '4px' : '8px';
         const part2Y = shadowDepth === 'short' ? '6px' : '10px';
         const part2Blur = shadowDepth === 'short' ? '10px' : '15px';
@@ -168,9 +169,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         gsap.to(buttonRef.current, {
           y: 0,
           boxShadow:
-            variant === "ghost"
-              ? "none"
-              : `0 ${part1Y} 0 rgba(0,0,0,0.3), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.35)`,
+            `0 ${part1Y} 0 rgba(0,0,0,0.3), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.35)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -181,8 +180,15 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       }
     };
 
-    const getVariantColors = () => {
-      switch (variant) {
+    const getColorSchemeDetails = () => {
+      switch (colorScheme) {
+        case "default":
+          return {
+            main: accentColor.value,
+            light: accentColor.hoverValue,
+            dark: accentColor.value,
+            text: "#ffffff",
+          };
         case "warning":
           return {
             main: "#f59e0b",
@@ -235,7 +241,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       }
     };
 
-    const colors = getVariantColors();
+    const colors = getColorSchemeDetails();
 
     const sizeStyles = {
       xs: "h-[32px] w-[32px] text-sm",
@@ -253,16 +259,15 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       xl: "w-8 h-8",
     };
 
-    const getBackgroundColor = () => {
-      if (variant === "ghost") return "transparent";
+    const getBackgroundColorForButton = () => {
+      if (displayVariant === 'ghost' || displayVariant === 'themed-surface' || colorScheme === 'ghost') return "transparent";
 
       const baseOpacity = isHovered ? "50" : "30";
       return `${colors.main}${baseOpacity}`;
     };
 
-    const getBorderColor = () => {
-      if (variant === "ghost") return "transparent";
-
+    const getBorderColorForButton = () => {
+      if (displayVariant === 'ghost' || displayVariant === 'themed-surface' || colorScheme === 'ghost') return "transparent";
       return isHovered ? `${colors.light}` : `${colors.main}80`;
     };
 
@@ -270,11 +275,54 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     const initialPart2Y = shadowDepth === 'short' ? '6px' : '10px';
     const initialPart2Blur = shadowDepth === 'short' ? '10px' : '15px';
 
-    const initialBoxShadow = variant === "ghost"
-        ? "none"
-        : `0 ${initialPart1Y} 0 rgba(0,0,0,0.3), 0 ${initialPart2Y} ${initialPart2Blur} rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`;
+    const initialBoxShadowForButton = (displayVariant === 'button' && colorScheme !== 'ghost')
+        ? `0 ${initialPart1Y} 0 rgba(0,0,0,0.3), 0 ${initialPart2Y} ${initialPart2Blur} rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
+        : "none";
 
-    return (
+    const buttonBaseClasses = cn(
+      "font-minecraft relative overflow-hidden transition-all duration-200",
+      displayVariant !== 'themed-surface' && "rounded-md",
+      "text-white tracking-wider",
+      "flex items-center justify-center",
+      "text-shadow-sm",
+      "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
+      "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0",
+    );
+
+    const buttonDisplayVariantSpecificClasses = displayVariant === 'button' && colorScheme !== 'ghost' ? cn(
+      shadowDepth === 'default' &&
+        "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+      shadowDepth === 'short' &&
+        "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+      shadowDepth === 'default' &&
+        "disabled:hover:shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+      shadowDepth === 'short' &&
+        "disabled:hover:shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]"
+    ) : displayVariant === 'themed-surface' ? "w-full h-full bg-transparent border-none shadow-none"
+      : "bg-transparent border-none shadow-none";
+    
+    const buttonDynamicStyles: React.CSSProperties = {
+      backgroundColor: getBackgroundColorForButton(),
+      borderColor: getBorderColorForButton(),
+      borderBottomColor:
+        (displayVariant === 'ghost' || displayVariant === 'themed-surface' || colorScheme === 'ghost')
+          ? "transparent"
+          : isHovered
+            ? colors.light
+            : colors.dark,
+      boxShadow: (displayVariant === 'button' && colorScheme !== 'ghost') 
+        ? (isHovered 
+            ? `0 ${shadowDepth === 'short' ? '7px' : '13px'} 0 rgba(0,0,0,0.25), 0 ${shadowDepth === 'short' ? '10px' : '16px'} ${shadowDepth === 'short' ? '15px' : '20px'} rgba(0,0,0,0.4), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
+            : initialBoxShadowForButton)
+        : 'none',
+      color: colors.text,
+      transform: (displayVariant === 'button' && colorScheme !== 'ghost' && isHovered && !disabled) ? "translateY(-5px)" : "translateY(0)",
+      filter: (displayVariant === 'button' && colorScheme !== 'ghost' && isHovered && !disabled) ? "brightness(1.2)" : "brightness(1)",
+    };
+
+    const showOrnamentalElements = displayVariant === 'button' && colorScheme !== 'ghost';
+
+    const buttonElement = (
       <button
         ref={mergedRef}
         disabled={disabled}
@@ -284,56 +332,31 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={cn(
-          "font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-200",
-          "rounded-md text-white tracking-wider",
-          "flex items-center justify-center",
-          "text-shadow-sm",
-          variant !== "ghost" && shadowDepth === 'default' &&
-            "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-          variant !== "ghost" && shadowDepth === 'short' &&
-            "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
-          "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
-          "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0",
-          variant !== "ghost" && shadowDepth === 'default' &&
-            "disabled:hover:shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-          variant !== "ghost" && shadowDepth === 'short' &&
-            "disabled:hover:shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
-          sizeStyles[size],
-          className,
+          buttonBaseClasses,
+          buttonDisplayVariantSpecificClasses,
+          displayVariant !== 'themed-surface' && sizeStyles[size],
+          displayVariant !== 'themed-surface' && className
         )}
-        style={{
-          backgroundColor: getBackgroundColor(),
-          borderColor: getBorderColor(),
-          borderBottomColor:
-            variant === "ghost"
-              ? "transparent"
-              : isHovered
-                ? colors.light
-                : colors.dark,
-          boxShadow: initialBoxShadow,
-          color: colors.text,
-          transform:
-            isHovered && !disabled ? "translateY(-5px)" : "translateY(0)",
-          filter: isHovered && !disabled ? "brightness(1.2)" : "brightness(1)",
-        }}
+        style={buttonDynamicStyles}
         {...props}
       >
-        {variant !== "ghost" && (
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
-            style={{
-              backgroundColor: isHovered
-                ? `${colors.light}`
-                : `${colors.light}80`,
-              opacity: isHovered ? 1 : 0.8,
-            }}
-          />
+        {showOrnamentalElements && (
+          <>
+            <span
+              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
+              style={{
+                backgroundColor: isHovered
+                  ? `${colors.light}`
+                  : `${colors.light}80`,
+                opacity: isHovered ? 1 : 0.8,
+              }}
+            />
+            <span
+              className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
+              style={{ opacity: isHovered ? 0.5 : 0 }}
+            />
+          </>
         )}
-
-        <span
-          className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
-          style={{ opacity: isHovered ? 0.5 : 0 }}
-        />
 
         {ripples.map((ripple) => (
           <span
@@ -361,6 +384,27 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         </span>
       </button>
     );
+
+    if (displayVariant === 'themed-surface') {
+      const surfaceBaseColorHex = (colorScheme === 'default' || colorScheme === 'ghost') 
+        ? undefined
+        : colors.main;
+
+      return (
+        <ThemedSurface
+          baseColorHex={surfaceBaseColorHex}
+          className={cn(
+            sizeStyles[size],
+            "!p-0",
+            className
+          )}
+        >
+          {buttonElement}
+        </ThemedSurface>
+      );
+    }
+
+    return buttonElement;
   },
 );
 

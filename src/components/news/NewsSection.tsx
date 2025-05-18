@@ -10,8 +10,8 @@ import type { BlogPost } from "../../types/wordPress";
 import { cn } from "../../lib/utils";
 import { NewsCard } from "../ui/NewsCard";
 import { useThemeStore } from "../../store/useThemeStore";
-import { Label } from "../ui/Label";
 import { Skeleton } from "../ui/Skeleton";
+import { ThemedSurface } from "../ui/ThemedSurface";
 
 interface NewsSectionProps {
   className?: string;
@@ -23,27 +23,21 @@ export function NewsSection({ className }: NewsSectionProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   const loadNews = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    console.log("[NewsSection] Fetching news...");
-
     const startTime = Date.now();
-
     try {
       const fetchedPosts = await fetchNewsAndChangelogs();
-      console.log(`[NewsSection] Fetched ${fetchedPosts.length} posts.`);
-
       const elapsedTime = Date.now() - startTime;
       const minimumLoadingTime = 1000;
-
       if (elapsedTime < minimumLoadingTime) {
         await new Promise((resolve) =>
           setTimeout(resolve, minimumLoadingTime - elapsedTime),
         );
       }
-
       setPosts(fetchedPosts);
     } catch (err) {
       console.error("[NewsSection] Error fetching news:", err);
@@ -60,6 +54,8 @@ export function NewsSection({ className }: NewsSectionProps) {
   }, [loadNews]);
 
   useEffect(() => {
+    if (!isBackgroundAnimationEnabled) return;
+
     if (posts.length > 0 && !isLoading) {
       const ctx = gsap.context(() => {
         gsap.fromTo(
@@ -78,26 +74,7 @@ export function NewsSection({ className }: NewsSectionProps) {
       }, newsRef);
       return () => ctx.revert();
     }
-  }, [posts, isLoading]);
-
-  const handleOpenPost = (url: string, e: React.MouseEvent) => {
-    if (url !== "#") {
-      openExternalUrl(url).catch((err) =>
-        console.error("Failed to open URL:", err),
-      );
-      const cardId = (e.currentTarget as HTMLElement).closest(
-        ".news-item-card",
-      )?.id;
-      if (cardId) {
-        gsap.to(`#${cardId}`, {
-          scale: 0.98,
-          duration: 0.1,
-          yoyo: true,
-          repeat: 1,
-        });
-      }
-    }
-  };
+  }, [posts, isLoading, isBackgroundAnimationEnabled]);
 
   const renderContent = () => {
     if (isLoading) {
@@ -105,13 +82,17 @@ export function NewsSection({ className }: NewsSectionProps) {
         <div className="flex flex-col space-y-4 w-full">
           {[1, 2, 3].map((i) => (
             <div key={i} className="w-full">
-              <Skeleton variant="text" height={28} className="mb-1" />
-              <Skeleton
-                variant="image"
-                height={0}
-                width="100%"
-                className="aspect-square"
-              />
+              <div className="px-2">
+                <Skeleton variant="text" height={12} width="70%" className="mb-1" />
+              </div>
+              <ThemedSurface className="w-full opacity-50 !p-0">
+                <div className="relative w-full pt-[56.25%]">
+                  <Skeleton
+                    variant="image"
+                    className="absolute top-0 left-0 w-full h-full"
+                  />
+                </div>
+              </ThemedSurface>
             </div>
           ))}
         </div>
@@ -143,57 +124,53 @@ export function NewsSection({ className }: NewsSectionProps) {
     }
 
     return (
-      <div className="flex flex-col space-y-4 w-full">
+      <div className="flex flex-col space-y-1 w-full">
         {posts.map((post) => {
-          let rawTitle = post.yoast_head_json?.title || "News Item";
+          const rawTitle = post.yoast_head_json?.title || "News Item";
           const suffixToRemove = " - NoRisk Client Blog";
+          let displayTitle = rawTitle;
           if (rawTitle.endsWith(suffixToRemove)) {
-            rawTitle = rawTitle.substring(
-              0,
-              rawTitle.length - suffixToRemove.length,
-            );
+            displayTitle = rawTitle.substring(0, rawTitle.length - suffixToRemove.length);
           }
-          const title = rawTitle.toLowerCase();
 
           const imageUrl =
             post.yoast_head_json?.og_image?.[0]?.url || "/placeholder.svg";
           const postUrl = post.yoast_head_json?.og_url || "#";
 
           return (
-            <div key={post.id} className="news-item w-full">
-              <Label
-                variant="default"
-                size="lg"
-                className="w-full mb-1 px-2 py-1 font-minecraft lowercase line-clamp-2"
-                style={{
-                  backgroundColor: `${accentColor.value}20`,
-                  borderColor: `${accentColor.value}60`,
-                  color: "white",
-                }}
+            <div key={post.id} className="news-item w-full flex flex-col">
+              <p 
+                className="font-minecraft text-base text-white/70 truncate"
+                title={displayTitle} 
               >
-                {title}
-              </Label>
-
-              <NewsCard
-                id={`news-item-card-${post.id}`}
-                className="news-item-card w-full"
-                title={title}
-                imageUrl={imageUrl}
-                postUrl={postUrl}
-                onClick={() => {
-                  if (postUrl !== "#") {
-                    openExternalUrl(postUrl).catch((err) =>
-                      console.error("Failed to open URL:", err),
-                    );
-                  }
-                  gsap.to(`#news-item-card-${post.id}`, {
-                    scale: 0.98,
-                    duration: 0.1,
-                    yoyo: true,
-                    repeat: 1,
-                  });
-                }}
-              />
+                {displayTitle.toLowerCase()}
+              </p>
+              <ThemedSurface 
+                className="w-full flex flex-col !p-0" 
+              >
+                <div className="relative w-full pt-[56.25%]"> 
+                  <NewsCard
+                    id={`news-item-card-${post.id}`}
+                    className="absolute top-0 left-0 w-full h-full news-item-card"
+                    title={displayTitle}
+                    imageUrl={imageUrl}
+                    postUrl={postUrl}
+                    onClick={() => {
+                      if (postUrl !== "#") {
+                        openExternalUrl(postUrl).catch((err) =>
+                          console.error("Failed to open URL:", err),
+                        );
+                      }
+                      gsap.to(`#news-item-card-${post.id}`, {
+                        scale: 0.98,
+                        duration: 0.1,
+                        yoyo: true,
+                        repeat: 1,
+                      });
+                    }}
+                  />
+                </div>
+              </ThemedSurface>
             </div>
           );
         })}
@@ -211,34 +188,26 @@ export function NewsSection({ className }: NewsSectionProps) {
         boxShadow: `0 0 15px ${accentColor.value}30 inset`,
       }}
     >
-      <div
-        className="flex justify-between items-center p-3 border-b-2"
-        style={{ borderColor: `${accentColor.value}60` }}
+      <ThemedSurface 
+        className="flex-1 flex flex-col overflow-hidden !p-3" 
+        alwaysActive={true} 
       >
-        <Label
-          variant="default"
-          size="lg"
-          icon={<Icon icon="pixel:newspaper-solid" className="w-6 h-6" />}
-          className="uppercase"
-        >
-          NEUIGKEITEN
-        </Label>
-
-        <div className="flex items-center">
-          <button
-            className={`text-white/70 hover:text-white transition-colors p-1 ${isLoading ? "animate-spin" : ""}`}
-            onClick={loadNews}
-            disabled={isLoading}
-            aria-label="Refresh News"
-          >
-            <Icon icon="pixel:refresh-solid" className="w-7 h-7" />
-          </button>
+        <div className="pb-1">
+          <div className="flex items-center gap-2">
+            <Icon icon="pixel:newspaper-solid" className="w-7 h-7 text-white" />
+            <h2 className="text-2xl font-minecraft lowercase text-white">
+              NEWS
+            </h2>
+          </div>
+          <hr 
+            className="mt-2 border-t-2"
+            style={{ borderColor: `${accentColor.value}40` }} 
+          />
         </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-        {renderContent()}
-      </div>
+        <div className="flex-1 overflow-y-auto pr-1">
+          {renderContent()}
+        </div>
+      </ThemedSurface>
     </div>
   );
 }

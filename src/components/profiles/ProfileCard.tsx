@@ -16,6 +16,7 @@ import { toast } from "react-hot-toast";
 import { ProfileContextMenu } from "./ProfileContextMenu";
 import * as ProfileService from "../../services/profile-service";
 import { LaunchButton } from "../ui/buttons/LaunchButton";
+import { ThemedSurface } from '../ui/ThemedSurface';
 
 interface ProfileCardProps {
   profile: Profile;
@@ -38,9 +39,8 @@ export function ProfileCard({
     initializeProfile,
     getProfileState,
   } = useLaunchStateStore();
-  const accentColor = useThemeStore((state) => state.accentColor.value);
+  const accentColorValue = useThemeStore((state) => state.accentColor.value);
 
-  const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
   const { confirm, confirmDialog } = useConfirmDialog();
@@ -56,7 +56,6 @@ export function ProfileCard({
   }, [profile.id, initializeProfile]);
 
   const { launchState } = getProfileState(profile.id);
-  const isProfileCurrentlyLaunching = launchState === LaunchState.LAUNCHING;
 
   const getModLoaderIcon = () => {
     switch (profile.loader) {
@@ -222,72 +221,66 @@ export function ProfileCard({
   };
 
   return (
-    <div
-      ref={cardRef}
-      className="relative flex items-center p-3 transition-colors duration-150 rounded-lg border group focus-within:border-[var(--accent-color-soft)] w-full select-none"
-      style={{
-        backgroundColor: isHovered ? `${accentColor}1A` : `${accentColor}0D`,
-        borderColor: isHovered ? `${accentColor}3A` : `${accentColor}26`,
-        '--accent-color-soft': `${accentColor}99`,
-      } as React.CSSProperties}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onClick={handleDivClick}
-      onContextMenu={handleContextMenu}
-    >
-      <div
-        className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden mr-4 border-2 border-b-4 flex items-center justify-center"
-        style={{
-          backgroundColor: `${accentColor}1A`,
-          borderColor: `${accentColor}3A`,
-          borderBottomColor: `${accentColor}59`,
-        }}
+    <>
+      <ThemedSurface
+        surfaceRef={cardRef}
+        onClick={handleDivClick}
+        onContextMenu={handleContextMenu}
+        className="flex items-center"
       >
-        {profileIconSrc ? (
-          <img
-            src={profileIconSrc}
-            alt={profile.name}
-            className="w-full h-full object-contain"
-            style={{ imageRendering: "pixelated" }}
-            onError={(e) => {
-                (e.target as HTMLImageElement).src = "/icons/minecraft.png"; 
-                (e.target as HTMLImageElement).style.width = '75%';
-                (e.target as HTMLImageElement).style.height = '75%';
-            }}
-          />
-        ) : (
-          <Icon icon="solar:widget-bold" className="w-10 h-10 text-white/70" />
-        )}
-      </div>
-
-      <div className="flex-grow overflow-hidden flex flex-col min-w-0 pr-3 justify-between h-20">
-        <h3
-          className="text-base font-minecraft-ten text-white whitespace-nowrap overflow-hidden text-ellipsis mb-1"
-          title={profile.name}
+        <div
+          className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden mr-4 border-2 border-b-4 flex items-center justify-center"
+          style={{
+            backgroundColor: `${accentColorValue}1A`,
+            borderColor: `${accentColorValue}3A`,
+            borderBottomColor: `${accentColorValue}59`,
+          }}
         >
-          {profile.name}
-        </h3>
-        <div className="flex items-center">
-          <img
-            src={getModLoaderIcon()}
-            alt={profile.loader || "vanilla"}
-            className="w-4 h-4 mr-1.5 flex-shrink-0"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = "/icons/minecraft.png";
-            }}
-          />
-          <span className="text-sm text-white/60 font-minecraft-ten whitespace-nowrap lowercase">
-            {profile.game_version}
-          </span>
+          {profileIconSrc ? (
+            <img
+              src={profileIconSrc}
+              alt={profile.name}
+              className="w-full h-full object-contain"
+              style={{ imageRendering: "pixelated" }}
+              onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/icons/minecraft.png"; 
+                  (e.target as HTMLImageElement).style.width = '75%';
+                  (e.target as HTMLImageElement).style.height = '75%';
+              }}
+            />
+          ) : (
+            <Icon icon="solar:widget-bold" className="w-10 h-10 text-white/70" />
+          )}
         </div>
-      </div>
 
-      {/* Actions Area - Grouped to the right - Buttons removed */}
-      <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-2">
-        {/* Settings IconButton removed */}
-        {/* More actions IconButton (context menu trigger) removed - context menu still available via right-click */}
-        {/* LaunchButton removed */}
-      </div>
+        <div className="flex-grow overflow-hidden flex flex-col min-w-0 pr-3 justify-between h-20">
+          <h3
+            className="text-base font-minecraft-ten text-white whitespace-nowrap overflow-hidden text-ellipsis mb-1"
+            title={profile.name}
+          >
+            {profile.name}
+          </h3>
+          <div className="flex items-center">
+            <img
+              src={getModLoaderIcon()}
+              alt={profile.loader || "vanilla"}
+              className="w-4 h-4 mr-1.5 flex-shrink-0"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+              }}
+            />
+            <span className="text-sm text-white/60 font-minecraft-ten whitespace-nowrap lowercase">
+              {profile.game_version}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-2">
+          {/* Settings IconButton removed */}
+          {/* More actions IconButton (context menu trigger) removed - context menu still available via right-click */}
+          {/* LaunchButton removed */}
+        </div>
+      </ThemedSurface>
 
       {confirmDialog}
       <ProfileContextMenu
@@ -302,6 +295,6 @@ export function ProfileCard({
         onOpenFolder={handleOpenFolder}
         onExport={handleExportFromContextMenu}
       />
-    </div>
+    </>
   );
 }

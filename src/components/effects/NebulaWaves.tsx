@@ -2,20 +2,24 @@
 
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
-interface AccentWavesProps {
+interface NebulaWavesProps {
   opacity?: number;
   speed?: number;
   className?: string;
+  particleCount?: number;
 }
 
-export default function AccentWaves({
+export function NebulaWaves({
   opacity = 0.15,
   speed = 1,
   className = "",
-}: AccentWavesProps) {
+  particleCount = 100,
+}: NebulaWavesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { qualityLevel } = useQualitySettingsStore();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -26,6 +30,12 @@ export default function AccentWaves({
 
     let animationFrameId: number;
     let time = 0;
+
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedSpeed = speed * qualityMultiplier;
+    const waveCount =
+      qualityLevel === "low" ? 2 : qualityLevel === "high" ? 4 : 3;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -53,13 +63,13 @@ export default function AccentWaves({
 
       ctx.clearRect(0, 0, width, height);
 
-      const waveCount = 3;
       const baseAmplitude = height / 6;
 
       for (let i = 0; i < waveCount; i++) {
         const amplitude = baseAmplitude * (1 - i * 0.2);
         const frequency = 0.005 + i * 0.002;
-        const speed = 0.0015 * (i + 1) * window.devicePixelRatio;
+        const speed =
+          0.0015 * (i + 1) * window.devicePixelRatio * adjustedSpeed;
         const yOffset = height * 0.5 + i * 20;
 
         ctx.beginPath();
@@ -81,7 +91,7 @@ export default function AccentWaves({
         ctx.stroke();
       }
 
-      time += speed;
+      time += adjustedSpeed;
       animationFrameId = requestAnimationFrame(renderWaves);
     };
 
@@ -93,7 +103,7 @@ export default function AccentWaves({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, opacity, speed]);
+  }, [accentColor.value, opacity, speed, qualityLevel]);
 
   return (
     <canvas

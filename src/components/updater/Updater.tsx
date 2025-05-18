@@ -11,14 +11,15 @@ import {
 } from "../../store/background-effect-store";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
-import { Button } from "../ui/buttons/Button";
-import AccentGrid from "../effects/AccentGrid";
-import AccentParticles from "../effects/AccentParticles";
-import AccentWaves from "../effects/AccentWaves";
-import AccentVoxels from "../effects/AccentVoxels";
-import AccentLightning from "../effects/AccentLightning";
-import AccentLiquidChrome from "../effects/AccentLiquidChrome";
-import MatrixRainEffect from "../effects/MatrixRainEffect";
+import { Button } from ".././ui/buttons/Button";
+import { NebulaGrid } from ".././effects/NebulaGrid";
+import { NebulaParticles } from ".././effects/NebulaParticles";
+import { NebulaWaves } from ".././effects/NebulaWaves";
+import { NebulaVoxels } from ".././effects/NebulaVoxels";
+import { NebulaLightning } from ".././effects/NebulaLightning";
+import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
+import { MatrixRainEffect } from ".././effects/MatrixRainEffect";
+import { EnchantmentParticlesEffect } from ".././effects/EnchantmentParticlesEffect";
 
 interface UpdaterStatusPayload {
   message: string;
@@ -189,21 +190,23 @@ export default function Updater() {
 
   const renderBackgroundEffect = () => {
     switch (currentEffect) {
-      case BACKGROUND_EFFECTS.ACCENT_PARTICLES:
-        return <AccentParticles opacity={0.1} />;
-      case BACKGROUND_EFFECTS.ACCENT_WAVES:
-        return <AccentWaves opacity={0.1} />;
-      case BACKGROUND_EFFECTS.ACCENT_VOXELS:
-        return <AccentVoxels opacity={0.1} />;
-      case BACKGROUND_EFFECTS.ACCENT_LIGHTNING:
-        return <AccentLightning opacity={0.1} />;
-      case BACKGROUND_EFFECTS.ACCENT_LIQUID_CHROME:
-        return <AccentLiquidChrome opacity={0.1} />;
+      case BACKGROUND_EFFECTS.NEBULA_PARTICLES:
+        return <NebulaParticles opacity={0.1} />;
+      case BACKGROUND_EFFECTS.NEBULA_WAVES:
+        return <NebulaWaves opacity={0.1} />;
+      case BACKGROUND_EFFECTS.NEBULA_VOXELS:
+        return <NebulaVoxels opacity={0.1} />;
+      case BACKGROUND_EFFECTS.NEBULA_LIGHTNING:
+        return <NebulaLightning opacity={0.1} />;
+      case BACKGROUND_EFFECTS.NEBULA_LIQUID_CHROME:
+        return <NebulaLiquidChrome opacity={0.1} />;
       case BACKGROUND_EFFECTS.MATRIX_RAIN:
         return <MatrixRainEffect opacity={0.1} />;
-      case BACKGROUND_EFFECTS.ACCENT_GRID:
+      case BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES:
+        return <EnchantmentParticlesEffect opacity={0.1} />;
+      case BACKGROUND_EFFECTS.NEBULA_GRID:
       default:
-        return <AccentGrid opacity={0.1} />;
+        return <NebulaGrid opacity={0.1} />;
     }
   };
 
