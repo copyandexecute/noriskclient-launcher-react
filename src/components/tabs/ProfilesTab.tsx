@@ -35,6 +35,9 @@ export function ProfilesTab() {
   } = useProfileStore();
 
   const accentColor = useThemeStore((state) => state.accentColor);
+  const profileGroupingCriterion = useThemeStore((state) => state.profileGroupingCriterion);
+  const setProfileGroupingCriterionStore = useThemeStore((state) => state.setProfileGroupingCriterion);
+
   const tabRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const isBackgroundAnimationEnabled = useThemeStore(
@@ -51,52 +54,12 @@ export function ProfilesTab() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [profileToExport, setProfileToExport] = useState<Profile | null>(null);
 
-  const [groupingCriterion, setGroupingCriterion] = useState<string>("none");
   const [standardProfiles, setStandardProfiles] = useState<Profile[]>([]);
   const [loadingStandard, setLoadingStandard] = useState(false);
   const [standardError, setStandardError] = useState<string | null>(null);
 
-  const fetchStandardProfilesAndCriterion = async () => {
-    try {
-      setLoadingStandard(true);
-      setStandardError(null);
-      const result = await getStandardProfiles();
-
-      if (result && result.profiles && Array.isArray(result.profiles)) {
-        setStandardProfiles(result.profiles);
-      } else if (Array.isArray(result)) {
-        setStandardProfiles(result);
-      } else {
-        console.warn("Unexpected format for standard profiles:", result);
-        setStandardProfiles([]);
-      }
-    } catch (err) {
-      console.error("Failed to fetch standard profiles:", err);
-      setStandardError("Failed to load NoRisk versions");
-      setStandardProfiles([]);
-    } finally {
-      setLoadingStandard(false);
-    }
-
-    try {
-      const config = await getLauncherConfig();
-      if (config && config.profile_grouping_criterion) {
-        setGroupingCriterion(config.profile_grouping_criterion);
-      } else {
-        setGroupingCriterion("none");
-      }
-    } catch (err) {
-      console.error(
-        "Failed to fetch launcher config for grouping criterion:",
-        err,
-      );
-      setGroupingCriterion("none");
-    }
-  };
-
   useEffect(() => {
     fetchProfiles();
-    fetchStandardProfilesAndCriterion();
   }, [fetchProfiles]);
 
   useEffect(() => {
@@ -146,18 +109,18 @@ export function ProfilesTab() {
   });
 
   const groupedProfiles = (() => {
-    if (groupingCriterion === "none") {
+    if (profileGroupingCriterion === "none") {
       return { "All Profiles": initiallyFilteredProfiles };
     }
 
     return initiallyFilteredProfiles.reduce(
       (acc, profile) => {
         let key = "Unknown";
-        if (groupingCriterion === "loader") {
+        if (profileGroupingCriterion === "loader") {
           key = profile.loader?.toString() || "Vanilla";
-        } else if (groupingCriterion === "game_version") {
+        } else if (profileGroupingCriterion === "game_version") {
           key = profile.game_version || "Unknown Version";
-        } else if (groupingCriterion === "group") {
+        } else if (profileGroupingCriterion === "group") {
           key = profile.group || "No Group";
         }
 
@@ -200,7 +163,7 @@ export function ProfilesTab() {
     if (!isASpecial && isBSpecial) return -1;
     if (isASpecial && isBSpecial) return a.localeCompare(b);
 
-    if (groupingCriterion === "game_version") {
+    if (profileGroupingCriterion === "game_version") {
       return compareMinecraftVersions(a, b);
     }
 
@@ -252,12 +215,10 @@ export function ProfilesTab() {
   };
 
   const handleGroupingChange = async (newCriterion: string) => {
-    setGroupingCriterion(newCriterion);
     try {
-      await setProfileGroupingPreference(newCriterion);
-      console.log("Grouping preference saved successfully.");
+      await setProfileGroupingCriterionStore(newCriterion);
     } catch (error) {
-      console.error("Failed to save grouping preference:", error);
+      console.error("Failed to save grouping preference via store:", error);
       toast.error("Failed to save grouping preference.");
     }
   };
@@ -289,7 +250,7 @@ export function ProfilesTab() {
   const profileActions = (
     <div className="flex items-center gap-3">
       <Select
-        value={groupingCriterion}
+        value={profileGroupingCriterion}
         onChange={handleGroupingChange}
         options={groupingOptions}
         className="w-full md:w-52 h-[42px]"
@@ -356,7 +317,7 @@ export function ProfilesTab() {
               <div className="space-y-6">
                 {sortedGroupKeys.map((groupKey) => (
                   <div key={groupKey}>
-                    {groupingCriterion !== "none" && (
+                    {profileGroupingCriterion !== "none" && (
                       <h2
                         className="text-2xl font-minecraft lowercase text-white mb-3 pb-1 border-b-2"
                         style={{ borderColor: `${accentColor.value}40` }}
@@ -378,7 +339,7 @@ export function ProfilesTab() {
                       ))}
                     </div>
                     {groupedProfiles[groupKey].length === 0 &&
-                      groupingCriterion !== "none" && (
+                      profileGroupingCriterion !== "none" && (
                         <p className="text-neutral-500 italic text-center py-4">
                           No profiles in this group.
                         </p>

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { setProfileGroupingPreference } from "../services/launcher-config-service";
 
 export type AccentColor = {
   name: string;
@@ -150,6 +151,8 @@ interface ThemeState {
   toggleBackgroundAnimation: () => void;
   isDetailViewSidebarOnLeft: boolean;
   toggleDetailViewSidebarPosition: () => void;
+  profileGroupingCriterion: string;
+  setProfileGroupingCriterion: (criterion: string) => Promise<void>;
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -158,6 +161,7 @@ export const useThemeStore = create<ThemeState>()(
       accentColor: ACCENT_COLORS.blue,
       isBackgroundAnimationEnabled: true,
       isDetailViewSidebarOnLeft: true,
+      profileGroupingCriterion: "none",
 
       setAccentColor: (color: AccentColor) => {
         set({ accentColor: color });
@@ -183,6 +187,17 @@ export const useThemeStore = create<ThemeState>()(
 
       toggleDetailViewSidebarPosition: () => {
         set((state) => ({ isDetailViewSidebarOnLeft: !state.isDetailViewSidebarOnLeft }));
+      },
+
+      setProfileGroupingCriterion: async (criterion: string) => {
+        try {
+          await setProfileGroupingPreference(criterion);
+          set({ profileGroupingCriterion: criterion });
+        } catch (error) {
+          console.error("Failed to save grouping preference:", error);
+          set({ profileGroupingCriterion: criterion });
+          throw error;
+        }
       },
 
       applyAccentColorToDOM: () => {

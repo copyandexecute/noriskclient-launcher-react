@@ -12,11 +12,9 @@ import {
 import { IconButton } from "../ui/buttons/IconButton";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useThemeStore } from "../../store/useThemeStore";
-import { gsap } from "gsap";
 import { toast } from "react-hot-toast";
 import { ProfileContextMenu } from "./ProfileContextMenu";
 import * as ProfileService from "../../services/profile-service";
-import { Card } from "../ui/Card";
 import { LaunchButton } from "../ui/buttons/LaunchButton";
 
 interface ProfileCardProps {
@@ -40,10 +38,7 @@ export function ProfileCard({
     initializeProfile,
     getProfileState,
   } = useLaunchStateStore();
-  const accentColor = useThemeStore((state) => state.accentColor);
-  const isBackgroundAnimationEnabled = useThemeStore(
-    (state) => state.isBackgroundAnimationEnabled,
-  );
+  const accentColor = useThemeStore((state) => state.accentColor.value);
 
   const [isHovered, setIsHovered] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
@@ -52,10 +47,7 @@ export function ProfileCard({
   const cardRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({
-    x: 0,
-    y: 0,
-  });
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (profile.id) {
@@ -81,12 +73,13 @@ export function ProfileCard({
     }
   };
 
-  const getProfileIcon = () => {
+  const getProfileIconSource = () => {
     if (profile.banner?.source.type === "url") {
       return profile.banner.source.url;
     }
     return null;
   };
+  const profileIconSrc = getProfileIconSource();
 
   const handleClone = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -182,12 +175,12 @@ export function ProfileCard({
 
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     setContextMenuPosition({ x: event.clientX, y: event.clientY });
     setContextMenuVisible(true);
   };
 
   const closeContextMenu = () => {
-    console.log("[ProfileCard] closeContextMenu called");
     setContextMenuVisible(false);
   };
 
@@ -198,49 +191,17 @@ export function ProfileCard({
         contextMenuRef.current &&
         !contextMenuRef.current.contains(event.target as Node)
       ) {
-        console.log("[ProfileCard] handleClickOutside - closing menu");
         closeContextMenu();
-      } else if (contextMenuVisible) {
-        console.log(
-          "[ProfileCard] handleClickOutside - click was inside menu or on menu itself, not closing.",
-        );
       }
     };
 
     if (contextMenuVisible) {
-      const timerId = setTimeout(() => {
-        document.addEventListener("mousedown", handleClickOutside);
-      }, 0);
+      document.addEventListener("mousedown", handleClickOutside);
       return () => {
-        clearTimeout(timerId);
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
   }, [contextMenuVisible]);
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    if (
-      e.target === e.currentTarget ||
-      !(e.target as HTMLElement).closest("button")
-    ) {
-      onClick();
-    }
-  };
-
-  useEffect(() => {
-    if (isBackgroundAnimationEnabled && cardRef.current) {
-      gsap.fromTo(
-        cardRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [isBackgroundAnimationEnabled]);
 
   const handleExportFromContextMenu = () => {
     if (profile) {
@@ -248,88 +209,86 @@ export function ProfileCard({
     }
   };
 
+  const handleDivClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const isInteractiveElementClick =
+      target.closest('button') ||
+      target.closest('[data-context-menu-trigger="true"]') ||
+      (contextMenuRef.current && contextMenuRef.current.contains(target));
+
+    if (!isInteractiveElementClick) {
+      onClick();
+    }
+  };
+
   return (
-    <Card
+    <div
       ref={cardRef}
-      className="h-full flex flex-col select-none cursor-pointer"
-      onClick={(e) => handleCardClick(e)}
+      className="relative flex items-center p-3 transition-colors duration-150 rounded-lg border group focus-within:border-[var(--accent-color-soft)] w-full select-none"
+      style={{
+        backgroundColor: isHovered ? `${accentColor}1A` : `${accentColor}0D`,
+        borderColor: isHovered ? `${accentColor}3A` : `${accentColor}26`,
+        '--accent-color-soft': `${accentColor}99`,
+      } as React.CSSProperties}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={handleDivClick}
       onContextMenu={handleContextMenu}
     >
       <div
-        className="flex items-center justify-between p-4 border-b border-white/20"
-        style={{ backgroundColor: `${accentColor.value}05` }}
+        className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden mr-4 border-2 border-b-4 flex items-center justify-center"
+        style={{
+          backgroundColor: `${accentColor}1A`,
+          borderColor: `${accentColor}3A`,
+          borderBottomColor: `${accentColor}59`,
+        }}
       >
-        <div className="flex items-center flex-1 min-w-0">
-          <div
-            className="w-12 h-12 mr-3 relative flex-shrink-0 flex items-center justify-center rounded-sm overflow-hidden"
-            style={{
-              borderWidth: "2px",
-              borderStyle: "solid",
-              borderColor: `${accentColor.value}60`,
-              backgroundColor: "rgba(0, 0, 0, 0.3)",
+        {profileIconSrc ? (
+          <img
+            src={profileIconSrc}
+            alt={profile.name}
+            className="w-full h-full object-contain"
+            style={{ imageRendering: "pixelated" }}
+            onError={(e) => {
+                (e.target as HTMLImageElement).src = "/icons/minecraft.png"; 
+                (e.target as HTMLImageElement).style.width = '75%';
+                (e.target as HTMLImageElement).style.height = '75%';
             }}
-          >
-            {getProfileIcon() ? (
-              <img
-                src={getProfileIcon() || "/placeholder.svg"}
-                alt={profile.name}
-                className="w-full h-full object-contain"
-                style={{ imageRendering: "pixelated" }}
-              />
-            ) : (
-              <Icon icon="solar:widget-bold" className="w-6 h-6 text-white" />
-            )}
-          </div>
-          <div className="overflow-hidden">
-            <h3 className="text-2xl font-minecraft text-white whitespace-nowrap overflow-hidden text-ellipsis lowercase font-normal">
-              {profile.name}
-            </h3>
-            <div className="flex items-center">
-              <img
-                src={getModLoaderIcon() || "/placeholder.svg"}
-                alt={profile.loader || "vanilla"}
-                className="w-5 h-5 mr-2"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/icons/minecraft.png";
-                }}
-              />
-              <span className="text-base text-white/70 font-minecraft whitespace-nowrap lowercase">
-                {profile.game_version}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {!profile.is_standard_version && (
-            <IconButton
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit();
-              }}
-              variant="secondary"
-              size="xs"
-              disabled={isLaunching || isProfileCurrentlyLaunching || isCloning}
-              icon={<Icon icon="solar:settings-bold" className="w-3.5 h-3.5" />}
-              aria-label="Settings"
-            />
-          )}
-        </div>
-      </div>
-
-      <div
-        className="p-4 flex-1 flex flex-col justify-end"
-        style={{ backgroundColor: `${accentColor.value}05` }}
-      >
-        <div className="flex flex-col gap-3">
-          <LaunchButton
-            id={profile.id}
-            name={profile.name}
-            disabled={isProfileCurrentlyLaunching || isCloning}
-            onStatusChange={setIsLaunching}
           />
+        ) : (
+          <Icon icon="solar:widget-bold" className="w-10 h-10 text-white/70" />
+        )}
+      </div>
+
+      <div className="flex-grow overflow-hidden flex flex-col min-w-0 pr-3 justify-between h-20">
+        <h3
+          className="text-base font-minecraft-ten text-white whitespace-nowrap overflow-hidden text-ellipsis mb-1"
+          title={profile.name}
+        >
+          {profile.name}
+        </h3>
+        <div className="flex items-center">
+          <img
+            src={getModLoaderIcon()}
+            alt={profile.loader || "vanilla"}
+            className="w-4 h-4 mr-1.5 flex-shrink-0"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+            }}
+          />
+          <span className="text-sm text-white/60 font-minecraft-ten whitespace-nowrap lowercase">
+            {profile.game_version}
+          </span>
         </div>
       </div>
+
+      {/* Actions Area - Grouped to the right - Buttons removed */}
+      <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-2">
+        {/* Settings IconButton removed */}
+        {/* More actions IconButton (context menu trigger) removed - context menu still available via right-click */}
+        {/* LaunchButton removed */}
+      </div>
+
       {confirmDialog}
       <ProfileContextMenu
         ref={contextMenuRef}
@@ -343,6 +302,6 @@ export function ProfileCard({
         onOpenFolder={handleOpenFolder}
         onExport={handleExportFromContextMenu}
       />
-    </Card>
+    </div>
   );
 }
