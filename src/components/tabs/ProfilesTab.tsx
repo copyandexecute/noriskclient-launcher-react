@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
 import { useProfileStore } from "../../store/profile-store";
-import { SearchInput } from "../ui/SearchInput";
 import { LoadingState } from "../ui/LoadingState";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "@iconify/react";
@@ -16,39 +15,16 @@ import { ProfileWizard } from "../profiles/ProfileWizard";
 import { Select } from "../ui/Select";
 import { Button } from "../ui/buttons/Button";
 import { toast } from "react-hot-toast";
-import { Card } from "../ui/Card";
 import { ProfileDetailView } from "../profiles/ProfileDetailView";
 import { ExportProfileModal } from "../profiles/ExportProfileModal";
-import { useOutletContext } from "react-router-dom";
-import type { ProfilesTabContext } from "../../App";
-
-const groupingOptions = [
-  {
-    value: "none",
-    label: "No Grouping",
-    icon: <Icon icon="solar:menu-dots-linear" className="w-4 h-4" />,
-  },
-  {
-    value: "loader",
-    label: "Loader",
-    icon: <Icon icon="solar:box-bold" className="w-4 h-4" />,
-  },
-  {
-    value: "game_version",
-    label: "Game Version",
-    icon: <Icon icon="solar:gamepad-bold" className="w-4 h-4" />,
-  },
-  {
-    value: "group",
-    label: "Group",
-    icon: <Icon icon="solar:users-group-rounded-bold" className="w-4 h-4" />,
-  },
-];
+import { TabLayout } from "../ui/TabLayout";
+import { getStandardProfiles } from "../../services/profile-service";
+import {
+  getLauncherConfig,
+  setProfileGroupingPreference,
+} from "../../services/launcher-config-service";
 
 export function ProfilesTab() {
-  const { currentGroupingCriterion, onGroupingChange } =
-    useOutletContext<ProfilesTabContext>();
-
   const {
     profiles,
     loading,
@@ -60,7 +36,6 @@ export function ProfilesTab() {
 
   const accentColor = useThemeStore((state) => state.accentColor);
   const tabRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
@@ -76,6 +51,54 @@ export function ProfilesTab() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [profileToExport, setProfileToExport] = useState<Profile | null>(null);
 
+  const [groupingCriterion, setGroupingCriterion] = useState<string>("none");
+  const [standardProfiles, setStandardProfiles] = useState<Profile[]>([]);
+  const [loadingStandard, setLoadingStandard] = useState(false);
+  const [standardError, setStandardError] = useState<string | null>(null);
+
+  const fetchStandardProfilesAndCriterion = async () => {
+    try {
+      setLoadingStandard(true);
+      setStandardError(null);
+      const result = await getStandardProfiles();
+
+      if (result && result.profiles && Array.isArray(result.profiles)) {
+        setStandardProfiles(result.profiles);
+      } else if (Array.isArray(result)) {
+        setStandardProfiles(result);
+      } else {
+        console.warn("Unexpected format for standard profiles:", result);
+        setStandardProfiles([]);
+      }
+    } catch (err) {
+      console.error("Failed to fetch standard profiles:", err);
+      setStandardError("Failed to load NoRisk versions");
+      setStandardProfiles([]);
+    } finally {
+      setLoadingStandard(false);
+    }
+
+    try {
+      const config = await getLauncherConfig();
+      if (config && config.profile_grouping_criterion) {
+        setGroupingCriterion(config.profile_grouping_criterion);
+      } else {
+        setGroupingCriterion("none");
+      }
+    } catch (err) {
+      console.error(
+        "Failed to fetch launcher config for grouping criterion:",
+        err,
+      );
+      setGroupingCriterion("none");
+    }
+  };
+
+  useEffect(() => {
+    fetchProfiles();
+    fetchStandardProfilesAndCriterion();
+  }, [fetchProfiles]);
+
   useEffect(() => {
     if (isBackgroundAnimationEnabled) {
       if (tabRef.current) {
@@ -85,20 +108,6 @@ export function ProfilesTab() {
           {
             opacity: 1,
             duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-
-      if (headerRef.current) {
-        gsap.fromTo(
-          headerRef.current,
-          { opacity: 0, y: -20 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.4,
-            delay: 0.1,
             ease: "power2.out",
           },
         );
@@ -120,7 +129,10 @@ export function ProfilesTab() {
     }
   }, [isBackgroundAnimationEnabled]);
 
-  const allProfiles = profiles;
+  const standardProfilesArray = Array.isArray(standardProfiles)
+    ? standardProfiles
+    : [];
+  const allProfiles = [...profiles, ...standardProfilesArray];
 
   const initiallyFilteredProfiles = allProfiles.filter((profile) => {
     if (
@@ -134,18 +146,18 @@ export function ProfilesTab() {
   });
 
   const groupedProfiles = (() => {
-    if (currentGroupingCriterion === "none") {
+    if (groupingCriterion === "none") {
       return { "All Profiles": initiallyFilteredProfiles };
     }
 
     return initiallyFilteredProfiles.reduce(
       (acc, profile) => {
         let key = "Unknown";
-        if (currentGroupingCriterion === "loader") {
+        if (groupingCriterion === "loader") {
           key = profile.loader?.toString() || "Vanilla";
-        } else if (currentGroupingCriterion === "game_version") {
+        } else if (groupingCriterion === "game_version") {
           key = profile.game_version || "Unknown Version";
-        } else if (currentGroupingCriterion === "group") {
+        } else if (groupingCriterion === "group") {
           key = profile.group || "No Group";
         }
 
@@ -188,7 +200,7 @@ export function ProfilesTab() {
     if (!isASpecial && isBSpecial) return -1;
     if (isASpecial && isBSpecial) return a.localeCompare(b);
 
-    if (currentGroupingCriterion === "game_version") {
+    if (groupingCriterion === "game_version") {
       return compareMinecraftVersions(a, b);
     }
 
@@ -226,7 +238,7 @@ export function ProfilesTab() {
     toast.promise(deletePromise, {
       loading: `Deleting profile '${profileName}'...`,
       success: () => {
-        fetchProfiles();
+        fetchProfiles(); // Refresh profiles list on success
         return `Profile '${profileName}' deleted successfully!`;
       },
       error: (err) =>
@@ -238,6 +250,72 @@ export function ProfilesTab() {
     setProfileToExport(profile);
     setIsExportModalOpen(true);
   };
+
+  const handleGroupingChange = async (newCriterion: string) => {
+    setGroupingCriterion(newCriterion);
+    try {
+      await setProfileGroupingPreference(newCriterion);
+      console.log("Grouping preference saved successfully.");
+    } catch (error) {
+      console.error("Failed to save grouping preference:", error);
+      toast.error("Failed to save grouping preference.");
+    }
+  };
+
+  const groupingOptions = [
+    {
+      value: "none",
+      label: "No Grouping",
+      icon: <Icon icon="solar:menu-dots-linear" className="w-4 h-4" />,
+    },
+    {
+      value: "loader",
+      label: "Loader",
+      icon: <Icon icon="solar:box-bold" className="w-4 h-4" />,
+    },
+    {
+      value: "game_version",
+      label: "Game Version",
+      icon: <Icon icon="solar:gamepad-bold" className="w-4 h-4" />,
+    },
+    {
+      value: "group",
+      label: "Group",
+      icon: <Icon icon="solar:users-group-rounded-bold" className="w-4 h-4" />,
+    },
+  ];
+
+  // Additional UI elements for the TabLayout
+  const profileActions = (
+    <div className="flex items-center gap-3">
+      <Select
+        value={groupingCriterion}
+        onChange={handleGroupingChange}
+        options={groupingOptions}
+        className="w-full md:w-52 h-[42px]"
+      />
+      <Button
+        onClick={() => setShowWizard(true)}
+        variant="default"
+        size="md"
+        className="h-[42px]"
+        icon={<Icon icon="solar:widget-add-bold" className="w-5 h-5" />}
+        iconPosition="left"
+      >
+        CREATE
+      </Button>
+      <Button
+        onClick={() => setShowImport(true)}
+        variant="secondary"
+        size="md"
+        className="h-[42px]"
+        icon={<Icon icon="solar:upload-bold" className="w-5 h-5" />}
+        iconPosition="left"
+      >
+        IMPORT
+      </Button>
+    </div>
+  );
 
   return (
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
@@ -256,67 +334,29 @@ export function ProfilesTab() {
           }}
         />
       ) : (
-        <>
-          <Card
-            ref={headerRef}
-            className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 sticky top-0 z-10 rounded-none border-b-2"
-            variant="flat"
-          >
-            <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
-              <SearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Search profiles..."
-                className="w-full md:w-auto flex-grow md:flex-grow-0 h-[54px]"
-              />
-              <Select
-                value={currentGroupingCriterion}
-                onChange={onGroupingChange}
-                options={groupingOptions}
-                className="w-full md:w-52"
-              />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={() => setShowWizard(true)}
-                variant="default"
-                size="md"
-                className="h-[54px]"
-                icon={<Icon icon="solar:widget-add-bold" className="w-5 h-5" />}
-                iconPosition="left"
-              >
-                CREATE
-              </Button>
-              <Button
-                onClick={() => setShowImport(true)}
-                variant="secondary"
-                size="md"
-                className="h-[54px]"
-                icon={<Icon icon="solar:upload-bold" className="w-5 h-5" />}
-                iconPosition="left"
-              >
-                IMPORT
-              </Button>
-            </div>
-          </Card>
-
-          <div
-            ref={contentRef}
-            className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar"
-          >
-            {loading ? (
+        <TabLayout
+          title="Profiles"
+          icon="solar:widget-bold"
+          search={{
+            value: searchQuery,
+            onChange: setSearchQuery,
+            placeholder: "Search profiles...",
+          }}
+          actions={profileActions}
+        >
+          <div ref={contentRef}>
+            {loading || loadingStandard ? (
               <LoadingState message="loading profiles..." />
-            ) : error ? (
+            ) : error || standardError ? (
               <EmptyState
                 icon="solar:danger-triangle-bold"
-                message={error || ""}
+                message={error || standardError || ""}
               />
             ) : initiallyFilteredProfiles.length > 0 ? (
               <div className="space-y-6">
                 {sortedGroupKeys.map((groupKey) => (
                   <div key={groupKey}>
-                    {currentGroupingCriterion !== "none" && (
+                    {groupingCriterion !== "none" && (
                       <h2
                         className="text-2xl font-minecraft lowercase text-white mb-3 pb-1 border-b-2"
                         style={{ borderColor: `${accentColor.value}40` }}
@@ -338,7 +378,7 @@ export function ProfilesTab() {
                       ))}
                     </div>
                     {groupedProfiles[groupKey].length === 0 &&
-                      currentGroupingCriterion !== "none" && (
+                      groupingCriterion !== "none" && (
                         <p className="text-neutral-500 italic text-center py-4">
                           No profiles in this group.
                         </p>
@@ -353,7 +393,7 @@ export function ProfilesTab() {
               />
             )}
           </div>
-        </>
+        </TabLayout>
       )}
 
       {showWizard && (
@@ -383,6 +423,7 @@ export function ProfilesTab() {
         />
       )}
 
+      {/* Render ExportProfileModal at the ProfilesTab level */}
       {profileToExport && (
         <ExportProfileModal
           profile={profileToExport}

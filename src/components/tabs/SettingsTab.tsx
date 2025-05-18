@@ -23,6 +23,7 @@ import {
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { toast } from "react-hot-toast";
+import { TabLayout } from "../ui/TabLayout";
 
 export function SettingsTab() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -160,9 +161,7 @@ export function SettingsTab() {
     }
   };
 
-  const handleConcurrentIoLimitChange = (
-    e: ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleConcurrentIoLimitChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (!tempConfig) return;
     const value = Number.parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 1 && value <= 20) {
@@ -231,13 +230,24 @@ export function SettingsTab() {
             <ToggleSwitch
               checked={tempConfig?.is_experimental || false}
               onChange={(newCheckedState) => {
-                console.log('Experimental Mode toggle: onChange triggered');
-                console.log('Current tempConfig.is_experimental:', tempConfig?.is_experimental);
-                console.log('Value from ToggleSwitch (newCheckedState):', newCheckedState);
+                console.log("Experimental Mode toggle: onChange triggered");
+                console.log(
+                  "Current tempConfig.is_experimental:",
+                  tempConfig?.is_experimental,
+                );
+                console.log(
+                  "Value from ToggleSwitch (newCheckedState):",
+                  newCheckedState,
+                );
                 if (tempConfig) {
-                  setTempConfig({ ...tempConfig, is_experimental: newCheckedState });
+                  setTempConfig({
+                    ...tempConfig,
+                    is_experimental: newCheckedState,
+                  });
                 } else {
-                  console.log('Experimental Mode toggle: tempConfig is null, cannot update.');
+                  console.log(
+                    "Experimental Mode toggle: tempConfig is null, cannot update.",
+                  );
                 }
               }}
               disabled={saving}
@@ -581,78 +591,75 @@ export function SettingsTab() {
     }
   };
 
+  // Settings tab actions
+  const settingsActions = (
+    <div className="flex items-center gap-3">
+      <Button
+        onClick={resetChanges}
+        disabled={saving || !hasChanges}
+        variant="secondary"
+        size="sm"
+        icon={<Icon icon="solar:refresh-bold" className="w-4 h-4" />}
+      >
+        Reset
+      </Button>
+      <Button
+        onClick={saveConfig}
+        disabled={saving || !hasChanges}
+        variant="default"
+        size="sm"
+        icon={<Icon icon="solar:disk-bold" className="w-4 h-4" />}
+      >
+        {saving ? (
+          <>
+            <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
+            <span>Saving...</span>
+          </>
+        ) : (
+          "Save"
+        )}
+      </Button>
+    </div>
+  );
+
   return (
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
-      <div
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 border-b-2 sticky top-0 z-10"
-        style={{
-          backgroundColor: `${accentColor.value}15`,
-          borderColor: `${accentColor.value}60`,
-          boxShadow: `0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)`,
-        }}
-      >
-        <div className="flex items-center gap-3 flex-wrap">
-          <Label
-            variant={activeTab === "general" ? "default" : "ghost"}
-            size="sm"
-            className="cursor-pointer"
-            onClick={() => setActiveTab("general")}
-            icon={
-              <Icon icon="solar:settings-bold" className="w-4 h-4 text-white" />
-            }
-          >
-            general
-          </Label>
-          <Label
-            variant={activeTab === "appearance" ? "default" : "ghost"}
-            size="sm"
-            className="cursor-pointer"
-            onClick={() => setActiveTab("appearance")}
-            icon={
-              <Icon icon="solar:brush-bold" className="w-4 h-4 text-white" />
-            }
-          >
-            appearance
-          </Label>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={resetChanges}
-            disabled={saving || !hasChanges}
-            variant="secondary"
-            size="sm"
-            icon={<Icon icon="solar:refresh-bold" className="w-4 h-4" />}
-          >
-            Reset
-          </Button>
-          <Button
-            onClick={saveConfig}
-            disabled={saving || !hasChanges}
-            variant="default"
-            size="sm"
-            icon={<Icon icon="solar:disk-bold" className="w-4 h-4" />}
-          >
-            {saving ? (
-              <>
+      <TabLayout
+        title="Settings"
+        icon="solar:settings-bold"
+        actions={
+          <div className="flex items-center gap-3">
+            <Label
+              variant={activeTab === "general" ? "default" : "ghost"}
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => setActiveTab("general")}
+              icon={
                 <Icon
-                  icon="solar:refresh-bold"
-                  className="w-4 h-4 animate-spin"
+                  icon="solar:settings-bold"
+                  className="w-4 h-4 text-white"
                 />
-                <span>Saving...</span>
-              </>
-            ) : (
-              "Save"
-            )}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex-1 p-6 pt-4 overflow-y-auto custom-scrollbar">
-        <div ref={contentRef}>
-          {renderTabContent()}
-        </div>
-      </div>
+              }
+            >
+              general
+            </Label>
+            <Label
+              variant={activeTab === "appearance" ? "default" : "ghost"}
+              size="sm"
+              className="cursor-pointer"
+              onClick={() => setActiveTab("appearance")}
+              icon={
+                <Icon icon="solar:brush-bold" className="w-4 h-4 text-white" />
+              }
+            >
+              appearance
+            </Label>
+            {settingsActions}
+          </div>
+        }
+      >
+        <div ref={contentRef}>{renderTabContent()}</div>
+      </TabLayout>
     </div>
   );
 }

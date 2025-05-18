@@ -2,7 +2,6 @@
 
 import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TabContent } from "../ui/TabContent";
 import type { MinecraftProfile, TexturesData } from "../../types/minecraft";
 import type { MinecraftSkin, SkinVariant } from "../../types/localSkin";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
@@ -13,7 +12,6 @@ import { Icon } from "@iconify/react";
 import { StatusMessage } from "../ui/StatusMessage";
 import { SkinViewer } from "../launcher/SkinViewer";
 import { Modal } from "../ui/Modal";
-import { SearchInput } from "../ui/SearchInput";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useSkinStore } from "../../store/useSkinStore";
@@ -23,7 +21,8 @@ import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 import { RadioButton } from "../ui/RadioButton";
 import { Skeleton } from "../ui/Skeleton";
-import { SkeletonSkinCard } from "../ui/SkeletonSkinCard.tsx";
+import { SkeletonSkinCard } from "../ui/SkeletonSkinCard";
+import { TabLayout } from "../ui/TabLayout";
 
 const SkinPreview = memo(
   ({
@@ -439,7 +438,6 @@ export function SkinsTab() {
   const [editingSkin, setEditingSkin] = useState<MinecraftSkin | null>(null);
   const [search, setSearch] = useState<string>("");
   const [currentSkinId, setCurrentSkinId] = useState<string | null>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const debouncedSearch = useDebounce(search, 250);
@@ -738,118 +736,111 @@ export function SkinsTab() {
     );
   };
 
+  // Add skin button for the TabLayout
+  const addSkinButton = (
+    <Button
+      onClick={() => startEditSkin(null)}
+      variant="default"
+      size="md"
+      className="h-[42px]"
+      icon={<Icon icon="solar:add-circle-bold" className="w-5 h-5" />}
+      iconPosition="left"
+      disabled={!activeAccount}
+    >
+      ADD SKIN
+    </Button>
+  );
+
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <Card
-        ref={headerRef}
-        className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-6 py-4 sticky top-0 z-10 rounded-none border-b-2"
-        variant="flat"
-      >
-        <div className="flex items-center gap-3 flex-wrap md:flex-nowrap">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search skins..."
-            className="w-full md:w-auto flex-grow md:flex-grow-0 h-[54px]"
-          />
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => startEditSkin(null)}
-            variant="default"
-            size="md"
-            className="h-[54px]"
-            icon={<Icon icon="solar:add-circle-bold" className="w-5 h-5" />}
-            iconPosition="left"
-            disabled={!activeAccount}
-          >
-            ADD SKIN
-          </Button>
-        </div>
-      </Card>
-
-      <TabContent>
-        <div className="p-5 space-y-8 overflow-y-auto flex-grow scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-          {accountLoading ? (
-            <div className="space-y-4">
-              <Skeleton
-                variant="text"
-                height={28}
-                width="50%"
-                className="mx-auto"
-              />
-              <Skeleton
-                variant="text"
-                height={20}
-                width="70%"
-                className="mx-auto"
-              />
-            </div>
-          ) : accountError ? (
-            <StatusMessage
-              type="error"
-              className="font-minecraft text-lg"
-              message={`Account Error: ${accountError}`}
+    <TabLayout
+      title="Skins"
+      icon="solar:user-id-bold"
+      search={{
+        value: search,
+        onChange: setSearch,
+        placeholder: "Search skins...",
+      }}
+      actions={addSkinButton}
+    >
+      <div className="space-y-8">
+        {accountLoading ? (
+          <div className="space-y-4">
+            <Skeleton
+              variant="text"
+              height={28}
+              width="50%"
+              className="mx-auto"
             />
-          ) : !activeAccount ? (
-            <p className="text-white/70 italic font-minecraft text-xl text-center py-10">
-              Please log in to a Minecraft account to manage skins.
-            </p>
-          ) : (
-            <>
-              <div className="space-y-5 text-center">
-                {localSkinsLoading && !editingSkin ? (
-                  renderSkeletonGrid()
-                ) : localSkinsError && !editingSkin ? (
-                  <StatusMessage
-                    type="error"
-                    className="font-minecraft text-lg"
-                    message={localSkinsError}
-                  />
-                ) : !localSkinsLoading &&
-                  localSkins.length === 0 &&
-                  !localSkinsError &&
-                  !editingSkin ? (
-                  <p className="text-white/70 italic font-minecraft text-lg">
-                    No local skins found. Upload skins to add them to your
-                    library.
-                  </p>
-                ) : !localSkinsLoading &&
-                  localSkins.length > 0 &&
-                  filteredSkins.length === 0 &&
-                  !localSkinsError &&
-                  !editingSkin ? (
-                  <p className="text-white/70 italic font-minecraft text-lg">
-                    No skins match your search. Try a different search term.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-                    {filteredSkins.map((skin, index) => (
-                      <SkinPreview
-                        key={skin.id}
-                        skin={skin}
-                        index={index}
-                        loading={loading}
-                        localSkinsLoading={localSkinsLoading}
-                        selectedLocalSkin={selectedLocalSkin}
-                        isApplied={isSkinApplied(skin)}
-                        onClick={applyLocalSkin}
-                        onEditSkin={startEditSkin}
-                        onDeleteSkin={handleDeleteSkin}
-                      />
-                    ))}
-                    <AddSkinCard
-                      index={filteredSkins.length + 1}
-                      onClick={() => startEditSkin(null, undefined)}
+            <Skeleton
+              variant="text"
+              height={20}
+              width="70%"
+              className="mx-auto"
+            />
+          </div>
+        ) : accountError ? (
+          <StatusMessage
+            type="error"
+            className="font-minecraft text-lg"
+            message={`Account Error: ${accountError}`}
+          />
+        ) : !activeAccount ? (
+          <p className="text-white/70 italic font-minecraft text-xl text-center py-10">
+            Please log in to a Minecraft account to manage skins.
+          </p>
+        ) : (
+          <>
+            <div className="space-y-5 text-center">
+              {localSkinsLoading && !editingSkin ? (
+                renderSkeletonGrid()
+              ) : localSkinsError && !editingSkin ? (
+                <StatusMessage
+                  type="error"
+                  className="font-minecraft text-lg"
+                  message={localSkinsError}
+                />
+              ) : !localSkinsLoading &&
+                localSkins.length === 0 &&
+                !localSkinsError &&
+                !editingSkin ? (
+                <p className="text-white/70 italic font-minecraft text-lg">
+                  No local skins found. Upload skins to add them to your
+                  library.
+                </p>
+              ) : !localSkinsLoading &&
+                localSkins.length > 0 &&
+                filteredSkins.length === 0 &&
+                !localSkinsError &&
+                !editingSkin ? (
+                <p className="text-white/70 italic font-minecraft text-lg">
+                  No skins match your search. Try a different search term.
+                </p>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                  {filteredSkins.map((skin, index) => (
+                    <SkinPreview
+                      key={skin.id}
+                      skin={skin}
+                      index={index}
+                      loading={loading}
+                      localSkinsLoading={localSkinsLoading}
+                      selectedLocalSkin={selectedLocalSkin}
+                      isApplied={isSkinApplied(skin)}
+                      onClick={applyLocalSkin}
+                      onEditSkin={startEditSkin}
+                      onDeleteSkin={handleDeleteSkin}
                     />
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </TabContent>
+                  ))}
+                  <AddSkinCard
+                    index={filteredSkins.length + 1}
+                    onClick={() => startEditSkin(null, undefined)}
+                  />
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {isEditingSkin && (
         <EditSkinModal
@@ -860,6 +851,6 @@ export function SkinsTab() {
           localSkinsLoading={modalLoading}
         />
       )}
-    </div>
+    </TabLayout>
   );
 }
