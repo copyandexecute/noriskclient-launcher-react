@@ -297,15 +297,17 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
       data-tauri-drag-region
     >
       <div className="flex items-center gap-4" data-tauri-drag-region>
-        <h1
-          className="font-minecraft text-4xl tracking-wider text-white font-bold lowercase text-shadow"
-          data-tauri-drag-region
-        >
-          <span className="text-white">noriskclient</span>
-          <span className="text-white/70 font-minecraft-ten text-[8px] font-normal ml-2">
+        <div className="flex flex-col items-start">
+          <h1
+            className="font-minecraft text-4xl tracking-wider text-white font-bold lowercase text-shadow"
+            data-tauri-drag-region
+          >
+            noriskclient
+          </h1>
+          <span className="text-white/70 font-minecraft-ten text-[8px] font-normal -mt-2.5">
             {appVersion || "v?.?.?"}
           </span>
-        </h1>
+        </div>
       </div>
 
       <div className="flex items-center gap-4">
