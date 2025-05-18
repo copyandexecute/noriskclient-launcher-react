@@ -8,7 +8,7 @@ import { CapeBrowser } from '../capes/CapeBrowser';
 export function StoreTab() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <TabContent>
+      <TabContent className={"py-0"}>
         <CapeBrowser />
       </TabContent>
     </div>

@@ -12,6 +12,7 @@ interface Cape3DRendererProps {
   autoRotate?: boolean;
   backgroundColor?: string;
   isVisible?: boolean;
+  className?: string;
 }
 
 // Cape dimensions (scaled for Minecraft proportions)
@@ -39,6 +40,7 @@ export function Cape3DRenderer({
   autoRotate = false,
   backgroundColor = 'transparent', // Default to transparent for better card integration
   isVisible = true,
+  className,
 }: Cape3DRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -292,7 +294,7 @@ export function Cape3DRenderer({
   return (
     <InView onChange={handleVisibilityChange} triggerOnce={false} rootMargin="200px 0px"> 
       {({ ref, inView }) => (
-        <div ref={ref} className="relative w-full h-full" style={{ width: `${width}px`, height: `${height}px` }}>
+        <div ref={ref} className={`relative w-full h-full ${className ? className : ""}`} style={{ width: `${width}px`, height: `${height}px` }}>
           {!inView && (
              <div className="w-full h-full flex items-center justify-center bg-black/5">
                  <p className="text-xs text-white/30 font-minecraft">Loading Preview...</p> 

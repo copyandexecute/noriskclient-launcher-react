@@ -44,8 +44,8 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
     onFilterChange({ ...currentFilters, sortBy: value || undefined });
   };
 
-  const handleElytraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onFilterChange({ ...currentFilters, filterHasElytra: e.target.checked });
+  const handleElytraChange = () => {
+    onFilterChange({ ...currentFilters, filterHasElytra: !currentFilters.filterHasElytra });
   };
 
   const handleTimeFrameChange = (value: string) => {
@@ -75,7 +75,7 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
 
   return (
     <div className="p-3 sm:p-4 border-b border-white/10 bg-background-secondary flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
-      <div className="flex-grow min-w-[180px] sm:min-w-[200px]">
+      <div className="flex-grow min-w-[180px] sm:min-w-[200px] max-w-96">
         <SearchInput 
           value={searchInputValue} 
           onChange={handleSearchChange} 
@@ -84,40 +84,40 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
           className="text-xl w-full h-[38px]"
         />
       </div>
+
+      <div className={"flex-grow"}/>
       
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <label htmlFor="sort-by" className="font-minecraft text-lg text-white/80 lowercase whitespace-nowrap">
-          Sort:
-        </label>
         <Select 
           value={currentFilters.sortBy || ''}
           onChange={handleSortChange}
           options={sortOptions}
-          size="sm"
+          size="md"
           className="w-[160px]"
         />
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">
-        <label htmlFor="time-frame" className="font-minecraft text-lg text-white/80 lowercase whitespace-nowrap">
-          Period:
-        </label>
         <Select
           value={currentFilters.timeFrame || ''}
           onChange={handleTimeFrameChange}
           options={timeFrameOptions}
-          size="sm"
+          size="md"
           className="w-[160px]"
         />
       </div>
 
-      <Checkbox
-        checked={currentFilters.filterHasElytra || false}
-        onChange={handleElytraChange}
-        label="Elytra"
-        customSize="sm"
-        className="pt-1"
-      />
+      <Button
+        onClick={handleElytraChange}
+        variant={currentFilters.filterHasElytra ? "default" : "secondary"}
+        size="sm"
+        icon={<Icon icon="solar:user-id-broken" className="w-4 h-4" />}
+        className="min-w-0"
+        disabled={!activeAccount}
+        title={!activeAccount ? "No active Minecraft account" : undefined}
+      >
+        Only Elytra
+      </Button>
 
       <Button
         onClick={handleOwnedToggle}

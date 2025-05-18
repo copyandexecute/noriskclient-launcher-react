@@ -5,7 +5,6 @@ import { toast } from 'react-hot-toast';
 import { browseCapes, equipCape, unequipCape, uploadCape, getPlayerCapes, downloadTemplateAndOpenExplorer, deleteCape } from '../../services/cape-service';
 import type { CosmeticCape, PaginationInfo, BrowseCapesOptions, GetPlayerCapesPayloadOptions } from '../../types/noriskCapes';
 import { CapeList } from './CapeList';
-import { CapePagination } from './CapePagination';
 import { CapeFilters, type CapeFiltersData } from './CapeFilters';
 import { Icon } from '@iconify/react';
 import { useThemeStore } from '../../store/useThemeStore';
@@ -333,7 +332,7 @@ export function CapeBrowser() {
     <div className="h-full flex flex-col bg-background-primary overflow-hidden">
       {/* Actions Bar */}
       <div className="p-3 border-b border-white/10 bg-background-secondary flex flex-wrap items-center justify-between gap-2">
-        <div className="font-minecraft text-xl text-white/90 lowercase">Cape Actions</div>
+        <div className="font-minecraft text-4xl text-white/90 lowercase">Cape Actions</div>
         <div className="flex items-center gap-2">
           <Button
             onClick={handleUploadClick}
@@ -396,10 +395,6 @@ export function CapeBrowser() {
             onDeleteCape={handleDeleteCapeClick}
         />
       </div>
-
-      {paginationInfo && paginationInfo.totalPages > 0 && displayedCapes.length > 0 && (
-        <CapePagination paginationInfo={paginationInfo} onPageChange={handlePageChange} />
-      )}
       
       {/* Cape Preview Modal using Modal component */}
       {showPreviewModal && previewImageUrl && (
