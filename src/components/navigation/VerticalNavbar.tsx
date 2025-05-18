@@ -9,6 +9,7 @@ import { NavButton } from "../ui/nav/NavButton";
 import { NavTooltip } from "../ui/nav/NavTooltip";
 import * as ConfigService from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
+import { createPortal } from "react-dom";
 
 interface NavItem {
   id: string;
@@ -36,8 +37,16 @@ export function VerticalNavbar({
   const navRef = useRef<HTMLDivElement>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
 
   useEffect(() => {
     if (activeItem) {
@@ -85,6 +94,15 @@ export function VerticalNavbar({
   };
 
   const handleMouseEnter = (id: string) => {
+    const buttonElement = buttonRefs.current[id];
+    if (buttonElement) {
+      const rect = buttonElement.getBoundingClientRect();
+      setTooltipPosition({
+        top: rect.top + rect.height / 2, // Center vertically
+        left: rect.right + 12, // Add some spacing
+      });
+    }
+
     setShowTooltip(id);
     if (tooltipRef.current) {
       gsap.fromTo(
@@ -100,42 +118,70 @@ export function VerticalNavbar({
   };
 
   return (
-    <div
-      ref={navRef}
-      className={cn(
-        "flex flex-col items-center py-6 w-24 bg-black/50 backdrop-blur-lg",
-        className,
-      )}
-      style={{
-        borderRight: `2px solid ${accentColor.value}60`,
-        borderLeft: `2px solid ${accentColor.value}60`,
-        boxShadow: `0 0 15px ${accentColor.value}30 inset`,
-      }}
-    >
-      <div className="mb-12">
-        <Logo size="sm" />
-      </div>
+    <>
+      <div
+        ref={navRef}
+        className={cn(
+          "flex flex-col items-center py-6 w-24 bg-black/50 backdrop-blur-lg",
+          className,
+        )}
+        style={{
+          borderRight: `2px solid ${accentColor.value}60`,
+          borderLeft: `2px solid ${accentColor.value}60`,
+          boxShadow: `0 0 15px ${accentColor.value}30 inset`,
+        }}
+      >
+        <div className="mb-12">
+          <Logo size="sm" />
+        </div>
 
-      <div className="flex-1 flex flex-col items-center space-y-4 min-h-[400px]">
-        {items.map((item) => (
-          <div key={item.id} className="relative group nav-item">
-            <NavButton
-              icon={<Icon icon={item.icon} className="w-8 h-8" />}
-              isActive={active === item.id}
-              onClick={() => handleItemClick(item.id)}
-              onMouseEnter={() => handleMouseEnter(item.id)}
-              onMouseLeave={handleMouseLeave}
-              aria-label={item.label}
-            />
+        <div className="flex-1 flex flex-col items-center space-y-4 min-h-[400px]">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="relative group nav-item"
+              ref={(el) => (buttonRefs.current[item.id] = el)}
+            >
+              <NavButton
+                icon={<Icon icon={item.icon} className="w-8 h-8" />}
+                isActive={active === item.id}
+                onClick={() => handleItemClick(item.id)}
+                onMouseEnter={() => handleMouseEnter(item.id)}
+                onMouseLeave={handleMouseLeave}
+                aria-label={item.label}
+              />
+            </div>
+          ))}
+        </div>
 
-            {showTooltip === item.id && (
-              <div className="absolute left-full ml-3 bottom-2 z-50">
-                <NavTooltip ref={tooltipRef}>{item.label}</NavTooltip>
-              </div>
-            )}
+        {appVersion && (
+          <div className="py-4 text-center">
+            <span className="text-white/40 text-[10px] font-minecraft-ten">
+              {appVersion}
+            </span>
           </div>
-        ))}
+        )}
       </div>
-    </div>
+
+      {isMounted &&
+        showTooltip &&
+        document.body &&
+        createPortal(
+          <div
+            className="fixed pointer-events-none"
+            style={{
+              top: `${tooltipPosition.top}px`,
+              left: `${tooltipPosition.left}px`,
+              zIndex: 9999,
+              transform: "translateY(-50%)",
+            }}
+          >
+            <NavTooltip ref={tooltipRef}>
+              {items.find((item) => item.id === showTooltip)?.label}
+            </NavTooltip>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
