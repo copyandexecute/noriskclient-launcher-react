@@ -98,8 +98,8 @@ export function VerticalNavbar({
     if (buttonElement) {
       const rect = buttonElement.getBoundingClientRect();
       setTooltipPosition({
-        top: rect.top + rect.height / 2, // Center vertically
-        left: rect.right + 12, // Add some spacing
+        top: rect.top + rect.height / 2,
+        left: rect.right + 12,
       });
     }
 
@@ -153,14 +153,6 @@ export function VerticalNavbar({
             </div>
           ))}
         </div>
-
-        {appVersion && (
-          <div className="py-4 text-center">
-            <span className="text-white/40 text-[10px] font-minecraft-ten">
-              {appVersion}
-            </span>
-          </div>
-        )}
       </div>
 
       {isMounted &&
