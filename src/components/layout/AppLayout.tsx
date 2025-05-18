@@ -298,7 +298,7 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
     >
       <div className="flex items-center gap-4" data-tauri-drag-region>
         <h1
-          className="font-minecraft text-4xl tracking-wider text-white font-bold uppercase text-shadow"
+          className="font-minecraft text-4xl tracking-wider text-white font-bold lowercase text-shadow"
           data-tauri-drag-region
         >
           <span className="text-white">noriskclient</span>
