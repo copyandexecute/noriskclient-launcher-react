@@ -19,6 +19,7 @@ import { ShaderPacksTab } from "./detail/ShaderPacksTab";
 import { DataPacksTab } from "./detail/DataPacksTab";
 import { ShaderPacksTabV2 } from "./detail/v2/ShaderPacksTabV2";
 import { DataPacksTabV2 } from "./detail/v2/DataPacksTabV2";
+import { ScreenshotsTab } from "./detail/ScreenshotsTab";
 
 interface ProfileDetailViewProps {
   profile: Profile;
@@ -26,7 +27,7 @@ interface ProfileDetailViewProps {
   onEdit: () => void;
 }
 
-type MainTabType = "content" | "browse" | "worlds" | "logs" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
+type MainTabType = "content" | "browse" | "worlds" | "logs" | "screenshots" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
 type ContentSubType =
   | "modsv2"
   | "resourcepacksv2"
@@ -159,6 +160,7 @@ export function ProfileDetailView({
   const mainTabs = profile.is_standard_version
     ? [
       { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+      { id: "screenshots" as MainTabType, label: "Screenshots", icon: "solar:camera-bold" },
       { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
       { id: "content", label: "Content", icon: "solar:widget-bold" },
     ]
@@ -166,6 +168,7 @@ export function ProfileDetailView({
       { id: "content", label: "Content", icon: "solar:widget-bold" },
       { id: "browse", label: "Browse", icon: "solar:magnifer-bold" },
       { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+      { id: "screenshots" as MainTabType, label: "Screenshots", icon: "solar:camera-bold" },
       { id: "logs", label: "Logs", icon: "solar:code-bold" },
     ];
 
@@ -423,6 +426,9 @@ export function ProfileDetailView({
             )}
             {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
             {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
+            {activeMainTab === "screenshots" && (
+              <ScreenshotsTab profile={currentProfile} />
+            )}
           </>
         </div>
       </div>
