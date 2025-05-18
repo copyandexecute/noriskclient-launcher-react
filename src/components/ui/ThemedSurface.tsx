@@ -11,6 +11,7 @@ interface ThemedSurfaceProps {
   onContextMenu?: (event: React.MouseEvent<HTMLDivElement>) => void;
   surfaceRef?: React.Ref<HTMLDivElement>;
   alwaysActive?: boolean;
+  baseColorHex?: string;
 }
 
 export function ThemedSurface({ 
@@ -19,9 +20,17 @@ export function ThemedSurface({
   onClick, 
   onContextMenu, 
   surfaceRef, 
-  alwaysActive = false
+  alwaysActive = false,
+  baseColorHex,
 }: ThemedSurfaceProps) {
   const accentColorValue = useThemeStore((state) => state.accentColor.value);
+
+  const isValidHex = (hex: string | undefined): hex is string => {
+    if (!hex) return false;
+    return /^#[0-9A-F]{6}$/i.test(hex) || /^#[0-9A-F]{8}$/i.test(hex);
+  };
+
+  const effectiveBaseColor = isValidHex(baseColorHex) ? baseColorHex : accentColorValue;
 
   const parseHexToRgba = (hex: string, alpha: number) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -34,11 +43,11 @@ export function ThemedSurface({
   };
 
   const styles = {
-    '--surface-bg-default': parseHexToRgba(accentColorValue, 0.03),
-    '--surface-bg-hover': parseHexToRgba(accentColorValue, 0.1),
-    '--surface-border-default': `${accentColorValue}33`,
-    '--surface-border-hover': `${accentColorValue}7A`,
-    '--surface-border-focus-within': `${accentColorValue}99`,
+    '--surface-bg-default': parseHexToRgba(effectiveBaseColor, 0.03),
+    '--surface-bg-hover': parseHexToRgba(effectiveBaseColor, 0.1),
+    '--surface-border-default': `${effectiveBaseColor}33`,
+    '--surface-border-hover': `${effectiveBaseColor}7A`,
+    '--surface-border-focus-within': `${effectiveBaseColor}99`,
   } as React.CSSProperties;
 
   return (

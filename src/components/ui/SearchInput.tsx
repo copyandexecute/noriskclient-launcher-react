@@ -54,7 +54,7 @@ export function SearchInput({
     },
     lg: {
       container: "h-12",
-      text: "text-lg",
+      text: "text-base",
       icon: "w-5 h-5",
       padding: "px-4",
       surfacePadding: "!p-0",
@@ -237,7 +237,7 @@ export function SearchInput({
         placeholder={placeholder}
         disabled={disabled}
         className={cn(
-          "flex-1 h-full bg-transparent border-none outline-none text-white font-minecraft placeholder:text-white/50 lowercase",
+          "flex-1 h-full bg-transparent border-none outline-none text-white font-minecraft-ten placeholder:text-white/50",
           sizeConfig[size].text,
           sizeConfig[size].padding.replace("px-", "pr-"),
           variant === "themed-surface" ? "pl-0" : sizeConfig[size].padding.replace("px-", "pl-"),

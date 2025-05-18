@@ -8,6 +8,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { Dropdown } from "./dropdown/Dropdown.tsx";
 import { DropdownItem } from "./dropdown/DropdownItem.tsx";
 import { gsap } from "gsap";
+import { ThemedSurface } from "./ThemedSurface";
 
 export interface SelectOption {
   value: string;
@@ -23,6 +24,7 @@ interface SelectProps {
   className?: string;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
+  variant?: "default" | "themed-surface";
 }
 
 export function Select({
@@ -33,20 +35,22 @@ export function Select({
   className,
   disabled = false,
   size = "md",
+  variant = "default",
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
   );
+  const shouldAnimate = isBackgroundAnimationEnabled && variant !== "themed-surface";
 
   const selectedOption = options.find((option) => option.value === value);
 
   useEffect(() => {
-    if (containerRef.current && isBackgroundAnimationEnabled) {
+    if (containerRef.current && shouldAnimate) {
       gsap.fromTo(
         containerRef.current,
         { scale: 0.95, opacity: 0 },
@@ -58,12 +62,12 @@ export function Select({
         },
       );
     }
-  }, []);
+  }, [shouldAnimate]);
 
   const handleClick = () => {
     if (disabled) return;
 
-    if (triggerRef.current && isBackgroundAnimationEnabled) {
+    if (triggerRef.current && shouldAnimate) {
       gsap.to(triggerRef.current, {
         scale: 0.95,
         duration: 0.1,
@@ -82,10 +86,10 @@ export function Select({
   };
 
   const handleMouseEnter = () => {
-    if (disabled) return;
+    if (disabled || !shouldAnimate) return;
     setIsHovered(true);
 
-    if (triggerRef.current && isBackgroundAnimationEnabled) {
+    if (triggerRef.current) {
       gsap.to(triggerRef.current, {
         y: -3,
         boxShadow: `0 7px 0 rgba(0,0,0,0.25), 0 9px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
@@ -96,10 +100,10 @@ export function Select({
   };
 
   const handleMouseLeave = () => {
-    if (disabled) return;
+    if (disabled || !shouldAnimate) return;
     setIsHovered(false);
 
-    if (triggerRef.current && isBackgroundAnimationEnabled) {
+    if (triggerRef.current) {
       gsap.to(triggerRef.current, {
         y: 0,
         boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
@@ -113,7 +117,7 @@ export function Select({
     onChange(optionValue);
     setIsOpen(false);
 
-    if (triggerRef.current && isBackgroundAnimationEnabled) {
+    if (triggerRef.current && shouldAnimate) {
       gsap.fromTo(
         triggerRef.current,
         { scale: 0.95 },
@@ -131,6 +135,78 @@ export function Select({
     md: "h-[42px] text-sm",
     lg: "h-14 text-lg",
   };
+
+  const buttonContent = (
+    <>
+      <div className="flex items-center gap-2 truncate">
+        {selectedOption?.icon && (
+          <span className="flex-shrink-0">{selectedOption.icon}</span>
+        )}
+        <span className="truncate">
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+      </div>
+      <Icon
+        icon="solar:alt-arrow-down-bold"
+        className={cn(
+          "w-5 h-5 transition-transform duration-200 flex-shrink-0",
+          isOpen && "transform rotate-180",
+        )}
+      />
+    </>
+  );
+
+  if (variant === "themed-surface") {
+    return (
+      <ThemedSurface
+        className={cn(
+          "relative",
+          sizeClasses[size],
+          className,
+          disabled && "opacity-60"
+        )}
+        aria-disabled={disabled}
+      >
+        <div 
+          ref={triggerRef}
+          onClick={disabled ? undefined : handleClick}
+          className={cn(
+            "w-full h-full flex items-center justify-between px-4", 
+            disabled ? "cursor-not-allowed" : "cursor-pointer",
+            "font-minecraft lowercase text-white"
+          )}
+          onMouseEnter={() => !disabled && setIsHovered(true)}
+          onMouseLeave={() => !disabled && setIsHovered(false)}
+          role="button"
+          tabIndex={disabled ? -1 : 0}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+        >
+          {buttonContent}
+        </div>
+        <Dropdown
+          isOpen={isOpen}
+          onClose={() => setIsOpen(false)}
+          triggerRef={triggerRef}
+          width={triggerRef.current?.offsetWidth || 300}
+          position={options.length > 6 ? "top" : "bottom"}
+        >
+          <div className="max-h-60 overflow-y-auto custom-scrollbar">
+            {options.map((option) => (
+              <DropdownItem
+                key={option.value}
+                isActive={option.value === value}
+                icon={option.icon}
+                onClick={() => handleOptionSelect(option.value)}
+              >
+                {option.label}
+              </DropdownItem>
+            ))}
+          </div>
+        </Dropdown>
+      </ThemedSurface>
+    );
+  }
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
@@ -163,23 +239,8 @@ export function Select({
           className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
           style={{ backgroundColor: `${accentColor.value}80` }}
         />
-
-        <div className="flex items-center gap-2 truncate">
-          {selectedOption?.icon && (
-            <span className="flex-shrink-0">{selectedOption.icon}</span>
-          )}
-          <span className="truncate">
-            {selectedOption ? selectedOption.label : placeholder}
-          </span>
-        </div>
-
-        <Icon
-          icon="solar:alt-arrow-down-bold"
-          className={cn(
-            "w-5 h-5 transition-transform duration-200",
-            isOpen && "transform rotate-180",
-          )}
-        />
+        
+        {buttonContent}
 
         <span
           className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"

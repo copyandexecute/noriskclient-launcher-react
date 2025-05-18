@@ -123,13 +123,16 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
             placeholder={`Search for ${projectType}s...`}
             className={`flex-grow h-[48px]`}
             variant="themed-surface"
+            size="lg"
           />
           
           <Select
             value={sortOrder}
             onChange={(value) => onSortOrderChange(value as ModrinthSortType)}
             options={sortOptions}
-            className={`max-w-[180px]`}
+            className={`max-w-[180px] h-[48px]`}
+            variant="themed-surface"
+            size="md"
           />
 
           <IconButton
@@ -140,7 +143,8 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
               </svg>
             }
             size={isDetailView ? "md" : "md"}
-            variant="secondary"
+            colorScheme="secondary"
+            displayVariant="themed-surface"
             title={isSidebarVisible ? "Hide filters" : "Show filters"}
           />
         </div>
