@@ -34,19 +34,17 @@ export function PlayerActionsDisplay({
         {playerName || "no account"}
       </h2>
 
-      <div className="relative w-full max-w-[500px]"> {/* Max width for skin viewer container */}
+      <div className="relative w-full max-w-[500px]">
         <SkinViewer
           skinUrl={skinUrl}
-          width={500} // Consider making these responsive or props
+          playerName={playerName?.toString()}
+          width={200}
           height={450}
           className="bg-transparent"
-          autoRotate={true}
-          enableZoom={false}
         />
 
         <div className="absolute bottom-8 left-0 right-0 flex justify-center px-4">
-          {/* Allow LaunchButton to dictate its own width, then center it */}
-          <div className="max-w-xs sm:max-w-sm"> {/* Removed w-full */}
+          <div className="max-w-xs sm:max-w-sm">
             <LaunchButton
               defaultVersion={launchButtonDefaultVersion}
               onVersionChange={onLaunchVersionChange}

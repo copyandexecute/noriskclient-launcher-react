@@ -69,26 +69,6 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       badgeRef.current = node;
     };
 
-    useEffect(() => {
-      if (isFirstRender.current) {
-        isFirstRender.current = false;
-        return;
-      }
-
-      if (badgeRef.current) {
-        gsap.fromTo(
-          badgeRef.current,
-          { scale: 0.95, opacity: 0.8 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-    }, []);
-
     const handleRipple = (e: React.MouseEvent<HTMLDivElement>) => {
       if (disabled || !isClickable) return;
 
@@ -149,37 +129,13 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     };
 
     const handleMouseEnter = () => {
-      if (disabled) return;
+      if (disabled || !isClickable) return;
       setIsHovered(true);
-
-      if (badgeRef.current && isClickable && isBackgroundAnimationEnabled) {
-        gsap.to(badgeRef.current, {
-          y: -2,
-          boxShadow: getShadowStyle(true),
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      } else if (badgeRef.current && isClickable) {
-        badgeRef.current.style.transform = "translateY(-2px)";
-        badgeRef.current.style.boxShadow = getShadowStyle(true);
-      }
     };
 
     const handleMouseLeave = () => {
-      if (disabled) return;
+      if (disabled || !isClickable) return;
       setIsHovered(false);
-
-      if (badgeRef.current && isClickable && isBackgroundAnimationEnabled) {
-        gsap.to(badgeRef.current, {
-          y: 0,
-          boxShadow: getShadowStyle(false),
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      } else if (badgeRef.current && isClickable) {
-        badgeRef.current.style.transform = "translateY(0px)";
-        badgeRef.current.style.boxShadow = getShadowStyle(false);
-      }
 
       if (isPressed) {
         handleMouseUp();
@@ -278,7 +234,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
         className={cn(
           "inline-flex items-center justify-center relative overflow-hidden",
           sizeStyles,
-          "font-medium backdrop-blur-sm transition-all duration-150",
+          "font-medium transition-all duration-150",
           iconElement ? "gap-x-1.5" : "",
           isClickable ? "cursor-pointer" : "",
           disabled ? "opacity-50 cursor-not-allowed" : "",
@@ -287,16 +243,10 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
         )}
         style={{
           backgroundColor: variantStyles.bg,
-          borderColor:
-            isHovered && isClickable ? variantStyles.light : variantStyles.main,
-          borderBottomColor:
-            isHovered && isClickable ? variantStyles.light : variantStyles.dark,
+          borderColor: variantStyles.main,
+          borderBottomColor: variantStyles.dark,
           color: variantStyles.text,
           boxShadow: initialShadow,
-          transform:
-            isHovered && isClickable && !disabled
-              ? "translateY(-2px)"
-              : "translateY(0)",
           filter:
             isHovered && isClickable && !disabled
               ? "brightness(1.1)"
