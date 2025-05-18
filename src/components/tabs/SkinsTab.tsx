@@ -24,6 +24,71 @@ import { Skeleton } from "../ui/Skeleton";
 import { SkeletonSkinCard } from "../ui/SkeletonSkinCard";
 import { TabLayout } from "../ui/TabLayout";
 
+const keyframes = `
+  @keyframes fadeIn {
+    from { 
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+    to { 
+      opacity: 1;
+      backdrop-filter: blur(2px);
+    }
+  }
+  
+  @keyframes slideUp {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes glow {
+    0%, 100% { 
+      opacity: 1;
+      text-shadow: 0 0 5px rgba(255,255,255,0.7);
+    }
+    50% { 
+      opacity: 0.95;
+      text-shadow: 0 0 20px rgba(255,255,255,0.9);
+    }
+  }
+  
+  @keyframes pulseOpacity {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    50% { opacity: 0.7; }
+    100% { opacity: 1; }
+  }
+  
+  @keyframes reverseSpin {
+    0% { 
+      opacity: 0;
+      transform: rotate(360deg);
+    }
+    10% { opacity: 1; }
+    100% { 
+      opacity: 1;
+      transform: rotate(0deg);
+    }
+  }
+`;
+
+// Add the keyframes to the document head
+useEffect(() => {
+  const style = document.createElement("style");
+  style.textContent = keyframes;
+  document.head.appendChild(style);
+
+  return () => {
+    document.head.removeChild(style);
+  };
+}, []);
+
 const SkinPreview = memo(
   ({
     skin,
@@ -107,11 +172,50 @@ const SkinPreview = memo(
         </div>
 
         {isDisabled && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-20 transition-opacity duration-300 ease-in-out">
-            <div className="w-20 h-20 border-4 border-t-transparent border-white rounded-full animate-spin mb-4 transition-all duration-300"></div>
-            <span className="font-minecraft text-2xl text-white lowercase animate-pulse transition-all duration-300">
-              Applying...
-            </span>
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-lg z-20 opacity-0"
+            style={{
+              animation: "fadeIn 0.3s ease-out forwards",
+            }}
+          >
+            <div className="relative w-20 h-20 mb-4">
+              <div
+                className="absolute inset-0 border-4 border-t-transparent border-white rounded-full opacity-0"
+                style={{
+                  animation:
+                    "spin 1.2s linear infinite, pulseOpacity 2s ease-in-out infinite",
+                  animationDelay: "0.1s",
+                }}
+              />
+              <div
+                className="absolute inset-0 border-4 border-t-transparent border-white/30 rounded-full opacity-0"
+                style={{
+                  animation: "reverseSpin 3s linear infinite",
+                  animationDelay: "0.2s",
+                }}
+              />
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <span
+                className="font-minecraft text-2xl text-white opacity-0 -translate-y-2"
+                style={{
+                  animation:
+                    "slideUp 0.4s ease-out 0.2s forwards, glow 2s ease-in-out infinite",
+                  animationDelay: "0.3s",
+                }}
+              >
+                Applying...
+              </span>
+              <span
+                className="font-minecraft text-white/50 text-lg opacity-0 -translate-y-2"
+                style={{
+                  animation: "slideUp 0.4s ease-out forwards",
+                  animationDelay: "0.4s",
+                }}
+              >
+                Please wait
+              </span>
+            </div>
           </div>
         )}
 
@@ -584,7 +688,7 @@ export function SkinsTab() {
 
   const saveSkin = async (skin: MinecraftSkin) => {
     if (!skin) return;
-    setLocalSkinsLoading(true);
+    setModalLoading(true);
 
     try {
       const updatedSkin = await MinecraftSkinService.updateSkinProperties(
@@ -612,7 +716,7 @@ export function SkinsTab() {
       console.error("Error updating skin properties:", err);
       setLocalSkinsError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLocalSkinsLoading(false);
+      setModalLoading(false);
     }
   };
 
@@ -696,6 +800,7 @@ export function SkinsTab() {
 
     setLoading(true);
     setSelectedLocalSkin(skin);
+    setSelectedSkinId(skin.id);
 
     try {
       await MinecraftSkinService.applySkinFromBase64(
@@ -712,6 +817,8 @@ export function SkinsTab() {
     } catch (err) {
       console.error("Error applying local skin:", err);
       toast.error(err instanceof Error ? err.message : String(err));
+      setSelectedLocalSkin(null);
+      setSelectedSkinId(null);
     } finally {
       setLoading(false);
     }
@@ -791,7 +898,7 @@ export function SkinsTab() {
         ) : (
           <>
             <div className="space-y-5 text-center">
-              {localSkinsLoading && !editingSkin ? (
+              {localSkinsLoading && localSkins.length === 0 && !editingSkin ? (
                 renderSkeletonGrid()
               ) : localSkinsError && !editingSkin ? (
                 <StatusMessage
