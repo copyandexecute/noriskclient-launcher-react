@@ -20,12 +20,12 @@ interface ThemedSurfaceProps {
   };
 }
 
-export function ThemedSurface({ 
-  children, 
-  className, 
-  onClick, 
-  onContextMenu, 
-  surfaceRef, 
+export function ThemedSurface({
+  children,
+  className,
+  onClick,
+  onContextMenu,
+  surfaceRef,
   alwaysActive = false,
   baseColorHex,
   borderVisibility,
@@ -41,60 +41,52 @@ export function ThemedSurface({
   const effectiveBaseColor = isValidHex(baseColorHex) ? baseColorHex : accentColorValue;
 
   const parseHexToRgba = (hex: string, alpha: number) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    if (isNaN(r) || isNaN(g) || isNaN(b)) { // Fallback for invalid hex
-      return `rgba(0, 0, 0, ${alpha})`; // Default to black with alpha
+    const pureHex = hex.startsWith('#') ? hex.substring(1, 7) : hex.substring(0, 6);
+    const r = parseInt(pureHex.substring(0, 2), 16);
+    const g = parseInt(pureHex.substring(2, 4), 16);
+    const b = parseInt(pureHex.substring(4, 6), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) {
+      return `rgba(0, 0, 0, ${alpha})`;
     }
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
-  const {
-    top: showTopBorder = true,
-    bottom: showBottomBorder = true,
-    left: showLeftBorder = true,
-    right: showRightBorder = true,
+  const opacityDefault = 0.2;
+  const opacityHover = 0.48;
+  const opacityActive = 0.6; // For alwaysActive or future focus state
+
+  let currentBorderOpacity = opacityDefault;
+  if (alwaysActive) {
+    currentBorderOpacity = opacityActive;
+  } else if (isSurfaceHovered) {
+    currentBorderOpacity = opacityHover;
+  }
+
+  const { 
+    top: showTopBorder = true, 
+    bottom: showBottomBorder = true, 
+    left: showLeftBorder = true, 
+    right: showRightBorder = true 
   } = borderVisibility || {};
 
   const styles = {
     '--surface-bg-default': parseHexToRgba(effectiveBaseColor, 0.03),
     '--surface-bg-hover': parseHexToRgba(effectiveBaseColor, 0.1),
-    '--surface-border-default': `${effectiveBaseColor}33`,
-    '--surface-border-hover': `${effectiveBaseColor}7A`,
-    '--surface-border-focus-within': `${effectiveBaseColor}99`,
+    borderTopColor: ((isSurfaceHovered && !alwaysActive) || showTopBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
+    borderRightColor: ((isSurfaceHovered && !alwaysActive) || showRightBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
+    borderBottomColor: ((isSurfaceHovered && !alwaysActive) || showBottomBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
+    borderLeftColor: ((isSurfaceHovered && !alwaysActive) || showLeftBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
   } as React.CSSProperties;
-
-  const getBorderClass = (
-    showBorderConfig: boolean, 
-    borderDirection: 't' | 'b' | 'l' | 'r'
-  ) => {
-    if (showBorderConfig) {
-      return alwaysActive
-        ? `border-${borderDirection}-[var(--surface-border-hover)]`
-        : `border-${borderDirection}-[var(--surface-border-default)] hover:border-${borderDirection}-[var(--surface-border-hover)] focus-within:border-${borderDirection}-[var(--surface-border-focus-within)]`;
-    } else if (isSurfaceHovered) {
-      return `border-${borderDirection}-[var(--surface-border-hover)]`;
-    }
-    return `border-${borderDirection}-transparent`;
-  };
 
   return (
     <div
       ref={surfaceRef}
       className={cn(
         "relative p-3 transition-colors duration-150 w-full select-none rounded-lg",
-        alwaysActive 
+        "border-2", // Sets border-width and border-style
+        alwaysActive
           ? "bg-[var(--surface-bg-hover)]"
           : "bg-[var(--surface-bg-default)] hover:bg-[var(--surface-bg-hover)]",
-        
-        (showTopBorder || showBottomBorder || showLeftBorder || showRightBorder || isSurfaceHovered) && "border-2",
-
-        getBorderClass(showTopBorder, 't'),
-        getBorderClass(showBottomBorder, 'b'),
-        getBorderClass(showLeftBorder, 'l'),
-        getBorderClass(showRightBorder, 'r'),
-
         className
       )}
       style={styles}

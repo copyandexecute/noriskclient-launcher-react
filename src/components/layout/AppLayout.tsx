@@ -167,7 +167,7 @@ export function AppLayout({
           <MatrixRainEffect
             speed={qualityParams.speed}
             opacity={qualityParams.opacity}
-            forceEnable={true}
+            forceEnable={false}
           />
         );
       case BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES:
@@ -176,7 +176,7 @@ export function AppLayout({
             opacity={qualityParams.opacity}
             particleCount={qualityParams.particleCount}
             speed={qualityParams.speed}
-            forceEnable={true}
+            forceEnable={false}
           />
         );
       case BACKGROUND_EFFECTS.NEBULA_WAVES:
