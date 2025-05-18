@@ -116,7 +116,7 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
         disabled={!activeAccount}
         title={!activeAccount ? "No active Minecraft account" : undefined}
       >
-        Only Elytra
+        Has Elytra
       </Button>
 
       <Button
