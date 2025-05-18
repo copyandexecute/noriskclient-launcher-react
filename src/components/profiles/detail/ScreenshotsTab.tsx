@@ -11,7 +11,8 @@ import { EmptyState } from "../../ui/EmptyState"; // Import EmptyState
 import { invoke } from "@tauri-apps/api/core"; // Import invoke
 import { convertFileSrc } from "@tauri-apps/api/core"; // Import convertFileSrc
 import { ScreenshotGridItem } from "./ScreenshotGridItem"; // Import ScreenshotGridItem
-import { VirtuosoGrid } from "react-virtuoso"; // Import VirtuosoGrid
+import { Button } from "../../ui/buttons/Button"; // Import Button for pagination
+import { IconButton } from "../../ui/buttons/IconButton"; // Import IconButton
 
 interface ScreenshotItem {
   id: string;
@@ -26,21 +27,23 @@ interface ScreenshotsTabProps {
 }
 
 // Placeholder data for screenshots
-const placeholderScreenshotsData: ScreenshotItem[] = Array.from({ length: 12 }, (_, i) => ({
-  id: `screenshot-${i + 1}`,
-  // You could add more properties like src, alt, date, etc. later
-  // For now, we'll just use a placeholder color based on index
-  color: `hsl(${i * 45}, 65%, 60%)`, // Adjusted color spread
-}));
+// const placeholderScreenshotsData: ScreenshotItem[] = Array.from({ length: 12 }, (_, i) => ({
+// id: `screenshot-${i + 1}`,
+// You could add more properties like src, alt, date, etc. later
+// For now, we\'ll just use a placeholder color based on index
+// color: `hsl(${i * 45}, 65%, 60%)`, // Adjusted color spread
+// }));
 
 const sortOptions: SelectOption[] = [
   { value: "newest", label: "newest first", icon: <Icon icon="solar:sort-amount-down-bold-duotone" /> },
   { value: "oldest", label: "oldest first", icon: <Icon icon="solar:sort-amount-up-bold-duotone" /> },
 ];
 
+const ITEMS_PER_PAGE = 16; // 4 columns * 4 rows, changed from 8
+
 export function ScreenshotsTab({
   profile,
-  isActive = true, // Assuming it's active when rendered by ProfileDetailView logic
+  isActive = true, // Assuming it\'s active when rendered by ProfileDetailView logic
 }: ScreenshotsTabProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
@@ -54,6 +57,7 @@ export function ScreenshotsTab({
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState<ActualScreenshotInfo | null>(null);
   const [sortOrder, setSortOrder] = useState<string>("newest");
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Simulate fetching and initial data state
   const [rawScreenshots, setRawScreenshots] = useState<ActualScreenshotInfo[]>([]);
@@ -86,7 +90,7 @@ export function ScreenshotsTab({
     fetchScreenshots();
   }, [profile.id, profile]); // Added profile to dependency array
 
-  const displayedScreenshots = useMemo(() => {
+  const sortedScreenshots = useMemo(() => {
     let sorted = [...rawScreenshots];
     if (sortOrder === "newest") {
       sorted.sort((a, b) => {
@@ -103,10 +107,32 @@ export function ScreenshotsTab({
         return new Date(a.modified).getTime() - new Date(b.modified).getTime();
       });
     }
-    // If no date or same date, could add secondary sort by filename if desired
-    // e.g., return a.filename.localeCompare(b.filename);
     return sorted;
   }, [rawScreenshots, sortOrder]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(sortedScreenshots.length / ITEMS_PER_PAGE));
+  }, [sortedScreenshots.length]);
+
+  const paginatedScreenshots = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return sortedScreenshots.slice(startIndex, endIndex);
+  }, [sortedScreenshots, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1); // Reset to first page when profile or sort order changes
+  }, [profile.id, sortOrder]);
+
+  useEffect(() => {
+    // Adjust current page if it becomes invalid after data changes
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (totalPages === 1 && currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
 
   useEffect(() => {
     if (containerRef.current && isActive && isBackgroundAnimationEnabled && !isLoading) {
@@ -134,7 +160,7 @@ export function ScreenshotsTab({
   const closeLightbox = () => {
     setIsLightboxOpen(false);
     // Delay clearing selected screenshot for smoother exit animation if any
-    setTimeout(() => setSelectedScreenshot(null), 300); 
+    setTimeout(() => setSelectedScreenshot(null), 300);
   };
 
   useEffect(() => {
@@ -150,7 +176,7 @@ export function ScreenshotsTab({
       gsap.to(lightboxRef.current, { opacity: 0, duration: 0.3 });
     }
   }, [isLightboxOpen, isBackgroundAnimationEnabled]);
-  
+
   // Handle Escape key to close lightbox
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -180,32 +206,37 @@ export function ScreenshotsTab({
           borderColor: `${accentColor.value}30`,
         }}
       >
-        <h2 className="font-minecraft text-lg text-white flex-shrink-0">Screenshots</h2>
+        <div>
+          <h2 className="font-minecraft text-lg text-white flex-shrink-0">Screenshots</h2>
+          {(!isLoading && !error) && (
+            <p className="font-minecraft-five text-sm text-white/60">
+              ({sortedScreenshots.length} total)
+            </p>
+          )}
+        </div>
         <div className="w-full max-w-xs sm:max-w-[200px] ml-auto">
           <Select
             value={sortOrder}
             onChange={setSortOrder}
             options={sortOptions}
             size="sm"
-            disabled={isLoading || (!isLoading && !error && displayedScreenshots.length === 0)} // Disable if loading or no items
+            disabled={isLoading || (!isLoading && !error && sortedScreenshots.length === 0)} // Disable if loading or no items
           />
         </div>
       </div>
 
       {/* New main content wrapper with its own background */}
-      <div 
+      <div
         className="flex-1 overflow-hidden rounded-lg border flex flex-col"
         style={{
-          backgroundColor: `${accentColor.value}0A`, // Slightly different from tab pane bg
-          borderColor: `${accentColor.value}20`,
+          backgroundColor: `${accentColor.value}10`, 
+          borderColor: `${accentColor.value}30`,
         }}
       >
         {isLoading && (
-          <EmptyState 
-            icon="solar:gallery-send-bold-duotone" 
-            message="loading screenshots..." 
-            // fullHeight is true by default, which is desired here
-            // The EmptyState component will handle its own styling and centering within this flex-1 container.
+          <EmptyState
+            icon="solar:gallery-send-bold-duotone"
+            message="loading screenshots..."
           />
         )}
 
@@ -217,7 +248,7 @@ export function ScreenshotsTab({
           </div>
         )}
 
-        {!isLoading && !error && displayedScreenshots.length === 0 && rawScreenshots.length > 0 && (
+        {!isLoading && !error && sortedScreenshots.length === 0 && rawScreenshots.length > 0 && (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
             <Icon icon="solar:gallery-minimalistic-bold-duotone" className="w-20 h-20 mb-4 text-white/40" />
             <p className="font-minecraft-ten text-xl text-white/70 mb-2">No Screenshots Match Filter</p>
@@ -228,34 +259,61 @@ export function ScreenshotsTab({
         )}
 
         {!isLoading && !error && rawScreenshots.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-            <Icon icon="solar:camera-minimalistic-bold-duotone" className="w-20 h-20 mb-4 text-white/30" />
-            <p className="font-minecraft-ten text-xl text-white/70 mb-2">No Screenshots Yet</p>
-            <p className="text-white/50 font-minecraft-five text-base">
-              Take some in-game screenshots and they'll appear here!
-            </p>
-          </div>
+          <EmptyState
+            icon="solar:camera-minimalistic-bold-duotone"
+            message="no screenshots yet"
+            description="take some in-game screenshots and they\'ll appear here!"
+            // iconClassName="text-white/30" // Icon color is handled by EmptyState or can be passed to Icon if customization is needed beyond accent
+          />
         )}
 
-        {!isLoading && !error && displayedScreenshots.length > 0 && (
-          <div className="h-full p-3">
-            <VirtuosoGrid
-              style={{ height: '100%' }}
-              data={displayedScreenshots}
-              itemContent={(index, screenshot) => (
+        {!isLoading && !error && sortedScreenshots.length > 0 && (
+          <>
+            <div className="grid grid-cols-4 gap-4 p-3 flex-grow overflow-hidden">
+              {paginatedScreenshots.map((screenshot, index) => (
                 <ScreenshotGridItem
-                  key={screenshot.path} 
+                  key={screenshot.path}
                   screenshot={screenshot}
                   accentColorValue={accentColor.value}
                   isBackgroundAnimationEnabled={isBackgroundAnimationEnabled}
                   animationDelay={isBackgroundAnimationEnabled ? `${index * 0.035}s` : undefined}
                   onClick={() => openLightbox(screenshot)}
                 />
-              )}
-              listClassName="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
-              className="custom-scrollbar"
-            />
-          </div>
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div 
+                className="flex items-center justify-center gap-4 p-4"
+                style={{ flexShrink: 0 }}
+              >
+                <IconButton
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  colorScheme="secondary"
+                  displayVariant="ghost"
+                  size="sm"
+                  icon={<Icon icon="solar:arrow-left-bold" />}
+                  title="Previous Page"
+                >
+                  {/* Previous */}
+                </IconButton>
+                <span className="font-minecraft text-sm text-white/80">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <IconButton
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  colorScheme="secondary"
+                  displayVariant="ghost"
+                  size="sm"
+                  icon={<Icon icon="solar:arrow-right-bold" />}
+                  title="Next Page"
+                >
+                  {/* Next */}
+                </IconButton>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -265,18 +323,18 @@ export function ScreenshotsTab({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
           onClick={closeLightbox} // Close on backdrop click
         >
-          <div 
+          <div
             className="lightbox-content relative max-w-4xl max-h-[90vh] w-full rounded-lg shadow-2xl overflow-hidden cursor-default bg-black/50"
             onClick={(e) => e.stopPropagation()} // Prevent closing when clicking on the content itself
           >
-            <img 
+            <img
               src={convertFileSrc(selectedScreenshot.path)}
               alt={`Enlarged screenshot: ${selectedScreenshot.filename}`}
               className="block max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-md mx-auto"
             />
             <button
               onClick={closeLightbox}
-              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors text-white"
+              className="absolute top-3 right-3 z-10 p-2 rounded-full text-white transition-colors bg-[rgba(var(--accent-rgb),0.5)] hover:bg-[rgba(var(--accent-rgb),0.7)]"
               aria-label="Close screenshot viewer"
             >
               <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
@@ -287,6 +345,9 @@ export function ScreenshotsTab({
     </div>
   );
 }
+
+// ... (keyframes can be removed if not used, or ensure they are globally defined if ScreenshotGridItem relies on them via a class)
+// For now, assuming ScreenshotGridItem handles its own animation or uses global styles.
 
 // It's generally better to define keyframes in a global CSS file (e.g., globals.css)
 // For Tailwind, you can also define custom animations in tailwind.config.js
