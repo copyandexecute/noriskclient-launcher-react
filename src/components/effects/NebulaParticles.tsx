@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
 interface Particle {
   x: number;
@@ -14,21 +15,22 @@ interface Particle {
   maxLife: number;
 }
 
-interface AccentParticlesProps {
+interface NebulaParticlesProps {
   particleCount?: number;
   opacity?: number;
   speed?: number;
   className?: string;
 }
 
-export default function AccentParticles({
+export function NebulaParticles({
   particleCount = 50,
   opacity = 0.3,
   speed = 1,
   className = "",
-}: AccentParticlesProps) {
+}: NebulaParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { qualityLevel } = useQualitySettingsStore();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -39,6 +41,11 @@ export default function AccentParticles({
 
     let animationFrameId: number;
     let particles: Particle[] = [];
+
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedParticleCount = Math.floor(particleCount * qualityMultiplier);
+    const adjustedSpeed = speed * qualityMultiplier;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -67,13 +74,13 @@ export default function AccentParticles({
       const { width, height } = canvas.getBoundingClientRect();
       particles = [];
 
-      for (let i = 0; i < particleCount; i++) {
+      for (let i = 0; i < adjustedParticleCount; i++) {
         particles.push({
           x: Math.random() * width,
           y: Math.random() * height,
           size: Math.random() * 4 + 1,
-          speedX: (Math.random() - 0.5) * 0.5 * speed,
-          speedY: (Math.random() - 0.5) * 0.5 * speed,
+          speedX: (Math.random() - 0.5) * 0.5 * adjustedSpeed,
+          speedY: (Math.random() - 0.5) * 0.5 * adjustedSpeed,
           opacity: Math.random() * 0.5 + 0.1,
           life: 0,
           maxLife: Math.random() * 100 + 50,
@@ -172,7 +179,7 @@ export default function AccentParticles({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, particleCount, opacity, speed]);
+  }, [accentColor.value, particleCount, opacity, speed, qualityLevel]);
 
   return (
     <canvas

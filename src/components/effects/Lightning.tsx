@@ -1,7 +1,6 @@
 "use client";
-
-import type React from "react";
 import { useEffect, useRef } from "react";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
 interface LightningProps {
   hue?: number;
@@ -12,19 +11,28 @@ interface LightningProps {
   className?: string;
 }
 
-const Lightning: React.FC<LightningProps> = ({
+export function Lightning({
   hue = 230,
   xOffset = 0,
   speed = 1,
   intensity = 1,
   size = 1,
   className = "",
-}) => {
+}: LightningProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { qualityLevel } = useQualitySettingsStore();
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Adjust based on quality level
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedSpeed = speed * qualityMultiplier;
+    const adjustedIntensity = intensity * qualityMultiplier;
+    const octaveCount =
+      qualityLevel === "low" ? 6 : qualityLevel === "high" ? 12 : 10;
 
     const resizeCanvas = () => {
       canvas.width = canvas.clientWidth;
@@ -56,7 +64,7 @@ const Lightning: React.FC<LightningProps> = ({
       uniform float uIntensity;
       uniform float uSize;
       
-      #define OCTAVE_COUNT 10
+      #define OCTAVE_COUNT ${octaveCount}
 
       // Convert HSV to RGB.
       vec3 hsv2rgb(vec3 c) {
@@ -187,6 +195,7 @@ const Lightning: React.FC<LightningProps> = ({
     gl.useProgram(program);
 
     const startTime = performance.now();
+
     const render = () => {
       resizeCanvas();
       gl.viewport(0, 0, canvas.width, canvas.height);
@@ -195,8 +204,8 @@ const Lightning: React.FC<LightningProps> = ({
       gl.uniform1f(iTimeLocation, (currentTime - startTime) / 1000.0);
       gl.uniform1f(uHueLocation, hue);
       gl.uniform1f(uXOffsetLocation, xOffset);
-      gl.uniform1f(uSpeedLocation, speed);
-      gl.uniform1f(uIntensityLocation, intensity);
+      gl.uniform1f(uSpeedLocation, adjustedSpeed);
+      gl.uniform1f(uIntensityLocation, adjustedIntensity);
       gl.uniform1f(uSizeLocation, size);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       requestAnimationFrame(render);
@@ -218,11 +227,9 @@ const Lightning: React.FC<LightningProps> = ({
         gl.deleteBuffer(vertexBuffer);
       }
     };
-  }, [hue, xOffset, speed, intensity, size]);
+  }, [hue, xOffset, speed, intensity, size, qualityLevel]);
 
   return (
     <canvas ref={canvasRef} className={`w-full h-full relative ${className}`} />
   );
-};
-
-export default Lightning;
+}

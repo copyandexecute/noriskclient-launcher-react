@@ -4,12 +4,12 @@ import { persist } from "zustand/middleware";
 export const BACKGROUND_EFFECTS = {
   MATRIX_RAIN: "matrix_rain",
   ENCHANTMENT_PARTICLES: "enchantment_particles",
-  ACCENT_WAVES: "accent_waves",
-  ACCENT_PARTICLES: "accent_particles",
-  ACCENT_GRID: "accent_grid",
-  ACCENT_VOXELS: "accent_voxels",
-  ACCENT_LIGHTNING: "accent_lightning",
-  ACCENT_LIQUID_CHROME: "accent_liquid_chrome",
+  NEBULA_WAVES: "nebula_waves",
+  NEBULA_PARTICLES: "nebula_particles",
+  NEBULA_GRID: "nebula_grid",
+  NEBULA_VOXELS: "nebula_voxels",
+  NEBULA_LIGHTNING: "nebula_lightning",
+  NEBULA_LIQUID_CHROME: "nebula_liquid_chrome",
 };
 
 interface BackgroundEffectState {
@@ -25,6 +25,6 @@ export const useBackgroundEffectStore = create<BackgroundEffectState>()(
     }),
     {
       name: "norisk-background-effect-storage",
-    }
-  )
+    },
+  ),
 );

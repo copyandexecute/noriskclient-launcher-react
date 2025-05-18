@@ -1,8 +1,9 @@
-import type React from "react";
+"use client";
 import { useThemeStore } from "../../store/useThemeStore";
-import LiquidChrome from "./LiquidChrome";
+import { LiquidChrome } from "./LiquidChrome";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
-interface AccentLiquidChromeProps {
+interface NebulaLiquidChromeProps {
   speed?: number;
   amplitude?: number;
   frequencyX?: number;
@@ -11,20 +12,26 @@ interface AccentLiquidChromeProps {
   className?: string;
 }
 
-const AccentLiquidChrome: React.FC<AccentLiquidChromeProps> = ({
+export function NebulaLiquidChrome({
   speed = 0.2,
   amplitude = 0.5,
   frequencyX = 3,
   frequencyY = 2,
   opacity = 0.7,
   className = "",
-}) => {
+}: NebulaLiquidChromeProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { qualityLevel } = useQualitySettingsStore();
+
+  const qualityMultiplier =
+    qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+  const adjustedSpeed = speed * qualityMultiplier;
+  const adjustedAmplitude = amplitude * qualityMultiplier;
 
   const hexToRgb = (hex: string): [number, number, number] => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     if (!result) {
-      return [0.1, 0.1, 0.1]; // Default fallback
+      return [0.1, 0.1, 0.1];
     }
 
     const r = Number.parseInt(result[1], 16) / 255;
@@ -40,14 +47,12 @@ const AccentLiquidChrome: React.FC<AccentLiquidChromeProps> = ({
     <div className={`absolute inset-0 ${className}`} style={{ opacity }}>
       <LiquidChrome
         baseColor={baseColor}
-        speed={speed}
-        amplitude={amplitude}
+        speed={adjustedSpeed}
+        amplitude={adjustedAmplitude}
         frequencyX={frequencyX}
         frequencyY={frequencyY}
         interactive={true}
       />
     </div>
   );
-};
-
-export default AccentLiquidChrome;
+}

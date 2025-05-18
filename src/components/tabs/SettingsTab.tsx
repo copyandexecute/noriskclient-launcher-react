@@ -8,11 +8,11 @@ import {
   useState,
 } from "react";
 import { Icon } from "@iconify/react";
-import { Button } from "../ui/buttons/Button";
-import { Input } from "../ui/Input";
-import { Label } from "../ui/Label";
-import { ToggleSwitch } from "../ui/ToggleSwitch";
-import { ColorPicker } from "../ColorPicker";
+import { Button } from ".././ui/buttons/Button";
+import { Input } from ".././ui/Input";
+import { Label } from ".././ui/Label";
+import { ToggleSwitch } from ".././ui/ToggleSwitch";
+import { ColorPicker } from ".././ColorPicker";
 import type { LauncherConfig } from "../../types/launcherConfig";
 import * as ConfigService from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
@@ -20,10 +20,15 @@ import {
   BACKGROUND_EFFECTS,
   useBackgroundEffectStore,
 } from "../../store/background-effect-store";
+import {
+  type QualityLevel,
+  useQualitySettingsStore,
+} from "../../store/quality-settings-store";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { toast } from "react-hot-toast";
-import { TabLayout } from "../ui/TabLayout";
+import { TabLayout } from ".././ui/TabLayout";
+import EffectPreviewCard from ".././EffectPreviewCard";
 
 export function SettingsTab() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -37,8 +42,9 @@ export function SettingsTab() {
   const contentRef = useRef<HTMLDivElement>(null);
   const tabRef = useRef<HTMLDivElement>(null);
 
-  const { accentColor } = useThemeStore();
+  const { accentColor, isBackgroundAnimationEnabled } = useThemeStore();
   const { currentEffect, setCurrentEffect } = useBackgroundEffectStore();
+  const { qualityLevel, setQualityLevel } = useQualitySettingsStore();
 
   const backgroundOptions = [
     {
@@ -52,36 +58,47 @@ export function SettingsTab() {
       icon: "solar:magic-stick-bold",
     },
     {
-      id: BACKGROUND_EFFECTS.ACCENT_WAVES,
-      name: "Accent Waves",
+      id: BACKGROUND_EFFECTS.NEBULA_WAVES,
+      name: "Nebula Waves",
       icon: "solar:wave-linear",
     },
     {
-      id: BACKGROUND_EFFECTS.ACCENT_PARTICLES,
-      name: "Accent Particles",
+      id: BACKGROUND_EFFECTS.NEBULA_PARTICLES,
+      name: "Nebula Particles",
       icon: "solar:star-bold",
     },
     {
-      id: BACKGROUND_EFFECTS.ACCENT_GRID,
-      name: "Accent Grid",
+      id: BACKGROUND_EFFECTS.NEBULA_GRID,
+      name: "Nebula Grid",
       icon: "solar:square-academic-cap-bold",
     },
     {
-      id: BACKGROUND_EFFECTS.ACCENT_VOXELS,
-      name: "Accent Voxels",
+      id: BACKGROUND_EFFECTS.NEBULA_VOXELS,
+      name: "Nebula Voxels",
       icon: "solar:cube-3d-bold",
     },
     {
-      id: BACKGROUND_EFFECTS.ACCENT_LIGHTNING,
-      name: "Accent Lightning",
+      id: BACKGROUND_EFFECTS.NEBULA_LIGHTNING,
+      name: "Nebula Lightning",
       icon: "solar:bolt-bold",
     },
     {
-      id: BACKGROUND_EFFECTS.ACCENT_LIQUID_CHROME,
+      id: BACKGROUND_EFFECTS.NEBULA_LIQUID_CHROME,
       name: "Liquid Chrome",
       icon: "solar:liquid-bold",
     },
   ];
+
+  const qualityOptions: { value: QualityLevel; label: string; icon: string }[] =
+    [
+      { value: "low", label: "Low", icon: "solar:speedometer-slow-bold" },
+      {
+        value: "medium",
+        label: "Medium",
+        icon: "solar:speedometer-medium-bold",
+      },
+      { value: "high", label: "High", icon: "solar:speedometer-bold" },
+    ];
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -230,24 +247,11 @@ export function SettingsTab() {
             <ToggleSwitch
               checked={tempConfig?.is_experimental || false}
               onChange={(newCheckedState) => {
-                console.log("Experimental Mode toggle: onChange triggered");
-                console.log(
-                  "Current tempConfig.is_experimental:",
-                  tempConfig?.is_experimental,
-                );
-                console.log(
-                  "Value from ToggleSwitch (newCheckedState):",
-                  newCheckedState,
-                );
                 if (tempConfig) {
                   setTempConfig({
                     ...tempConfig,
                     is_experimental: newCheckedState,
                   });
-                } else {
-                  console.log(
-                    "Experimental Mode toggle: tempConfig is null, cannot update.",
-                  );
                 }
               }}
               disabled={saving}
@@ -462,6 +466,89 @@ export function SettingsTab() {
           <Label
             size="lg"
             className="mb-2"
+            icon={<Icon icon="solar:speedometer-medium-bold" />}
+          >
+            Visual Quality
+          </Label>
+          <p className="text-xl text-white/70 font-minecraft mt-2">
+            Adjust visual quality for all effects
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4 mt-6">
+          {qualityOptions.map((option) => (
+            <button
+              key={option.value}
+              className={cn(
+                "relative overflow-hidden transition-all duration-300 p-4 rounded-md",
+                "border-2 border-b-4",
+                "bg-black/20 backdrop-blur-md",
+                qualityLevel === option.value
+                  ? "ring-2 ring-white/30"
+                  : "hover:bg-black/40",
+              )}
+              style={{
+                borderColor:
+                  qualityLevel === option.value
+                    ? accentColor.value
+                    : `${accentColor.value}40`,
+                borderBottomColor:
+                  qualityLevel === option.value
+                    ? accentColor.value
+                    : `${accentColor.value}60`,
+                boxShadow:
+                  "0 4px 0 rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
+                backgroundColor:
+                  qualityLevel === option.value
+                    ? `${accentColor.value}20`
+                    : "rgba(0, 0, 0, 0.2)",
+              }}
+              onClick={() => setQualityLevel(option.value)}
+            >
+              <div className="flex flex-col items-center gap-2">
+                <Icon icon={option.icon} className="w-8 h-8 text-white" />
+                <h5 className="font-minecraft text-xl lowercase text-white text-center">
+                  {option.label}
+                </h5>
+              </div>
+
+              {qualityLevel === option.value && (
+                <div className="absolute top-2 right-2">
+                  <Icon
+                    icon="solar:check-circle-bold"
+                    className="w-5 h-5"
+                    style={{ color: accentColor.value }}
+                  />
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-6 p-4 rounded-lg border" style={settingItemStyle}>
+          <p className="text-sm text-white/70 font-minecraft">
+            {qualityLevel === "low" &&
+              "Low quality reduces particle count and detail for better performance."}
+            {qualityLevel === "medium" &&
+              "Medium quality provides a balanced experience for most systems."}
+            {qualityLevel === "high" &&
+              "High quality increases visual fidelity but may impact performance on older systems."}
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
+          "border-2 border-b-4",
+          "bg-black/20 backdrop-blur-md",
+        )}
+        style={cardStyle}
+      >
+        <div className="mb-4">
+          <Label
+            size="lg"
+            className="mb-2"
             icon={<Icon icon="solar:stars-bold" />}
           >
             Background Effect
@@ -473,51 +560,14 @@ export function SettingsTab() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           {backgroundOptions.map((option) => (
-            <button
+            <EffectPreviewCard
               key={option.id}
-              className={cn(
-                "relative overflow-hidden transition-all duration-300 p-3 rounded-md",
-                "border-2 border-b-4",
-                "bg-black/20 backdrop-blur-md",
-                currentEffect === option.id
-                  ? "ring-2 ring-white/30"
-                  : "hover:bg-black/40",
-              )}
-              style={{
-                borderColor:
-                  currentEffect === option.id
-                    ? accentColor.value
-                    : `${accentColor.value}40`,
-                borderBottomColor:
-                  currentEffect === option.id
-                    ? accentColor.value
-                    : `${accentColor.value}60`,
-                boxShadow:
-                  "0 4px 0 rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
-                backgroundColor:
-                  currentEffect === option.id
-                    ? `${accentColor.value}20`
-                    : "rgba(0, 0, 0, 0.2)",
-              }}
+              effectId={option.id}
+              name={option.name}
+              icon={option.icon}
+              isActive={currentEffect === option.id}
               onClick={() => setCurrentEffect(option.id)}
-            >
-              <div className="flex flex-col items-center gap-2">
-                <Icon icon={option.icon} className="w-8 h-8 text-white" />
-                <h5 className="font-minecraft text-xl lowercase text-white text-center">
-                  {option.name}
-                </h5>
-              </div>
-
-              {currentEffect === option.id && (
-                <div className="absolute top-2 right-2">
-                  <Icon
-                    icon="solar:check-circle-bold"
-                    className="w-5 h-5"
-                    style={{ color: accentColor.value }}
-                  />
-                </div>
-              )}
-            </button>
+            />
           ))}
         </div>
       </div>
@@ -591,7 +641,6 @@ export function SettingsTab() {
     }
   };
 
-  // Settings tab actions
   const settingsActions = (
     <div className="flex items-center gap-3">
       <Button

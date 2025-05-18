@@ -15,7 +15,7 @@ interface LiquidChromeProps extends React.HTMLAttributes<HTMLDivElement> {
   interactive?: boolean;
 }
 
-export const LiquidChrome: React.FC<LiquidChromeProps> = ({
+export function LiquidChrome({
   baseColor = [0.1, 0.1, 0.1],
   speed = 0.2,
   amplitude = 0.5,
@@ -23,7 +23,7 @@ export const LiquidChrome: React.FC<LiquidChromeProps> = ({
   frequencyY = 2,
   interactive = true,
   ...props
-}) => {
+}: LiquidChromeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -184,6 +184,4 @@ export const LiquidChrome: React.FC<LiquidChromeProps> = ({
   return (
     <div ref={containerRef} className="liquidChrome-container" {...props} />
   );
-};
-
-export default LiquidChrome;
+}

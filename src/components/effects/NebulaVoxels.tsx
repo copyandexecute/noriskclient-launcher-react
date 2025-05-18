@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
 interface Cube {
   x: number;
@@ -17,21 +18,22 @@ interface Cube {
   opacity: number;
 }
 
-interface AccentVoxelsProps {
+interface NebulaVoxelsProps {
   cubeCount?: number;
   opacity?: number;
   speed?: number;
   className?: string;
 }
 
-export default function AccentVoxels({
+export function NebulaVoxels({
   cubeCount = 30,
   opacity = 0.2,
   speed = 1,
   className = "",
-}: AccentVoxelsProps) {
+}: NebulaVoxelsProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { qualityLevel } = useQualitySettingsStore();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -42,6 +44,11 @@ export default function AccentVoxels({
 
     let animationFrameId: number;
     let cubes: Cube[] = [];
+
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedCubeCount = Math.floor(cubeCount * qualityMultiplier);
+    const adjustedSpeed = speed * qualityMultiplier;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -70,7 +77,7 @@ export default function AccentVoxels({
       const { width, height } = canvas.getBoundingClientRect();
       cubes = [];
 
-      for (let i = 0; i < cubeCount; i++) {
+      for (let i = 0; i < adjustedCubeCount; i++) {
         cubes.push({
           x: Math.random() * width,
           y: Math.random() * height,
@@ -79,9 +86,9 @@ export default function AccentVoxels({
           rotationX: Math.random() * Math.PI * 2,
           rotationY: Math.random() * Math.PI * 2,
           rotationZ: Math.random() * Math.PI * 2,
-          speedX: (Math.random() - 0.5) * 0.01 * speed,
-          speedY: (Math.random() - 0.5) * 0.01 * speed,
-          speedZ: (Math.random() - 0.5) * 0.01 * speed,
+          speedX: (Math.random() - 0.5) * 0.01 * adjustedSpeed,
+          speedY: (Math.random() - 0.5) * 0.01 * adjustedSpeed,
+          speedZ: (Math.random() - 0.5) * 0.01 * adjustedSpeed,
           opacity: Math.random() * 0.5 + 0.1,
         });
       }
@@ -202,7 +209,7 @@ export default function AccentVoxels({
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, cubeCount, opacity, speed]);
+  }, [accentColor.value, cubeCount, opacity, speed, qualityLevel]);
 
   return (
     <canvas

@@ -3,26 +3,33 @@
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { cn } from "../../lib/utils";
+import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
 interface MatrixRainEffectProps {
   opacity?: number;
   speed?: number;
   className?: string;
+  forceEnable?: boolean;
 }
 
-export default function MatrixRainEffect({
+export function MatrixRainEffect({
   opacity = 0.15,
   speed = 1,
   className,
+  forceEnable = false,
 }: MatrixRainEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
   );
+  const { qualityLevel } = useQualitySettingsStore();
+
+  // This is the key line - we need to respect forceEnable
+  const shouldRender = forceEnable || isBackgroundAnimationEnabled;
 
   useEffect(() => {
-    if (!isBackgroundAnimationEnabled) {
+    if (!shouldRender) {
       return;
     }
 
@@ -37,6 +44,11 @@ export default function MatrixRainEffect({
       "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const charactersArray = CHARACTERS.split("");
     const RAINDROP_SPAWN_RATE = 0.99;
+
+    // Adjust based on quality level
+    const qualityMultiplier =
+      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    const adjustedSpeed = speed * qualityMultiplier;
 
     let columns: number;
     let drops: {
@@ -78,7 +90,7 @@ export default function MatrixRainEffect({
           trail: Math.floor(
             Math.random() * ((canvas.height / FONT_SIZE) * 0.8) + 5,
           ),
-          speed: (Math.random() * 1 + 0.5) * speed,
+          speed: (Math.random() * 1 + 0.5) * adjustedSpeed,
           ticksLeft: 0,
           brightness: Math.random() * 0.5 + 0.5,
           pulse: Math.random(),
@@ -168,7 +180,7 @@ export default function MatrixRainEffect({
             trail: Math.floor(
               Math.random() * ((canvas.height / FONT_SIZE) * 0.8) + 5,
             ),
-            speed: (Math.random() * 1 + 0.5) * speed,
+            speed: (Math.random() * 1 + 0.5) * adjustedSpeed,
             ticksLeft: 0,
             brightness: Math.random() * 0.5 + 0.5,
             pulse: Math.random(),
@@ -187,14 +199,14 @@ export default function MatrixRainEffect({
       window.removeEventListener("resize", resize);
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [opacity, speed, accentColor.value, isBackgroundAnimationEnabled]);
+  }, [opacity, speed, accentColor.value, shouldRender, qualityLevel]);
 
-  if (!isBackgroundAnimationEnabled) {
+  if (!shouldRender) {
     return (
       <div
         className={cn("absolute inset-0 w-full h-full", className)}
         style={{
-          backgroundColor: '#121212',
+          backgroundColor: "#121212",
         }}
       />
     );
