@@ -18,9 +18,9 @@ const PlainBackground: React.FC<PlainBackgroundProps> = ({ accentColorValue }) =
 
     // Reduce brightness (e.g., by 50%)
     // Ensure values don't go below 0
-    r = Math.max(0, Math.floor(r * 0.5));
-    g = Math.max(0, Math.floor(g * 0.5));
-    b = Math.max(0, Math.floor(b * 0.5));
+    r = Math.max(0, Math.floor(r * 0.1));
+    g = Math.max(0, Math.floor(g * 0.1));
+    b = Math.max(0, Math.floor(b * 0.1));
 
     // Convert back to hex
     const darkerHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
