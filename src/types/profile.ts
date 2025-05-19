@@ -312,3 +312,38 @@ export interface AllProfilesAndLastPlayed {
   all_profiles: Profile[];
   last_played_profile_id: string | null;
 }
+
+// --- Generic Content Types ---
+
+// Ensure ContentType enum/type is comprehensive if not already defined elsewhere
+// For this example, assuming it's similar to the Rust enum and defined in ./content.ts
+// export enum ContentType { ResourcePack, ShaderPack, DataPack, Mod }
+
+export interface GenericModrinthInfo {
+  project_id: string;
+  version_id: string;
+  name: string;
+  version_number: string;
+  download_url?: string | null; // Making it optional as in Rust struct
+}
+
+export interface LocalContentItem {
+  filename: string;
+  path_str: string; 
+  sha1_hash?: string | null;
+  file_size: number; // u64 in Rust maps to number in TS
+  is_disabled: boolean;
+  is_directory: boolean;
+  content_type: ContentType; 
+  modrinth_info?: GenericModrinthInfo | null;
+  // Frontend specific fields can be added here if needed, e.g., for UI state
+  // local_icon_data_url?: string; // Example if we were to add this later
+}
+
+// --- Params for get_local_content command ---
+export interface LoadItemsParams {
+  profile_id: string; // UUID
+  content_type: ContentType; // Enum: ResourcePack, ShaderPack, DataPack
+  calculate_hashes: boolean;
+  fetch_modrinth_data: boolean;
+}

@@ -11,6 +11,8 @@ import type {
   AllProfilesAndLastPlayed,
   BatchCheckContentParams,
   BatchContentInstallStatus,
+  LoadItemsParams,
+  LocalContentItem,
 } from "../types/profile";
 import type {
   DataPackInfo,
@@ -313,4 +315,10 @@ export async function getProfileLatestLogContent(profileId: string): Promise<str
 
 export async function getAllProfilesAndLastPlayed(): Promise<AllProfilesAndLastPlayed> {
   return invoke<AllProfilesAndLastPlayed>("get_all_profiles_and_last_played");
+}
+
+export async function getLocalContent(
+  params: LoadItemsParams,
+): Promise<LocalContentItem[]> {
+  return invoke<LocalContentItem[]>("get_local_content", { params });
 }

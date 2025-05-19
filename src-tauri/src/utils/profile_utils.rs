@@ -9,17 +9,19 @@ use crate::utils::{datapack_utils, hash_utils, resourcepack_utils, shaderpack_ut
 use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
-use futures::future::{BoxFuture, FutureExt};
+use futures::future::{BoxFuture, FutureExt, join_all};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 use tempfile;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+use std::collections::HashMap;
 
 /// Represents the type of content to be installed
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1929,4 +1931,253 @@ async fn process_datapack_requests(
     }
 
     Ok(())
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GenericModrinthInfo {
+    pub project_id: String,
+    pub version_id: String,
+    pub name: String,        // Name des Modrinth-Projekts oder der Version
+    pub version_number: String,
+    pub download_url: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LocalContentItem {
+    pub filename: String,
+    pub path_str: String, // Pfad als String
+    pub sha1_hash: Option<String>,
+    pub file_size: u64,
+    pub is_disabled: bool,
+    pub is_directory: bool, // Wichtig für Shader
+    pub content_type: ContentType, // Um den Typ mitzuführen
+    pub modrinth_info: Option<GenericModrinthInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)] // Ensure Serialize and Deserialize are here
+pub struct LoadItemsParams {
+    pub profile_id: Uuid,
+    pub content_type: ContentType,
+    pub calculate_hashes: bool,
+    pub fetch_modrinth_data: bool,
+}
+
+pub struct LocalContentLoader; // No longer holds profile_id, becomes a namespace/utility struct
+
+impl LocalContentLoader {
+    // new() constructor is removed as loader is now stateless regarding profile_id
+
+    pub async fn load_items( // Made static conceptually, no longer uses &self
+        params: LoadItemsParams,
+    ) -> Result<Vec<LocalContentItem>> {
+        let state = State::get().await?;
+        // Fetch profile using profile_id from params
+        let profile = state.profile_manager.get_profile(params.profile_id).await?;
+
+        debug!(
+            "Loading items for profile: {} ({}), content_type: {:?}, calculate_hashes: {}, fetch_modrinth_data: {}",
+            profile.name, params.profile_id, params.content_type, params.calculate_hashes, params.fetch_modrinth_data
+        );
+
+        let content_dir = match params.content_type {
+            ContentType::ResourcePack => resourcepack_utils::get_resourcepacks_dir(&profile).await?,
+            ContentType::ShaderPack => shaderpack_utils::get_shaderpacks_dir(&profile).await?,
+            ContentType::DataPack => datapack_utils::get_datapacks_dir(&profile).await?,
+            ContentType::Mod => {
+                warn!("load_items called for ContentType::Mod, which is not supported by this generic loader.");
+                // Return an empty vector or an error, depending on desired behavior.
+                // For now, returning empty vector.
+                return Ok(Vec::new());
+            }
+        };
+
+        if !content_dir.exists() {
+            debug!("Content directory {} does not exist. Returning empty list.", content_dir.display());
+            return Ok(Vec::new());
+        }
+
+        let mut entries = fs::read_dir(&content_dir)
+            .await
+            .map_err(|e| AppError::Io(e))?; // Simplified error, consider specific context
+
+        let mut items_to_process_with_paths: Vec<(PathBuf, bool)> = Vec::new(); // (path, is_directory)
+
+        while let Some(entry_result) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
+            let path = entry_result.path();
+            let file_name_os = path.file_name().unwrap_or_default();
+            let file_name_str = file_name_os.to_string_lossy();
+            let is_directory = path.is_dir(); // Check if it's a directory
+
+            // Filter based on content type
+            let is_valid_item = match params.content_type { // Use params.content_type
+                ContentType::ResourcePack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
+                ContentType::ShaderPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) || is_directory,
+                ContentType::DataPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
+                ContentType::Mod => false, // Should have been caught earlier
+            };
+
+            if is_valid_item {
+                items_to_process_with_paths.push((path.clone(), is_directory));
+            } else {
+                debug!("Skipping invalid item for {:?}: {}", params.content_type, path.display());
+            }
+        }
+        
+        let mut preliminary_items: Vec<LocalContentItem> = Vec::new();
+        for (path, is_dir_flag) in items_to_process_with_paths {
+            let file_name_os = path.file_name().unwrap_or_default();
+            let file_name_str = file_name_os.to_string_lossy().to_string();
+            let metadata = fs::metadata(&path).await.map_err(|e| AppError::Io(e))?;
+            let file_size = metadata.len();
+            let is_disabled = file_name_str.ends_with(".disabled");
+            let base_filename = if is_disabled {
+                file_name_str.strip_suffix(".disabled").unwrap_or(&file_name_str).to_string()
+            } else {
+                file_name_str
+            };
+
+            preliminary_items.push(LocalContentItem {
+                filename: base_filename,
+                path_str: path.to_string_lossy().into_owned(),
+                sha1_hash: None,
+                file_size,
+                is_disabled,
+                is_directory: is_dir_flag,
+                content_type: params.content_type.clone(), // Use params.content_type
+                modrinth_info: None,
+            });
+        }
+
+
+        let mut final_items = preliminary_items; // Start with preliminary items
+
+        if params.calculate_hashes { // Use params.calculate_hashes
+            let mut hash_tasks = Vec::new();
+            // Collect indices of items that need hashing (files only)
+            let items_to_hash_indices: Vec<usize> = final_items.iter().enumerate()
+                .filter(|(_, item)| !item.is_directory)
+                .map(|(index, _)| index)
+                .collect();
+
+            for &index_in_final_items in &items_to_hash_indices {
+                let item_info = &final_items[index_in_final_items]; // Borrow item_info
+                let path_buf = PathBuf::from(item_info.path_str.clone());
+                let semaphore_clone = Arc::clone(&state.io_semaphore); 
+                
+                hash_tasks.push(tokio::spawn(async move {
+                    let permit_result = semaphore_clone.acquire_owned().await;
+                    if permit_result.is_err() {
+                        error!("Failed to acquire semaphore permit for hashing.");
+                        return (index_in_final_items, Err(AppError::Other("Semaphore acquisition failed".to_string())));
+                    }
+                    // Permit is acquired, proceed with hashing
+                    let hash_result = hash_utils::calculate_sha1(&path_buf).await.map_err(AppError::Io);
+                    // Permit is automatically dropped when it goes out of scope
+                    (index_in_final_items, hash_result)
+                }));
+            }
+
+            let hash_calculation_results = join_all(hash_tasks).await;
+            for task_result in hash_calculation_results {
+                match task_result {
+                    Ok((item_idx, Ok(sha1))) => {
+                        if let Some(item_to_update) = final_items.get_mut(item_idx) {
+                            item_to_update.sha1_hash = Some(sha1);
+                        }
+                    }
+                    Ok((item_idx, Err(e))) => {
+                        if let Some(item) = final_items.get(item_idx) {
+                             warn!("Failed to calculate SHA1 for {}: {}", item.filename, e);
+                        } else {
+                            warn!("Failed to calculate SHA1 for item at index {}: {}", item_idx, e);
+                        }
+                    }
+                    Err(e) => { // JoinError
+                        error!("Hash calculation task panicked: {}", e);
+                    }
+                }
+            }
+        }
+
+        if params.fetch_modrinth_data { // Use params.fetch_modrinth_data
+            let mut hashes_for_modrinth_lookup: HashMap<String, Vec<usize>> = HashMap::new(); // sha1 -> Vec of indices in final_items
+            for (index, item) in final_items.iter().enumerate() {
+                if let Some(hash) = &item.sha1_hash {
+                    if !item.is_directory { // Only fetch for files with hashes
+                        hashes_for_modrinth_lookup.entry(hash.clone()).or_default().push(index);
+                    }
+                }
+            }
+
+            if !hashes_for_modrinth_lookup.is_empty() {
+                let hashes_vec: Vec<String> = hashes_for_modrinth_lookup.keys().cloned().collect();
+                debug!("Fetching Modrinth info for {} unique hashes (affecting {} items)", hashes_vec.len(), hashes_for_modrinth_lookup.values().map(|v| v.len()).sum::<usize>());
+                
+                match crate::integrations::modrinth::get_versions_by_hashes(hashes_vec, "sha1").await {
+                    Ok(version_map) => {
+                        for (hash, modrinth_version) in version_map {
+                            if let Some(item_indices) = hashes_for_modrinth_lookup.get(&hash) {
+                                for &item_idx in item_indices {
+                                    if let Some(item_to_update) = final_items.get_mut(item_idx) {
+                                        // Additional check: ensure content type matches Modrinth project type if possible/needed.
+                                        // For now, directly assign if a primary file exists.
+                                        let primary_file = modrinth_version.files.iter().find(|f| f.primary);
+                                        
+                                        // TODO: Re-evaluate project type compatibility check.
+                                        // The ModrinthVersion struct from get_versions_by_hashes might not include project_type directly.
+                                        // This check needs to be re-implemented if project_type is available or fetched separately.
+                                        /* 
+                                        let project_type_compatible = match params.content_type { // Use params.content_type
+                                            ContentType::ResourcePack => modrinth_version.project_type == Some(crate::integrations::modrinth::ModrinthProjectType::ResourcePack),
+                                            ContentType::ShaderPack => modrinth_version.project_type == Some(crate::integrations::modrinth::ModrinthProjectType::Shader),
+                                            ContentType::DataPack => modrinth_version.project_type == Some(crate::integrations::modrinth::ModrinthProjectType::Datapack),
+                                            ContentType::Mod => false, // Should not happen here
+                                        };
+
+                                        if !project_type_compatible && modrinth_version.project_type.is_some() {
+                                            debug!(
+                                                "Skipping Modrinth info for '{}' (hash {}): Mismatched project type. Expected {:?}, got {:?}",
+                                                item_to_update.filename, hash, params.content_type, modrinth_version.project_type // Use params.content_type
+                                            );
+                                            continue;
+                                        }
+                                        */
+
+                                        if let Some(file_info) = primary_file {
+                                            item_to_update.modrinth_info = Some(GenericModrinthInfo {
+                                                project_id: modrinth_version.project_id.clone(),
+                                                version_id: modrinth_version.id.clone(),
+                                                name: modrinth_version.name.clone(),
+                                                version_number: modrinth_version.version_number.clone(),
+                                                download_url: Some(file_info.url.clone()),
+                                            });
+                                        } else if !modrinth_version.files.is_empty() {
+                                            // Fallback to first file if no primary, but log this
+                                            warn!("No primary file for Modrinth version {} (project {}). Using first available file for Modrinth info.", modrinth_version.id, modrinth_version.project_id);
+                                            let first_file = &modrinth_version.files[0];
+                                             item_to_update.modrinth_info = Some(GenericModrinthInfo {
+                                                project_id: modrinth_version.project_id.clone(),
+                                                version_id: modrinth_version.id.clone(),
+                                                name: modrinth_version.name.clone(),
+                                                version_number: modrinth_version.version_number.clone(),
+                                                download_url: Some(first_file.url.clone()),
+                                            });
+                                        } else {
+                                            debug!("No files found for Modrinth version {} (project {}) to determine download URL.", modrinth_version.id, modrinth_version.project_id);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to fetch Modrinth versions by hashes: {}", e);
+                    }
+                }
+            }
+        }
+        
+        info!("Successfully loaded {} items of type {:?} for profile {}", final_items.len(), params.content_type, params.profile_id);
+        Ok(final_items)
+    }
 }

@@ -12,7 +12,7 @@ use crate::state::state_manager::State;
 use crate::utils::datapack_utils::DataPackInfo;
 use crate::utils::mc_utils::{self, WorldInfo};
 use crate::utils::path_utils::find_unique_profile_segment;
-use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo};
+use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo, LocalContentItem, GenericModrinthInfo, ContentType as ProfileUtilContentType, LoadItemsParams as ProfileUtilLoadItemsParams, LocalContentLoader as ProfileUtilLocalContentLoader};
 use crate::utils::resourcepack_utils::ResourcePackInfo;
 use crate::utils::shaderpack_utils::ShaderPackInfo;
 use crate::utils::world_utils;
@@ -1773,4 +1773,53 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
         all_profiles: all_profiles_final,
         last_played_profile_id: effective_last_played_id,
     })
+}
+
+// --- DTO for GetLocalContent --- 
+// This DTO is no longer needed as we will use LoadItemsParams directly
+/*
+#[derive(Deserialize, Debug)]
+pub struct GetLocalContentParams {
+    profile_id: Uuid,
+    content_type: String, 
+    calculate_hashes: bool,
+    fetch_modrinth_data: bool,
+}
+*/
+
+#[tauri::command]
+pub async fn get_local_content(
+    params: ProfileUtilLoadItemsParams, // Use LoadItemsParams directly from profile_utils
+) -> Result<Vec<LocalContentItem>, CommandError> {
+    info!(
+        "Executing get_local_content command for profile {}, content_type: '{:?}', calc_hashes: {}, fetch_modrinth: {}",
+        params.profile_id,
+        params.content_type, // This is now the enum, so use {:?} for Debug display
+        params.calculate_hashes,
+        params.fetch_modrinth_data
+    );
+
+    // No need to map content_type string to enum, it's already the enum.
+    // The loader_params creation is also simplified as params is already the correct type.
+
+    match ProfileUtilLocalContentLoader::load_items(params.clone()).await { // .clone() if params is used later, or pass directly
+        Ok(items) => {
+            info!(
+                "Successfully loaded {} items of type '{:?}' for profile {}",
+                items.len(),
+                params.content_type, // Log the enum directly
+                params.profile_id
+            );
+            Ok(items)
+        }
+        Err(e) => {
+            error!(
+                "Failed to load content type '{:?}' for profile {}: {}",
+                params.content_type, // Log the enum directly
+                params.profile_id,
+                e
+            );
+            Err(CommandError::from(e))
+        }
+    }
 }
