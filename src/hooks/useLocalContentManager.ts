@@ -17,7 +17,7 @@ export interface LocalContentItem extends ProfileLocalContentItem {
 }
 
 // Enum for the types of content this hook can manage (used for UI/logic, maps to NrContentType for backend)
-export type LocalContentType = 'ShaderPack' | 'ResourcePack' | 'DataPack';
+export type LocalContentType = 'ShaderPack' | 'ResourcePack' | 'DataPack' | 'Mod';
 
 interface UseLocalContentManagerProps<T extends LocalContentItem> {
   profile?: Profile;
@@ -83,6 +83,7 @@ function mapUiContentTypeToBackend(uiType: LocalContentType): NrContentType {
     case 'ResourcePack': return NrContentType.ResourcePack;
     case 'ShaderPack': return NrContentType.ShaderPack;
     case 'DataPack': return NrContentType.DataPack;
+    case 'Mod': return NrContentType.Mod;
     default: throw new Error(`Unsupported UI content type: ${uiType}`);
   }
 }

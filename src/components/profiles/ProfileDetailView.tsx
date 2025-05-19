@@ -403,7 +403,18 @@ export function ProfileDetailView({
           <>
             {activeMainTab === "content" && !profile.is_standard_version && (
               <>
-                {activeContentType === "modsv2" && <ModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                {activeContentType === "modsv2" && (
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="Mod"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="mod"
+                    itemTypeNamePlural="mods"
+                    addContentButtonText="Add Mods"
+                    emptyStateIconOverride="solar:gallery-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                  />
+                )}
                 {activeContentType === "resourcepacksv2" && (
                   <LocalContentTabV2<LocalContentItem>
                     profile={currentProfile}

@@ -1984,78 +1984,149 @@ impl LocalContentLoader {
             ContentType::ShaderPack => shaderpack_utils::get_shaderpacks_dir(&profile).await?,
             ContentType::DataPack => datapack_utils::get_datapacks_dir(&profile).await?,
             ContentType::Mod => {
-                warn!("load_items called for ContentType::Mod, which is not supported by this generic loader.");
-                // Return an empty vector or an error, depending on desired behavior.
-                // For now, returning empty vector.
-                return Ok(Vec::new());
+                // For mods, we don't read a directory in the same way.
+                // We'll process profile.mods directly.
+                // We still need the instance path for constructing full paths to mod files.
+                let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
+                instance_path.join("mods") // Return mods directory path for consistency, though iteration logic will differ.
             }
         };
 
-        if !content_dir.exists() {
-            debug!("Content directory {} does not exist. Returning empty list.", content_dir.display());
-            return Ok(Vec::new());
-        }
+        let mut preliminary_items: Vec<LocalContentItem> = Vec::new();
 
-        let mut entries = fs::read_dir(&content_dir)
-            .await
-            .map_err(|e| AppError::Io(e))?; // Simplified error, consider specific context
+        if params.content_type == ContentType::Mod {
+            let mods_dir = content_dir; // This is <instance_path>/mods
+            for mod_item in &profile.mods {
+                let mut filename = mod_item.file_name_override.clone();
+                if filename.is_none() {
+                    match mod_item.source { // Removed & before mod_item.source and Some() wrapper
+                        crate::state::profile_state::ModSource::Modrinth { ref file_name, .. } => filename = Some(file_name.clone()),
+                        crate::state::profile_state::ModSource::Local { ref file_name, .. } => filename = Some(file_name.clone()),
+                        crate::state::profile_state::ModSource::Url { ref file_name, .. } => filename = file_name.clone(), // file_name in ModSourceUrl is Option<String>
+                        _ => {
+                            warn!("Mod {} has no derivable filename. Skipping.", mod_item.id);
+                            continue;
+                        }
+                    }
+                }
 
-        let mut items_to_process_with_paths: Vec<(PathBuf, bool)> = Vec::new(); // (path, is_directory)
+                let actual_filename = match filename {
+                    Some(name) => name,
+                    None => {
+                        warn!("Mod {} could not determine a filename even after checks. Skipping.", mod_item.id);
+                        continue;
+                    }
+                };
+                
+                let path_buf = mods_dir.join(&actual_filename);
+                let path_str = path_buf.to_string_lossy().into_owned();
 
-        while let Some(entry_result) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
-            let path = entry_result.path();
-            let file_name_os = path.file_name().unwrap_or_default();
-            let file_name_str = file_name_os.to_string_lossy();
-            let is_directory = path.is_dir(); // Check if it's a directory
+                let file_size = 0; // Placeholder due to cache logic - will revisit
 
-            // Filter based on content type
-            let is_valid_item = match params.content_type { // Use params.content_type
-                ContentType::ResourcePack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
-                ContentType::ShaderPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) || is_directory,
-                ContentType::DataPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
-                ContentType::Mod => false, // Should have been caught earlier
-            };
+                let sha1_hash = match mod_item.source { // Removed & and Some() wrapper
+                    crate::state::profile_state::ModSource::Modrinth { ref file_hash_sha1, .. } => file_hash_sha1.clone(),
+                    _ => None,
+                };
 
-            if is_valid_item {
-                items_to_process_with_paths.push((path.clone(), is_directory));
-            } else {
-                debug!("Skipping invalid item for {:?}: {}", params.content_type, path.display());
+                let modrinth_info = match mod_item.source { // Removed & and Some() wrapper
+                    crate::state::profile_state::ModSource::Modrinth { ref project_id, ref version_id, .. } => {
+                        Some(GenericModrinthInfo {
+                            project_id: project_id.clone(),
+                            version_id: version_id.clone(),
+                            name: mod_item.display_name.clone().unwrap_or_else(|| project_id.clone()), 
+                            version_number: mod_item.version.clone().unwrap_or_else(|| version_id.clone()), 
+                            download_url: None, 
+                        })
+                    }
+                    _ => None,
+                };
+
+                preliminary_items.push(LocalContentItem {
+                    filename: actual_filename,
+                    path_str,
+                    sha1_hash, // May be None, will be calculated if params.calculate_hashes is true
+                    file_size, // May be 0, might be updated if file is read for hashing
+                    is_disabled: !mod_item.enabled,
+                    is_directory: false, // Mods are files
+                    content_type: ContentType::Mod,
+                    modrinth_info,
+                });
+            }
+        } else {
+            // Existing logic for ResourcePack, ShaderPack, DataPack
+            if !content_dir.exists() {
+                debug!("Content directory {} does not exist. Returning empty list.", content_dir.display());
+                return Ok(Vec::new());
+            }
+
+            let mut entries = fs::read_dir(&content_dir)
+                .await
+                .map_err(|e| AppError::Io(e))?; 
+
+            let mut items_to_process_with_paths: Vec<(PathBuf, bool)> = Vec::new(); 
+
+            while let Some(entry_result) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
+                let path = entry_result.path();
+                let file_name_os = path.file_name().unwrap_or_default();
+                let file_name_str = file_name_os.to_string_lossy();
+                let is_directory = path.is_dir(); 
+
+                let is_valid_item = match params.content_type { 
+                    ContentType::ResourcePack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
+                    ContentType::ShaderPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) || is_directory,
+                    ContentType::DataPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
+                    ContentType::Mod => false, // Should have been caught by the if block above
+                };
+
+                if is_valid_item {
+                    items_to_process_with_paths.push((path.clone(), is_directory));
+                } else {
+                    if params.content_type != ContentType::Mod { // Avoid double logging for mods
+                        debug!("Skipping invalid item for {:?}: {}", params.content_type, path.display());
+                    }
+                }
+            }
+            
+            for (path, is_dir_flag) in items_to_process_with_paths {
+                let file_name_os = path.file_name().unwrap_or_default();
+                let file_name_str = file_name_os.to_string_lossy().to_string();
+                let metadata = fs::metadata(&path).await.map_err(|e| AppError::Io(e))?;
+                let file_size = metadata.len();
+                let is_disabled = file_name_str.ends_with(".disabled");
+                let base_filename = if is_disabled {
+                    file_name_str.strip_suffix(".disabled").unwrap_or(&file_name_str).to_string()
+                } else {
+                    file_name_str
+                };
+
+                preliminary_items.push(LocalContentItem {
+                    filename: base_filename,
+                    path_str: path.to_string_lossy().into_owned(),
+                    sha1_hash: None,
+                    file_size,
+                    is_disabled,
+                    is_directory: is_dir_flag,
+                    content_type: params.content_type.clone(), 
+                    modrinth_info: None,
+                });
             }
         }
         
-        let mut preliminary_items: Vec<LocalContentItem> = Vec::new();
-        for (path, is_dir_flag) in items_to_process_with_paths {
-            let file_name_os = path.file_name().unwrap_or_default();
-            let file_name_str = file_name_os.to_string_lossy().to_string();
-            let metadata = fs::metadata(&path).await.map_err(|e| AppError::Io(e))?;
-            let file_size = metadata.len();
-            let is_disabled = file_name_str.ends_with(".disabled");
-            let base_filename = if is_disabled {
-                file_name_str.strip_suffix(".disabled").unwrap_or(&file_name_str).to_string()
-            } else {
-                file_name_str
-            };
+        let mut final_items = preliminary_items; 
 
-            preliminary_items.push(LocalContentItem {
-                filename: base_filename,
-                path_str: path.to_string_lossy().into_owned(),
-                sha1_hash: None,
-                file_size,
-                is_disabled,
-                is_directory: is_dir_flag,
-                content_type: params.content_type.clone(), // Use params.content_type
-                modrinth_info: None,
-            });
-        }
-
-
-        let mut final_items = preliminary_items; // Start with preliminary items
-
-        if params.calculate_hashes { // Use params.calculate_hashes
+        if params.calculate_hashes { 
             let mut hash_tasks = Vec::new();
-            // Collect indices of items that need hashing (files only)
+            // Collect indices of items that need hashing (files only, or non-Modrinth mods if hash not present)
             let items_to_hash_indices: Vec<usize> = final_items.iter().enumerate()
-                .filter(|(_, item)| !item.is_directory)
+                .filter(|(_, item)| {
+                    if item.is_directory { return false; }
+                    if item.content_type == ContentType::Mod {
+                        // For mods, only hash if sha1_hash is currently None (e.g. local mod, or Modrinth mod missing it)
+                        return item.sha1_hash.is_none();
+                    }
+                    // For other types, always hash if calculate_hashes is true (as sha1_hash starts as None)
+                    true 
+                })
                 .map(|(index, _)| index)
                 .collect();
 

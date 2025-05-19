@@ -122,15 +122,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     preloadIcons(LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD);
   }, []);
 
-  useEffect(() => {
-    const initialLoad = async () => {
-      if (profile?.id) {
-        await fetchData(true);
-      }
-    };
-    initialLoad();
-  }, [profile?.id, fetchData]);
-
   const renderListItem = useCallback((item: T) => {
     const itemTitle = getDisplayFileName(item);
     const isToggling = itemBeingToggled === item.filename;
@@ -178,12 +169,33 @@ export function LocalContentTabV2<T extends LocalContentItem>({
         </div>
     );
 
-    const itemDescriptionNode = (
-      <span title={`Size: ${formatFileSize(item.file_size || 0)}`}>
-        {formatFileSize(item.file_size || 0)}
-        {item.is_directory && <span className="ml-1 text-xs text-white/60">(Folder)</span>}
-      </span>
-    );
+    // Reverting to IIFE for itemDescriptionNode to avoid "Rendered more hooks" error
+    const itemDescriptionNode = (() => {
+      let descriptionText: string;
+      let titleText: string;
+
+      const isItemWaitingForHash = item.sha1_hash === null && isFetchingHashes;
+      const isItemStillLoadingDetails = isItemWaitingForHash || 
+                                      (item.sha1_hash !== null && !item.modrinth_info && isFetchingModrinthDetails);
+
+      if (item.modrinth_info?.version_number) {
+        descriptionText = `Version: ${item.modrinth_info.version_number}`;
+        titleText = `Modrinth Version: ${item.modrinth_info.version_number}`;
+      } else if (isItemStillLoadingDetails) {
+        descriptionText = "Loading...";
+        titleText = "Loading details...";
+      } else {
+        descriptionText = formatFileSize(item.file_size || 0);
+        titleText = `Size: ${formatFileSize(item.file_size || 0)}`;
+      }
+
+      return (
+        <span title={titleText}>
+          {descriptionText}
+          {item.is_directory && <span className="ml-1 text-xs text-white/60">(Folder)</span>}
+        </span>
+      );
+    })(); // Immediately invoke the function
 
     const itemBadgesNode = (
       <>
