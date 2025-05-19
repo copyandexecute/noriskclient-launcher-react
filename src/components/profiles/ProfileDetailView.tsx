@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { WorldsTab } from "./detail/WorldsTab";
@@ -13,12 +13,13 @@ import { IconButton } from "../ui/buttons/IconButton";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { ModsTabV2 } from "./detail/v2/ModsTabV2";
-import { ResourcePacksTabV2 } from "./detail/v2/ResourcePacksTabV2";
 import { NoRiskModsTabV2 } from "./detail/v2/NoRiskModsTabV2";
 import { ShaderPacksTab } from "./detail/ShaderPacksTab";
 import { DataPacksTab } from "./detail/DataPacksTab";
 import { ShaderPacksTabV2 } from "./detail/v2/ShaderPacksTabV2";
 import { DataPacksTabV2 } from "./detail/v2/DataPacksTabV2";
+import { LocalContentTabV2 } from "./detail/v2/LocalContentTabV2";
+import type { LocalContentItem } from "../../hooks/useLocalContentManager";
 
 interface ProfileDetailViewProps {
   profile: Profile;
@@ -58,6 +59,9 @@ export function ProfileDetailView({
   const subMenuRef = useRef<HTMLDivElement>(null);
   const subItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const prevActiveMainTab = useRef<MainTabType | null>(null);
+
+  // Memoized callback for getDisplayFileName
+  const getGenericDisplayFileName = useCallback((item: LocalContentItem) => item.filename, []);
 
   useEffect(() => {
     if (containerRef.current && isBackgroundAnimationEnabled) {
@@ -255,7 +259,6 @@ export function ProfileDetailView({
                 onClick={onEdit}
                 title="Edit profile"
                 size="sm"
-                variant="secondary"
               />
             )}
 
@@ -271,7 +274,6 @@ export function ProfileDetailView({
               disabled={isRefreshing}
               title="Refresh profile"
               size="sm"
-              variant="secondary"
             />
           </div>
         </div>
@@ -296,7 +298,6 @@ export function ProfileDetailView({
               onClick={toggleSidebarPosition}
               title="Toggle Sidebar Position"
               size="xs"
-              variant="ghost"
               className="text-white hover:text-white/80"
             />
           </div>
@@ -403,12 +404,41 @@ export function ProfileDetailView({
             {activeMainTab === "content" && !profile.is_standard_version && (
               <>
                 {activeContentType === "modsv2" && <ModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
-                {activeContentType === "resourcepacksv2" && <ResourcePacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                {activeContentType === "resourcepacksv2" && (
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="ResourcePack"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="resource pack"
+                    itemTypeNamePlural="resource packs"
+                    addContentButtonText="Add Resource Packs"
+                    emptyStateIconOverride="solar:gallery-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                  />
+                )}
                 {activeContentType === "shaderpacksv2" && (
-                  <ShaderPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="ShaderPack"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="shader pack"
+                    itemTypeNamePlural="shader packs"
+                    addContentButtonText="Add Shader Packs"
+                    emptyStateIconOverride="solar:sun-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                  />
                 )}
                 {activeContentType === "datapacksv2" && (
-                  <DataPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="DataPack"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="data pack"
+                    itemTypeNamePlural="data packs"
+                    addContentButtonText="Add Data Packs"
+                    emptyStateIconOverride="solar:database-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                  />
                 )}
                 {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
               </>

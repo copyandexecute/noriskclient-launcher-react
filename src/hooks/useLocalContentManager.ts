@@ -1,35 +1,29 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'react-hot-toast';
-import type { Profile } from '../types/profile';
-import type { ModrinthVersion, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm } from '../types/modrinth'; // Added ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm
-import { ContentType } from '../types/content'; // Assuming this is your NrContentType for backend
+import type { Profile, LocalContentItem as ProfileLocalContentItem, GenericModrinthInfo as ProfileGenericModrinthInfo, LoadItemsParams } from '../types/profile';
+import type { ModrinthVersion, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm, ResourcePackModrinthInfo, ShaderPackModrinthInfo, DataPackModrinthInfo } from '../types/modrinth';
+import { ContentType as NrContentType } from '../types/content';
 import type { ToggleContentPayload } from '../types/content';
-import { ModrinthService } from '../services/modrinth-service'; // Corrected import path
+import { ModrinthService } from '../services/modrinth-service';
+import { getLocalContent } from '../services/profile-service';
 
-// Base type for content items managed by this hook
-export interface LocalContentItem {
-  filename: string; // Unique identifier, often the file name itself
-  path: string;     // Absolute path to the content file/folder
-  is_disabled?: boolean; // Whether the item is currently disabled
-  file_size?: number;
-  modrinth_info?: { // Optional, for Modrinth linked content
-    project_id?: string;
-    version_id?: string;
-  };
-  sha1_hash?: string; // Optional, needed for some backend operations
-  // Add other common fields if necessary
+// Base type for content items managed by this hook - maps to ProfileLocalContentItem
+// We'll use ProfileLocalContentItem directly or ensure T extends it.
+export interface LocalContentItem extends ProfileLocalContentItem { 
+  path: string;
+  // This can be used to extend ProfileLocalContentItem with frontend-specific fields if needed
+  // For now, it will be structurally the same as ProfileLocalContentItem
 }
 
-// Enum for the types of content this hook can manage
+// Enum for the types of content this hook can manage (used for UI/logic, maps to NrContentType for backend)
 export type LocalContentType = 'ShaderPack' | 'ResourcePack' | 'DataPack';
 
 interface UseLocalContentManagerProps<T extends LocalContentItem> {
   profile?: Profile;
   contentType: LocalContentType;
-  getDisplayFileName: (item: T) => string; // Function to get a user-friendly name
+  getDisplayFileName: (item: T) => string;
   onRefreshRequired?: () => void;
-  // Can add specific fetch commands if they differ significantly beyond the convention
 }
 
 interface UseLocalContentManagerReturn<T extends LocalContentItem> {
@@ -60,29 +54,49 @@ interface UseLocalContentManagerReturn<T extends LocalContentItem> {
   isDialogActionLoading: boolean;
   handleConfirmDeletion: () => Promise<void>;
   handleCloseDeleteDialog: () => void;
-  itemToDeleteForDialog: T | null; // For displaying name in dialog
+  itemToDeleteForDialog: T | null;
 
   modrinthIcons: Record<string, string | null>;
   localArchiveIcons: Record<string, string | null>;
 
-  // Modrinth Update states and functions
-  contentUpdates: Record<string, ModrinthVersion | null>; // sha1_hash -> ModrinthVersion
+  contentUpdates: Record<string, ModrinthVersion | null>;
   isCheckingUpdates: boolean;
-  itemsBeingUpdated: Set<string>; // filename of items currently being updated
+  itemsBeingUpdated: Set<string>;
   contentUpdateError: string | null;
   isUpdatingAll: boolean;
 
-  fetchData: () => Promise<void>;
+  fetchData: (initialFetch?: boolean) => Promise<void>;
   handleToggleItemEnabled: (item: T) => Promise<void>;
-  handleDeleteItem: (item: T) => void; // Initiates delete, shows dialog
+  handleDeleteItem: (item: T) => void;
   handleBatchToggleSelected: () => Promise<void>;
-  handleBatchDeleteSelected: () => void; // Initiates batch delete, shows dialog
+  handleBatchDeleteSelected: () => void;
   handleOpenItemFolder: (item: T) => void;
 
-  // Modrinth Update functions
   checkForContentUpdates: (currentProfile?: Profile, currentItems?: T[]) => Promise<void>;
   handleUpdateContentItem: (item: T, updateVersion: ModrinthVersion, preventRefetch?: boolean) => Promise<void>;
   handleUpdateAllAvailableContent: () => Promise<void>;
+}
+
+// Helper to map LocalContentType (UI string) to NrContentType (backend enum string)
+function mapUiContentTypeToBackend(uiType: LocalContentType): NrContentType {
+  switch (uiType) {
+    case 'ResourcePack': return NrContentType.ResourcePack;
+    case 'ShaderPack': return NrContentType.ShaderPack;
+    case 'DataPack': return NrContentType.DataPack;
+    default: throw new Error(`Unsupported UI content type: ${uiType}`);
+  }
+}
+
+// Helper to map backend ProfileLocalContentItem to frontend T (which extends LocalContentItem)
+function mapBackendItemToFrontendType<T extends LocalContentItem>(backendItem: ProfileLocalContentItem): T {
+  const { path_str, ...rest } = backendItem;
+  // ProfileGenericModrinthInfo is used by ProfileLocalContentItem
+  // T expects a modrinth_info structure compatible with ProfileGenericModrinthInfo
+  // (e.g. ResourcePackInfo uses ResourcePackModrinthInfo which is compatible)
+  return {
+    ...rest,
+    path: path_str, // Map path_str to path
+  } as T;
 }
 
 export function useLocalContentManager<T extends LocalContentItem>({
@@ -92,9 +106,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
   onRefreshRequired,
 }: UseLocalContentManagerProps<T>): UseLocalContentManagerReturn<T> {
   const [items, setItems] = useState<T[]>([]);
-  const [isInitialLoadingState, setIsInitialLoadingState] = useState(false); // Renamed: Covers phase 1 loading
-  const [isFetchingHashesState, setIsFetchingHashesState] = useState(false); // Renamed: Covers phase 2 loading
-  const [isFetchingModrinthDetailsState, setIsFetchingModrinthDetailsState] = useState(false); // Renamed: Covers phase 3 loading
+  const [isInitialLoadingState, setIsInitialLoadingState] = useState(false);
+  const [isFetchingHashesState, setIsFetchingHashesState] = useState(false);
+  const [isFetchingModrinthDetailsState, setIsFetchingModrinthDetailsState] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -112,14 +126,10 @@ export function useLocalContentManager<T extends LocalContentItem>({
   const [isBatchDeleteConfirmActive, setIsBatchDeleteConfirmActive] = useState(false);
   const [isDialogActionLoading, setIsDialogActionLoading] = useState(false);
 
-  // TODO: Icon fetching logic (Modrinth, local archive) can be added here later
   const [modrinthIcons, setModrinthIcons] = useState<Record<string, string | null>>({});
   const [localArchiveIcons, setLocalArchiveIcons] = useState<Record<string, string | null>>({});
-
-  // New state to trigger Modrinth details fetching for resource packs
   const [hashesToFetchModrinthDetailsFor, setHashesToFetchModrinthDetailsFor] = useState<string[] | null>(null);
 
-  // Modrinth Update State
   const [contentUpdates, setContentUpdates] = useState<Record<string, ModrinthVersion | null>>({});
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
   const [itemsBeingUpdated, setItemsBeingUpdated] = useState<Set<string>>(new Set());
@@ -131,168 +141,159 @@ export function useLocalContentManager<T extends LocalContentItem>({
     onRefreshRequiredRef.current = onRefreshRequired;
   }, [onRefreshRequired]);
 
-  const getTauriFetchCommand = useCallback((): string => {
-    switch (contentType) {
-      case 'ShaderPack':
-        return 'get_local_shaderpacks'; // Assuming this also supports calculateHashes, fetchModrinthData
-      case 'ResourcePack':
-        return 'get_local_resourcepacks';
-      case 'DataPack':
-        return 'get_local_datapacks'; // Assuming this command will exist and support params
-      default:
-        throw new Error(`Unsupported content type for fetching: ${contentType}`);
-    }
-  }, [contentType]);
-
-  const fetchData = useCallback(async () => {
+  // Generic Phase 1: Fetch basic info for all content types
+  const fetchBasicInfo = useCallback(async (): Promise<void> => {
     if (!profile?.id) {
       setItems([]);
       return;
     }
     setIsInitialLoadingState(true);
-    setIsFetchingHashesState(false); // Reset phase 2 loading state
-    setIsFetchingModrinthDetailsState(false); // Reset phase 3 loading state
+    setIsFetchingHashesState(false);
+    setIsFetchingModrinthDetailsState(false);
     setError(null);
     setModrinthIcons({});
     setLocalArchiveIcons({});
     setContentUpdates({});
     setContentUpdateError(null);
-    setHashesToFetchModrinthDetailsFor(null); // Clear this as it will be populated later
+    setHashesToFetchModrinthDetailsFor(null); // Reset this here
 
+    const backendContentType = mapUiContentTypeToBackend(contentType);
+    console.log(`[${contentType}] Phase 1: Fetching basic info...`, new Date().toISOString());
     try {
-      if (contentType === 'ResourcePack') {
-        console.log(`[${contentType}] Phase 1: Fetching basic info...`, new Date().toISOString());
-        const basicItems = await invoke<T[]>(getTauriFetchCommand(), {
-          profileId: profile.id,
-          calculateHashes: false, // Phase 1: No hashes yet
-          fetchModrinthData: false, // Phase 1: No Modrinth data from Rust yet
-        });
-        
-        const processedBasicItems = (basicItems || []).map(item => ({
-          ...item, // sha1_hash will be null from Rust
-          filename: item.filename || getDisplayFileName(item),
-          modrinth_info: null, // Ensure modrinth_info is initially null
-        }));        
-        setItems(processedBasicItems as T[]); 
-        console.log(`[${contentType}] Phase 1: Basic items set`, new Date().toISOString(), processedBasicItems);
-        // Phase 2 (hash calculation) will be triggered by a useEffect watching 'items'
+      const serviceParams: LoadItemsParams = {
+        profile_id: profile.id,
+        content_type: backendContentType,
+        calculate_hashes: false,
+        fetch_modrinth_data: false,
+      };
+      const fetchedBackendItems = await getLocalContent(serviceParams) as ProfileLocalContentItem[];
+      console.log(`[${contentType}] Phase 1: Raw items from getLocalContent`, new Date().toISOString(), fetchedBackendItems);
 
-      } else {
-        // Original logic for other content types (ShaderPack, DataPack)
-        // For these, we assume a single fetch or that they are fast enough / already optimized.
-        // If they also need phased loading, this logic would need to be expanded.
-        console.log(`[${contentType}] Fetching data (single step)...`, new Date().toISOString());
-        const command = getTauriFetchCommand();
-        // Assuming other types might directly return hashes if applicable
-        const backendItems = await invoke<T[]>(command, { profileId: profile.id, calculateHashes: true, fetchModrinthData: false });
-        const processedItems = (backendItems || []).map(item => ({
-          ...item,
-          filename: item.filename || getDisplayFileName(item),
-        }));
-        setItems(processedItems as T[]);
-        console.log(`[${contentType}] Data set (single step)`, new Date().toISOString(), processedItems);
-
-        const newHashes = processedItems
-          .map(item => item.sha1_hash)
-          .filter(hash => hash != null) as string[];
-        if (newHashes.length > 0) {
-          setHashesToFetchModrinthDetailsFor(newHashes);
-        } else {
-          setHashesToFetchModrinthDetailsFor(null);
-        }
-      }
-
+      const mappedItemsToFrontend = fetchedBackendItems.map(item => mapBackendItemToFrontendType<T>(item));
+      const processedBasicItems = mappedItemsToFrontend.map(item => ({
+        ...item,
+        filename: item.filename || getDisplayFileName(item),
+        modrinth_info: null, // Ensure modrinth_info is initially null
+        sha1_hash: null, // Ensure sha1_hash is initially null for Phase 1
+      }));
+      setItems(processedBasicItems as T[]);
+      console.log(`[${contentType}] Phase 1: Basic items set`, new Date().toISOString(), processedBasicItems);
       setSelectedItemIds(new Set());
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
     } catch (err) {
-      console.error(`Failed to fetch ${contentType}s:`, err);
-      setError(`Failed to fetch ${contentType}s: ${err instanceof Error ? err.message : String(err.message)}`);
-      setItems([]);
+      console.error(`[${contentType}] Phase 1: Error fetching basic info:`, err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsInitialLoadingState(false); // Phase 1 loading finished
+      setIsInitialLoadingState(false);
     }
-  }, [profile?.id, contentType, getTauriFetchCommand, getDisplayFileName]);
+  }, [profile?.id, contentType, getDisplayFileName]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-  
-  // Phase 2: Fetch Hashes for ResourcePacks (if not already loaded)
-  useEffect(() => {
-    if (contentType === 'ResourcePack' && profile?.id && items.length > 0 && items.some(item => item.sha1_hash === null) && !isInitialLoadingState && !isFetchingHashesState) {
-      const fetchHashesAndFullLocalInfo = async () => {
-        console.log(`[${contentType}] Phase 2: Fetching hashes and full local info...`, new Date().toISOString());
-        setIsFetchingHashesState(true);
-        try {
-          const itemsWithHashes = await invoke<T[]>(getTauriFetchCommand(), {
-            profileId: profile.id,
-            calculateHashes: true, // Phase 2: Calculate hashes
-            fetchModrinthData: false, // Let JS handle Modrinth details in Phase 3
-          });
+  // Generic Phase 2: Fetch hashes and update items
+  const fetchHashesAndUpdateItems = useCallback(async (): Promise<void> => {
+    if (!profile?.id || items.length === 0) return;
 
-          setItems(currentItems =>
-            currentItems.map(currentItem => {
-              const match = itemsWithHashes.find(iwh => iwh.path === currentItem.path);
-              if (match && match.sha1_hash) {
-                // Merge hash and potentially other updated local info (like file_size, is_disabled if changed)
-                return { 
-                  ...currentItem, 
-                  sha1_hash: match.sha1_hash, 
-                  file_size: match.file_size, 
-                  is_disabled: match.is_disabled 
-                };
-              }
-              return currentItem;
-            })
-          );
+    const backendContentType = mapUiContentTypeToBackend(contentType);
+    console.log(`[${contentType}] Phase 2: Fetching hashes and full local info...`, new Date().toISOString());
+    setIsFetchingHashesState(true);
+    setError(null); // Clear previous errors before this specific phase
 
-          const newHashes = itemsWithHashes
-            .map(item => item.sha1_hash)
-            .filter(hash => hash != null) as string[];
-          
-          if (newHashes.length > 0) {
-            console.log(`[${contentType}] Phase 2: Hashes obtained, setting for Modrinth lookup.`, new Date().toISOString(), newHashes);
-            setHashesToFetchModrinthDetailsFor(newHashes);
-          } else {
-            console.log(`[${contentType}] Phase 2: No hashes obtained after explicit fetch.`, new Date().toISOString());
-            setHashesToFetchModrinthDetailsFor(null);
-          }
-        } catch (err) {
-          console.error(`[${contentType}] Phase 2: Failed to fetch hashes:`, err);
-          setError(prevError => prevError ? `${prevError}; Failed to fetch hashes` : 'Failed to fetch hashes');
-        } finally {
-          setIsFetchingHashesState(false);
-        }
+    try {
+      const serviceParams: LoadItemsParams = {
+        profile_id: profile.id,
+        content_type: backendContentType,
+        calculate_hashes: true,
+        fetch_modrinth_data: false, // Modrinth details via JS in Phase 3
       };
-      fetchHashesAndFullLocalInfo();
+      const fetchedBackendItemsWithHashes = await getLocalContent(serviceParams) as ProfileLocalContentItem[];
+      console.log(`[${contentType}] Phase 2: Raw items with hashes from getLocalContent`, new Date().toISOString(), fetchedBackendItemsWithHashes);
+      
+      const mappedItemsToFrontend = fetchedBackendItemsWithHashes.map(item => mapBackendItemToFrontendType<T>(item));
+
+      setItems(currentItems =>
+        currentItems.map(currentItem => {
+          const match = mappedItemsToFrontend.find(fi => fi.path === currentItem.path);
+          if (match) { // Merge all details from the hash-calculated fetch
+            return { 
+              ...currentItem, 
+              sha1_hash: match.sha1_hash, 
+              file_size: match.file_size, 
+              is_disabled: match.is_disabled,
+              is_directory: match.is_directory, // Ensure this is also updated
+              // Modrinth info is still deferred to Phase 3
+            } as T;
+          }
+          return currentItem;
+        })
+      );
+
+      const allKnownHashes = mappedItemsToFrontend
+        .map(item => item.sha1_hash)
+        .filter(hash => hash != null) as string[];
+      
+      if (allKnownHashes.length > 0) {
+        console.log(`[${contentType}] Phase 2: Hashes obtained, setting for Modrinth lookup.`, new Date().toISOString(), allKnownHashes);
+        setHashesToFetchModrinthDetailsFor(allKnownHashes);
+      } else {
+        setHashesToFetchModrinthDetailsFor(null);
+      }
+    } catch (err) {
+      console.error(`[${contentType}] Phase 2: Error fetching hashes:`, err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsFetchingHashesState(false);
+    }
+  }, [profile?.id, contentType, items, getDisplayFileName]); // items is a dependency here
+
+  // fetchData now just calls fetchBasicInfo, which is Phase 1
+  const fetchData = useCallback(async (initialFetch = true): Promise<void> => {
+    // The 'initialFetch' parameter for fetchData is now more about resetting UI states like selection
+    // The actual data fetching sequence is managed by fetchBasicInfo and subsequent effects.
+    if (initialFetch) {
+      // Reset things that should clear on a full manual refresh
+      setSelectedItemIds(new Set());
+      // Potentially clear other states if needed for a true "hard refresh" feel
+    }
+    await fetchBasicInfo(); // Await the async fetchBasicInfo
+  }, [fetchBasicInfo]);
+
+  // Initial data fetch (Phase 1)
+  useEffect(() => {
+    fetchBasicInfo();
+  }, [fetchBasicInfo]);
+  
+  // Phase 2: Trigger Fetch Hashes (for all content types)
+  useEffect(() => {
+    // Only trigger if Phase 1 is done, and there are items that might need hashes,
+    // and hash fetching isn't already in progress.
+    if (!isInitialLoadingState && items.length > 0 && items.some(item => item.sha1_hash === null) && !isFetchingHashesState) {
+      fetchHashesAndUpdateItems(); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, profile?.id, contentType, getTauriFetchCommand, isInitialLoadingState]); // Depends on isInitialLoadingState (phase 1)
+  }, [items, isInitialLoadingState, isFetchingHashesState, fetchHashesAndUpdateItems]); // fetchHashesAndUpdateItems is memoized
   
-  // Phase 3: Fetch Modrinth project details based on hashes (existing logic, adapted)
+  // Phase 3: Fetch Modrinth project details based on hashes (existing logic, should be fine)
   useEffect(() => {
-    if (contentType === 'ResourcePack' && hashesToFetchModrinthDetailsFor && hashesToFetchModrinthDetailsFor.length > 0 && profile?.id && !isFetchingModrinthDetailsState) {
+    if (hashesToFetchModrinthDetailsFor && hashesToFetchModrinthDetailsFor.length > 0 && profile?.id && !isFetchingModrinthDetailsState) {
       console.log(`[${contentType}] Phase 3: Triggering Modrinth project details fetch for hashes`, new Date().toISOString(), hashesToFetchModrinthDetailsFor);
       setIsFetchingModrinthDetailsState(true);
       const fetchModrinthDataByHashes = async () => {
         try {
-          const modrinthVersionsMap = await ModrinthService.getVersionsByHashes(hashesToFetchModrinthDetailsFor);
+          const modrinthVersionsMap = await ModrinthService.getVersionsByHashes(hashesToFetchModrinthDetailsFor!);
           console.log(`[${contentType}] Phase 3: Modrinth data received`, new Date().toISOString(), modrinthVersionsMap);
           setItems(currentItems =>
             currentItems.map(item => {
               if (item.sha1_hash && modrinthVersionsMap[item.sha1_hash]) {
                 const modrinthVersion = modrinthVersionsMap[item.sha1_hash];
                 const primaryFile = modrinthVersion.files.find(f => f.primary) || modrinthVersion.files[0];
-                return {
-                  ...item,
-                  modrinth_info: primaryFile ? {
-                    project_id: modrinthVersion.project_id,
-                    version_id: modrinthVersion.id,
-                    name: modrinthVersion.name, // Modrinth's version name
-                    version_number: modrinthVersion.version_number,
-                    download_url: primaryFile.url,
-                  } : null,
-                } as T; 
+                // Ensure mapping to ProfileGenericModrinthInfo structure
+                const newModrinthInfo: ProfileGenericModrinthInfo | null = primaryFile ? {
+                  project_id: modrinthVersion.project_id,
+                  version_id: modrinthVersion.id,
+                  name: modrinthVersion.name, 
+                  version_number: modrinthVersion.version_number,
+                  download_url: primaryFile.url,
+                } : null;
+                return { ...item, modrinth_info: newModrinthInfo } as T;
               }
               return item;
             })
@@ -300,19 +301,18 @@ export function useLocalContentManager<T extends LocalContentItem>({
           console.log(`[${contentType}] Phase 3: Items updated with Modrinth data`, new Date().toISOString());
         } catch (modrinthError) {
           console.warn(`[${contentType}] Phase 3: Failed to fetch Modrinth details by hashes:`, modrinthError);
-          setError(prevError => prevError ? `${prevError}; Failed to fetch Modrinth details` : 'Failed to fetch Modrinth details');
+          const errorMsg = modrinthError instanceof Error ? modrinthError.message : String(modrinthError);
+          setError(prevError => prevError ? `${prevError}; Failed to fetch Modrinth details (${errorMsg})` : `Failed to fetch Modrinth details (${errorMsg})`);
         } finally {
           setIsFetchingModrinthDetailsState(false);
-          // Clear hashesToFetchModrinthDetailsFor AFTER attempting fetch to avoid re-fetch loops on partial success/failure for this batch.
-          // If some hashes failed, they won't be re-fetched immediately unless items/profile changes to re-trigger phase 2.
           setHashesToFetchModrinthDetailsFor(null); 
         }
       };
       fetchModrinthDataByHashes();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hashesToFetchModrinthDetailsFor, profile?.id, contentType]); // Removed isFetchingModrinthDetailsState from deps to avoid loop, added guard inside
-  
+  }, [hashesToFetchModrinthDetailsFor, profile?.id, contentType]); 
+
   // Click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -353,12 +353,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
           } else {
              console.warn("[useLocalContentManager] ModrinthService.getProjectDetails did not return an array. Received:", projectDetailsList);
           }
-          // Update modrinthIcons, mapping from project_id to icon_url.
-          // The GenericDetailListItem will need to look up based on item.modrinth_info.project_id
           setModrinthIcons(prevIcons => ({ ...prevIcons, ...newIcons }));
         } catch (err) {
           console.error("[useLocalContentManager] Failed to fetch Modrinth project details for icons:", err);
-           // Mark IDs as tried (failed) to avoid re-fetching in a loop on error
           const errorIcons: Record<string, string | null> = {};
           uniqueProjectIds.forEach(id => { errorIcons[id] = null; });
           setModrinthIcons(prevIcons => ({ ...prevIcons, ...errorIcons }));
@@ -366,7 +363,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       }
     };
     fetchModrinthIcons();
-  }, [items]); // Depends on items, and modrinthIcons implicitly (by checking undefined)
+  }, [items]); 
 
   // Fetch local archive icons
   useEffect(() => {
@@ -376,10 +373,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
         return;
       }
 
-      // Key for localArchiveIcons should be item.filename for consistency with display component
       const pathsToFetchIconsFor = items
         .filter(item => item.path && item.filename.toLowerCase().endsWith('.zip') && localArchiveIcons[item.filename] === undefined)
-        .map(item => ({ filename: item.filename, path: item.path! }));
+        .map(item => ({ filename: item.filename, path: item.path! })); // Use path now
       
       const uniquePathObjects = pathsToFetchIconsFor.filter((obj, index, self) => 
         index === self.findIndex(t => t.path === obj.path)
@@ -405,7 +401,6 @@ export function useLocalContentManager<T extends LocalContentItem>({
           }
         } catch (err) {
           console.error("[useLocalContentManager] Failed to fetch local archive icons:", err);
-           // Mark filenames as tried (failed)
           const errorIcons: Record<string, string | null> = {};
           uniquePathObjects.forEach(obj => { errorIcons[obj.filename] = null; });
           setLocalArchiveIcons(prevIcons => ({ ...prevIcons, ...errorIcons }));
@@ -413,7 +408,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       }
     };
     fetchLocalArchiveIcons();
-  }, [items]); // Depends on items, and localArchiveIcons implicitly
+  }, [items]); 
 
   const filteredItems = useMemo(() => {
     if (!searchQuery) return items;
@@ -446,16 +441,15 @@ export function useLocalContentManager<T extends LocalContentItem>({
   }, [filteredItems]);
 
   const handleToggleItemEnabled = useCallback(async (item: T) => {
-    if (!profile || !item.path) {
+    if (!profile || !item.path) { // Use path
       toast.error("Profile or item path missing for toggle.");
       return;
     }
     setItemBeingToggled(item.filename);
-    const newEnabledState = !(item.is_disabled === false); // if is_disabled is true or undefined, new state is enabled (true)
+    const newEnabledState = !(item.is_disabled === false); 
 
     try {
-      // All content types will now use set_file_enabled
-      await invoke("set_file_enabled", { filePath: item.path, enabled: newEnabledState });
+      await invoke("set_file_enabled", { filePath: item.path, enabled: newEnabledState }); // Use path
 
       setItems(prevItems =>
         prevItems.map(i =>
@@ -463,18 +457,17 @@ export function useLocalContentManager<T extends LocalContentItem>({
         )
       );
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
-      // No toast on individual success, consistent with individual tab behavior
     } catch (err) {
       console.error(`Failed to toggle ${getDisplayFileName(item)}:`, err);
-      toast.error(`Failed to toggle ${getDisplayFileName(item)}: ${err instanceof Error ? err.message : String(err.message)}`);
-      // Optionally refetch or revert optimistic update here
+      const errorMsg = err instanceof Error ? err.message : String(err.message);
+      toast.error(`Failed to toggle ${getDisplayFileName(item)}: ${errorMsg}`);
     } finally {
       setItemBeingToggled(null);
     }
-  }, [profile, getDisplayFileName]); // Removed contentType, items is still needed for optimistic update
+  }, [profile, getDisplayFileName]); 
 
   const handleDeleteItem = useCallback((item: T) => {
-    if (!item.path) {
+    if (!item.path) { // Use path
       toast.error("Item path missing, cannot delete.");
       return;
     }
@@ -504,9 +497,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
       setIsBatchDeleting(true);
       for (const itemId of selectedItemIds) {
         const item = items.find(i => i.filename === itemId);
-        if (item?.path) {
+        if (item?.path) { // Use path
           try {
-            await invoke("delete_file", { filePath: item.path });
+            await invoke("delete_file", { filePath: item.path }); // Use path
             successfulOperations++;
           } catch (err) {
             const errorDetail = err instanceof Error ? err.message : String(err.message);
@@ -520,13 +513,12 @@ export function useLocalContentManager<T extends LocalContentItem>({
       if (successfulOperations > 0) toast.success(`Successfully deleted ${successfulOperations} item(s).`);
       setIsBatchDeleting(false);
       setSelectedItemIds(new Set());
-    } else if (itemToDeleteForDialog?.path) {
+    } else if (itemToDeleteForDialog?.path) { // Use path
       setItemBeingDeleted(itemToDeleteForDialog.filename);
       try {
-        await invoke("delete_file", { filePath: itemToDeleteForDialog.path });
+        await invoke("delete_file", { filePath: itemToDeleteForDialog.path }); // Use path
         toast.success(`Deleted ${getDisplayFileName(itemToDeleteForDialog)}.`);
         successfulOperations++;
-        // Optimistically update UI for single item delete
         setItems(prevItems => prevItems.filter(i => i.filename !== itemToDeleteForDialog.filename));
         setSelectedItemIds(prevIds => {
           const newSet = new Set(prevIds);
@@ -544,11 +536,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
     setIsDialogActionLoading(false);
     handleCloseDeleteDialog();
-    if (successfulOperations > 0 || errors.length > 0) { // Refresh if any attempt was made
-      if (isBatchDeleteConfirmActive) {
-        await fetchData(); // Refresh list only for batch deletes or if there were errors in single delete
-      } else if (errors.length > 0 && !isBatchDeleteConfirmActive) {
-        await fetchData(); // Also refresh if single delete had an error
+    if (successfulOperations > 0 || errors.length > 0) { 
+      if (isBatchDeleteConfirmActive || errors.length > 0) { // Refresh if batch or single error
+        await fetchData(true); // Full refresh
       }
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
     }
@@ -564,11 +554,10 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
     for (const itemId of selectedItemIds) {
       const item = items.find(i => i.filename === itemId);
-      if (item?.path) {
+      if (item?.path) { // Use path
         const newEnabledState = !(item.is_disabled === false);
         try {
-          // All content types will now use set_file_enabled
-          await invoke("set_file_enabled", { filePath: item.path, enabled: newEnabledState });
+          await invoke("set_file_enabled", { filePath: item.path, enabled: newEnabledState }); // Use path
           setItems(prev => prev.map(i => i.filename === itemId ? { ...i, is_disabled: !newEnabledState } : i));
           successfulOperations++;
         } catch (err) {
@@ -582,74 +571,61 @@ export function useLocalContentManager<T extends LocalContentItem>({
     setIsBatchToggling(false);
     if (errors.length > 0) toast.error(`Batch toggle failed for some items: ${errors.join("; ")}`);
     if (successfulOperations > 0) {
-      // No specific success toast for batch toggle, individual item updates UI
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
     }
     setSelectedItemIds(new Set());
-  }, [profile, selectedItemIds, items, getDisplayFileName]); // Removed contentType
+  }, [profile, selectedItemIds, items, getDisplayFileName]); 
 
   const handleBatchDeleteSelected = useCallback(() => {
     if (!profile || selectedItemIds.size === 0) return;
-    setItemToDeleteForDialog(null); // Clear single item dialog if any
+    setItemToDeleteForDialog(null); 
     setIsBatchDeleteConfirmActive(true);
     setIsConfirmDeleteDialogOpen(true);
   }, [profile, selectedItemIds]);
 
   const handleOpenItemFolder = useCallback((item: T) => {
-    if (!item.path) {
+    if (!item.path) { // Use path
       toast.error("Path not available for this item.");
       return;
     }
-    invoke("open_file_directory", { filePath: item.path })
+    invoke("open_file_directory", { filePath: item.path }) // Use path
       .catch(err => {
-        toast.error(`Failed to open directory: ${err instanceof Error ? err.message : String(err.message)}`);
+        const errorMsg = err instanceof Error ? err.message : String(err.message);
+        toast.error(`Failed to open directory: ${errorMsg}`);
       });
   }, []);
   
-  // --- Modrinth Update Logic ---
   const checkForContentUpdates = useCallback(async (currentProfile = profile, currentItems = items) => {
     if (!currentProfile || !currentItems || currentItems.length === 0) {
       setContentUpdates({});
       return;
     }
-
-    const itemsWithHashes = currentItems.filter(
-      (item: T) => item.modrinth_info && item.sha1_hash
-    );
-
+    const itemsWithHashes = currentItems.filter(item => item.modrinth_info && item.sha1_hash);
     if (itemsWithHashes.length === 0) {
       setContentUpdates({});
       return;
     }
-
-    const hashes = itemsWithHashes.map((item: T) => item.sha1_hash!);
-
+    const hashes = itemsWithHashes.map(item => item.sha1_hash!);
     setIsCheckingUpdates(true);
     setContentUpdateError(null);
-
     try {
       const requestBody: ModrinthBulkUpdateRequestBody = {
         hashes,
         algorithm: "sha1" as ModrinthHashAlgorithm,
-        loaders: [], // TODO: Potentially make loaders configurable or derive from profile
+        loaders: [], 
         game_versions: [currentProfile.game_version],
       };
-
-      // Assuming a similar command exists or will be created for generic content updates
       const updates = await invoke<Record<string, ModrinthVersion | null>>(
         "check_modrinth_updates", 
         { request: requestBody } 
       );
-
       const filteredUpdates: Record<string, ModrinthVersion> = {};
       const itemsByHash = new Map<string, T>();
       for (const item of itemsWithHashes) {
         if(item.sha1_hash) itemsByHash.set(item.sha1_hash, item);
       }
-
       for (const [hash, versionInfo] of Object.entries(updates)) {
         const item = itemsByHash.get(hash);
-        // Update if versionInfo exists and ( (item has modrinth_info and version_id differs) OR (item doesn't have modrinth_info meaning it's a new link) )
         if (item && versionInfo && versionInfo.id && 
            ((item.modrinth_info && item.modrinth_info.version_id !== versionInfo.id) || !item.modrinth_info)) {
           filteredUpdates[hash] = versionInfo;
@@ -657,12 +633,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
       }
       setContentUpdates(filteredUpdates);
     } catch (error) {
-      console.error(`Error checking for ${contentType} updates:`, error);
-      setContentUpdateError(
-        error instanceof Error
-          ? error.message
-          : `Error checking for ${contentType} updates`,
-      );
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`Error checking for ${contentType} updates:`, errorMsg);
+      setContentUpdateError(`Error checking for ${contentType} updates: ${errorMsg}`);
       setContentUpdates({});
     } finally {
       setIsCheckingUpdates(false);
@@ -670,7 +643,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
   }, [profile, items, contentType]);
 
   const handleUpdateContentItem = useCallback(async (item: T, updateVersion: ModrinthVersion, preventRefetch: boolean = false) => {
-    if (!profile || !item.path) {
+    if (!profile || !item.path) { // Use path
       toast.error("Profile or item path missing, cannot update.");
       return;
     }
@@ -678,48 +651,27 @@ export function useLocalContentManager<T extends LocalContentItem>({
       toast.error(`Item ${getDisplayFileName(item)} is not linked to Modrinth or missing hash, cannot auto-update.`);
         return;
     }
-
     setItemsBeingUpdated(prev => new Set(prev).add(item.filename));
     setContentUpdateError(null);
-
     try {
       let command = "";
-      let payload: any = {};
+      let payload: any = { profileId: profile.id, newVersionDetails: updateVersion };
+
+      // The 'item' itself might need to be mapped to specific structs like 'ResourcePackInfo' for the backend.
+      // For now, we pass the generic 'item', assuming the backend commands can handle it or it matches structure.
+      // If not, specific mapping will be needed here based on 'contentType'.
+      const itemPayloadKey = contentType.toLowerCase(); // e.g., 'resourcepack', 'shaderpack'
+      payload[itemPayloadKey] = item; 
 
       switch (contentType) {
-        case 'ShaderPack':
-          command = "update_shaderpack_from_modrinth";
-          payload = {
-            profileId: profile.id,
-            shaderpack: item, // Specific key for shaderpack
-            newVersionDetails: updateVersion,
-          };
-          break;
-        case 'ResourcePack':
-          command = "update_resourcepack_from_modrinth";
-          payload = {
-            profileId: profile.id,
-            resourcepack: item, // Specific key for resourcepack
-            newVersionDetails: updateVersion,
-          };
-          break;
-        case 'DataPack':
-          command = "update_datapack_from_modrinth";
-          payload = {
-            profileId: profile.id,
-            datapack: item, // Specific key for datapack
-            newVersionDetails: updateVersion,
-          };
-          break;
-        default:
-          toast.error(`Unsupported content type for update: ${contentType}`);
-          throw new Error(`Unsupported content type for update: ${contentType}`);
+        case 'ShaderPack': command = "update_shaderpack_from_modrinth"; break;
+        case 'ResourcePack': command = "update_resourcepack_from_modrinth"; break;
+        case 'DataPack': command = "update_datapack_from_modrinth"; break;
+        default: throw new Error(`Unsupported content type for update: ${contentType}`);
       }
 
       await invoke(command, payload);
-
       toast.success(`Successfully updated ${getDisplayFileName(item)} to ${updateVersion.version_number}`);
-      
       if (item.sha1_hash) {
         setContentUpdates(prevUpdates => {
           const newUpdates = { ...prevUpdates };
@@ -727,13 +679,12 @@ export function useLocalContentManager<T extends LocalContentItem>({
           return newUpdates;
         });
       }
-      if (!preventRefetch) {
-        await fetchData(); // Refresh list after successful update, only if not prevented
-      }
+      if (!preventRefetch) await fetchData(true); // Full refresh
     } catch (err) {
       console.error(`Failed to update ${contentType}:`, err);
       const displayName = getDisplayFileName(item);
-      toast.error(`Failed to update ${displayName}: ${err instanceof Error ? err.message : String(err)}`);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to update ${displayName}: ${errorMsg}`);
     } finally {
       setItemsBeingUpdated(prev => {
         const newSet = new Set(prev);
@@ -749,60 +700,48 @@ export function useLocalContentManager<T extends LocalContentItem>({
     setContentUpdateError(null);
     let SucceededCount = 0;
     let errorCount = 0;
-
     const itemsToUpdateWithDetails: {item: T, version: ModrinthVersion}[] = [];
-    for (const item of items) { // Iterate over current items in state
+    for (const item of items) { 
       if (item.sha1_hash && contentUpdates[item.sha1_hash]) {
         itemsToUpdateWithDetails.push({ item, version: contentUpdates[item.sha1_hash]! });
       }
     }
-
     if (itemsToUpdateWithDetails.length === 0) {
         setIsUpdatingAll(false);
         return;
     }
-
     toast.loading(`Updating ${itemsToUpdateWithDetails.length} ${contentType}(s)...`, { id: 'batch-update-toast' });
-
     for (const { item, version } of itemsToUpdateWithDetails) {
       try {
-        // Pass true to prevent individual refetches during batch update
         await handleUpdateContentItem(item, version, true); 
         SucceededCount++;
-      } catch {
-        errorCount++; 
-      }
+      } catch { errorCount++; }
     }
-    
     setIsUpdatingAll(false);
     if (errorCount > 0) {
         toast.error(`Finished batch update: ${SucceededCount} succeeded, ${errorCount} failed.`, { id: 'batch-update-toast' });
     } else {
         toast.success(`Successfully updated ${SucceededCount} ${contentType}(s).`, { id: 'batch-update-toast' });
     }
-
     if (SucceededCount > 0) {
-        await fetchData(); // Single fetch after all successful batch updates
-        // After updating, re-check for updates to clear out any remaining ones
-        // or to find new ones if versions changed significantly
+        await fetchData(true); // Full refresh
         await checkForContentUpdates(profile, items); 
     }
   }, [profile, items, contentUpdates, contentType, handleUpdateContentItem, checkForContentUpdates, fetchData]);
 
-  // Effect to check for updates when profile or items change
   useEffect(() => {
     if (profile?.id && items.length > 0) {
       checkForContentUpdates();
     }
-  }, [items, profile?.id, checkForContentUpdates]);
-  // --- End Modrinth Update Logic ---
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, profile?.id]); // Removed checkForContentUpdates from deps to avoid loop, as it's memoized by profile/items
 
   return {
     items,
-    isLoading: isInitialLoadingState, // This is now ONLY for Phase 1 initial load
+    isLoading: isInitialLoadingState, 
     isFetchingHashes: isFetchingHashesState,
     isFetchingModrinthDetails: isFetchingModrinthDetailsState,
-    isAnyTaskRunning: isInitialLoadingState || isFetchingHashesState || isFetchingModrinthDetailsState || isCheckingUpdates || isUpdatingAll, // Composite flag for general busy state
+    isAnyTaskRunning: isInitialLoadingState || isFetchingHashesState || isFetchingModrinthDetailsState || isCheckingUpdates || isUpdatingAll, 
     error,
     searchQuery,
     setSearchQuery,
@@ -825,19 +764,17 @@ export function useLocalContentManager<T extends LocalContentItem>({
     itemToDeleteForDialog,
     modrinthIcons,
     localArchiveIcons,
-    // Modrinth Update state and functions
     contentUpdates,
-    isCheckingUpdates, // This is for Modrinth update checks, separate from initial load phases
+    isCheckingUpdates, 
     itemsBeingUpdated,
     contentUpdateError,
-    isUpdatingAll, // This is for batch Modrinth updates
+    isUpdatingAll, 
     fetchData,
     handleToggleItemEnabled,
     handleDeleteItem,
     handleBatchToggleSelected,
     handleBatchDeleteSelected,
     handleOpenItemFolder,
-    // Modrinth Update functions
     checkForContentUpdates,
     handleUpdateContentItem,
     handleUpdateAllAvailableContent,
