@@ -37,6 +37,17 @@ export function PlayerActionsDisplay({
   const dropShadowY = '4px';
   const dropShadowBlur = '6px';
   const commonDropShadowStyle = `drop-shadow(${dropShadowX} ${dropShadowY} ${dropShadowBlur} ${accentColor.value})`;
+  
+  const skinViewerDisplayHeight = 450;
+  const skinViewerMaxDisplayWidth = 225; // Adjusted to allow for wider classic skins
+
+  const skinViewerStyles: React.CSSProperties = {
+    filter: 'drop-shadow(5px 10px 5px rgba(0,0,0,0.75))',
+    WebkitBoxReflect: 'below 0px linear-gradient(to bottom, transparent, rgba(0,0,0,0.05))',
+    height: `${skinViewerDisplayHeight}px`,
+    width: 'auto', // Allow width to adjust to aspect ratio
+    maxWidth: `${skinViewerMaxDisplayWidth}px`, // Cap the maximum width
+  };
 
   return (
     <div className={cn("flex flex-col items-center", className)}>
@@ -63,10 +74,10 @@ export function PlayerActionsDisplay({
         <SkinViewer
           skinUrl={skinUrl}
           playerName={playerName?.toString()}
-          width={200}
-          height={450}
-          className="bg-transparent"
-          style={{ filter: commonDropShadowStyle }}
+          width={skinViewerMaxDisplayWidth} // Provide max width to internal canvas
+          height={skinViewerDisplayHeight} // Provide fixed height to internal canvas
+          className="bg-transparent flex-shrink-0"
+          style={skinViewerStyles}
         />
 
         <div className="absolute bottom-8 left-0 right-0 flex justify-center px-4">
