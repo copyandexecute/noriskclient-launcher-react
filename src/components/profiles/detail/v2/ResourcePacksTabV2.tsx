@@ -64,6 +64,9 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
   const {
     items: resourcePacks,
     isLoading,
+    isFetchingHashes,
+    isFetchingModrinthDetails,
+    isAnyTaskRunning,
     error,
     searchQuery,
     setSearchQuery,
@@ -130,6 +133,9 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
     
     const updateAvailableVersion = pack.sha1_hash ? contentUpdates[pack.sha1_hash] : null;
 
+    const isItemWaitingForHash = pack.sha1_hash === null && (isLoading || isFetchingHashes);
+    const isItemWaitingForModrinth = pack.sha1_hash !== null && !pack.modrinth_info && (isLoading || isFetchingHashes || isFetchingModrinthDetails);
+
     let iconToShow: React.ReactNode;
     const modrinthProjectId = pack.modrinth_info?.project_id;
     const modrinthIconUrl = modrinthProjectId ? modrinthIcons[modrinthProjectId] : null;
@@ -191,7 +197,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
                 size="sm"
                 colorScheme="success"
                 onClick={() => handleUpdateContentItem(pack, updateAvailableVersion)}
-                disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
+                disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting  || isUpdatingAll}
                 icon={<Icon icon="solar:cloud-download-bold-duotone" className="w-3.5 h-3.5" />}
                 title={`Update to ${updateAvailableVersion.version_number}`}
                 />
@@ -214,7 +220,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
         size="sm"
         variant={!pack.is_disabled ? "secondary" : "default"}
         onClick={() => handleToggleItemEnabled(pack)}
-        disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting }
+        disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting}
       >
         {isToggling ? "..." : (!pack.is_disabled ? "Disable" : "Enable")}
       </Button>
@@ -304,7 +310,8 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
     handleUpdateContentItem,
     modrinthIcons,
     localArchiveIcons,
-    isUpdatingAll
+    isUpdatingAll,
+    isAnyTaskRunning,
   ]);
 
   const primaryLeftActionsContent = (
@@ -315,24 +322,24 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
           onChange={(val) => setSearchQuery(val)}
           placeholder="Search resource packs..." 
           className="flex-grow !h-9"
-          disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
+          disabled={isBatchToggling || isBatchDeleting || isLoading || isAnyTaskRunning}
         />
         <IconButton
             icon={<Icon icon="solar:add-circle-bold-duotone" />}
             onClick={handleAddResourcePacks} 
-            disabled={isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
+            disabled={isLoading || isAnyTaskRunning}
             colorScheme="secondary"
             size="sm"
             title="Add Resource Packs" 
             className="!h-9 !w-9 flex-shrink-0"
         />
         <IconButton
-            icon={isLoading ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
+            icon={isLoading || isAnyTaskRunning ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
             onClick={fetchData} 
-            disabled={isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
+            disabled={isLoading || isAnyTaskRunning}
             colorScheme="secondary"
             size="sm"
-            title={isLoading ? "Refreshing..." : "Refresh Resource Packs"} 
+            title={isLoading || isAnyTaskRunning ? "Refreshing..." : "Refresh Resource Packs"} 
             className="!h-9 !w-9 flex-shrink-0 ml-auto"
         />
       </div>
@@ -351,23 +358,23 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
             customSize="md" 
             checked={areAllFilteredSelected}
             onChange={(e) => handleSelectAllToggle(e.target.checked)}
-            disabled={filteredItems.length === 0 || isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
+            disabled={filteredItems.length === 0 || isAnyTaskRunning || isLoading}
             label={selectedItemIds.size > 0 ? `${selectedItemIds.size} selected` : "Select All"}
             title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
           />
           <div className="flex items-center gap-2">
             {selectedItemIds.size > 0 && (
               <>
-                <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll} icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
+                <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
                   {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
                 </Button>
-                <Button size="sm" variant="destructive" onClick={handleBatchDeleteSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll} icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
+                <Button size="sm" variant="destructive" onClick={handleBatchDeleteSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
                   {isBatchDeleting ? "Deleting..." : `Delete (${selectedItemIds.size})`}
                 </Button>
               </>
             )}
             {Object.keys(contentUpdates).length > 0 && (
-              <Button size="sm" variant="success" onClick={handleUpdateAllAvailableContent} disabled={isUpdatingAll || isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates} icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} className={selectedItemIds.size > 0 ? "ml-2" : ""}>
+              <Button size="sm" variant="success" onClick={handleUpdateAllAvailableContent} disabled={isAnyTaskRunning || isLoading} icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} className={selectedItemIds.size > 0 ? "ml-2" : ""}>
               {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(contentUpdates).length})`}
             </Button>
           )}
@@ -392,7 +399,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       <GenericContentTab<ResourcePackInfo> 
         items={filteredItems}
         renderListItem={renderResourcePackItem} 
-        isLoading={isLoading} 
+        isLoading={isLoading}
         error={error} 
         searchQuery={searchQuery} 
         primaryLeftActions={primaryLeftActionsContent}

@@ -35,6 +35,9 @@ interface UseLocalContentManagerProps<T extends LocalContentItem> {
 interface UseLocalContentManagerReturn<T extends LocalContentItem> {
   items: T[];
   isLoading: boolean;
+  isFetchingHashes: boolean;
+  isFetchingModrinthDetails: boolean;
+  isAnyTaskRunning: boolean;
   error: string | null;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -89,7 +92,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
   onRefreshRequired,
 }: UseLocalContentManagerProps<T>): UseLocalContentManagerReturn<T> {
   const [items, setItems] = useState<T[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoadingState, setIsInitialLoadingState] = useState(false); // Renamed: Covers phase 1 loading
+  const [isFetchingHashesState, setIsFetchingHashesState] = useState(false); // Renamed: Covers phase 2 loading
+  const [isFetchingModrinthDetailsState, setIsFetchingModrinthDetailsState] = useState(false); // Renamed: Covers phase 3 loading
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -129,11 +134,11 @@ export function useLocalContentManager<T extends LocalContentItem>({
   const getTauriFetchCommand = useCallback((): string => {
     switch (contentType) {
       case 'ShaderPack':
-        return 'get_local_shaderpacks';
+        return 'get_local_shaderpacks'; // Assuming this also supports calculateHashes, fetchModrinthData
       case 'ResourcePack':
         return 'get_local_resourcepacks';
       case 'DataPack':
-        return 'get_local_datapacks'; // Assuming this command will exist
+        return 'get_local_datapacks'; // Assuming this command will exist and support params
       default:
         throw new Error(`Unsupported content type for fetching: ${contentType}`);
     }
@@ -144,51 +149,57 @@ export function useLocalContentManager<T extends LocalContentItem>({
       setItems([]);
       return;
     }
-    setIsLoading(true);
+    setIsInitialLoadingState(true);
+    setIsFetchingHashesState(false); // Reset phase 2 loading state
+    setIsFetchingModrinthDetailsState(false); // Reset phase 3 loading state
     setError(null);
-    setModrinthIcons({}); // Reset icons on fetch
-    setLocalArchiveIcons({}); // Reset icons on fetch
-    setContentUpdates({}); // Reset updates
-    setContentUpdateError(null); // Reset update error
+    setModrinthIcons({});
+    setLocalArchiveIcons({});
+    setContentUpdates({});
+    setContentUpdateError(null);
+    setHashesToFetchModrinthDetailsFor(null); // Clear this as it will be populated later
 
     try {
       if (contentType === 'ResourcePack') {
-        // Step 1: Fetch local resource packs without Modrinth data first
-        console.log(`[${contentType}] Fetching local data...`, new Date().toISOString());
-        const localPacks = await invoke<T[]>(getTauriFetchCommand(), {
+        console.log(`[${contentType}] Phase 1: Fetching basic info...`, new Date().toISOString());
+        const basicItems = await invoke<T[]>(getTauriFetchCommand(), {
           profileId: profile.id,
-          fetchModrinthData: false, // Explicitly false for the first call
+          calculateHashes: false, // Phase 1: No hashes yet
+          fetchModrinthData: false, // Phase 1: No Modrinth data from Rust yet
         });
         
-        const processedLocalPacks = (localPacks || []).map(item => ({
-          ...item,
+        const processedBasicItems = (basicItems || []).map(item => ({
+          ...item, // sha1_hash will be null from Rust
           filename: item.filename || getDisplayFileName(item),
           modrinth_info: null, // Ensure modrinth_info is initially null
         }));        
-        setItems(processedLocalPacks as T[]); 
-        console.log(`[${contentType}] Phase 1: Local items set`, new Date().toISOString(), processedLocalPacks);
-
-        const newHashes = processedLocalPacks
-          .map(item => item.sha1_hash)
-          .filter(hash => hash != null) as string[];
-        
-        if (newHashes.length > 0) {
-          setHashesToFetchModrinthDetailsFor(newHashes);
-        } else {
-          setHashesToFetchModrinthDetailsFor(null); // No hashes, ensure effect doesn't run unnecessarily
-        }
+        setItems(processedBasicItems as T[]); 
+        console.log(`[${contentType}] Phase 1: Basic items set`, new Date().toISOString(), processedBasicItems);
+        // Phase 2 (hash calculation) will be triggered by a useEffect watching 'items'
 
       } else {
         // Original logic for other content types (ShaderPack, DataPack)
+        // For these, we assume a single fetch or that they are fast enough / already optimized.
+        // If they also need phased loading, this logic would need to be expanded.
         console.log(`[${contentType}] Fetching data (single step)...`, new Date().toISOString());
         const command = getTauriFetchCommand();
-        const backendItems = await invoke<T[]>(command, { profileId: profile.id });
-        setItems((backendItems || []).map(item => ({
+        // Assuming other types might directly return hashes if applicable
+        const backendItems = await invoke<T[]>(command, { profileId: profile.id, calculateHashes: true, fetchModrinthData: false });
+        const processedItems = (backendItems || []).map(item => ({
           ...item,
           filename: item.filename || getDisplayFileName(item),
-        })));
-        console.log(`[${contentType}] Data set (single step)`, new Date().toISOString(), backendItems);
-        setHashesToFetchModrinthDetailsFor(null); // Ensure this is reset for other types
+        }));
+        setItems(processedItems as T[]);
+        console.log(`[${contentType}] Data set (single step)`, new Date().toISOString(), processedItems);
+
+        const newHashes = processedItems
+          .map(item => item.sha1_hash)
+          .filter(hash => hash != null) as string[];
+        if (newHashes.length > 0) {
+          setHashesToFetchModrinthDetailsFor(newHashes);
+        } else {
+          setHashesToFetchModrinthDetailsFor(null);
+        }
       }
 
       setSelectedItemIds(new Set());
@@ -198,7 +209,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       setError(`Failed to fetch ${contentType}s: ${err instanceof Error ? err.message : String(err.message)}`);
       setItems([]);
     } finally {
-      setIsLoading(false);
+      setIsInitialLoadingState(false); // Phase 1 loading finished
     }
   }, [profile?.id, contentType, getTauriFetchCommand, getDisplayFileName]);
 
@@ -206,14 +217,67 @@ export function useLocalContentManager<T extends LocalContentItem>({
     fetchData();
   }, [fetchData]);
   
-  // Effect to fetch Modrinth details for resource packs after local items are set
+  // Phase 2: Fetch Hashes for ResourcePacks (if not already loaded)
   useEffect(() => {
-    if (contentType === 'ResourcePack' && hashesToFetchModrinthDetailsFor && hashesToFetchModrinthDetailsFor.length > 0 && profile?.id) {
-      console.log(`[${contentType}] Phase 2: Triggering Modrinth fetch for hashes`, new Date().toISOString(), hashesToFetchModrinthDetailsFor);
-      const fetchDetails = async () => {
+    if (contentType === 'ResourcePack' && profile?.id && items.length > 0 && items.some(item => item.sha1_hash === null) && !isInitialLoadingState && !isFetchingHashesState) {
+      const fetchHashesAndFullLocalInfo = async () => {
+        console.log(`[${contentType}] Phase 2: Fetching hashes and full local info...`, new Date().toISOString());
+        setIsFetchingHashesState(true);
+        try {
+          const itemsWithHashes = await invoke<T[]>(getTauriFetchCommand(), {
+            profileId: profile.id,
+            calculateHashes: true, // Phase 2: Calculate hashes
+            fetchModrinthData: false, // Let JS handle Modrinth details in Phase 3
+          });
+
+          setItems(currentItems =>
+            currentItems.map(currentItem => {
+              const match = itemsWithHashes.find(iwh => iwh.path === currentItem.path);
+              if (match && match.sha1_hash) {
+                // Merge hash and potentially other updated local info (like file_size, is_disabled if changed)
+                return { 
+                  ...currentItem, 
+                  sha1_hash: match.sha1_hash, 
+                  file_size: match.file_size, 
+                  is_disabled: match.is_disabled 
+                };
+              }
+              return currentItem;
+            })
+          );
+
+          const newHashes = itemsWithHashes
+            .map(item => item.sha1_hash)
+            .filter(hash => hash != null) as string[];
+          
+          if (newHashes.length > 0) {
+            console.log(`[${contentType}] Phase 2: Hashes obtained, setting for Modrinth lookup.`, new Date().toISOString(), newHashes);
+            setHashesToFetchModrinthDetailsFor(newHashes);
+          } else {
+            console.log(`[${contentType}] Phase 2: No hashes obtained after explicit fetch.`, new Date().toISOString());
+            setHashesToFetchModrinthDetailsFor(null);
+          }
+        } catch (err) {
+          console.error(`[${contentType}] Phase 2: Failed to fetch hashes:`, err);
+          setError(prevError => prevError ? `${prevError}; Failed to fetch hashes` : 'Failed to fetch hashes');
+        } finally {
+          setIsFetchingHashesState(false);
+        }
+      };
+      fetchHashesAndFullLocalInfo();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, profile?.id, contentType, getTauriFetchCommand, isInitialLoadingState]); // Depends on isInitialLoadingState (phase 1)
+  
+  // Phase 3: Fetch Modrinth project details based on hashes (existing logic, adapted)
+  useEffect(() => {
+    if (contentType === 'ResourcePack' && hashesToFetchModrinthDetailsFor && hashesToFetchModrinthDetailsFor.length > 0 && profile?.id && !isFetchingModrinthDetailsState) {
+      console.log(`[${contentType}] Phase 3: Triggering Modrinth project details fetch for hashes`, new Date().toISOString(), hashesToFetchModrinthDetailsFor);
+      setIsFetchingModrinthDetailsState(true);
+      const fetchModrinthDataByHashes = async () => {
         try {
           const modrinthVersionsMap = await ModrinthService.getVersionsByHashes(hashesToFetchModrinthDetailsFor);
-          console.log(`[${contentType}] Phase 2: Modrinth data received`, new Date().toISOString(), modrinthVersionsMap);
+          console.log(`[${contentType}] Phase 3: Modrinth data received`, new Date().toISOString(), modrinthVersionsMap);
           setItems(currentItems =>
             currentItems.map(item => {
               if (item.sha1_hash && modrinthVersionsMap[item.sha1_hash]) {
@@ -228,22 +292,26 @@ export function useLocalContentManager<T extends LocalContentItem>({
                     version_number: modrinthVersion.version_number,
                     download_url: primaryFile.url,
                   } : null,
-                } as T; // Ensure the item remains type T
+                } as T; 
               }
               return item;
             })
           );
-          console.log(`[${contentType}] Phase 2: Items updated with Modrinth data`, new Date().toISOString());
+          console.log(`[${contentType}] Phase 3: Items updated with Modrinth data`, new Date().toISOString());
         } catch (modrinthError) {
-          console.warn(`[${contentType}] Phase 2: Failed to fetch Modrinth details by hashes:`, modrinthError);
-          // Not setting global error, as local files are already displayed.
+          console.warn(`[${contentType}] Phase 3: Failed to fetch Modrinth details by hashes:`, modrinthError);
+          setError(prevError => prevError ? `${prevError}; Failed to fetch Modrinth details` : 'Failed to fetch Modrinth details');
+        } finally {
+          setIsFetchingModrinthDetailsState(false);
+          // Clear hashesToFetchModrinthDetailsFor AFTER attempting fetch to avoid re-fetch loops on partial success/failure for this batch.
+          // If some hashes failed, they won't be re-fetched immediately unless items/profile changes to re-trigger phase 2.
+          setHashesToFetchModrinthDetailsFor(null); 
         }
-        setHashesToFetchModrinthDetailsFor(null); // Reset after fetching
       };
-      fetchDetails();
+      fetchModrinthDataByHashes();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hashesToFetchModrinthDetailsFor, profile?.id, contentType]); // Dependencies include contentType to ensure this only runs for ResourcePacks
+  }, [hashesToFetchModrinthDetailsFor, profile?.id, contentType]); // Removed isFetchingModrinthDetailsState from deps to avoid loop, added guard inside
   
   // Click outside to close dropdown
   useEffect(() => {
@@ -731,7 +799,10 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
   return {
     items,
-    isLoading,
+    isLoading: isInitialLoadingState, // This is now ONLY for Phase 1 initial load
+    isFetchingHashes: isFetchingHashesState,
+    isFetchingModrinthDetails: isFetchingModrinthDetailsState,
+    isAnyTaskRunning: isInitialLoadingState || isFetchingHashesState || isFetchingModrinthDetailsState || isCheckingUpdates || isUpdatingAll, // Composite flag for general busy state
     error,
     searchQuery,
     setSearchQuery,
@@ -756,10 +827,10 @@ export function useLocalContentManager<T extends LocalContentItem>({
     localArchiveIcons,
     // Modrinth Update state and functions
     contentUpdates,
-    isCheckingUpdates,
+    isCheckingUpdates, // This is for Modrinth update checks, separate from initial load phases
     itemsBeingUpdated,
     contentUpdateError,
-    isUpdatingAll,
+    isUpdatingAll, // This is for batch Modrinth updates
     fetchData,
     handleToggleItemEnabled,
     handleDeleteItem,

@@ -899,6 +899,7 @@ pub async fn import_profile_from_file(app_handle: tauri::AppHandle) -> Result<()
 #[tauri::command]
 pub async fn get_local_resourcepacks(
     profile_id: Uuid,
+    calculate_hashes: bool,
     fetch_modrinth_data: bool,
 ) -> Result<Vec<resourcepack_utils::ResourcePackInfo>, CommandError> {
     log::info!(
@@ -913,6 +914,7 @@ pub async fn get_local_resourcepacks(
     // Use the utility function to get all resourcepacks
     let resourcepacks = resourcepack_utils::get_resourcepacks_for_profile(
         &profile, 
+        calculate_hashes,
         fetch_modrinth_data,
     )
         .await

@@ -4,8 +4,42 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use futures::AsyncReadExt;
 use std::path::Path;
 use tokio::fs::File;
+use async_zip::error::ZipError;
+use log::debug;
+
+/// Helper function to read a specific zip entry by index and encode it as Base64
+async fn read_zip_entry_as_base64(
+    zip: &mut ZipFileReader<tokio::io::BufReader<tokio::fs::File>>,
+    entry_index: usize,
+    entry_filename_for_error: &str,
+) -> Result<String> {
+    let mut entry_reader = zip
+        .reader_with_entry(entry_index)
+        .await
+        .map_err(|e| {
+            AppError::ArchiveReadError(format!(
+                "Failed to create reader for entry {}: {}",
+                entry_filename_for_error, e
+            ))
+        })?;
+
+    let mut buffer = Vec::new();
+    entry_reader
+        .read_to_end(&mut buffer)
+        .await
+        .map_err(|e| {
+            AppError::ArchiveReadError(format!(
+                "Failed to read content of {}: {}",
+                entry_filename_for_error, e
+            ))
+        })?;
+
+    let base64_string = STANDARD.encode(&buffer);
+    Ok(base64_string)
+}
 
 /// Finds the first `.png` file within a zip or jar archive and returns its content as a Base64 encoded string.
+/// Prioritizes pack.png, then icon.png in root, then other root PNGs, then any subdirectory PNG.
 ///
 /// # Arguments
 ///
@@ -16,42 +50,85 @@ use tokio::fs::File;
 /// A `Result` containing the Base64 encoded string of the first PNG found, or an `AppError`.
 pub async fn find_first_png_in_archive_as_base64(archive_path: &Path) -> Result<String> {
     if !archive_path.exists() {
+        debug!("Archive not found at path: {}", archive_path.display());
         return Err(AppError::FileNotFound(archive_path.to_path_buf()));
     }
+    debug!("Attempting to find PNG in archive: {}", archive_path.display());
 
-    let file = File::open(archive_path).await?;
+    let file = File::open(archive_path).await.map_err(|e| AppError::Io(e))?;
     let mut reader = tokio::io::BufReader::new(file);
 
-    let mut zip = ZipFileReader::with_tokio(&mut reader)
+    let mut zip = ZipFileReader::with_tokio(reader)
         .await
-        .map_err(|e| AppError::ArchiveReadError(format!("Failed to read archive: {}", e)))?;
+        .map_err(|e| AppError::ArchiveReadError(format!("Failed to read archive {}: {}", archive_path.display(), e)))?;
 
-    let entries = zip.file().entries().to_vec();
+    let entries = zip.file().entries().to_vec(); // Clone to allow mutable borrow of zip later
+
+    let mut root_pack_png_idx: Option<usize> = None;
+    let mut root_icon_png_idx: Option<usize> = None;
+    let mut first_other_root_png_idx: Option<usize> = None;
+    let mut first_subdir_png_idx: Option<usize> = None;
 
     for index in 0..entries.len() {
-        let entry = entries.get(index).ok_or_else(|| {
-            AppError::ArchiveReadError(format!("Failed to get entry at index {}", index))
-        })?;
-        let filename = entry.filename().as_str().map_err(|e| {
-            AppError::ArchiveReadError(format!("Invalid filename in archive: {}", e))
-        })?;
+        let entry = match entries.get(index) {
+            Some(e) => e,
+            None => continue, // Should not happen if iterating up to entries.len()
+        };
+        
+        let filename = match entry.filename().as_str() {
+            Ok(s) => s,
+            Err(_) => {
+                debug!("Skipping entry with non-UTF8 filename at index {}", index);
+                continue; // Skip non-UTF8 filenames
+            }
+        };
 
-        if filename.to_lowercase().ends_with(".png") {
-            let mut entry_reader = zip.reader_with_entry(index).await.map_err(|e| {
-                AppError::ArchiveReadError(format!("Failed to read entry {}: {}", filename, e))
-            })?;
+        if !filename.to_lowercase().ends_with(".png") {
+            continue; // Not a PNG file
+        }
 
-            let mut buffer = Vec::new();
-            entry_reader.read_to_end(&mut buffer).await.map_err(|e| {
-                AppError::ArchiveReadError(format!("Failed to read content of {}: {}", filename, e))
-            })?;
+        let is_root_file = !filename.contains('/');
 
-            // Encode the buffer to Base64
-            let base64_string = STANDARD.encode(&buffer);
-            return Ok(base64_string);
+        if is_root_file {
+            if filename.eq_ignore_ascii_case("pack.png") {
+                if root_pack_png_idx.is_none() {
+                    debug!("Found potential root 'pack.png': {}", filename);
+                    root_pack_png_idx = Some(index);
+                }
+            } else if filename.eq_ignore_ascii_case("icon.png") {
+                if root_icon_png_idx.is_none() {
+                    debug!("Found potential root 'icon.png': {}", filename);
+                    root_icon_png_idx = Some(index);
+                }
+            } else {
+                if first_other_root_png_idx.is_none() {
+                    debug!("Found potential other root PNG: {}", filename);
+                    first_other_root_png_idx = Some(index);
+                }
+            }
+        } else { // Is a subdirectory file
+            if first_subdir_png_idx.is_none() {
+                debug!("Found potential subdirectory PNG: {}", filename);
+                first_subdir_png_idx = Some(index);
+            }
         }
     }
 
+    // Determine which index to use based on priority
+    let final_idx_to_read: Option<usize> = root_pack_png_idx
+        .or(root_icon_png_idx)
+        .or(first_other_root_png_idx)
+        .or(first_subdir_png_idx);
+
+    if let Some(index_to_read) = final_idx_to_read {
+        let entry_to_read = entries.get(index_to_read).unwrap(); // Safe due to previous checks
+        let filename_for_error = entry_to_read.filename().as_str().unwrap_or("[unknown filename]").to_string(); // Fallback for error
+        
+        debug!("Selected PNG to read: {} (index {})", filename_for_error, index_to_read);
+        return read_zip_entry_as_base64(&mut zip, index_to_read, &filename_for_error).await;
+    }
+
+    debug!("No PNG found in archive: {}", archive_path.display());
     Err(AppError::PngNotFoundInArchive(archive_path.to_path_buf()))
 }
 

@@ -344,7 +344,7 @@ pub async fn toggle_content_from_profile(
         }
         Some(profile_utils::ContentType::ResourcePack) => {
             log::debug!("Targeted toggle for ResourcePacks with SHA1: {}", current_sha1_hash);
-            match resourcepack_utils::get_resourcepacks_for_profile(&profile, false).await {
+            match resourcepack_utils::get_resourcepacks_for_profile(&profile, true, false).await {
                 Ok(resource_packs) => {
                     for pack_info in resource_packs {
                         if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {

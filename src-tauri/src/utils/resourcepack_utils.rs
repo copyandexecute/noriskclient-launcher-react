@@ -47,15 +47,17 @@ pub struct ResourcePackModrinthInfo {
 /// Get all resourcepacks for a profile
 pub async fn get_resourcepacks_for_profile(
     profile: &Profile,
+    calculate_hashes: bool,
     fetch_modrinth_data: bool,
 ) -> Result<Vec<ResourcePackInfo>> {
     let state = State::get().await?;
     let io_semaphore = state.io_semaphore.clone();
 
     debug!(
-        "Getting resourcepacks for profile: {} ({}), fetch_modrinth_data: {}, using internal semaphore",
+        "Getting resourcepacks for profile: {} ({}), calculate_hashes: {}, fetch_modrinth_data: {}, using internal semaphore",
         profile.name,
         profile.id,
+        calculate_hashes,
         fetch_modrinth_data
     );
 
@@ -68,8 +70,48 @@ pub async fn get_resourcepacks_for_profile(
         .await
         .map_err(|e| AppError::Other(format!("Failed to read resourcepacks directory: {}", e)))?;
 
-    let mut tasks = Vec::new();
+    let mut resourcepacks = Vec::new();
 
+    if !calculate_hashes {
+        debug!("Skipping hash calculation for resource packs, returning basic info.");
+        while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Other(format!("Failed to read resourcepack entry: {}", e)))? {
+            let path = entry.path();
+            if is_resourcepack_file(&path) {
+                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
+                let is_disabled = filename.ends_with(".disabled");
+                let base_filename = if is_disabled {
+                    filename.strip_suffix(".disabled").unwrap_or(&filename).to_string()
+                } else {
+                    filename.clone()
+                };
+                let metadata = match fs::metadata(&path).await {
+                    Ok(md) => md,
+                    Err(e) => {
+                        warn!("Failed to get metadata for {}: {}. Skipping pack.", path.display(), e);
+                        continue;
+                    }
+                };
+                let file_size = metadata.len();
+
+                resourcepacks.push(ResourcePackInfo {
+                    filename: base_filename,
+                    path: path.to_string_lossy().into_owned(),
+                    sha1_hash: None,
+                    file_size,
+                    is_disabled,
+                    modrinth_info: None,
+                });
+            }
+        }
+        info!(
+            "Found {} resourcepacks (basic info) for profile {}",
+            resourcepacks.len(),
+            profile.id
+        );
+        return Ok(resourcepacks);
+    }
+
+    let mut tasks = Vec::new();
     debug!("Scanning resourcepacks directory for valid resource packs and spawning hash tasks...");
     let mut file_count = 0;
     let mut valid_file_paths_for_hashing = Vec::new();
@@ -93,7 +135,6 @@ pub async fn get_resourcepacks_for_profile(
     let hash_results = join_all(tasks).await;
     debug!("All hash tasks completed.");
 
-    let mut resourcepacks = Vec::new();
     let mut hashes_for_modrinth = Vec::new();
     let mut path_to_info_map: HashMap<String, ResourcePackInfo> = HashMap::new(); // Keyed by SHA1 to update with Modrinth info
     let mut packs_without_successful_hash = Vec::new();
@@ -211,9 +252,10 @@ pub async fn get_resourcepacks_for_profile(
     resourcepacks.extend(packs_without_successful_hash);
 
     info!(
-        "Found {} total resourcepacks for profile {} (fetch_modrinth_data: {})",
+        "Found {} total resourcepacks for profile {} (calculate_hashes: {}, fetch_modrinth_data: {})",
         resourcepacks.len(),
         profile.id,
+        calculate_hashes,
         fetch_modrinth_data
     );
 
