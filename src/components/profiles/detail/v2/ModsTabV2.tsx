@@ -90,6 +90,8 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [activeDropdownModId, setActiveDropdownModId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null); // Ref for the dropdown menu
+  const [batchProcessingModIds, setBatchProcessingModIds] = useState<Set<string>>(new Set()); // New state for batch processing
+  const justToggledRef = useRef(false); // Ref to track if a toggle was just initiated
 
   // State for delete confirmation dialog
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
@@ -222,6 +224,7 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
 
     setModBeingToggled(modId);
     const toastMessage = newEnabledStateForBackend ? "Enabling" : "Disabling"; // For error message
+    justToggledRef.current = true; // Set flag before backend call
 
     try {
       // Always use ProfileService.setProfileModEnabled
@@ -237,14 +240,13 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
           m.id === modId ? { ...m, enabled: newEnabledStateForBackend } : m
         )
       );
-      if (onRefreshRequired) onRefreshRequired();
     } catch (err) {
       console.error(`Failed to ${toastMessage.toLowerCase()} ${modDisplayName}:`, err);
       toast.error(`Failed to ${toastMessage.toLowerCase()} ${modDisplayName}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setModBeingToggled(null);
     }
-  }, [mods, profile, onRefreshRequired]);
+  }, [mods, profile]);
 
   const handleDeleteMod = useCallback(async (mod: Mod) => {
     if (!profile) {
@@ -290,6 +292,8 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
   const renderModItem = useCallback((mod: Mod) => {
     const isToggling = modBeingToggled === mod.id;
     const isDeleting = modBeingDeleted === mod.id;
+    const isThisModInBatchProcess = batchProcessingModIds.has(mod.id);
+    const isCurrentlyUpdatingThisMod = updatingMods.has(mod.id);
     
     const modFileName = getModFileNameFromSource(mod);
     const itemTitle = mod.display_name || modFileName || mod.id;
@@ -355,24 +359,21 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
     // Update Action Node
     const isModrinthModWithHash = mod.source?.type === "modrinth" && (mod.source as ModSourceModrinth).file_hash_sha1;
     const updateAvailableVersion = isModrinthModWithHash ? modUpdates[(mod.source as ModSourceModrinth).file_hash_sha1!] : null;
-    const isCurrentlyUpdating = updatingMods.has(mod.id);
     let itemUpdateActionNode: React.ReactNode = null;
-    if (updateAvailableVersion && !isCurrentlyUpdating) {
+    if (updateAvailableVersion && !isCurrentlyUpdatingThisMod) {
       itemUpdateActionNode = (
         <IconButton
           size="sm"
-          variant="success"
           onClick={() => handleUpdateMod(mod, updateAvailableVersion)}
-          disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+          disabled={isToggling || isDeleting || isThisModInBatchProcess || isBatchDeleting || checkingUpdates || isCurrentlyUpdatingThisMod}
           icon={<Icon icon="solar:cloud-download-bold-duotone" className="w-3.5 h-3.5" />}
           title={`Update to ${updateAvailableVersion.version_number}`}
         />
       );
-    } else if (isCurrentlyUpdating) {
+    } else if (isCurrentlyUpdatingThisMod) {
       itemUpdateActionNode = (
          <IconButton
           size="sm"
-          variant="secondary"
           disabled={true}
           icon={<Icon icon="solar:refresh-bold" className="animate-spin w-3.5 h-3.5" />}
           title={`Updating to ${updateAvailableVersion?.version_number}...`}
@@ -386,9 +387,9 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
         size="sm" 
         variant={mod.enabled ? "secondary" : "default"}
         onClick={() => handleToggleMod(mod.id, mod.enabled)}
-        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+        disabled={isToggling || isDeleting || isThisModInBatchProcess || isBatchDeleting || checkingUpdates || isCurrentlyUpdatingThisMod}
       >
-        {isToggling ? (mod.enabled ? "..." : "...") : (mod.enabled ? "Disable" : "Enable")}
+        {isToggling || isThisModInBatchProcess ? (mod.enabled ? "..." : "...") : (mod.enabled ? "Disable" : "Enable")}
       </Button>
     );
 
@@ -397,10 +398,9 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
       <IconButton
         title="Delete Mod"
         icon={isDeleting ? <Icon icon="solar:refresh-circle-bold-duotone" className="animate-spin w-3.5 h-3.5" /> : <Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />} 
-        variant="destructive"
         size="sm"
         onClick={() => handleDeleteMod(mod)}
-        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+        disabled={isToggling || isDeleting || isThisModInBatchProcess || isBatchDeleting || checkingUpdates || isCurrentlyUpdatingThisMod}
       />
     );
 
@@ -409,13 +409,12 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
       <IconButton
         title="More Actions"
         icon={<Icon icon="solar:menu-dots-bold" className="w-3.5 h-3.5" />} 
-        variant="ghost"
         size="sm"
         onClick={(e) => {
           e.stopPropagation();
           setActiveDropdownModId(prevId => prevId === mod.id ? null : mod.id);
         }}
-        disabled={isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+        disabled={isToggling || isDeleting || isThisModInBatchProcess || isBatchDeleting || checkingUpdates || isCurrentlyUpdatingThisMod}
         data-mod-id={mod.id}
       />
     );
@@ -487,7 +486,7 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
     profile,
     selectedModIds, 
     handleModSelectionChange,
-    isBatchToggling,
+    batchProcessingModIds,
     isBatchDeleting,
     checkingUpdates,
     updatingMods,
@@ -537,6 +536,8 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
       setMods(updatedProfile.mods || []);
       setSelectedModIds(new Set()); 
       if (onRefreshRequired) onRefreshRequired(); 
+      // After refreshing mods data, explicitly check for updates with the new data
+      checkForModUpdates(updatedProfile); 
     } catch (err) {
       console.error("Failed to refresh mods data:", err);
       setError(`Failed to refresh mods: ${err instanceof Error ? err.message : String(err)}`);
@@ -612,12 +613,15 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
     }
   };
 
-  // Initial check for updates on mount and if profile/mods change
+  // Initial check for updates on mount and if profile ID changes (indicating a new profile is selected)
   useEffect(() => {
-    if (profile && profile.mods && profile.mods.length > 0) {
+    if (profile && profile.id && profile.mods && profile.mods.length > 0) {
+      // Ensure this runs only when the profile context genuinely changes to a new one,
+      // or on initial load of a profile.
       checkForModUpdates(profile);
     }
-  }, [profile]); // Rerun if the whole profile object changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]); // Rerun only if profile.id changes
 
   const handleUpdateMod = async (mod: Mod, updateVersion: ModrinthVersion) => {
     if (
@@ -693,57 +697,89 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
   const handleBatchToggleSelected = async () => {
     if (!profile || selectedModIds.size === 0) return;
     
-    setIsBatchToggling(true);
-    const errors: string[] = [];
-    let successfulToggles = 0;
+    setIsBatchToggling(true); // Disables the main batch "Toggle" button in header
+    setBatchProcessingModIds(new Set(selectedModIds)); // Mark specific mods as processing
+    justToggledRef.current = true; // Set flag before backend calls
+    const collectedErrors: string[] = [];
 
-    for (const modId of selectedModIds) {
+    // Prepare data for each mod to be toggled
+    const toggleOperations = Array.from(selectedModIds).map(modId => {
       const mod = mods.find(m => m.id === modId);
       if (mod && profile) {
         const newEnabledStateForBackend = !mod.enabled;
         const modDisplayName = mod.display_name || getModFileNameFromSource(mod) || mod.id;
-        const toastMessage = newEnabledStateForBackend ? "Enabling" : "Disabling"; // For error message
+        const actionDescription = newEnabledStateForBackend ? "enable" : "disable";
 
-        try {
-          const modSource = mod.source as ModSourceModrinth;
-          if (mod.source?.type === "modrinth" && modSource.file_hash_sha1) {
-            const payload: ToggleContentPayload = {
-              profile_id: profile.id,
-              sha1_hash: modSource.file_hash_sha1,
-              enabled: newEnabledStateForBackend,
-            };
-            await toggleContentFromProfile(payload); // Directly await
-          } else {
-            await ProfileService.setProfileModEnabled(profile.id, modId, newEnabledStateForBackend); // Directly await
-          }
-          // Success case for this item
-          successfulToggles++;
-          setMods(prevMods =>
-            prevMods.map(m => 
-              m.id === modId ? { ...m, enabled: newEnabledStateForBackend } : m
-            )
-          );
-        } catch (err) {
-          const errorDetail = err instanceof Error ? err.message : String(err);
-          errors.push(`Failed to ${toastMessage.toLowerCase()} ${modDisplayName}: ${errorDetail}`);
-          console.error(`Batch toggle: Failed to ${toastMessage.toLowerCase()} ${modDisplayName}:`, err);
-          toast.error(`Failed to ${toastMessage.toLowerCase()} ${modDisplayName}: ${errorDetail}`);
+        let promise;
+        const modSource = mod.source as ModSourceModrinth; // Type assertion for clarity
+        if (mod.source?.type === "modrinth" && modSource.file_hash_sha1) {
+          const payload: ToggleContentPayload = {
+            profile_id: profile.id,
+            sha1_hash: modSource.file_hash_sha1,
+            enabled: newEnabledStateForBackend,
+          };
+          promise = toggleContentFromProfile(payload);
+        } else {
+          promise = ProfileService.setProfileModEnabled(profile.id, modId, newEnabledStateForBackend);
         }
-      } else {
-        const errorMsg = !mod ? `Could not find mod with ID ${modId}.` : `Mod data incomplete for ${modId}.`;
-        errors.push(errorMsg);
-        toast.error(errorMsg); // Show toast for this specific failure
+        return { modId, modDisplayName, actionDescription, newEnabledStateForBackend, promise };
+      }
+      const errorMsg = !mod ? `Could not find mod with ID ${modId}.` : `Profile data missing for mod ${modId}.`;
+      toast.error(errorMsg);
+      collectedErrors.push(errorMsg);
+      return null;
+    }).filter(op => op !== null) as { modId: string; modDisplayName: string; actionDescription: string; newEnabledStateForBackend: boolean; promise: Promise<any> }[];
+
+    if (toggleOperations.length === 0) {
+      setIsBatchToggling(false);
+      setSelectedModIds(new Set());
+      if (collectedErrors.length > 0) {
+        console.warn("Batch mod toggle pre-flight errors:", collectedErrors);
+      }
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      toggleOperations.map(op => op.promise)
+    );
+
+    let successfulTogglesCount = 0;
+    const updatedMods = mods.map(mod => {
+      const operationIndex = toggleOperations.findIndex(op => op.modId === mod.id);
+      if (operationIndex !== -1) {
+        const result = results[operationIndex];
+        const opData = toggleOperations[operationIndex];
+        if (result.status === 'fulfilled') {
+          successfulTogglesCount++;
+          return { ...mod, enabled: opData.newEnabledStateForBackend };
+        } else { // result.status === 'rejected'
+          const errorDetail = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          const errorMessage = `Failed to ${opData.actionDescription} ${opData.modDisplayName}: ${errorDetail}`;
+          collectedErrors.push(errorMessage);
+          console.error(`Batch toggle: ${errorMessage}`, result.reason);
+          toast.error(errorMessage);
+          return mod; // Return original mod on failure
+        }
+      }
+      return mod; // Not part of this batch operation
+    });
+
+    setMods(updatedMods);
+
+    setIsBatchToggling(false); // Re-enable main batch "Toggle" button
+    setBatchProcessingModIds(new Set()); // Clear specific mod processing states
+    if (collectedErrors.length > 0 && successfulTogglesCount < toggleOperations.length) {
+      // Log only if there were actual processing errors, not just pre-flight ones already handled
+      const processingErrors = collectedErrors.filter(e => e.startsWith("Failed to"));
+      if (processingErrors.length > 0) {
+        console.warn("Batch mod toggle finished with some errors:", processingErrors);
       }
     }
 
-    setIsBatchToggling(false);
-    if (errors.length > 0) {
-      console.warn("Batch mod toggle finished with errors:", errors);
-      // Individual errors already toasted
-    }
-    if (successfulToggles > 0) {
-      if (onRefreshRequired) onRefreshRequired();
-    }
+    // Removed onRefreshRequired call
+    // if (successfulTogglesCount > 0) {
+    //   if (onRefreshRequired) onRefreshRequired();
+    // }
     setSelectedModIds(new Set());
   };
 
@@ -879,7 +915,6 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
             icon={<Icon icon="solar:add-circle-bold-duotone" />}
             onClick={handleAddMods}
             disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
-            variant="secondary"
             size="sm"
             title="Add Mods"
             className="!h-9 !w-9 flex-shrink-0"
@@ -889,7 +924,6 @@ export function ModsTabV2({ profile, onRefreshRequired }: ModsTabV2Props) {
             icon={isLoading ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
             onClick={refreshModsData}
             disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
-            variant="secondary"
             size="sm"
             title={isLoading ? "Refreshing..." : "Refresh Mods"}
             className="!h-9 !w-9 flex-shrink-0 ml-auto"

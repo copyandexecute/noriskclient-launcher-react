@@ -163,6 +163,8 @@ export function ModrinthSearchV2({
 
   // Internal state for profiles, synced with the prop
   const [internalProfiles, setInternalProfiles] = useState<Profile[]>(initialProfiles);
+  const justInstalledOrToggledRef = useRef(false); // New ref to prevent re-check loops
+
   useEffect(() => {
     setInternalProfiles(initialProfiles);
     // If a selectedProfileId is passed as a prop, find and set it.
@@ -800,6 +802,7 @@ export function ModrinthSearchV2({
         [selectedVersion.id]: getStatusForNewInstall(prev[selectedVersion.id])
       }));
 
+      justInstalledOrToggledRef.current = true; // Set flag
       if (onInstallSuccess) {
         onInstallSuccess();
       }
@@ -871,6 +874,7 @@ export function ModrinthSearchV2({
         // No need to call checkDisplayedVersionsStatus since we already know the state
         // This reduces server load and improves performance
 
+        justInstalledOrToggledRef.current = true; // Set flag
         if (onInstallSuccess) {
             onInstallSuccess();
         }
@@ -1045,6 +1049,7 @@ export function ModrinthSearchV2({
               [bestVersion.id]: getStatusForNewInstall(prev[bestVersion.id])
             }));
             
+            justInstalledOrToggledRef.current = true; // Set flag
             return { version: bestVersion.version_number };
           },
           {
@@ -1240,7 +1245,8 @@ export function ModrinthSearchV2({
         ...prev,
         [bestVersion.id]: getStatusForNewInstall(prev[bestVersion.id])
       }));
-      
+
+      justInstalledOrToggledRef.current = true; // Set flag
       if (onInstallSuccess) {
         onInstallSuccess();
       }
@@ -1258,6 +1264,10 @@ export function ModrinthSearchV2({
     const checkInstallationStatus = async () => {
       if (!selectedProfile || !searchResults.length) {
         setInstalledProjects({});
+        return;
+      }
+      if (justInstalledOrToggledRef.current) { // Check flag
+        justInstalledOrToggledRef.current = false; // Reset flag
         return;
       }
 
@@ -1287,6 +1297,11 @@ export function ModrinthSearchV2({
   useEffect(() => {
     const checkNewResultsInstallation = async () => {
       if (!selectedProfile || !searchResults.length) return;
+
+      if (justInstalledOrToggledRef.current) { // Check flag
+        justInstalledOrToggledRef.current = false; // Reset flag
+        return;
+      }
 
       const newInstalledState = {...installedProjects};
       const uncheckedProjects = searchResults.filter(project => 
@@ -1613,6 +1628,7 @@ export function ModrinthSearchV2({
       // Call onInstallSuccess if it exists and the installed content was not a modpack
       // (Modpack specific installations as new profiles might have their own success handlers or flows)
       if (project.project_type !== 'modpack' && onInstallSuccess) {
+        justInstalledOrToggledRef.current = true; // Set flag (also here for consistency if onInstallSuccess runs)
         onInstallSuccess();
       }
 
@@ -1710,6 +1726,7 @@ export function ModrinthSearchV2({
             }));
           }
 
+          justInstalledOrToggledRef.current = true; // Set flag
           if (onInstallSuccess) {
             onInstallSuccess();
           }
