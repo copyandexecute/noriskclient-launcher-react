@@ -11,53 +11,60 @@ use tokio::fs;
 /// Sets a file as enabled or disabled by adding or removing the .disabled extension
 #[tauri::command]
 pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), CommandError> {
-    // file_path is expected to be the "base" path, e.g., "shader.zip", not "shader.zip.disabled"
-    let base_path = PathBuf::from(&file_path);
+    let input_path = PathBuf::from(&file_path);
+
+    let input_filename_cow = input_path.file_name().unwrap_or_default().to_string_lossy();
+    let input_filename = input_filename_cow.as_ref();
+    let parent_dir = input_path.parent().unwrap_or_else(|| Path::new("")); // Handles case where input_path might be just a filename
+
+    // Determine the true base name by stripping .disabled if it exists on the input filename
+    let true_base_name = if input_filename.ends_with(".disabled") {
+        input_filename.strip_suffix(".disabled").unwrap_or(input_filename).to_string()
+    } else {
+        input_filename.to_string()
+    };
+
     info!(
-        "Attempting to set file (base name) '{}' to enabled={}",
-        base_path.display(),
+        "Attempting to set file (true base name '{}' from input '{}') to enabled={}",
+        true_base_name,
+        input_path.display(),
         enabled
     );
 
-    let path_as_is = base_path.clone();
-    let path_disabled = PathBuf::from(format!("{}.disabled", file_path));
+    let path_if_enabled = parent_dir.join(&true_base_name); // e.g., /path/to/foo.zip
+    let path_if_disabled = parent_dir.join(format!("{}.disabled", true_base_name)); // e.g., /path/to/foo.zip.disabled
 
     let current_path: PathBuf;
-    let is_currently_disabled: bool;
+    let is_file_actually_disabled: bool;
 
-    if path_as_is.exists() {
-        current_path = path_as_is;
-        is_currently_disabled = false;
-        debug!("Found file as is: {}", current_path.display());
-    } else if path_disabled.exists() {
-        current_path = path_disabled;
-        is_currently_disabled = true;
-        debug!("Found file with .disabled extension: {}", current_path.display());
+    if path_if_enabled.exists() {
+        current_path = path_if_enabled.clone();
+        is_file_actually_disabled = false;
+        debug!("Found file in its enabled form: {}", current_path.display());
+    } else if path_if_disabled.exists() {
+        current_path = path_if_disabled.clone();
+        is_file_actually_disabled = true;
+        debug!("Found file in its disabled form: {}", current_path.display());
     } else {
         let error_message = format!(
-            "File not found: {} (or its .disabled version)",
-            base_path.display()
+            "File not found: Neither '{}' nor '{}' exists.",
+            path_if_enabled.display(),
+            path_if_disabled.display()
         );
         log::error!("{}", error_message);
         return Err(CommandError::from(AppError::Other(error_message)));
     }
-
-    // Correctly determine if the FOUND current_path is in a disabled state based on its actual name
-    let current_filename_str_cow = current_path.file_name().unwrap_or_default().to_string_lossy();
-    let current_filename_str = current_filename_str_cow.as_ref(); // Get &str
-    let is_file_actually_disabled = current_filename_str.ends_with(".disabled");
-
-    // Determine the base name of the file (without .disabled) from the FOUND current_path
-    let current_true_base_name = if is_file_actually_disabled {
-        current_filename_str.strip_suffix(".disabled").unwrap_or(current_filename_str).to_string()
-    } else {
-        current_filename_str.to_string()
-    };
     
-    // Check if the file is already in the desired state, using the accurately determined is_file_actually_disabled
-    if is_file_actually_disabled == !enabled {
+    // Check if the file is already in the desired state.
+    // `enabled` is the target state (true for enabled, false for disabled).
+    // `is_file_actually_disabled` is the current state (true if it ends with .disabled).
+    // If target is enabled (enabled=true) AND file is NOT disabled (is_file_actually_disabled=false), it's already enabled.
+    //   Condition: enabled == !is_file_actually_disabled  =>  true == !false  =>  true == true  => true.
+    // If target is disabled (enabled=false) AND file IS disabled (is_file_actually_disabled=true), it's already disabled.
+    //   Condition: enabled == !is_file_actually_disabled  =>  false == !true  =>  false == false => true.
+    if enabled == !is_file_actually_disabled {
         debug!(
-            "File '{}' is already in the desired state (is_disabled: {}, target_enabled: {}). No action needed.",
+            "File '{}' is already in the desired state (current_is_disabled: {}, target_enabled: {}). No action needed.",
             current_path.display(),
             is_file_actually_disabled,
             enabled
@@ -65,31 +72,23 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
         return Ok(());
     }
 
-    let parent = match current_path.parent() {
-        Some(p) => p,
-        None => {
-            // This should be rare given path.exists() checks passed, but good for safety.
-            let error_message = format!(
-                "Could not determine parent directory for existing file: {}",
-                current_path.display()
-            );
-            log::error!("{}", error_message);
-            return Err(CommandError::from(AppError::Other(error_message)));
-        }
-    };
-
-    // Determine the new file name based on the 'enabled' parameter and the original base file name.
-    // The base_path.file_name() gives us the intended final name if enabled, or base for .disabled.
-    // We should use current_true_base_name derived from the actual found file.
-    let new_file_name = if enabled {
-        // Target state is enabled, so the name should be the true base name derived from the found file.
-        current_true_base_name
+    // Determine the new path based on the target 'enabled' state and the true_base_name.
+    let new_path = if enabled {
+        path_if_enabled // Target state is enabled, so use the path_if_enabled form
     } else {
-        // Target state is disabled, so add .disabled to the true base name derived from the found file.
-        format!("{}.disabled", current_true_base_name)
+        path_if_disabled // Target state is disabled, so use the path_if_disabled form
     };
+    
+    // This check is mostly a safeguard; the logic above should prevent current_path == new_path.
+    if current_path == new_path {
+        warn!(
+            "Source path '{}' and target path '{}' are identical. This should have been caught by the 'already in desired state' check. No action needed.",
+            current_path.display(),
+            new_path.display()
+        );
+        return Ok(());
+    }
 
-    let new_path = parent.join(new_file_name);
     debug!(
         "Renaming file from '{}' to '{}'",
         current_path.display(),
@@ -105,45 +104,88 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
         })?;
 
     info!(
-        "Successfully set file '{}' (now at '{}') to enabled={}",
-        base_path.display(), // Log original base name for clarity
-        new_path.display(),  // Log the new actual path
+        "Successfully set file based on input '{}' (now at '{}') to enabled={}",
+        input_path.display(), // Log original input for clarity
+        new_path.display(),   // Log the new actual path
         enabled
     );
     Ok(())
 }
 
-/// Deletes a file from the filesystem
+/// Deletes a file from the filesystem. Handles cases where the input path might or might not
+/// already have a .disabled extension, and will attempt to delete the corresponding file.
 #[tauri::command]
 pub async fn delete_file(file_path: String) -> Result<(), CommandError> {
-    let path = PathBuf::from(&file_path);
-    info!("Deleting file: {}", path.display());
+    let input_path = PathBuf::from(&file_path);
 
-    if !path.exists() {
-        return Err(CommandError::from(AppError::Other(format!(
-            "File not found: {}",
-            path.display()
-        ))));
+    // Determine the parent directory and the effective base file name (without .disabled potentially)
+    let parent_dir = input_path.parent().unwrap_or_else(|| Path::new("."));
+    let input_file_name_cow = input_path.file_name().unwrap_or_default().to_string_lossy();
+    let input_file_name = input_file_name_cow.as_ref();
+
+    let effective_base_file_name = if input_file_name.ends_with(".disabled") {
+        input_file_name.strip_suffix(".disabled").unwrap_or(input_file_name)
+    } else {
+        input_file_name
+    };
+
+    info!(
+        "Attempting to delete file based on effective base name: '{}' (from input '{}')",
+        effective_base_file_name,
+        input_path.display()
+    );
+
+    let path_enabled_version = parent_dir.join(effective_base_file_name);
+    let path_disabled_version = parent_dir.join(format!("{}.disabled", effective_base_file_name));
+
+    let actual_path_to_delete: PathBuf;
+
+    if path_enabled_version.exists() {
+        actual_path_to_delete = path_enabled_version;
+        debug!("Found file to delete (enabled form): {}", actual_path_to_delete.display());
+    } else if path_disabled_version.exists() {
+        actual_path_to_delete = path_disabled_version;
+        debug!(
+            "Found file to delete (disabled form): {}",
+            actual_path_to_delete.display()
+        );
+    } else {
+        let error_message = format!(
+            "File not found for deletion: Neither '{}' nor '{}' exists.",
+            parent_dir.join(effective_base_file_name).display(),
+            parent_dir.join(format!("{}.disabled", effective_base_file_name)).display()
+        );
+        log::error!("{}", error_message);
+        return Err(CommandError::from(AppError::Other(error_message)));
     }
 
     // Check if it's a file or directory
-    let metadata = fs::metadata(&path)
+    let metadata = fs::metadata(&actual_path_to_delete)
         .await
-        .map_err(|e| CommandError::from(AppError::Io(e)))?;
+        .map_err(|e| {
+            log::error!("Failed to get metadata for {}: {}", actual_path_to_delete.display(), e);
+            CommandError::from(AppError::Io(e))
+        })?;
 
     if metadata.is_dir() {
-        debug!("Deleting directory: {}", path.display());
-        fs::remove_dir_all(&path)
+        debug!("Deleting directory: {}", actual_path_to_delete.display());
+        fs::remove_dir_all(&actual_path_to_delete)
             .await
-            .map_err(|e| CommandError::from(AppError::Io(e)))?;
+            .map_err(|e| {
+                log::error!("Failed to delete directory {}: {}", actual_path_to_delete.display(), e);
+                CommandError::from(AppError::Io(e))
+            })?;
     } else {
-        debug!("Deleting file: {}", path.display());
-        fs::remove_file(&path)
+        debug!("Deleting file: {}", actual_path_to_delete.display());
+        fs::remove_file(&actual_path_to_delete)
             .await
-            .map_err(|e| CommandError::from(AppError::Io(e)))?;
+            .map_err(|e| {
+                log::error!("Failed to delete file {}: {}", actual_path_to_delete.display(), e);
+                CommandError::from(AppError::Io(e))
+            })?;
     }
 
-    info!("Successfully deleted: {}", path.display());
+    info!("Successfully deleted: {}", actual_path_to_delete.display());
     Ok(())
 }
 
