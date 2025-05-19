@@ -415,6 +415,12 @@ pub async fn toggle_content_from_profile(
                 // We don't return an error here yet, as the final check below will handle it if nothing at all was toggled.
             }
         }
+        Some(profile_utils::ContentType::NoRiskMod) => {
+            log::debug!("Targeted toggle for NoRiskMod with SHA1: {}", current_sha1_hash);
+            // NoRiskMods are handled differently, not by scanning directories
+            // We don't need to scan any asset types for NoRiskMods
+            // We'll handle this in the future if needed
+        }
         None => {
             // ContentType is None. This case is tricky for optimization.
             // Current "safe" behavior without content_type was to scan all.
@@ -613,6 +619,12 @@ pub async fn install_content_to_profile(payload: InstallContentPayload) -> Resul
             )
             .await
             .map_err(CommandError::from)
+        }
+        _ => {
+            log::error!("Unsupported content type: {:?}", payload.content_type);
+            Err(CommandError::from(AppError::Other(
+                "Unsupported content type".to_string(),
+            )))
         }
         // No default needed as ContentType from profile_utils is an enum and all variants are handled
     }

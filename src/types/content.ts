@@ -37,6 +37,7 @@ export enum ContentType {
   ResourcePack = "ResourcePack",
   ShaderPack = "ShaderPack",
   DataPack = "DataPack",
+  NoRiskMod = "NoRiskMod",
 }
 
 /**

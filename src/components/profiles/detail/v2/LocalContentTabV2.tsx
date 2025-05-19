@@ -178,7 +178,11 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       const isItemStillLoadingDetails = isItemWaitingForHash || 
                                       (item.sha1_hash !== null && !item.modrinth_info && isFetchingModrinthDetails);
 
-      if (item.modrinth_info?.version_number) {
+      // First check for fallback_version, especially useful for NoRisk mods
+      if (item.fallback_version) {
+        descriptionText = `Version: ${item.fallback_version}`;
+        titleText = `Version: ${item.fallback_version}`;
+      } else if (item.modrinth_info?.version_number) {
         descriptionText = `Version: ${item.modrinth_info.version_number}`;
         titleText = `Modrinth Version: ${item.modrinth_info.version_number}`;
       } else if (isItemStillLoadingDetails) {
@@ -206,8 +210,13 @@ export function LocalContentTabV2<T extends LocalContentItem>({
         >
           {!item.is_disabled ? "Enabled" : "Disabled"}
         </TagBadge>
+        {item.norisk_identifier && <TagBadge size="sm" variant="success">NoRisk</TagBadge>}
         {item.modrinth_info && <TagBadge size="sm" variant="info">Modrinth</TagBadge>}
-        {item.source_type === "custom" && <TagBadge size="sm" variant="warning">Custom</TagBadge>}
+        {item.source_type && (
+          <TagBadge size="sm" variant="warning">
+            {item.source_type.charAt(0).toUpperCase() + item.source_type.slice(1)}
+          </TagBadge>
+        )}
       </>
     );
     

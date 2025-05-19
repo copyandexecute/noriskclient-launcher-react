@@ -447,6 +447,18 @@ export function ProfileDetailView({
                     onRefreshRequired={handleRefresh}
                   />
                 )}
+                  {activeContentType === "noriskv2" && (
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="NoRiskMod"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="NoRisk Mod"
+                    itemTypeNamePlural="NoRisk Mods"
+                    addContentButtonText="Add NoRisk Mods"
+                    emptyStateIconOverride="solar:shield-check-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                  />
+                )}
                 {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
               </>
             )}

@@ -13,6 +13,7 @@ use futures::future::{BoxFuture, FutureExt, join_all};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
+use tokio::task::JoinHandle;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::Manager;
@@ -30,6 +31,7 @@ pub enum ContentType {
     ShaderPack,
     DataPack,
     Mod,
+    NoRiskMod,
 }
 
 impl Default for ContentType {
@@ -189,6 +191,14 @@ async fn get_content_directory(profile: &Profile, content_type: &ContentType) ->
                 .profile_manager
                 .calculate_instance_path_for_profile(profile)?;
             Ok(instance_path.join("mods"))
+        },
+        ContentType::NoRiskMod => {
+            // NoRiskMods don't have a physical directory but we return a path for consistency
+            let state = State::get().await?;
+            let instance_path = state
+                .profile_manager
+                .calculate_instance_path_for_profile(profile)?;
+            Ok(instance_path)  // Just return the instance path as base
         }
     }
 }
@@ -200,6 +210,7 @@ fn content_type_to_string(content_type: &ContentType) -> &'static str {
         ContentType::ShaderPack => "Shader Pack",
         ContentType::DataPack => "Data Pack",
         ContentType::Mod => "Mod",
+        ContentType::NoRiskMod => "NoRisk Mod",
     }
 }
 
@@ -674,14 +685,17 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
 
                         // Match against provided parameters (excluding context)
                         let mut match_project = true;
+                        //DAS HIER NICHT EDITIEREN
                         if let Some(pid) = &params.project_id {
                             match_project = modrinth_pid == Some(pid.as_str());
                         }
                         let mut match_version = true;
+                        //DAS HIER NICHT EDITIEREN
                         if let Some(vid) = &params.version_id {
                             match_version = modrinth_vid == Some(vid.as_str());
                         }
                         let mut match_hash = true;
+                        //DAS HIER NICHT EDITIEREN
                         if let Some(hash) = &params.file_hash_sha1 {
                             match_hash = pack_hash == Some(hash.as_str());
                         }
@@ -691,10 +705,6 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                         }
 
                         if match_project && match_version && match_hash && match_name {
-                            info!(
-                                "Found matching locally installed data pack: {}",
-                                pack_info.filename
-                            );
                             status.is_installed = true;
                             status.is_enabled = Some(!pack_info.is_disabled);
                             status.found_item_details = Some(FoundItemDetails {
@@ -1229,7 +1239,7 @@ pub fn find_screenshots_recursive<'a>(
             let path = entry_result.path();
             if path.is_dir() {
                 // If it's a directory, recurse into it
-                find_screenshots_recursive(&path, screenshots).await?; // Use .await here
+                find_screenshots_recursive(&path, screenshots).await?;
             } else if path.is_file() {
                 // If it's a file, check if it's a PNG
                 if let Some(filename_str) = path.file_name().and_then(|n| n.to_str()) {
@@ -1953,6 +1963,8 @@ pub struct LocalContentItem {
     pub content_type: ContentType, // Um den Typ mitzuführen
     pub modrinth_info: Option<GenericModrinthInfo>,
     pub source_type: Option<String>, // Zur Kennzeichnung von Custom Mods
+    pub norisk_info: Option<crate::state::profile_state::NoriskModIdentifier>, // Identifier für NoRiskMods
+    pub fallback_version: Option<String>, // Fallback Version aus dem compatibility target
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)] // Ensure Serialize and Deserialize are here
@@ -1990,12 +2002,116 @@ impl LocalContentLoader {
                 vec![
                     instance_path.join("custom_mods")
                 ]
+            },
+            ContentType::NoRiskMod => {
+                // For NoRisk mods, we don't actually need a physical directory
+                // since these are managed via the NoRisk pack system
+                // Return an empty vector as we'll handle it differently
+                Vec::new()
             }
         };
 
         let mut preliminary_items: Vec<LocalContentItem> = Vec::new();
 
-        if params.content_type == ContentType::Mod {
+        if params.content_type == ContentType::NoRiskMod {
+            // Special handling for NoRisk mods - fetch them from the NoRisk pack system
+            if let Some(pack_id) = &profile.selected_norisk_pack_id {
+                // Get the NoRisk pack manager from the state
+                let state = State::get().await?;
+                let config = state.norisk_pack_manager.get_config().await;
+                
+                // Get the resolved pack definition
+                match config.get_resolved_pack_definition(pack_id) {
+                    Ok(pack_def) => {
+                        for norisk_mod in &pack_def.mods {
+                            // Extract fallback version from compatibility target at the beginning
+                            let fallback_version = norisk_mod.compatibility
+                                .get(&profile.game_version)
+                                .and_then(|game_version_map| game_version_map.get(profile.loader.as_str()))
+                                .map(|loader_target| loader_target.identifier.clone());
+                            
+                            // Skip this mod if no fallback version is available
+                            if fallback_version.is_none() {
+                                continue;
+                            }
+                            
+                            // Create a proper NoriskModIdentifier first so we can reuse it
+                            let norisk_mod_identifier =
+                                crate::state::profile_state::NoriskModIdentifier {
+                                    pack_id: pack_id.clone(),
+                                    mod_id: norisk_mod.id.clone(),
+                                    game_version: profile.game_version.clone(),
+                                    loader: profile.loader.clone(),
+                                };
+
+                            // Determine if the mod is enabled/disabled using the identifier
+                            let is_disabled = profile.disabled_norisk_mods_detailed.iter().any(|disabled_mod| {
+                                *disabled_mod == norisk_mod_identifier
+                            });
+
+                            // Determine source type string
+                            let source_type_str = match &norisk_mod.source {
+                                crate::integrations::norisk_packs::NoriskModSourceDefinition::Modrinth { .. } => None,
+                                crate::integrations::norisk_packs::NoriskModSourceDefinition::Maven { .. } => Some("maven"),
+                                crate::integrations::norisk_packs::NoriskModSourceDefinition::Url { .. } => Some("url"),
+                                _ => Some("norisk"),
+                            };
+
+                            // Extract Modrinth info if available
+                            let modrinth_info = if let crate::integrations::norisk_packs::NoriskModSourceDefinition::Modrinth { project_id, .. } = &norisk_mod.source {
+                                // For version info we need to look at compatibility
+                                let version_id = norisk_mod.compatibility
+                                    .get(&profile.game_version)
+                                    .and_then(|game_version_map| game_version_map.get(profile.loader.as_str()))
+                                    .map(|loader_target| loader_target.identifier.clone())
+                                    .unwrap_or_else(|| "unknown".to_string());
+
+                                Some(GenericModrinthInfo {
+                                    project_id: project_id.clone(),
+                                    version_id,
+                                    name: norisk_mod.display_name.clone().unwrap_or_else(|| norisk_mod.id.clone()),
+                                    version_number: "".to_string(), // Not directly available
+                                    download_url: None,
+                                })
+                            } else {
+                                None
+                            };
+                            
+                            // Use the path_utils function to get the mod cache path
+                            let path_str = match crate::utils::path_utils::get_norisk_mod_cache_path(
+                                norisk_mod, 
+                                &profile.game_version, 
+                                &profile.loader.as_str()
+                            ) {
+                                Ok(path) => path.to_string_lossy().to_string(),
+                                Err(e) => {
+                                    warn!("Could not get cache path for NoRisk mod {}: {}", norisk_mod.id, e);
+                                    String::new() // Fallback if path can't be determined
+                                }
+                            };
+                            
+                            // Create LocalContentItem (using the identifier we created earlier)
+                            preliminary_items.push(LocalContentItem {
+                                filename: norisk_mod.id.clone(),
+                                path_str,
+                                sha1_hash: None,
+                                file_size: 0,
+                                is_disabled,
+                                is_directory: false,
+                                content_type: ContentType::NoRiskMod,
+                                modrinth_info,
+                                source_type: source_type_str.map(|s| s.to_string()),
+                                norisk_info: Some(norisk_mod_identifier),
+                                fallback_version: fallback_version,
+                            });
+                        }
+                    },
+                    Err(e) => {
+                        warn!("Failed to get NoRisk pack definition: {}", e);
+                    }
+                }
+            }
+        } else if params.content_type == ContentType::Mod {
             // First process profile.mods entries (for tracking enabled status)
             for mod_item in &profile.mods {
                 let mut filename = mod_item.file_name_override.clone();
@@ -2063,6 +2179,8 @@ impl LocalContentLoader {
                     content_type: ContentType::Mod,
                     modrinth_info,
                     source_type: None,
+                    norisk_info: None,
+                    fallback_version: mod_item.version.clone(),
                 });
             }
         }
@@ -2095,6 +2213,7 @@ impl LocalContentLoader {
                     ContentType::ShaderPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) || is_directory,
                     ContentType::DataPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
                     ContentType::Mod => (file_name_str.ends_with(".jar") || file_name_str.ends_with(".jar.disabled")) && !is_directory,
+                    ContentType::NoRiskMod => false, // We handle NoRisk mods differently, not by scanning directories
                 };
 
                 if is_valid_item {
@@ -2141,6 +2260,8 @@ impl LocalContentLoader {
                     content_type: params.content_type.clone(), 
                     modrinth_info: None,
                     source_type,
+                    norisk_info: None,
+                    fallback_version: None,
                 });
             }
         }
@@ -2148,7 +2269,7 @@ impl LocalContentLoader {
         let mut final_items = preliminary_items; 
 
         if params.calculate_hashes { 
-            let mut hash_tasks = Vec::new();
+            let mut hash_tasks: Vec<JoinHandle<(usize, std::result::Result<String, AppError>)>> = Vec::new();
             // Collect indices of items that need hashing (files only, or non-Modrinth mods if hash not present)
             let items_to_hash_indices: Vec<usize> = final_items.iter().enumerate()
                 .filter(|(_, item)| {
@@ -2163,9 +2284,15 @@ impl LocalContentLoader {
                 .map(|(index, _)| index)
                 .collect();
 
-            for &index_in_final_items in &items_to_hash_indices {
-                let item_info = &final_items[index_in_final_items]; // Borrow item_info
-                let path_buf = PathBuf::from(item_info.path_str.clone());
+            let mut hash_tasks = Vec::new();
+            
+            // Create a vector of (index, path, filename) to avoid borrowing final_items in the async tasks
+            let hash_items_info: Vec<(usize, String, String)> = items_to_hash_indices.iter()
+                .map(|&idx| (idx, final_items[idx].path_str.clone(), final_items[idx].filename.clone()))
+                .collect();
+
+            for (index_in_final_items, path_str, filename) in hash_items_info {
+                let path_buf = PathBuf::from(&path_str);
                 let semaphore_clone = Arc::clone(&state.io_semaphore); 
                 
                 hash_tasks.push(tokio::spawn(async move {
@@ -2174,7 +2301,14 @@ impl LocalContentLoader {
                         error!("Failed to acquire semaphore permit for hashing.");
                         return (index_in_final_items, Err(AppError::Other("Semaphore acquisition failed".to_string())));
                     }
+                    
                     // Permit is acquired, proceed with hashing
+                    if !path_buf.exists() {
+                        // If file doesn't exist, return "0" as hash instead of error
+                        warn!("Path doesn't exist for {}: {}", filename, path_buf.display());
+                        return (index_in_final_items, Ok("0".to_string()));
+                    }
+                    
                     let hash_result = hash_utils::calculate_sha1(&path_buf).await.map_err(AppError::Io);
                     // Permit is automatically dropped when it goes out of scope
                     (index_in_final_items, hash_result)
