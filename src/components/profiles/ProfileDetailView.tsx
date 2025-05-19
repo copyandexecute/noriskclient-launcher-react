@@ -13,7 +13,6 @@ import { IconButton } from "../ui/buttons/IconButton";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { ModsTabV2 } from "./detail/v2/ModsTabV2";
-import { NoRiskModsTabV2 } from "./detail/v2/NoRiskModsTabV2";
 import { LocalContentTabV2 } from "./detail/v2/LocalContentTabV2";
 import type { LocalContentItem } from "../../hooks/useLocalContentManager";
 
@@ -459,7 +458,6 @@ export function ProfileDetailView({
                     onRefreshRequired={handleRefresh}
                   />
                 )}
-                {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
               </>
             )}
             {activeMainTab === "browse" && !profile.is_standard_version && (

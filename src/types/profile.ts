@@ -337,7 +337,7 @@ export interface LocalContentItem {
   content_type: ContentType; 
   modrinth_info?: GenericModrinthInfo | null;
   source_type?: string | null; // For identifying "custom" mods
-  norisk_identifier?: NoriskModIdentifier | null; // Identifier for NoRiskMods
+  norisk_info?: NoriskModIdentifier | null; // Identifier for NoRiskMods
   fallback_version?: string | null; // Fallback version from compatibility target
   // Frontend specific fields can be added here if needed, e.g., for UI state
   // local_icon_data_url?: string; // Example if we were to add this later

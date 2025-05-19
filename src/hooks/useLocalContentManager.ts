@@ -91,15 +91,22 @@ function mapUiContentTypeToBackend(uiType: LocalContentType): NrContentType {
 }
 
 // Helper to map backend ProfileLocalContentItem to frontend T (which extends LocalContentItem)
-function mapBackendItemToFrontendType<T extends LocalContentItem>(backendItem: ProfileLocalContentItem): T {
-  const { path_str, ...rest } = backendItem;
-  // ProfileGenericModrinthInfo is used by ProfileLocalContentItem
-  // T expects a modrinth_info structure compatible with ProfileGenericModrinthInfo
-  // (e.g. ResourcePackInfo uses ResourcePackModrinthInfo which is compatible)
-  return {
-    ...rest,
-    path: path_str, // Map path_str to path
-  } as T;
+function mapBackendItemToFrontendType<T extends LocalContentItem>(rawItem: ProfileLocalContentItem): T {
+  // rawItem is typed as ProfileLocalContentItem (from types/profile.ts)
+  // It has fields like: filename, path_str, ..., norisk_identifier, fallback_version
+  // The actual object from Rust via invoke might have `norisk_info` field instead of `norisk_identifier` being populated.
+  console.log(`mapBackendItemToFrontendType: Raw item from backend - PathStr: ${rawItem.path_str}, Filename: ${rawItem.filename}`);
+
+  const outputItem = {
+    ...rawItem, // Spread all properties from rawItem (which is typed as ProfileLocalContentItem)
+    path: rawItem.path_str, // Add/override path using path_str from ProfileLocalContentItem // Fallback to the typed norisk_identifier if norisk_info isn't there
+  };
+
+  // Optional: For cleanliness, if T is not expected to have path_str, we could delete it.
+  // However, LocalContentItem (the type T extends) currently inherits path_str from ProfileLocalContentItem.
+  // delete (outputItem as any).path_str;
+  console.log(`mapBackendItemToFrontendType: Mapped item - Path: ${outputItem.path}, Filename: ${outputItem.filename}`);
+  return outputItem as T;
 }
 
 // Helper function to create ToggleContentPayload
@@ -117,23 +124,41 @@ function createTogglePayload<T extends LocalContentItem>(
     content_type: backendContentType,
   };
 
-  if (uiContentType === 'Mod') {
-    const noriskId = (item as any).norisk_mod_identifier; 
-    if (noriskId) {
-      return { ...payloadBase, norisk_mod_identifier: noriskId };
-    } else if (item.sha1_hash) {
-      const modPayload: ToggleContentPayload = {...payloadBase, sha1_hash: item.sha1_hash};
-      // Also include file_path if available, backend can prioritize
-      if (item.path) {
-        modPayload.file_path = item.path;
-      }
-      return modPayload;
-    } else if (item.path) {
-      // Local mod with no hash, identified by path
-      return { ...payloadBase, file_path: item.path };
+  if (uiContentType === 'NoRiskMod') {
+    const noriskIdentifierFromItem = (item as ProfileLocalContentItem).norisk_info; // Expect norisk_info from the item
+    if (noriskIdentifierFromItem) {
+      return { ...payloadBase, norisk_mod_identifier: noriskIdentifierFromItem }; // Map to payload's norisk_mod_identifier
     } else {
-      toast.error(`Mod item ${item.filename} is missing essential identifiers (SHA1, NoRiskID, or Path) for toggle.`);
+      toast.error(`NoRiskMod item ${item.filename} is missing the norisk_info. Cannot toggle.`);
       return null;
+    }
+  } else if (uiContentType === 'Mod') {
+    if (item.source_type === "custom") {
+        if (!item.path) {
+            toast.error(`Custom Mod item ${item.filename} must have a valid path to be toggled.`);
+            return null;
+        }
+        // For custom mods with a path, prioritize using the path.
+        // SHA1 can be included if available.
+        const payload: ToggleContentPayload = { ...payloadBase, file_path: item.path };
+        if (item.sha1_hash) {
+            payload.sha1_hash = item.sha1_hash;
+        }
+        return payload;
+    } else {
+        // Original logic for non-custom (e.g., Modrinth) mods
+        if (item.sha1_hash) {
+            const modPayload: ToggleContentPayload = {...payloadBase, sha1_hash: item.sha1_hash};
+            if (item.path) {
+                //modPayload.file_path = item.path;
+            }
+            return modPayload;
+        } else if (item.path) {
+            return { ...payloadBase, /*file_path: item.path*/ };
+        } else {
+            toast.error(`Mod item ${item.filename} is missing essential identifiers (SHA1 or Path) for toggle.`);
+            return null;
+        }
     }
   } else {
     // For ResourcePacks, ShaderPacks, DataPacks, use file_path
@@ -183,6 +208,8 @@ export function useLocalContentManager<T extends LocalContentItem>({
   const [contentUpdateError, setContentUpdateError] = useState<string | null>(null);
   const [isUpdatingAll, setIsUpdatingAll] = useState(false);
 
+  const [isInitialLoadProcessComplete, setIsInitialLoadProcessComplete] = useState(false);
+
   const onRefreshRequiredRef = useRef(onRefreshRequired);
   useEffect(() => {
     onRefreshRequiredRef.current = onRefreshRequired;
@@ -217,14 +244,18 @@ export function useLocalContentManager<T extends LocalContentItem>({
       console.log(`[${contentType}] Phase 1: Raw items from getLocalContent`, new Date().toISOString(), fetchedBackendItems);
 
       const mappedItemsToFrontend = fetchedBackendItems.map(item => mapBackendItemToFrontendType<T>(item));
-      const processedBasicItems = mappedItemsToFrontend.map(item => ({
-        ...item,
-        filename: item.filename || getDisplayFileName(item),
-        modrinth_info: null, // Ensure modrinth_info is initially null
-        sha1_hash: null, // Ensure sha1_hash is initially null for Phase 1
-      }));
+      const processedBasicItems = mappedItemsToFrontend.map(item => {
+        const finalFilename = item.filename || getDisplayFileName(item);
+        console.log(`[${contentType}] fetchBasicInfo: Processing item - Original Filename: ${item.filename}, Path: ${item.path}, getDisplayFileName: ${getDisplayFileName(item)}, Final Filename: ${finalFilename}`);
+        return {
+          ...item,
+          filename: finalFilename,
+          modrinth_info: null, // Ensure modrinth_info is initially null
+          sha1_hash: null, // Ensure sha1_hash is initially null for Phase 1
+        };
+      });
       setItems(processedBasicItems as T[]);
-      console.log(`[${contentType}] Phase 1: Basic items set`, new Date().toISOString(), processedBasicItems);
+      console.log(`[${contentType}] Phase 1: Basic items set (count: ${processedBasicItems.length})`, new Date().toISOString());
       setSelectedItemIds(new Set());
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
     } catch (err) {
@@ -296,11 +327,12 @@ export function useLocalContentManager<T extends LocalContentItem>({
     // The 'initialFetch' parameter for fetchData is now more about resetting UI states like selection
     // The actual data fetching sequence is managed by fetchBasicInfo and subsequent effects.
     if (initialFetch) {
-      // Reset things that should clear on a full manual refresh
       setSelectedItemIds(new Set());
-      // Potentially clear other states if needed for a true "hard refresh" feel
+      setContentUpdates({}); // Clear previous updates
+      setContentUpdateError(null);
+      setIsInitialLoadProcessComplete(false); // Reset flag for new load process
     }
-    await fetchBasicInfo(); // Await the async fetchBasicInfo
+    await fetchBasicInfo(); 
   }, [fetchBasicInfo]);
 
   // Initial data fetch (Phase 1)
@@ -320,19 +352,20 @@ export function useLocalContentManager<T extends LocalContentItem>({
   
   // Phase 3: Fetch Modrinth project details based on hashes (existing logic, should be fine)
   useEffect(() => {
+    let isMounted = true; // To prevent state updates on unmounted component
     if (hashesToFetchModrinthDetailsFor && hashesToFetchModrinthDetailsFor.length > 0 && profile?.id && !isFetchingModrinthDetailsState) {
       console.log(`[${contentType}] Phase 3: Triggering Modrinth project details fetch for hashes`, new Date().toISOString(), hashesToFetchModrinthDetailsFor);
       setIsFetchingModrinthDetailsState(true);
       const fetchModrinthDataByHashes = async () => {
         try {
           const modrinthVersionsMap = await ModrinthService.getVersionsByHashes(hashesToFetchModrinthDetailsFor!);
+          if (!isMounted) return;
           console.log(`[${contentType}] Phase 3: Modrinth data received`, new Date().toISOString(), modrinthVersionsMap);
           setItems(currentItems =>
             currentItems.map(item => {
               if (item.sha1_hash && modrinthVersionsMap[item.sha1_hash]) {
                 const modrinthVersion = modrinthVersionsMap[item.sha1_hash];
                 const primaryFile = modrinthVersion.files.find(f => f.primary) || modrinthVersion.files[0];
-                // Ensure mapping to ProfileGenericModrinthInfo structure
                 const newModrinthInfo: ProfileGenericModrinthInfo | null = primaryFile ? {
                   project_id: modrinthVersion.project_id,
                   version_id: modrinthVersion.id,
@@ -347,18 +380,23 @@ export function useLocalContentManager<T extends LocalContentItem>({
           );
           console.log(`[${contentType}] Phase 3: Items updated with Modrinth data`, new Date().toISOString());
         } catch (modrinthError) {
+          if (!isMounted) return;
           console.warn(`[${contentType}] Phase 3: Failed to fetch Modrinth details by hashes:`, modrinthError);
           const errorMsg = modrinthError instanceof Error ? modrinthError.message : String(modrinthError);
           setError(prevError => prevError ? `${prevError}; Failed to fetch Modrinth details (${errorMsg})` : `Failed to fetch Modrinth details (${errorMsg})`);
         } finally {
-          setIsFetchingModrinthDetailsState(false);
-          setHashesToFetchModrinthDetailsFor(null); 
+          if (isMounted) { // Ensure component is still mounted before setting state
+            setIsFetchingModrinthDetailsState(false);
+            setHashesToFetchModrinthDetailsFor(null); 
+            setIsInitialLoadProcessComplete(true); // Set the flag indicating Phase 3 completion
+          }
         }
       };
       fetchModrinthDataByHashes();
     }
+    return () => { isMounted = false; }; // Cleanup function
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hashesToFetchModrinthDetailsFor, profile?.id, contentType]); 
+  }, [hashesToFetchModrinthDetailsFor, profile?.id, contentType]); // Dependencies should NOT include isInitialLoadProcessComplete
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -414,19 +452,39 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
   // Fetch local archive icons
   useEffect(() => {
+    console.log(`[${contentType}] Running useEffect for fetchLocalArchiveIcons. Items count: ${items.length}`);
     const fetchLocalArchiveIcons = async () => {
       if (!items || items.length === 0) {
         setLocalArchiveIcons({});
+        console.log(`[${contentType}] fetchLocalArchiveIcons: No items or items array empty, clearing localArchiveIcons.`);
         return;
       }
 
+      console.log(`[${contentType}] fetchLocalArchiveIcons: Current localArchiveIcons keys:`, Object.keys(localArchiveIcons));
+      items.forEach(item => {
+        console.log(`[${contentType}] fetchLocalArchiveIcons: Checking item - Path: ${item.path}, Filename: ${item.filename}, Cached: ${localArchiveIcons[item.path!] !== undefined}`);
+      });
+
       const pathsToFetchIconsFor = items
-        .filter(item => item.path && item.filename.toLowerCase().endsWith('.zip') && localArchiveIcons[item.filename] === undefined)
-        .map(item => ({ filename: item.filename, path: item.path! })); // Use path now
+        .filter(item => {
+          if (!item.path || localArchiveIcons[item.path] !== undefined) {
+            return false;
+          }
+          // For NoRiskMod, the item.path points to a .jar file in cache
+          // For other types, item.path usually points to a .zip file
+          const lowerPath = item.path.toLowerCase();
+          if (contentType === 'NoRiskMod') {
+            return lowerPath.endsWith('.jar');
+          } else {
+            return lowerPath.endsWith('.zip');
+          }
+        })
+        .map(item => ({ filename: item.filename, path: item.path! })); 
       
       const uniquePathObjects = pathsToFetchIconsFor.filter((obj, index, self) => 
         index === self.findIndex(t => t.path === obj.path)
       );
+      console.log(`[${contentType}] fetchLocalArchiveIcons: Unique paths to fetch icons for:`, uniquePathObjects.map(obj => obj.path));
 
       if (uniquePathObjects.length > 0) {
         try {
@@ -440,7 +498,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
             const newLocalIcons: Record<string, string | null> = {};
             uniquePathObjects.forEach(obj => {
                 const base64Icon = iconsResult[obj.path];
-                newLocalIcons[obj.filename] = base64Icon ? 'data:image/png;base64,' + base64Icon : null;
+                if (obj.path) {
+                  newLocalIcons[obj.path] = base64Icon ? 'data:image/png;base64,' + base64Icon : null;
+                }
             });
             setLocalArchiveIcons(prevIcons => ({ ...prevIcons, ...newLocalIcons }));
           } else {
@@ -449,13 +509,15 @@ export function useLocalContentManager<T extends LocalContentItem>({
         } catch (err) {
           console.error("[useLocalContentManager] Failed to fetch local archive icons:", err);
           const errorIcons: Record<string, string | null> = {};
-          uniquePathObjects.forEach(obj => { errorIcons[obj.filename] = null; });
+          uniquePathObjects.forEach(obj => { 
+            if (obj.path) errorIcons[obj.path] = null;
+          });
           setLocalArchiveIcons(prevIcons => ({ ...prevIcons, ...errorIcons }));
         }
       }
     };
     fetchLocalArchiveIcons();
-  }, [items]); 
+  }, [items, contentType, localArchiveIcons]); 
 
   const filteredItems = useMemo(() => {
     if (!searchQuery) return items;
@@ -492,6 +554,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       toast.error("Profile missing for toggle.");
       return;
     }
+    console.log(`[${contentType}] handleToggleItemEnabled: Item BEFORE toggle - Path: ${item.path}, Filename: ${item.filename}, Disabled: ${item.is_disabled}`);
     
     setItemBeingToggled(item.filename);
     // If item.is_disabled is true (it's disabled), targetEnabledState becomes true (to enable it).
@@ -510,9 +573,14 @@ export function useLocalContentManager<T extends LocalContentItem>({
       await toggleContentFromProfile(payload);
 
       setItems(prevItems =>
-        prevItems.map(i =>
-          i.filename === item.filename ? { ...i, is_disabled: !targetEnabledState } : i
-        )
+        prevItems.map(i => {
+          if (i.filename === item.filename) {
+            const updatedItem = { ...i, is_disabled: !targetEnabledState };
+            console.log(`[${contentType}] handleToggleItemEnabled: Item AFTER toggle (in setItems) - Path: ${updatedItem.path}, Filename: ${updatedItem.filename}, Disabled: ${updatedItem.is_disabled}`);
+            return updatedItem;
+          }
+          return i;
+        })
       );
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
     } catch (err) {
@@ -609,29 +677,20 @@ export function useLocalContentManager<T extends LocalContentItem>({
     setIsBatchToggling(true);
     const errors: string[] = [];
     let successfulOperations = 0;
-    // Determine the most common current state to decide the batch action
-    // This is a simple approach: if most are disabled, enable all selected. Otherwise, disable all selected.
-    // More sophisticated logic could be to toggle each to its opposite state if needed.
-    let disabledCount = 0;
-    selectedItemIds.forEach(itemId => {
-      const item = items.find(i => i.filename === itemId);
-      if (item?.is_disabled) disabledCount++;
-    });
-    const predominantlyDisabled = disabledCount > selectedItemIds.size / 2;
-    const targetBatchEnabledState = predominantlyDisabled; // If mostly disabled, target state is enabled (true)
 
     for (const itemId of selectedItemIds) {
       const item = items.find(i => i.filename === itemId);
       if (item) {
-        // For batch, we determine a single target state for all selected items.
-        // Or, if we want individual toggling logic: const targetEnabledState = item.is_disabled;
-        const payload = createTogglePayload(item, profile.id, contentType, targetBatchEnabledState);
+        // Determine the target state for *this specific item*
+        const targetEnabledStateForItem = item.is_disabled; // If disabled (true), target is to enable (true). If enabled (false), target is to disable (false).
+        
+        const payload = createTogglePayload(item, profile.id, contentType, targetEnabledStateForItem);
 
         if (payload) {
           try {
             await toggleContentFromProfile(payload);
             setItems(prev => prev.map(i => 
-              i.filename === itemId ? { ...i, is_disabled: !targetBatchEnabledState } : i
+              i.filename === itemId ? { ...i, is_disabled: !targetEnabledStateForItem } : i
             ));
             successfulOperations++;
           } catch (err) {
@@ -809,11 +868,17 @@ export function useLocalContentManager<T extends LocalContentItem>({
   }, [profile, items, contentUpdates, contentType, handleUpdateContentItem, checkForContentUpdates, fetchData]);
 
   useEffect(() => {
-    if (profile?.id && items.length > 0) {
+    // Check for updates only after the initial full loading process for the current profile is complete,
+    // and if there are items to check.
+    if (profile?.id && items.length > 0 && isInitialLoadProcessComplete) {
+      console.log(`[${contentType}] Initial load process complete. Triggering checkForContentUpdates.`);
       checkForContentUpdates();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, profile?.id]); // Removed checkForContentUpdates from deps to avoid loop, as it's memoized by profile/items
+  }, [profile?.id, isInitialLoadProcessComplete, contentType]); // Removed items, relying on checkForContentUpdates internal dep on items. checkForContentUpdates itself is a dependency here to ensure it's the latest version.
+  // Note: We are intentionally omitting `items` from this dependency array to prevent re-checking on every toggle.
+  // `checkForContentUpdates` is a useCallback that itself depends on `items`, so it will use the latest `items` when called.
+  // The `isInitialLoadProcessComplete` flag is the primary gate for this effect.
 
   return {
     items,

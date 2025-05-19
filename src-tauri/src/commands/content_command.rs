@@ -209,10 +209,8 @@ pub async fn toggle_content_from_profile(
 
     // New: Prioritize file_path based toggling for non-Mod content types
     if let Some(ref path_str) = payload.file_path {
-        if payload.content_type != Some(profile_utils::ContentType::Mod) {
-            log::info!("Toggling content via direct file path: {} to enabled={}", path_str, payload.enabled);
-            return file_command::set_file_enabled(path_str.clone(), payload.enabled).await;
-        }
+        log::info!("Toggling content via direct file path: {} to enabled={}", path_str, payload.enabled);
+        return file_command::set_file_enabled(path_str.clone(), payload.enabled).await;
     }
 
     let state_manager = AppStateManager::get().await.map_err(|e| {

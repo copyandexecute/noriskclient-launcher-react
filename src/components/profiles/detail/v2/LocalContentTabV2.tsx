@@ -138,7 +138,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     let iconToShow: React.ReactNode;
     const modrinthProjectId = item.modrinth_info?.project_id;
     const modrinthIconUrl = modrinthProjectId ? modrinthIcons[modrinthProjectId] : null;
-    const localIconDataUrl = localArchiveIcons[item.filename];
+    const localIconDataUrl = item.path ? localArchiveIcons[item.path] : null;
 
     if (modrinthIconUrl) {
       iconToShow = (
@@ -210,7 +210,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
         >
           {!item.is_disabled ? "Enabled" : "Disabled"}
         </TagBadge>
-        {item.norisk_identifier && <TagBadge size="sm" variant="success">NoRisk</TagBadge>}
         {item.modrinth_info && <TagBadge size="sm" variant="info">Modrinth</TagBadge>}
         {item.source_type && (
           <TagBadge size="sm" variant="warning">
@@ -221,7 +220,8 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     );
     
     let itemUpdateActionNode: React.ReactNode = null;
-    if (updateAvailableVersion && !isCurrentlyUpdating) {
+    // Prevent update action for NoRisk mods
+    if (updateAvailableVersion && !isCurrentlyUpdating && !item.norisk_info) {
         if (!item.modrinth_info || item.modrinth_info.version_id !== updateAvailableVersion.id) {
             itemUpdateActionNode = (
                 <IconButton
@@ -234,7 +234,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
                 />
             );
         }
-    } else if (isCurrentlyUpdating) {
+    } else if (isCurrentlyUpdating && !item.norisk_info) { // Also ensure no update indicator for NoRisk mods
       itemUpdateActionNode = (
          <IconButton
           size="sm"
@@ -257,10 +257,11 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       </Button>
     );
 
-    const itemDeleteActionNode = (
+    // Prevent delete action for NoRisk mods
+    const itemDeleteActionNode: React.ReactNode = item.norisk_info ? null : (
       <IconButton
         title={`Delete ${itemTypeName}`}
-        icon={isDeleting ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin w-3.5 h-3.5" /> : <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[6]} className="w-3.5 h-3.5" />} 
+        icon={isDeleting ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin w-3.5 h-3.5" /> : <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[6]} className="w-3.5 h-3.5" />}
         colorScheme="destructive"
         size="sm"
         onClick={() => handleDeleteItem(item)}
@@ -403,7 +404,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
             title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
           />
           <div className="flex items-center gap-2">
-            {selectedItemIds.size > 0 && (
+            {selectedItemIds.size > 0 && contentType !== 'NoRiskMod' && (
               <>
                 <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchToggling ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}>
                   {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
@@ -413,7 +414,13 @@ export function LocalContentTabV2<T extends LocalContentItem>({
                 </Button>
               </>
             )}
-            {Object.keys(contentUpdates).length > 0 && (
+            {/* For NoRiskMod, only show batch toggle if items are selected */}
+            {selectedItemIds.size > 0 && contentType === 'NoRiskMod' && (
+                 <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchToggling ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}>
+                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
+                </Button>
+            )}
+            {Object.keys(contentUpdates).length > 0 && contentType !== 'NoRiskMod' && (
               <Button size="sm" variant="success" onClick={handleUpdateAllAvailableContent} disabled={isAnyTaskRunning || isLoading} icon={isUpdatingAll ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[14]} className="mr-1.5" />} className={selectedItemIds.size > 0 ? "ml-2" : ""}>
               {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(contentUpdates).length})`}
             </Button>
