@@ -117,4 +117,17 @@ export class ModrinthService {
   static async getModrinthGameVersions(): Promise<ModrinthGameVersion[]> {
     return invoke<ModrinthGameVersion[]>("get_modrinth_game_versions_command");
   }
+
+  static async getVersionsByHashes(
+    hashes: string[],
+  ): Promise<Record<string, ModrinthVersion>> {
+    // The backend command `get_modrinth_versions_by_hashes` implicitly uses "sha1"
+    return invoke<Record<string, ModrinthVersion>>(
+      "get_modrinth_versions_by_hashes",
+      {
+        hashes,
+        // hashAlgorithm: "sha1", // Not needed as backend command defaults/is specific to sha1
+      },
+    );
+  }
 }

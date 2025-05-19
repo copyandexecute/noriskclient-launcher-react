@@ -259,3 +259,30 @@ pub async fn get_modrinth_game_versions_command() -> Result<Vec<modrinth::Modrin
     log::info!("Successfully fetched {} game versions for frontend", game_versions.len());
     Ok(game_versions)
 }
+
+/// Fetches Modrinth version details for a given list of SHA1 hashes.
+#[tauri::command]
+pub async fn get_modrinth_versions_by_hashes(
+    hashes: Vec<String>,
+    // hash_algorithm: String, // Modrinth API for versions by hash is specific to SHA1 currently
+) -> Result<HashMap<String, ModrinthVersion>, CommandError> {
+    log::debug!(
+        "Received get_modrinth_versions_by_hashes command for {} hashes",
+        hashes.len()
+    );
+
+    if hashes.is_empty() {
+        return Ok(HashMap::new()); // Return empty map if no hashes are provided
+    }
+
+    // The modrinth::get_versions_by_hashes function expects "sha1" as the algorithm.
+    let versions_map = modrinth::get_versions_by_hashes(hashes, "sha1")
+        .await
+        .map_err(CommandError::from)?;
+
+    log::info!(
+        "Modrinth lookup by hash returned {} matches",
+        versions_map.len()
+    );
+    Ok(versions_map)
+}

@@ -6,7 +6,7 @@ import { IconButton } from "../../../ui/buttons/IconButton";
 import { GenericDetailListItem } from "../items/GenericDetailListItem";
 import { TagBadge } from "../../../ui/TagBadge";
 import { useThemeStore } from "../../../../store/useThemeStore";
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { GenericContentTab } from "../../../ui/GenericContentTab";
 import { preloadIcons } from "../../../../lib/icon-utils";
 import type { Profile } from "../../../../types/profile";
@@ -14,20 +14,14 @@ import type {
   ResourcePackInfo,
   ModrinthVersion,
 } from "../../../../types/modrinth";
-import { ModrinthService } from "../../../../services/modrinth-service";
 import { SearchInput } from "../../../ui/SearchInput";
 import { Checkbox } from "../../../ui/Checkbox";
-import { invoke } from "@tauri-apps/api/core";
-import type {
-  ModrinthBulkUpdateRequestBody,
-  ModrinthHashAlgorithm,
-} from "../../../../types/modrinth";
 import { ConfirmDeleteDialog } from "../../../modals/ConfirmDeleteDialog";
 import { formatFileSize } from "../../../../utils/format-file-size";
 import { toast } from 'react-hot-toast';
-import { toggleContentFromProfile } from "../../../../services/content-service";
-import type { ToggleContentPayload } from "../../../../types/content";
-import { ContentType } from "../../../../types/content";
+import {
+  useLocalContentManager,
+} from "../../../../hooks/useLocalContentManager";
 
 // Icons specific to ResourcePacksTabV2
 const RESOURCE_PACKS_TAB_ICONS_TO_PRELOAD = [
@@ -50,558 +44,96 @@ const RESOURCE_PACKS_TAB_ICONS_TO_PRELOAD = [
 ];
 
 interface ResourcePacksTabV2Props {
-  profile?: Profile; // Make profile prop optional to handle undefined case gracefully
-  onRefreshRequired?: () => void; // Callback if profile data changes internally
+  profile?: Profile; 
+  onRefreshRequired?: () => void; 
 }
 
-// Helper to get a displayable file name from mod source
-const getResourcePackFileName = (pack: ResourcePackInfo | null | undefined): string | null => {
-  if (!pack) return null; // Add null check for pack itself
+const getResourcePackFileName = (pack: ResourcePackInfo | null | undefined): string => {
+  if (!pack) return "Unknown Resource Pack";
   if (pack.filename && pack.filename !== "0") return pack.filename;
   if (pack.path) {
-    const parts = pack.path.split(/[\\/\\\\]/); // Original regex from ResourcePacksTab
+    const parts = pack.path.split(/[\/\\]/); 
     return parts[parts.length - 1] || "Unknown file";
   }
-  return "Unknown file";
+  return "Unknown Resource Pack";
 };
 
 export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacksTabV2Props) {
-  // Early return or loading state if profile is not yet available
-  if (!profile) {
-    // Optionally, render a more specific loading/error state for this case
-    return (
-      <div className="p-4 font-minecraft text-center text-white/70">
-        Profile data is not available. Cannot display resource packs.
-      </div>
-    );
-  }
-
   const accentColor = useThemeStore((state) => state.accentColor);
-  const [resourcePacks, setResourcePacks] = useState<ResourcePackInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(false); // For general loading like initial fetch or refresh
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState(""); // This state will drive our own SearchInput
-  const [packBeingToggled, setPackBeingToggled] = useState<string | null>(null);
-  const [packBeingDeleted, setPackBeingDeleted] = useState<string | null>(null);
-  const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
-  const [isBatchToggling, setIsBatchToggling] = useState(false);
-  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
-  const [resourcePackUpdates, setResourcePackUpdates] = useState<Record<string, ModrinthVersion | null>>({});
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
-  const [updatingPacks, setUpdatingPacks] = useState<Set<string>>(new Set());
-  const [updateError, setUpdateError] = useState<string | null>(null);
-  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null); // Ref for the dropdown menu
 
-  // State for delete confirmation dialog
-  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
-  const [packToDelete, setPackToDelete] = useState<ResourcePackInfo | null>(null);
-  const [isBatchDeleteConfirmActive, setIsBatchDeleteConfirmActive] = useState(false);
-  const [isDialogActionLoading, setIsDialogActionLoading] = useState(false);
-  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
-
-  // State for Modrinth icons (project_id -> icon_url)
-  const [resourcePackModrinthIcons, setResourcePackModrinthIcons] = useState<Record<string, string | null>>({});
-  // State for local archive icons (pack.path -> base64_icon_string)
-  const [localArchiveIcons, setLocalArchiveIcons] = useState<Record<string, string | null>>({});
+  const {
+    items: resourcePacks,
+    isLoading,
+    error,
+    searchQuery,
+    setSearchQuery,
+    selectedItemIds,
+    handleItemSelectionChange,
+    handleSelectAllToggle,
+    areAllFilteredSelected,
+    filteredItems,
+    itemBeingToggled,
+    itemBeingDeleted,
+    isBatchToggling,
+    isBatchDeleting,
+    activeDropdownId,
+    setActiveDropdownId,
+    dropdownRef,
+    isConfirmDeleteDialogOpen,
+    isDialogActionLoading,
+    handleConfirmDeletion,
+    handleCloseDeleteDialog,
+    itemToDeleteForDialog,
+    modrinthIcons, 
+    localArchiveIcons, 
+    fetchData,
+    handleToggleItemEnabled,
+    handleDeleteItem,
+    handleBatchToggleSelected,
+    handleBatchDeleteSelected,
+    handleOpenItemFolder,
+    contentUpdates,
+    isCheckingUpdates,
+    itemsBeingUpdated,
+    contentUpdateError,
+    isUpdatingAll,
+    checkForContentUpdates,
+    handleUpdateContentItem,
+    handleUpdateAllAvailableContent,
+  } = useLocalContentManager<ResourcePackInfo>({
+    profile,
+    contentType: 'ResourcePack',
+    getDisplayFileName: getResourcePackFileName,
+    onRefreshRequired,
+  });
 
   useEffect(() => {
     preloadIcons(RESOURCE_PACKS_TAB_ICONS_TO_PRELOAD);
   }, []);
 
-  // Fetch resource packs when profile changes
   useEffect(() => {
+    const initialLoad = async () => {
     if (profile?.id) {
-      fetchResourcePacksData();
-    }
-  }, [profile?.id]); // Depend on profile.id
-
-  // Fetch Modrinth icons for resource packs
-  useEffect(() => {
-    const fetchModrinthIconsForPacks = async () => {
-      if (!resourcePacks || resourcePacks.length === 0) {
-        setResourcePackModrinthIcons({});
-        return;
-      }
-      const projectIdsToFetch = resourcePacks
-        .filter(pack => pack.modrinth_info?.project_id && resourcePackModrinthIcons[pack.modrinth_info.project_id] === undefined)
-        .map(pack => pack.modrinth_info!.project_id!)
-      const uniqueProjectIds = [...new Set(projectIdsToFetch)];
-      if (uniqueProjectIds.length > 0) {
-        try {
-          const projectDetailsList = await ModrinthService.getProjectDetails(uniqueProjectIds);
-          const newIcons: Record<string, string | null> = {};
-          projectDetailsList.forEach(detail => {
-            if (detail?.id) {
-              newIcons[detail.id] = detail.icon_url || null;
-            }
-          });
-          setResourcePackModrinthIcons(prevIcons => ({ ...prevIcons, ...newIcons }));
-        } catch (err) {
-          console.error("Failed to fetch Modrinth project details for resource pack icons:", err);
-        }
+        await fetchData();
       }
     };
-    fetchModrinthIconsForPacks();
-  }, [resourcePacks]); // Removed resourcePackModrinthIcons from dep array to avoid loop, logic inside filters already fetched
+    initialLoad();
+  }, [profile?.id, fetchData]);
 
-  // Fetch local archive icons for resource packs
-  useEffect(() => {
-    const fetchLocalArchiveIconsForPacks = async () => {
-      if (!resourcePacks || resourcePacks.length === 0) {
-        setLocalArchiveIcons({});
-        return;
-      }
+  const handleAddResourcePacks = () => toast("PROTOTYPE: Add Resource Packs feature not implemented yet.");
 
-      const pathsToFetchIconsFor = resourcePacks
-        .filter(pack => pack.path && localArchiveIcons[pack.path] === undefined) // Only fetch if path exists and not already fetched
-        .map(pack => pack.path!);
-
-      const uniquePaths = [...new Set(pathsToFetchIconsFor)];
-
-      if (uniquePaths.length > 0) {
-        try {
-          // The invoke call expects { archivePaths: string[] }
-          const iconsResult = await invoke<Record<string, string | null>>(
-            "get_icons_for_archives",
-            { archivePaths: uniquePaths } // Pass the array of paths directly
-          );
-          
-          if (iconsResult) {
-            const newLocalIcons: Record<string, string | null> = {};
-            for (const path of uniquePaths) {
-              newLocalIcons[path] = iconsResult[path] || null; // Store null if not found for a specific path
-            }
-            setLocalArchiveIcons(prevIcons => ({ ...prevIcons, ...newLocalIcons }));
-          }
-        } catch (err) {
-          console.error("Failed to fetch local archive icons for resource packs:", err);
-          // Optionally mark these paths as errored to prevent constant refetching
-        }
-      }
-    };
-
-    fetchLocalArchiveIconsForPacks();
-  }, [resourcePacks]); // Removed localArchiveIcons from dep array
-
-  // Click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (activeDropdownId && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        // Also check if the click was on the toggle button itself, if so, the button's own handler will manage it.
-        // This check might need to be more robust if the button is deeply nested or event propagation is stopped.
-        const moreActionsButton = (event.target as HTMLElement).closest(`[data-item-id="${activeDropdownId}"] [title="More Actions"]`);
-        if (!moreActionsButton) {
-          setActiveDropdownId(null);
-        }
-      }
-    };
-
-    if (activeDropdownId) {
-      document.addEventListener("mousedown", handleClickOutside);
-    } else {
-      document.removeEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [activeDropdownId]);
-
-  const handleToggleResourcePackEnabled = useCallback(async (packId: string, currentIsEnabled?: boolean) => {
-    const pack = resourcePacks.find(p => p.filename === packId);
-    if (!pack || !profile ) return;
-
-    const newEnabledStateForBackend = pack.is_disabled === true; 
-
-    if (!pack.sha1_hash) {
-      toast.error(`Cannot toggle pack ${pack.filename}: missing SHA1 hash.`);
-      console.error("Attempted to toggle resource pack without an SHA1 hash:", pack);
-      return;
-    }
-
-    setPackBeingToggled(packId);
-    const toastMessage = newEnabledStateForBackend ? "Enabling" : "Disabling"; // For error message
-
-    const payload: ToggleContentPayload = {
-      profile_id: profile.id,
-      sha1_hash: pack.sha1_hash,
-      enabled: newEnabledStateForBackend, 
-      content_type: ContentType.ResourcePack,
-    };
-
-    try {
-      await toggleContentFromProfile(payload); // Directly await
-      // Success case: update state, no toast
-      setResourcePacks(prevPacks =>
-        prevPacks.map((p) =>
-          p.filename === packId ? { ...p, is_disabled: !newEnabledStateForBackend } : p
-        )
-      );
-      if (onRefreshRequired) onRefreshRequired();
-    } catch (err) {
-      console.error(`Failed to ${toastMessage.toLowerCase()} ${pack.filename}:`, err);
-      toast.error(`Failed to ${toastMessage.toLowerCase()} ${pack.filename}: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setPackBeingToggled(null);
-    }
-  }, [resourcePacks, profile, onRefreshRequired]);
-
-  const handleDeleteResourcePack = useCallback(async (pack: ResourcePackInfo) => {
-    if (!profile) {
-      setError("Profile data is missing, cannot initiate delete.");
-      return;
-    }
-    setPackToDelete(pack);
-    setIsBatchDeleteConfirmActive(false);
-    setIsConfirmDeleteDialogOpen(true);
-  }, [profile]);
-
-  const handleOpenFolder = useCallback((pack: ResourcePackInfo) => {
-    if (!pack.path) {
-      alert("PROTOTYPE: Path not available for this pack.");
-      return;
-    }
-    invoke("open_file_directory", { filePath: pack.path })
-      .catch(err => {
-        console.error("Failed to open pack directory:", err);
-        setError(`Failed to open directory: ${err instanceof Error ? err.message : String(err)}`);
-      });
-  }, []);
-
-  const handleMoreActions = useCallback((pack: ResourcePackInfo) => {
-    alert(`PROTOTYPE: More actions for ${pack.filename}`);
-  }, []);
-
-  const handlePackSelectionChange = useCallback((packId: string, isSelected: boolean) => {
-    setSelectedPackIds(prevSelectedIds => {
-      const newSelectedIds = new Set(prevSelectedIds);
-      if (isSelected) {
-        newSelectedIds.add(packId);
-      } else {
-        newSelectedIds.delete(packId);
-      }
-      return newSelectedIds;
-    });
-  }, []);
-
-  const filteredResourcePacks = useMemo(() => {
-    if (!searchQuery) return resourcePacks;
-    return resourcePacks.filter((pack) => {
-      const name = pack.filename || getResourcePackFileName(pack) || "";
-      const id = pack.filename || "";
-      const fileName = getResourcePackFileName(pack) || "";
-      return (
-        name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        fileName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    });
-  }, [resourcePacks, searchQuery]);
-
-  const handleSelectAllToggle = useCallback((isChecked: boolean) => {
-    setSelectedPackIds(prevSelectedIds => {
-      const newSelectedIds = new Set(prevSelectedIds);
-      if (isChecked) {
-        filteredResourcePacks.forEach(pack => newSelectedIds.add(pack.filename));
-      } else {
-        filteredResourcePacks.forEach(pack => newSelectedIds.delete(pack.filename));
-      }
-      return newSelectedIds;
-    });
-  }, [filteredResourcePacks]);
-
-  const areAllFilteredSelected = useMemo(() => {
-    return filteredResourcePacks.length > 0 && filteredResourcePacks.every(pack => selectedPackIds.has(pack.filename));
-  }, [filteredResourcePacks, selectedPackIds]);
-
-  const handleAddResourcePacks = () => alert("PROTOTYPE: Add Resource Packs");
-
-  const fetchResourcePacksData = async () => {
-    if (!profile) return; 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const packsFromBackend = await invoke<ResourcePackInfo[]>(
-        "get_local_resourcepacks",
-        { profileId: profile.id }
-      );
-      const processedPacks = (packsFromBackend || []).map((pack) => ({
-        ...pack,
-        filename: getResourcePackFileName(pack) || 'Unknown Pack'
-      }));
-      setResourcePacks(processedPacks);
-      setSelectedPackIds(new Set());
-      if (onRefreshRequired) onRefreshRequired(); 
-      if (processedPacks.length > 0) {
-        await checkForResourcePackUpdates(profile, processedPacks);
-      }
-    } catch (err) {
-      console.error("Failed to fetch resource packs data:", err);
-      setError(`Failed to fetch resource packs: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const checkForResourcePackUpdates = async (currentProfile = profile, currentPacks = resourcePacks) => {
-    if (!currentProfile || !currentPacks || currentPacks.length === 0) {
-      setResourcePackUpdates({});
-      return;
-    }
-
-    const packsWithHashes = currentPacks.filter(
-      (pack: ResourcePackInfo) => pack.modrinth_info && pack.sha1_hash
-    );
-
-    if (packsWithHashes.length === 0) {
-      setResourcePackUpdates({});
-      return;
-    }
-
-    const hashes = packsWithHashes.map((pack: ResourcePackInfo) => pack.sha1_hash!);
-
-    setCheckingUpdates(true);
-    setUpdateError(null);
-
-    try {
-      const request: ModrinthBulkUpdateRequestBody = {
-        hashes,
-        algorithm: "sha1" as ModrinthHashAlgorithm,
-        loaders: [],
-        game_versions: [currentProfile.game_version],
-      };
-
-      const updates = await invoke<Record<string, ModrinthVersion>>(
-        "check_modrinth_updates",
-        { request },
-      );
-
-      const filteredUpdates: Record<string, ModrinthVersion> = {};
-      const packsByHash = new Map<string, ResourcePackInfo>();
-      for (const pack of packsWithHashes) {
-        if(pack.sha1_hash) packsByHash.set(pack.sha1_hash, pack);
-      }
-
-      for (const [hash, versionInfo] of Object.entries(updates)) {
-        const pack = packsByHash.get(hash);
-        if (pack && pack.modrinth_info && pack.modrinth_info.version_id !== versionInfo.id) {
-          filteredUpdates[hash] = versionInfo;
-        } else if (pack && !pack.modrinth_info) {
-          filteredUpdates[hash] = versionInfo;
-        }
-      }
-      setResourcePackUpdates(filteredUpdates);
-    } catch (error) {
-      console.error("Error checking for resource pack updates:", error);
-      setUpdateError(
-        error instanceof Error
-          ? error.message
-          : "Error checking for resource pack updates",
-      );
-      setResourcePackUpdates({});
-    } finally {
-      setCheckingUpdates(false);
-    }
-  };
-
-  const handleUpdateResourcePack = async (pack: ResourcePackInfo, updateVersion: ModrinthVersion) => {
-    if (!profile || !pack.path) {
-      setError("Profile or pack path missing, cannot update.");
-      return;
-    }
-    if (!pack.modrinth_info || !pack.sha1_hash) {
-      setError(`Pack ${pack.filename} is not linked to Modrinth or missing hash, cannot auto-update.`);
-        return;
-    }
-
-    setUpdatingPacks(prev => new Set(prev).add(pack.filename));
-    setError(null);
-    setUpdateError(null);
-
-    try {
-      await invoke("update_resourcepack_from_modrinth", {
-        profileId: profile.id,
-        resourcepack: pack,
-        newVersionDetails: updateVersion,
-      });
-
-      if (pack.sha1_hash) {
-        setResourcePackUpdates(prevUpdates => {
-          const newUpdates = { ...prevUpdates };
-          delete newUpdates[pack.sha1_hash!];
-            return newUpdates;
-        });
-      }
-      await fetchResourcePacksData();
-    } catch (err) {
-      console.error("Failed to update resource pack:", err);
-      const displayName = pack.filename || getResourcePackFileName(pack) || pack.filename;
-      setError(`Failed to update ${displayName}: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setUpdatingPacks(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(pack.filename);
-        return newSet;
-      });
-    }
-  };
-
-  const handleBatchToggleSelected = async () => {
-    if (!profile || selectedPackIds.size === 0) return;
-    
-    setIsBatchToggling(true);
-    const errors: string[] = [];
-    let successfulToggles = 0;
-
-    for (const packId of selectedPackIds) {
-      const pack = resourcePacks.find(p => p.filename === packId);
-      if (pack?.sha1_hash && profile) {
-        const newEnabledStateForBackend = pack.is_disabled === true;
-        const payload: ToggleContentPayload = {
-          profile_id: profile.id,
-          sha1_hash: pack.sha1_hash,
-          enabled: newEnabledStateForBackend,
-          content_type: ContentType.ResourcePack,
-        };
-        const toastMessage = newEnabledStateForBackend ? "Enabling" : "Disabling"; // For error message
-
-        try {
-          await toggleContentFromProfile(payload); // Directly await
-          // Success case for this item
-          successfulToggles++;
-          setResourcePacks(prevPacks =>
-            prevPacks.map(p => 
-              p.filename === packId ? { ...p, is_disabled: !newEnabledStateForBackend } : p
-            )
-          );
-        } catch (err) {
-          const errorDetail = err instanceof Error ? err.message : String(err);
-          errors.push(`Failed to ${toastMessage.toLowerCase()} ${pack.filename}: ${errorDetail}`);
-          console.error(`Batch toggle: Failed to ${toastMessage.toLowerCase()} ${pack.filename}:`, err);
-          toast.error(`Failed to ${toastMessage.toLowerCase()} ${pack.filename}: ${errorDetail}`);
-        }
-      } else {
-        const errorMsg = !pack 
-          ? `Could not find pack with ID ${packId} to toggle.` 
-          : `Pack ${pack.filename || 'ID: '+packId} is missing SHA1 hash for toggling.`;
-        errors.push(errorMsg);
-        toast.error(errorMsg); // Show toast for this specific failure
-      }
-    }
-    
-    setIsBatchToggling(false);
-    if (errors.length > 0) {
-      console.warn("Batch toggle finished with errors:", errors);
-      // Individual errors already toasted
-    }
-    if (successfulToggles > 0) {
-      if (onRefreshRequired) onRefreshRequired(); 
-    }
-    setSelectedPackIds(new Set());
-  };
-
-  const handleBatchDeleteSelected = async () => {
-    if (!profile || selectedPackIds.size === 0) return;
-    setPackToDelete(null);
-    setIsBatchDeleteConfirmActive(true);
-    setIsConfirmDeleteDialogOpen(true);
-  };
-
-  const handleCloseDeleteDialog = () => {
-    setIsConfirmDeleteDialogOpen(false);
-    setPackToDelete(null);
-    setIsBatchDeleteConfirmActive(false);
-  };
-
-  const handleConfirmDeletion = async () => {
-    if (!profile) {
-      setError("Profile data missing, cannot complete deletion.");
-      handleCloseDeleteDialog();
-      return;
-    }
-    setIsDialogActionLoading(true);
-    setError(null);
-
-    if (isBatchDeleteConfirmActive) {
-      setIsBatchDeleting(true);
-      const errors: string[] = [];
-      for (const packId of selectedPackIds) {
-        const pack = resourcePacks.find(p => p.filename === packId);
-        if (pack?.path) {
-        try {
-            await invoke("delete_file", { filePath: pack.path });
-        } catch (err) {
-            errors.push(`Failed to delete ${pack.filename}: ${err instanceof Error ? err.message : String(err)}`);
-            console.error(`Failed to delete pack ${packId} during batch:`, err);
-          }
-      } else {
-          errors.push(`Could not find path for ${packId} to delete.`);
-        }
-      }
-      if (errors.length > 0) setError(`Batch delete: ${errors.join(". ")}`);
-      setIsBatchDeleting(false);
-    } else if (packToDelete?.path) {
-      setPackBeingDeleted(packToDelete.filename);
-      try {
-        await invoke("delete_file", { filePath: packToDelete.path });
-      } catch (err) {
-        setError(`Failed to delete ${packToDelete.filename}: ${err instanceof Error ? err.message : String(err)}`);
-        console.error(`Failed to delete pack ${packToDelete.filename}:`, err);
-      } finally {
-        setPackBeingDeleted(null);
-      }
-    }
-    setIsDialogActionLoading(false);
-    handleCloseDeleteDialog();
-    await fetchResourcePacksData();
-    if (onRefreshRequired) onRefreshRequired();
-  };
-  
-  const handleUpdateAllAvailableResourcePacks = async () => {
-    if (Object.keys(resourcePackUpdates).length === 0 || !profile) return;
-    setIsUpdatingAll(true);
-    setError(null);
-    setUpdateError(null);
-    let updateCount = 0;
-
-    const packsToUpdateWithDetails: {pack: ResourcePackInfo, version: ModrinthVersion}[] = [];
-    for (const pack of resourcePacks) {
-      if (pack.sha1_hash && resourcePackUpdates[pack.sha1_hash]) {
-        packsToUpdateWithDetails.push({ pack, version: resourcePackUpdates[pack.sha1_hash]! });
-      }
-    }
-
-    if (packsToUpdateWithDetails.length === 0) {
-        setIsUpdatingAll(false);
-        return;
-    }
-
-    for (const { pack, version } of packsToUpdateWithDetails) {
-      await handleUpdateResourcePack(pack, version);
-      updateCount++;
-    }
-    
-    setIsUpdatingAll(false);
-    if (updateCount > 0) {
-        await checkForResourcePackUpdates(profile, resourcePacks);
-    }
-  };
-
-  // renderResourcePackItem is now defined here, outside useEffect
   const renderResourcePackItem = useCallback((pack: ResourcePackInfo) => {
-    const itemTitle = getResourcePackFileName(pack) || "Unknown Pack";
-    const isToggling = packBeingToggled === pack.filename;
-    const isDeleting = packBeingDeleted === pack.filename;
-    const isCurrentlyUpdating = updatingPacks.has(pack.filename);
+    const itemTitle = getResourcePackFileName(pack);
+    const isToggling = itemBeingToggled === pack.filename;
+    const isDeleting = itemBeingDeleted === pack.filename;
+    const isCurrentlyUpdating = itemsBeingUpdated.has(pack.filename);
     
-    const updateAvailableVersion = pack.sha1_hash ? resourcePackUpdates[pack.sha1_hash] : null;
+    const updateAvailableVersion = pack.sha1_hash ? contentUpdates[pack.sha1_hash] : null;
 
-    // Determine Icon
     let iconToShow: React.ReactNode;
     const modrinthProjectId = pack.modrinth_info?.project_id;
-    const modrinthIconUrl = modrinthProjectId ? resourcePackModrinthIcons[modrinthProjectId] : null;
-    const localIconData = pack.path ? localArchiveIcons[pack.path] : null;
+    const modrinthIconUrl = modrinthProjectId ? modrinthIcons[modrinthProjectId] : null;
+    const localIconDataUrl = localArchiveIcons[pack.filename];
 
     if (modrinthIconUrl) {
       iconToShow = (
@@ -609,13 +141,13 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
           src={modrinthIconUrl} 
           alt={`${itemTitle} Modrinth icon`} 
           className="w-full h-full object-contain image-pixelated"
-          onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} // Hide on error
+          onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} 
         />
       );
-    } else if (localIconData) {
+    } else if (localIconDataUrl) {
       iconToShow = (
         <img 
-          src={`data:image/png;base64,${localIconData}`} 
+          src={localIconDataUrl} 
           alt={`${itemTitle} local icon`} 
           className="w-full h-full object-contain image-pixelated"
         />
@@ -658,8 +190,8 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
                 <IconButton
                 size="sm"
                 colorScheme="success"
-                onClick={() => handleUpdateResourcePack(pack, updateAvailableVersion)}
-                disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+                onClick={() => handleUpdateContentItem(pack, updateAvailableVersion)}
+                disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
                 icon={<Icon icon="solar:cloud-download-bold-duotone" className="w-3.5 h-3.5" />}
                 title={`Update to ${updateAvailableVersion.version_number}`}
                 />
@@ -681,8 +213,8 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       <Button 
         size="sm"
         variant={!pack.is_disabled ? "secondary" : "default"}
-        onClick={() => handleToggleResourcePackEnabled(pack.filename, !pack.is_disabled)}
-        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+        onClick={() => handleToggleItemEnabled(pack)}
+        disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting }
       >
         {isToggling ? "..." : (!pack.is_disabled ? "Disable" : "Enable")}
       </Button>
@@ -694,8 +226,8 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
         icon={isDeleting ? <Icon icon="solar:refresh-circle-bold-duotone" className="animate-spin w-3.5 h-3.5" /> : <Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />} 
         colorScheme="destructive"
         size="sm"
-        onClick={() => handleDeleteResourcePack(pack)}
-        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+        onClick={() => handleDeleteItem(pack)}
+        disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting}
       />
     );
 
@@ -707,9 +239,9 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
         size="sm"
         onClick={(e) => {
           e.stopPropagation();
-          setActiveDropdownId(prevId => prevId === pack.filename ? null : pack.filename);
+          setActiveDropdownId(activeDropdownId === pack.filename ? null : pack.filename);
         }}
-        disabled={isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
+        disabled={isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting}
         data-item-id={pack.filename} 
       />
     );
@@ -722,7 +254,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
         style={{ backgroundColor: `${accentColor.value}CC`, borderColor: `${accentColor.value}50` }}
       >
         <button 
-          onClick={() => { if(pack.path) handleOpenFolder(pack); setActiveDropdownId(null); }}
+          onClick={() => { if(pack.path) handleOpenItemFolder(pack); setActiveDropdownId(null); }}
           disabled={!pack.path}
           className="w-full text-left px-2 py-1.5 text-[11px] font-minecraft-ten hover:bg-[var(--accent-color-soft)] rounded-sm text-white/80 hover:text-white transition-colors duration-100 flex items-center gap-1.5 disabled:opacity-50"
         >
@@ -736,8 +268,8 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       <GenericDetailListItem
         key={pack.filename}
         id={pack.filename}
-        isSelected={selectedPackIds.has(pack.filename)}
-        onSelectionChange={(checked) => handlePackSelectionChange(pack.filename, checked)}
+        isSelected={selectedItemIds.has(pack.filename)}
+        onSelectionChange={(checked) => handleItemSelectionChange(pack.filename, checked)}
         iconNode={itemIconNode}
         title={itemTitle}
         descriptionNode={itemDescriptionNode}
@@ -753,24 +285,26 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
     );
   }, [
     accentColor.value, 
-    handleToggleResourcePackEnabled,
-    packBeingToggled, 
-    packBeingDeleted, 
-    handleDeleteResourcePack, 
-    handleOpenFolder, 
+    handleToggleItemEnabled,
+    itemBeingToggled,
+    itemBeingDeleted,
+    handleDeleteItem,
+    handleOpenItemFolder,
     profile, 
-    selectedPackIds, 
-    handlePackSelectionChange,
+    selectedItemIds,
+    handleItemSelectionChange,
     isBatchToggling,
     isBatchDeleting,
-    checkingUpdates,
-    updatingPacks,
-    resourcePackUpdates, 
+    isCheckingUpdates,
+    itemsBeingUpdated,
+    contentUpdates,
     activeDropdownId,
     setActiveDropdownId,
-    handleUpdateResourcePack,
-    resourcePackModrinthIcons,
-    localArchiveIcons
+    dropdownRef,
+    handleUpdateContentItem,
+    modrinthIcons,
+    localArchiveIcons,
+    isUpdatingAll
   ]);
 
   const primaryLeftActionsContent = (
@@ -778,15 +312,15 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       <div className="flex items-center gap-2">
         <SearchInput
           value={searchQuery}
-          onChange={setSearchQuery}
+          onChange={(val) => setSearchQuery(val)}
           placeholder="Search resource packs..." 
           className="flex-grow !h-9"
-          disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll}
+          disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
         />
         <IconButton
             icon={<Icon icon="solar:add-circle-bold-duotone" />}
             onClick={handleAddResourcePacks} 
-            disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
+            disabled={isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
             colorScheme="secondary"
             size="sm"
             title="Add Resource Packs" 
@@ -794,16 +328,19 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
         />
         <IconButton
             icon={isLoading ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
-            onClick={fetchResourcePacksData} 
-            disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
+            onClick={fetchData} 
+            disabled={isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
             colorScheme="secondary"
             size="sm"
             title={isLoading ? "Refreshing..." : "Refresh Resource Packs"} 
             className="!h-9 !w-9 flex-shrink-0 ml-auto"
         />
       </div>
-      {/* {updateError && ( ... )} */}
-      {/* Always show this section, regardless of resourcePacks.length */}
+      {contentUpdateError && (
+         <div className="text-xs text-red-400 p-1 bg-red-900/30 border border-red-700/50 rounded">
+            Update Check Error: {contentUpdateError}
+        </div>
+      )}
       <>
         <div 
           className="h-px w-full my-1"
@@ -814,39 +351,46 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
             customSize="md" 
             checked={areAllFilteredSelected}
             onChange={(e) => handleSelectAllToggle(e.target.checked)}
-            disabled={filteredResourcePacks.length === 0 || isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll}
-            label={selectedPackIds.size > 0 ? `${selectedPackIds.size} selected` : "Select All"}
+            disabled={filteredItems.length === 0 || isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
+            label={selectedItemIds.size > 0 ? `${selectedItemIds.size} selected` : "Select All"}
             title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
           />
           <div className="flex items-center gap-2">
-            {selectedPackIds.size > 0 && (
+            {selectedItemIds.size > 0 && (
               <>
-                <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll} icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedPackIds.size})`}
+                <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll} icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
+                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
                 </Button>
-                <Button size="sm" variant="destructive" onClick={() => { setIsBatchDeleteConfirmActive(true); setIsConfirmDeleteDialogOpen(true);}} disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates || isUpdatingAll} icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchDeleting ? "Deleting..." : `Delete (${selectedPackIds.size})`}
+                <Button size="sm" variant="destructive" onClick={handleBatchDeleteSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll} icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
+                  {isBatchDeleting ? "Deleting..." : `Delete (${selectedItemIds.size})`}
                 </Button>
               </>
             )}
-            {Object.keys(resourcePackUpdates).length > 0 && (
-              <Button size="sm" variant="success" onClick={handleUpdateAllAvailableResourcePacks} disabled={isUpdatingAll || isLoading || isBatchToggling || isBatchDeleting || checkingUpdates} icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} className={selectedPackIds.size > 0 ? "ml-2" : ""}>
-              {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(resourcePackUpdates).length})`}
+            {Object.keys(contentUpdates).length > 0 && (
+              <Button size="sm" variant="success" onClick={handleUpdateAllAvailableContent} disabled={isUpdatingAll || isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates} icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} className={selectedItemIds.size > 0 ? "ml-2" : ""}>
+              {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(contentUpdates).length})`}
             </Button>
           )}
           </div>
         </div>
       </>
-      {/* End of always shown section */}
     </div>
   );
 
   const primaryRightActionsContent = null;
+  
+  if (!profile) {
+    return (
+      <div className="p-4 font-minecraft text-center text-white/70">
+        Profile data is not available. Cannot display resource packs.
+      </div>
+    );
+  }
 
   return (
     <>
       <GenericContentTab<ResourcePackInfo> 
-        items={filteredResourcePacks} 
+        items={filteredItems}
         renderListItem={renderResourcePackItem} 
         isLoading={isLoading} 
         error={error} 
@@ -857,15 +401,15 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
         emptyStateMessage={ 
           error ? "Error loading resource packs" :
           isLoading && resourcePacks.length === 0 ? "Loading resource packs..." :
-          !searchQuery && resourcePacks.length === 0 && selectedPackIds.size === 0 ? "No resource packs found in this profile." :
-          searchQuery && filteredResourcePacks.length === 0 && selectedPackIds.size === 0 ? "No resource packs match your search." :
+          !searchQuery && resourcePacks.length === 0 && selectedItemIds.size === 0 ? "No resource packs found in this profile." :
+          searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0 ? "No resource packs match your search." :
           "Manage your resource packs"
         }
         emptyStateDescription={
           error ? "Please try refreshing or check the console." :
           isLoading && resourcePacks.length === 0 ? "Please wait while packs are being loaded." :
-          !searchQuery && resourcePacks.length === 0 && selectedPackIds.size === 0 ? "You can add resource packs to this profile by placing them in the profile's resourcepacks folder or via Modrinth (if supported)." :
-          searchQuery && filteredResourcePacks.length === 0 && selectedPackIds.size === 0 ? "Try a different search term or clear the search filter." :
+          !searchQuery && resourcePacks.length === 0 && selectedItemIds.size === 0 ? "You can add resource packs to this profile by placing them in the profile's resourcepacks folder or via Modrinth (if supported)." :
+          searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0 ? "Try a different search term or clear the search filter." :
           "Select packs to perform batch actions or manage them individually."
         }
         loadingItemCount={Math.min(resourcePacks.length > 0 ? resourcePacks.length : 5, 10)}
@@ -875,11 +419,11 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
     
       <ConfirmDeleteDialog
         isOpen={isConfirmDeleteDialogOpen}
-        itemName={isBatchDeleteConfirmActive ? `${selectedPackIds.size} pack${selectedPackIds.size === 1 ? '' : 's'}` : (packToDelete?.filename || "item")}
+        itemName={itemToDeleteForDialog ? getResourcePackFileName(itemToDeleteForDialog) : `${selectedItemIds.size} pack${selectedItemIds.size === 1 ? '' : 's'}`}
         onClose={handleCloseDeleteDialog}
         onConfirm={handleConfirmDeletion}
         isDeleting={isDialogActionLoading}
-        title={isBatchDeleteConfirmActive ? "Delete Selected Packs?" : `Delete Pack?`}
+        title={itemToDeleteForDialog ? `Delete ${getResourcePackFileName(itemToDeleteForDialog)}?` : "Delete Selected Packs?"}
       />
     </>
   );

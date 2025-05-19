@@ -899,17 +899,22 @@ pub async fn import_profile_from_file(app_handle: tauri::AppHandle) -> Result<()
 #[tauri::command]
 pub async fn get_local_resourcepacks(
     profile_id: Uuid,
+    fetch_modrinth_data: bool,
 ) -> Result<Vec<resourcepack_utils::ResourcePackInfo>, CommandError> {
     log::info!(
-        "Executing get_local_resourcepacks command for profile {}",
-        profile_id
+        "Executing get_local_resourcepacks command for profile {}, fetch_modrinth_data: {}",
+        profile_id,
+        fetch_modrinth_data
     );
 
     let state = State::get().await?;
     let profile = state.profile_manager.get_profile(profile_id).await?;
 
     // Use the utility function to get all resourcepacks
-    let resourcepacks = resourcepack_utils::get_resourcepacks_for_profile(&profile)
+    let resourcepacks = resourcepack_utils::get_resourcepacks_for_profile(
+        &profile, 
+        fetch_modrinth_data,
+    )
         .await
         .map_err(|e| CommandError::from(e))?;
 

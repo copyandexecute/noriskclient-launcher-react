@@ -3,11 +3,14 @@ use crate::integrations::modrinth;
 use crate::state::profile_state::Profile;
 use crate::state::state_manager::State;
 use crate::utils::hash_utils;
+use futures::future::join_all;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
+use tokio::sync::Semaphore;
 
 /// Represents a resourcepack found in the profile directory
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -42,158 +45,140 @@ pub struct ResourcePackModrinthInfo {
 }
 
 /// Get all resourcepacks for a profile
-pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<ResourcePackInfo>> {
+pub async fn get_resourcepacks_for_profile(
+    profile: &Profile,
+    fetch_modrinth_data: bool,
+) -> Result<Vec<ResourcePackInfo>> {
+    let state = State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
     debug!(
-        "Getting resourcepacks for profile: {} ({})",
-        profile.name, profile.id
+        "Getting resourcepacks for profile: {} ({}), fetch_modrinth_data: {}, using internal semaphore",
+        profile.name,
+        profile.id,
+        fetch_modrinth_data
     );
 
-    // Construct the path to the resourcepacks directory
     let resourcepacks_dir = get_resourcepacks_dir(profile).await?;
-    debug!(
-        "Resourcepacks directory path: {}",
-        resourcepacks_dir.display()
-    );
-
-    // Return empty list if directory doesn't exist yet
     if !resourcepacks_dir.exists() {
-        debug!(
-            "Resourcepacks directory does not exist for profile: {}",
-            profile.id
-        );
         return Ok(Vec::new());
     }
 
-    // Read directory contents
-    debug!("Reading contents of resourcepacks directory...");
     let mut entries = fs::read_dir(&resourcepacks_dir)
         .await
         .map_err(|e| AppError::Other(format!("Failed to read resourcepacks directory: {}", e)))?;
 
-    let mut resourcepacks = Vec::new();
-    let mut hashes = Vec::new();
-    let mut path_to_info = HashMap::new();
+    let mut tasks = Vec::new();
 
-    // Collect all .zip and .zip.disabled files
-    debug!("Scanning resourcepacks directory for valid resource packs...");
+    debug!("Scanning resourcepacks directory for valid resource packs and spawning hash tasks...");
     let mut file_count = 0;
-    let mut valid_count = 0;
+    let mut valid_file_paths_for_hashing = Vec::new();
 
-    while let Some(entry) = entries
-        .next_entry()
-        .await
-        .map_err(|e| AppError::Other(format!("Failed to read resourcepack entry: {}", e)))?
-    {
+    while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Other(format!("Failed to read resourcepack entry: {}", e)))? {
         file_count += 1;
         let path = entry.path();
-        debug!("Checking file: {}", path.display());
-
         if is_resourcepack_file(&path) {
-            valid_count += 1;
-            let filename = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("unknown")
-                .to_string();
-
-            let is_disabled = filename.ends_with(".disabled");
-            let base_filename = if is_disabled {
-                filename
-                    .strip_suffix(".disabled")
-                    .unwrap_or(&filename)
-                    .to_string()
-            } else {
-                filename.clone()
-            };
-
-            debug!(
-                "Found valid resourcepack: {} (disabled: {})",
-                base_filename, is_disabled
-            );
-
-            let metadata = fs::metadata(&path).await.map_err(|e| {
-                AppError::Other(format!("Failed to get metadata for {}: {}", filename, e))
-            })?;
-
-            let file_size = metadata.len();
-            debug!("Resourcepack size: {} bytes", file_size);
-
-            // Hash the file
-            debug!("Calculating SHA1 hash for {}", filename);
-            let sha1_hash = match hash_utils::calculate_sha1(&path).await {
-                Ok(hash) => {
-                    debug!("SHA1 hash for {}: {}", filename, hash);
-                    // Add to the list of hashes to check against Modrinth
-                    hashes.push(hash.clone());
-                    Some(hash)
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to compute SHA1 hash for resourcepack {}: {}",
-                        filename, e
-                    );
-                    None
-                }
-            };
-
-            let info = ResourcePackInfo {
-                filename: base_filename,
-                path: path.to_string_lossy().into_owned(),
-                sha1_hash: sha1_hash.clone(),
-                file_size,
-                is_disabled,
-                modrinth_info: None,
-            };
-
-            // Store info in hashmap to update with Modrinth data later
-            if let Some(hash) = sha1_hash {
-                path_to_info.insert(hash, info);
-            } else {
-                resourcepacks.push(info);
-            }
-        } else {
-            debug!("Skipping non-resourcepack file: {}", path.display());
+            valid_file_paths_for_hashing.push(path.clone());
+            let semaphore_clone = Arc::clone(&io_semaphore);
+            tasks.push(tokio::spawn(async move {
+                let permit = semaphore_clone.acquire_owned().await.expect("Semaphore acquisition failed");
+                let hash_result = hash_utils::calculate_sha1(&path).await;
+                drop(permit); // Explicitly drop permit to release semaphore before task completes fully if needed, though it auto-drops at scope end.
+                (path, hash_result)
+            }));
         }
     }
 
+    debug!("Awaiting {} hash calculation tasks...", tasks.len());
+    let hash_results = join_all(tasks).await;
+    debug!("All hash tasks completed.");
+
+    let mut resourcepacks = Vec::new();
+    let mut hashes_for_modrinth = Vec::new();
+    let mut path_to_info_map: HashMap<String, ResourcePackInfo> = HashMap::new(); // Keyed by SHA1 to update with Modrinth info
+    let mut packs_without_successful_hash = Vec::new();
+
+    for (task_index, join_result) in hash_results.into_iter().enumerate() {
+        match join_result {
+            Ok((path, hash_calc_result)) => {
+                let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
+                let is_disabled = filename.ends_with(".disabled");
+                let base_filename = if is_disabled {
+                    filename.strip_suffix(".disabled").unwrap_or(&filename).to_string()
+                } else {
+                    filename.clone()
+                };
+
+                let metadata = match fs::metadata(&path).await {
+                     Ok(md) => md,
+                     Err(e) => {
+                        warn!("Failed to get metadata for {}: {}. Skipping pack.", path.display(), e);
+                        continue; // Skip this pack if metadata fails
+                     }
+                };
+                let file_size = metadata.len();
+
+                let current_sha1_hash = match hash_calc_result {
+                    Ok(hash) => {
+                        debug!("SHA1 hash for {}: {}", filename, hash);
+                        hashes_for_modrinth.push(hash.clone());
+                        Some(hash)
+                    }
+                    Err(e) => {
+                        warn!("Failed to compute SHA1 hash for {}: {}", filename, e);
+                        None
+                    }
+                };
+
+                let info = ResourcePackInfo {
+                    filename: base_filename,
+                    path: path.to_string_lossy().into_owned(),
+                    sha1_hash: current_sha1_hash.clone(),
+                    file_size,
+                    is_disabled,
+                    modrinth_info: None,
+                };
+
+                if let Some(hash_val) = current_sha1_hash {
+                    path_to_info_map.insert(hash_val, info);
+                } else {
+                    packs_without_successful_hash.push(info); // Collect packs that failed hashing
+                }
+            }
+            Err(e) => {
+                // This is a JoinError, meaning the task panicked.
+                // It's good to log which task failed if possible, though task_index might not directly map to an identifiable file if paths weren't stored with it.
+                // For now, just log the panic.
+                warn!("Hash calculation task panicked (task index {}): {}", task_index, e);
+            }
+        }
+    }
+    
     debug!(
-        "Scanned {} files/directories, found {} valid resourcepacks",
-        file_count, valid_count
+        "Processed {} files/directories, found {} valid resourcepacks for hashing.",
+        file_count, valid_file_paths_for_hashing.len()
     );
 
-    // If we have hashes, try to look them up on Modrinth
-    if !hashes.is_empty() {
+    if fetch_modrinth_data && !hashes_for_modrinth.is_empty() {
         debug!(
-            "Looking up {} resource packs on Modrinth by hash...",
-            hashes.len()
+            "Looking up {} resource packs on Modrinth by hash (fetch_modrinth_data is true)...",
+            hashes_for_modrinth.len()
         );
-        match modrinth::get_versions_by_hashes(hashes.clone(), "sha1").await {
+        match modrinth::get_versions_by_hashes(hashes_for_modrinth.clone(), "sha1").await {
             Ok(version_map) => {
                 debug!(
                     "Modrinth lookup returned {} matches out of {} requested",
                     version_map.len(),
-                    hashes.len()
+                    hashes_for_modrinth.len()
                 );
                 for (hash, version) in version_map {
-                    if let Some(info) = path_to_info.get_mut(&hash) {
-                        debug!(
-                            "Found Modrinth info for pack with hash {}: project_id={}, name={}",
-                            hash, version.project_id, version.name
-                        );
-
-                        // Check if this is actually a resourcepack and not something else
+                    if let Some(info_to_update) = path_to_info_map.get_mut(&hash) {
                         if version.project_id.is_empty() || version.id.is_empty() {
                             debug!("Skipping invalid Modrinth data for hash {}: empty project_id or version_id", hash);
                             continue;
                         }
-
-                        // Find the primary file for the URL
                         if let Some(primary_file) = version.files.iter().find(|f| f.primary) {
-                            debug!(
-                                "Using primary file from Modrinth: {}",
-                                primary_file.filename
-                            );
-                            info.modrinth_info = Some(ResourcePackModrinthInfo {
+                            info_to_update.modrinth_info = Some(ResourcePackModrinthInfo {
                                 project_id: version.project_id.clone(),
                                 version_id: version.id.clone(),
                                 name: version.name.clone(),
@@ -201,10 +186,7 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
                                 download_url: primary_file.url.clone(),
                             });
                         } else {
-                            debug!(
-                                "No primary file found in Modrinth version for hash {}",
-                                hash
-                            );
+                            debug!("No primary file found in Modrinth version for hash {}", hash);
                         }
                     } else {
                         debug!("Received Modrinth data for unknown hash: {}", hash);
@@ -215,23 +197,24 @@ pub async fn get_resourcepacks_for_profile(profile: &Profile) -> Result<Vec<Reso
                 warn!("Failed to lookup resourcepacks on Modrinth: {}", e);
             }
         }
+    } else if !hashes_for_modrinth.is_empty() {
+        debug!(
+            "Skipping Modrinth lookup for {} resource packs as fetch_modrinth_data is false. Hashes were still computed.",
+            hashes_for_modrinth.len()
+        );
     } else {
-        debug!("No resource packs to lookup on Modrinth");
+        debug!("No resource pack hashes to lookup on Modrinth (or list was empty).");
     }
 
-    // Add all packs to the result list
-    for (hash, info) in path_to_info {
-        debug!(
-            "Adding pack with hash {} to result list: {}",
-            hash, info.filename
-        );
-        resourcepacks.push(info);
-    }
+    // Combine the successfully hashed (and potentially Modrinth-updated) packs with those that failed hashing.
+    resourcepacks.extend(path_to_info_map.into_values());
+    resourcepacks.extend(packs_without_successful_hash);
 
     info!(
-        "Found {} total resourcepacks for profile {}",
+        "Found {} total resourcepacks for profile {} (fetch_modrinth_data: {})",
         resourcepacks.len(),
-        profile.id
+        profile.id,
+        fetch_modrinth_data
     );
 
     Ok(resourcepacks)

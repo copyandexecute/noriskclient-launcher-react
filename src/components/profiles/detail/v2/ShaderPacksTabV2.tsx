@@ -6,32 +6,32 @@ import { IconButton } from "../../../ui/buttons/IconButton";
 import { GenericDetailListItem } from "../items/GenericDetailListItem";
 import { TagBadge } from "../../../ui/TagBadge";
 import { useThemeStore } from "../../../../store/useThemeStore";
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { GenericContentTab } from "../../../ui/GenericContentTab";
 import { preloadIcons } from "../../../../lib/icon-utils";
 import type { Profile } from "../../../../types/profile";
 import type { 
-  ShaderPackInfo, // Specific to ShaderPacks
-  ModrinthVersion,
+  ShaderPackInfo, 
+  ModrinthVersion
 } from "../../../../types/modrinth";
-import { ModrinthService } from "../../../../services/modrinth-service";
 import { SearchInput } from "../../../ui/SearchInput";
 import { Checkbox } from "../../../ui/Checkbox";
-import { invoke } from "@tauri-apps/api/core";
 import { ConfirmDeleteDialog } from "../../../modals/ConfirmDeleteDialog";
 import { formatFileSize } from "../../../../utils/format-file-size";
 import { toast } from 'react-hot-toast';
-// Potentially: import { toggleContentFromProfile } from "../../../../services/content-service"; if switching to that model
-// For now, we'll use direct invoke calls for enable/disable like the original ShaderPacksTab
+import {
+  useLocalContentManager,
+  type LocalContentItem,
+  type LocalContentType
+} from "../../../../hooks/useLocalContentManager";
 
-// Icons specific to ShaderPacksTabV2
 const SHADER_PACKS_TAB_ICONS_TO_PRELOAD = [
-  "solar:sun-bold-duotone", // Fallback icon, empty state
+  "solar:sun-bold-duotone",
   "solar:settings-bold-duotone", 
   "solar:info-circle-bold-duotone", 
-  "solar:check-circle-bold", // Enabled status
-  "solar:close-circle-bold", // Disabled status
-  "solar:shield-flash-bold-duotone", // Generic shader pack icon
+  "solar:check-circle-bold",
+  "solar:close-circle-bold",
+  "solar:shield-flash-bold-duotone",
   "solar:folder-open-bold-duotone",
   "solar:trash-bin-trash-bold",
   "solar:menu-dots-bold",
@@ -49,425 +49,92 @@ interface ShaderPacksTabV2Props {
   onRefreshRequired?: () => void;
 }
 
-// Helper to get a displayable file name from shader pack info
-const getShaderPackFileName = (pack: ShaderPackInfo | null | undefined): string | null => {
-  if (!pack) return null;
+const getShaderPackFileName = (pack: ShaderPackInfo | null | undefined): string => {
+  if (!pack) return "Unknown Shader Pack";
   if (pack.filename && pack.filename !== "0") return pack.filename;
   if (pack.path) {
     const parts = pack.path.split(/[\/\\]/);
     return parts[parts.length - 1] || "Unknown file";
   }
-  return "Unknown file";
+  return "Unknown Shader Pack";
 };
 
 export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV2Props) {
-  if (!profile) {
-    return (
-      <div className="p-4 font-minecraft text-center text-white/70">
-        Profile data is not available. Cannot display shader packs.
-      </div>
-    );
-  }
-
   const accentColor = useThemeStore((state) => state.accentColor);
-  const [shaderPacks, setShaderPacks] = useState<ShaderPackInfo[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [packBeingToggled, setPackBeingToggled] = useState<string | null>(null);
-  const [packBeingDeleted, setPackBeingDeleted] = useState<string | null>(null); // For individual row delete button state
-  const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
-  const [isBatchToggling, setIsBatchToggling] = useState(false);
-  const [isBatchDeleting, setIsBatchDeleting] = useState(false); // Added for batch delete operations
-  const [shaderPackUpdates, setShaderPackUpdates] = useState<Record<string, ModrinthVersion | null>>({});
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
-  const [updatingPacks, setUpdatingPacks] = useState<Set<string>>(new Set());
-  const [updateError, setUpdateError] = useState<string | null>(null);
-  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // State for Modrinth icons (project_id -> icon_url)
-  const [shaderPackModrinthIcons, setShaderPackModrinthIcons] = useState<Record<string, string | null>>({});
-  // State for local archive icons (pack.path -> base64_icon_string)
-  const [localArchiveIcons, setLocalArchiveIcons] = useState<Record<string, string | null>>({});
-
-  // State for ConfirmDeleteDialog
-  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
-  const [packToDelete, setPackToDelete] = useState<ShaderPackInfo | null>(null);
-  const [isBatchDeleteConfirmActive, setIsBatchDeleteConfirmActive] = useState(false); // Added
-  const [isDialogActionLoading, setIsDialogActionLoading] = useState(false); // For dialog's confirm button loading state
-
+  const {
+    items: shaderPacks,
+    isLoading,
+    error,
+    searchQuery,
+    setSearchQuery,
+    selectedItemIds,
+    handleItemSelectionChange,
+    handleSelectAllToggle,
+    areAllFilteredSelected,
+    filteredItems,
+    itemBeingToggled,
+    itemBeingDeleted,
+    isBatchToggling,
+    isBatchDeleting,
+    activeDropdownId,
+    setActiveDropdownId,
+    dropdownRef,
+    isConfirmDeleteDialogOpen,
+    isDialogActionLoading,
+    handleConfirmDeletion,
+    handleCloseDeleteDialog,
+    itemToDeleteForDialog,
+    fetchData,
+    handleToggleItemEnabled,
+    handleDeleteItem,
+    handleBatchToggleSelected,
+    handleBatchDeleteSelected,
+    handleOpenItemFolder,
+    modrinthIcons,
+    localArchiveIcons,
+    contentUpdates,
+    isCheckingUpdates,
+    itemsBeingUpdated,
+    isUpdatingAll,
+    handleUpdateContentItem,
+    handleUpdateAllAvailableContent,
+    contentUpdateError,
+  } = useLocalContentManager<ShaderPackInfo>({
+    profile,
+    contentType: 'ShaderPack',
+    getDisplayFileName: getShaderPackFileName,
+    onRefreshRequired,
+  });
 
   useEffect(() => {
     preloadIcons(SHADER_PACKS_TAB_ICONS_TO_PRELOAD);
   }, []);
 
-  useEffect(() => {
-    if (profile?.id) {
-      fetchShaderPacksData();
-    }
-  }, [profile?.id]);
-
-  // Fetch Modrinth icons for shader packs (similar to ResourcePacksTabV2)
-  useEffect(() => {
-    const fetchModrinthIconsForPacks = async () => {
-      if (!shaderPacks || shaderPacks.length === 0) {
-        setShaderPackModrinthIcons({});
-        return;
-      }
-      const projectIdsToFetch = shaderPacks
-        .filter(pack => pack.modrinth_info?.project_id && shaderPackModrinthIcons[pack.modrinth_info.project_id] === undefined)
-        .map(pack => pack.modrinth_info!.project_id!)
-      const uniqueProjectIds = [...new Set(projectIdsToFetch)];
-      
-      if (uniqueProjectIds.length > 0) {
-        console.log("[ShaderPacksTabV2] Fetching Modrinth project details for IDs:", uniqueProjectIds); // Log a
-        try {
-          // const projectDetailsList = await ModrinthService.getProjectDetails(uniqueProjectIds);
-          // To better debug, let's get the raw response first
-          const rawResponse = await ModrinthService.getProjectDetails(uniqueProjectIds);
-          console.log("[ShaderPacksTabV2] Raw response from ModrinthService.getProjectDetails:", rawResponse); // Log b
-
-          // Now, assuming rawResponse is what projectDetailsList was, proceed with caution
-          // It's good practice to check if it's an array before calling forEach
-          const projectDetailsList = Array.isArray(rawResponse) ? rawResponse : [];
-          if (!Array.isArray(rawResponse)) {
-            console.warn("[ShaderPacksTabV2] ModrinthService.getProjectDetails did not return an array. Received:", rawResponse);
-          }
-
-          const newIcons: Record<string, string | null> = {};
-          projectDetailsList.forEach(detail => {
-            // It's also good to check if detail is an object and has an id
-            if (detail && typeof detail === 'object' && detail.id) {
-              newIcons[detail.id] = detail.icon_url || null;
-            } else {
-              console.warn("[ShaderPacksTabV2] Invalid project detail item:", detail);
-            }
-          });
-          setShaderPackModrinthIcons(prevIcons => ({ ...prevIcons, ...newIcons }));
-        } catch (err) {
-          console.error("Failed to fetch Modrinth project details for shader pack icons:", err);
-        }
-      }
-    };
-    fetchModrinthIconsForPacks();
-  }, [shaderPacks]);
-
-  // Fetch local archive icons for shader packs (similar to ResourcePacksTabV2)
-  useEffect(() => {
-    const fetchLocalArchiveIconsForPacks = async () => {
-      if (!shaderPacks || shaderPacks.length === 0) {
-        setLocalArchiveIcons({});
-        return;
-      }
-      const pathsToFetchIconsFor = shaderPacks
-        .filter(pack => pack.path && localArchiveIcons[pack.path] === undefined)
-        .map(pack => pack.path!); // Ensure pack.path is not null/undefined before pushing
-      const uniquePaths = [...new Set(pathsToFetchIconsFor)];
-
-      if (uniquePaths.length > 0) {
-        try {
-          const iconsResult = await invoke<Record<string, string | null>>(
-            "get_icons_for_archives",
-            { archivePaths: uniquePaths }
-          );
-          if (iconsResult) {
-            const newLocalIcons: Record<string, string | null> = {};
-            for (const path of uniquePaths) {
-              newLocalIcons[path] = iconsResult[path] || null;
-            }
-            setLocalArchiveIcons(prevIcons => ({ ...prevIcons, ...newLocalIcons }));
-          }
-        } catch (err) {
-          console.error("Failed to fetch local archive icons for shader packs:", err);
-        }
-      }
-    };
-    fetchLocalArchiveIconsForPacks();
-  }, [shaderPacks]);
-  
-    // Click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (activeDropdownId && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        const moreActionsButton = (event.target as HTMLElement).closest(`[data-item-id="${activeDropdownId}"] [title="More Actions"]`);
-        if (!moreActionsButton) {
-          setActiveDropdownId(null);
-        }
-      }
-    };
-
-    if (activeDropdownId) {
-      document.addEventListener("mousedown", handleClickOutside);
-    } else {
-      document.removeEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [activeDropdownId]);
-
-
-  const fetchShaderPacksData = useCallback(async () => {
-    if (!profile) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const packsFromBackend = await invoke<ShaderPackInfo[]>(
-        "get_local_shaderpacks", // Adapted from ShaderPacksTab
-        { profileId: profile.id }
-      );
-      const processedPacks = (packsFromBackend || []).map((pack) => ({
-        ...pack,
-        filename: getShaderPackFileName(pack) || 'Unknown Shader Pack' // Use helper
-      })); 
-      setShaderPacks(processedPacks);
-      setSelectedPackIds(new Set()); // Reset selection
-      if (onRefreshRequired) onRefreshRequired();
-      // TODO: Call checkForShaderPackUpdates(profile, processedPacks) later
-    } catch (err) {
-      console.error("Failed to fetch shader packs data:", err);
-      setError(`Failed to fetch shader packs: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [profile, onRefreshRequired]);
-  
-  const handleToggleShaderPackEnabled = useCallback(async (packId: string) => {
-    const pack = shaderPacks.find(p => p.filename === packId);
-    if (!pack || !pack.path || !profile) return;
-
-    setPackBeingToggled(packId);
-    const shouldBeEnabled = pack.is_disabled === true; // If it IS disabled, we want to enable it.
-
-    try {
-      await invoke("set_file_enabled", { // From original ShaderPacksTab
-        filePath: pack.path,
-        enabled: shouldBeEnabled,
-      });
-      
-      // Optimistic update
-      setShaderPacks(prevPacks =>
-        prevPacks.map(p =>
-          p.filename === packId ? { ...p, is_disabled: !shouldBeEnabled } : p
-        )
-      );
-      // No toast on success for toggle, consistent with ModsTabV2
-      if (onRefreshRequired) onRefreshRequired();
-    } catch (err) {
-      console.error(`Failed to toggle shader pack ${pack.filename}:`, err);
-      toast.error(`Failed to toggle ${pack.filename}: ${err instanceof Error ? err.message : String(err.message)}`);
-      // Revert optimistic update on error if needed, or refetch
-      fetchShaderPacksData(); 
-    } finally {
-      setPackBeingToggled(null);
-    }
-  }, [shaderPacks, profile, onRefreshRequired, fetchShaderPacksData]);
-
-
-  const filteredShaderPacks = useMemo(() => {
-    if (!searchQuery) return shaderPacks;
-    return shaderPacks.filter((pack) => {
-      const name = pack.filename || getShaderPackFileName(pack) || "";
-      const id = pack.filename || ""; // Assuming filename is the ID here
-      return (
-        name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        id.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    });
-  }, [shaderPacks, searchQuery]);
-
-  const handlePackSelectionChange = useCallback((packId: string, isSelected: boolean) => {
-    setSelectedPackIds(prevSelectedIds => {
-      const newSelectedIds = new Set(prevSelectedIds);
-      if (isSelected) {
-        newSelectedIds.add(packId);
-      } else {
-        newSelectedIds.delete(packId);
-      }
-      return newSelectedIds;
-    });
-  }, []);
-  
-  const areAllFilteredSelected = useMemo(() => {
-    return filteredShaderPacks.length > 0 && filteredShaderPacks.every(pack => selectedPackIds.has(pack.filename));
-  }, [filteredShaderPacks, selectedPackIds]);
-
-  const handleSelectAllToggle = useCallback((isChecked: boolean) => {
-    setSelectedPackIds(prevSelectedIds => {
-      const newSelectedIds = new Set(prevSelectedIds);
-      if (isChecked) {
-        filteredShaderPacks.forEach(pack => newSelectedIds.add(pack.filename));
-      } else {
-        filteredShaderPacks.forEach(pack => newSelectedIds.delete(pack.filename));
-      }
-      return newSelectedIds;
-    });
-  }, [filteredShaderPacks]);
-
-  // Placeholder actions
-  const handleAddShaderPacks = () => toast.error("PROTOTYPE: Add Shader Packs not implemented");
-  const handleOpenFolder = useCallback((pack: ShaderPackInfo) => {
-    if (!pack.path) {
-      toast.error("Path not available for this pack.");
-      return;
-    }
-    invoke("open_file_directory", { filePath: pack.path })
-      .catch(err => {
-        console.error("Failed to open pack directory:", err);
-        toast.error(`Failed to open directory: ${err instanceof Error ? err.message : String(err)}`);
-      });
-  }, []);
-  
-  const handleCloseDeleteDialog = () => {
-    setIsConfirmDeleteDialogOpen(false);
-    setPackToDelete(null);
-    setIsBatchDeleteConfirmActive(false); // Ensure this is reset
-  };
-
-  const handleConfirmDeletion = async () => {
-    if (!profile) {
-      toast.error("Profile data missing, cannot complete deletion.");
-      handleCloseDeleteDialog();
-      return;
-    }
-    setIsDialogActionLoading(true);
-    setError(null);
-
-    if (isBatchDeleteConfirmActive) {
-      setIsBatchDeleting(true);
-      const errors: string[] = [];
-      let successfulDeletes = 0;
-      for (const packId of selectedPackIds) {
-        const pack = shaderPacks.find(p => p.filename === packId);
-        if (pack?.path) {
-        try {
-            await invoke("delete_file", { filePath: pack.path });
-            successfulDeletes++;
-        } catch (err) {
-            const errorDetail = err instanceof Error ? err.message : String(err);
-            errors.push(`Failed to delete ${getShaderPackFileName(pack) || packId}: ${errorDetail}`);
-            console.error(`Failed to delete pack ${getShaderPackFileName(pack) || packId} during batch:`, err);
-          }
-      } else {
-          errors.push(`Could not find path for ${packId} to delete.`);
-        }
-      }
-      if (errors.length > 0) {
-        toast.error(`Batch delete failed for some items: ${errors.join("; ")}`)
-        setError(`Batch delete: ${errors.join(". ")}`);
-      }
-      if (successfulDeletes > 0) toast.success(`Successfully deleted ${successfulDeletes} pack(s).`);
-      setIsBatchDeleting(false);
-      setSelectedPackIds(new Set()); // Clear selection after batch delete
-    } else if (packToDelete?.path) {
-      setPackBeingDeleted(packToDelete.filename); // Indicate loading on the specific item's button
-      try {
-        await invoke("delete_file", { filePath: packToDelete.path });
-        toast.success(`Deleted ${getShaderPackFileName(packToDelete)}.`);
-      } catch (err) {
-        const errorDetail = err instanceof Error ? err.message : String(err);
-        toast.error(`Failed to delete ${getShaderPackFileName(packToDelete)}: ${errorDetail}`);
-        setError(`Failed to delete ${getShaderPackFileName(packToDelete)}: ${errorDetail}`);
-      } finally {
-        setPackBeingDeleted(null);
-      }
-    }
-    setIsDialogActionLoading(false);
-    handleCloseDeleteDialog();
-    await fetchShaderPacksData(); // Refresh list in both cases
-    if (onRefreshRequired) onRefreshRequired();
-  };
-
-  const handleDeleteShaderPack = useCallback(async (pack: ShaderPackInfo) => {
-    if (!profile || !pack.path) {
-      toast.error("Profile or pack path missing, cannot initiate delete.");
-      return;
-    }
-    setPackToDelete(pack);
-    setIsBatchDeleteConfirmActive(false); // Ensure this is false for single delete
-    setIsConfirmDeleteDialogOpen(true);
-  }, [profile]);
-
-  const handleBatchToggleSelected = async () => {
-    if (!profile || selectedPackIds.size === 0) return;
-    
-    setIsBatchToggling(true);
-    const errors: string[] = [];
-    let successfulToggles = 0;
-
-    for (const packId of selectedPackIds) {
-      const pack = shaderPacks.find(p => p.filename === packId);
-      if (pack?.path && profile) {
-        const shouldBeEnabled = pack.is_disabled === true;
-        try {
-          await invoke("set_file_enabled", {
-            filePath: pack.path,
-            enabled: shouldBeEnabled,
-          });
-          successfulToggles++;
-          // Optimistic update for this item
-          setShaderPacks(prevPacks =>
-            prevPacks.map(p => 
-              p.filename === packId ? { ...p, is_disabled: !shouldBeEnabled } : p
-            )
-          );
-        } catch (err) {
-          const errorDetail = err instanceof Error ? err.message : String(err);
-          errors.push(`Failed to toggle ${getShaderPackFileName(pack) || packId}: ${errorDetail}`);
-          console.error(`Batch toggle: Failed to toggle ${getShaderPackFileName(pack) || packId}:`, err);
-          toast.error(`Failed to toggle ${getShaderPackFileName(pack) || packId}: ${errorDetail}`);
-        }
-      } else {
-        const errorMsg = !pack 
-          ? `Could not find pack with ID ${packId} to toggle.` 
-          : `Pack ${getShaderPackFileName(pack) || packId} is missing path for toggling.`;
-        errors.push(errorMsg);
-        toast.error(errorMsg); 
-      }
-    }
-    
-    setIsBatchToggling(false);
-    if (errors.length > 0) {
-      console.warn("Batch toggle finished with errors:", errors);
-    }
-    if (successfulToggles > 0) {
-      if (onRefreshRequired) onRefreshRequired(); 
-    }
-    setSelectedPackIds(new Set());
-  };
-
-  const handleBatchDeleteSelected = async () => {
-    if (!profile || selectedPackIds.size === 0) return;
-    setPackToDelete(null); // Clear single pack to delete if any
-    setIsBatchDeleteConfirmActive(true);
-    setIsConfirmDeleteDialogOpen(true);
-  };
-
+  const handleAddShaderPacks = () => alert("PROTOTYPE: Add Shader Packs not implemented (yet)");
 
   const renderShaderPackItem = useCallback((pack: ShaderPackInfo) => {
-    const itemTitle = getShaderPackFileName(pack) || "Unknown Shader Pack";
-    const isToggling = packBeingToggled === pack.filename;
-    const isDeleting = packBeingDeleted === pack.filename; 
-    // const isCurrentlyUpdating = updatingPacks.has(pack.filename); // Will use later
-    // const updateAvailableVersion = pack.sha1_hash ? shaderPackUpdates[pack.sha1_hash] : null; // Will use later
+    const itemTitle = getShaderPackFileName(pack);
+    const isToggling = itemBeingToggled === pack.filename;
+    const isDeleting = itemBeingDeleted === pack.filename;
+    const isCurrentlyUpdating = itemsBeingUpdated.has(pack.filename);
+    
+    const updateAvailableVersion = pack.sha1_hash ? contentUpdates[pack.sha1_hash] : null;
 
-    let iconToShow: React.ReactNode;
-    const modrinthProjectId = pack.modrinth_info?.project_id;
-    const modrinthIconUrl = modrinthProjectId ? shaderPackModrinthIcons[modrinthProjectId] : null;
-    const localIconData = pack.path ? localArchiveIcons[pack.path] : null;
+    let iconToShow: React.ReactNode = <Icon icon="solar:sun-bold-duotone" className="w-8 h-8 sm:w-10 sm:h-10 text-white/40" />;
+    
+    const modrinthIconUrl = pack.modrinth_info?.project_id ? modrinthIcons[pack.modrinth_info.project_id] : null;
+    const localIconDataUrl = localArchiveIcons[pack.filename];
 
     if (modrinthIconUrl) {
-      iconToShow = <img src={modrinthIconUrl} alt={`${itemTitle} Modrinth icon`} className="w-full h-full object-contain image-pixelated"/>;
-    } else if (localIconData) {
-      iconToShow = <img src={`data:image/png;base64,${localIconData}`} alt={`${itemTitle} local icon`} className="w-full h-full object-contain image-pixelated"/>;
-    } else {
-      iconToShow = <Icon icon="solar:sun-bold-duotone" className="w-8 h-8 sm:w-10 sm:h-10 text-white/40" />;
+      iconToShow = <img src={modrinthIconUrl} alt={itemTitle} className="w-full h-full object-cover rounded-sm" />;
+    } else if (localIconDataUrl) {
+      iconToShow = <img src={localIconDataUrl} alt={itemTitle} className="w-full h-full object-cover rounded-sm" />;
     }
+    
     const itemIconNode = (
       <div className="absolute inset-0 w-full h-full flex items-center justify-center">
-          {iconToShow}
+          {iconToShow} 
       </div>
     );
 
@@ -490,12 +157,38 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
       </>
     );
 
+    let itemUpdateActionNode: React.ReactNode = null;
+    if (updateAvailableVersion && !isCurrentlyUpdating) {
+        if (!pack.modrinth_info || pack.modrinth_info.version_id !== updateAvailableVersion.id) {
+            itemUpdateActionNode = (
+                <IconButton
+                size="sm"
+                colorScheme="success"
+                onClick={() => handleUpdateContentItem(pack, updateAvailableVersion)}
+                disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || isCheckingUpdates || isCurrentlyUpdating || isUpdatingAll}
+                icon={<Icon icon="solar:cloud-download-bold-duotone" className="w-3.5 h-3.5" />}
+                title={`Update to ${updateAvailableVersion.version_number}`}
+                />
+            );
+        }
+    } else if (isCurrentlyUpdating) {
+      itemUpdateActionNode = (
+         <IconButton
+          size="sm"
+          colorScheme="secondary"
+          disabled={true}
+          icon={<Icon icon="solar:refresh-bold" className="animate-spin w-3.5 h-3.5" />}
+          title={`Updating...`} 
+        />
+      );
+    }
+
     const itemMainActionNode = (
       <Button 
         size="sm"
         variant={!pack.is_disabled ? "secondary" : "default"}
-        onClick={() => handleToggleShaderPackEnabled(pack.filename)}
-        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates /* || isCurrentlyUpdating */}
+        onClick={() => handleToggleItemEnabled(pack)}
+        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting}
       >
         {isToggling ? "..." : (!pack.is_disabled ? "Disable" : "Enable")}
       </Button>
@@ -507,8 +200,8 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
         icon={isDeleting ? <Icon icon="solar:refresh-circle-bold-duotone" className="animate-spin w-3.5 h-3.5" /> :  <Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />} 
         colorScheme="destructive"
         size="sm"
-        onClick={() => handleDeleteShaderPack(pack)} // Changed to call new handler
-        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates /* || isCurrentlyUpdating */}
+        onClick={() => handleDeleteItem(pack)}
+        disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting}
       />
     );
     
@@ -520,9 +213,9 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
         size="sm"
         onClick={(e) => {
           e.stopPropagation();
-          setActiveDropdownId(prevId => prevId === pack.filename ? null : pack.filename); // Corrected logic here
+          setActiveDropdownId(activeDropdownId === pack.filename ? null : pack.filename);
         }}
-        disabled={isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates /*|| isCurrentlyUpdating*/}
+        disabled={isDeleting || isBatchToggling || isBatchDeleting}
         data-item-id={pack.filename} 
       />
     );
@@ -535,7 +228,7 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
         style={{ backgroundColor: `${accentColor.value}CC`, borderColor: `${accentColor.value}50` }}
       >
         <button 
-          onClick={() => { if(pack.path) handleOpenFolder(pack); setActiveDropdownId(null); }}
+          onClick={() => { handleOpenItemFolder(pack); setActiveDropdownId(null); }}
           disabled={!pack.path}
           className="w-full text-left px-2 py-1.5 text-[11px] font-minecraft-ten hover:bg-[var(--accent-color-soft)] rounded-sm text-white/80 hover:text-white transition-colors duration-100 flex items-center gap-1.5 disabled:opacity-50"
         >
@@ -545,18 +238,16 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
       </div>
     );
 
-
     return (
       <GenericDetailListItem
         key={pack.filename}
         id={pack.filename}
-        isSelected={selectedPackIds.has(pack.filename)}
-        onSelectionChange={(checked) => handlePackSelectionChange(pack.filename, checked)}
+        isSelected={selectedItemIds.has(pack.filename)}
+        onSelectionChange={(checked) => handleItemSelectionChange(pack.filename, checked)}
         iconNode={itemIconNode}
         title={itemTitle}
         descriptionNode={itemDescriptionNode}
         badgesNode={itemBadgesNode}
-        // updateActionNode={itemUpdateActionNode} // Will add later
         mainActionNode={itemMainActionNode}
         deleteActionNode={itemDeleteActionNode}
         moreActionsTriggerNode={itemMoreActionsTriggerNode}
@@ -567,20 +258,23 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
     );
   }, [
     accentColor.value,
-    handleToggleShaderPackEnabled,
-    packBeingToggled,
-    packBeingDeleted, 
-    handleDeleteShaderPack,
-    handleOpenFolder,
-    profile,
-    selectedPackIds,
-    handlePackSelectionChange,
+    activeDropdownId,
+    contentUpdates,
+    handleDeleteItem,
+    handleItemSelectionChange,
+    handleOpenItemFolder,
     isBatchToggling,
     isBatchDeleting,
-    checkingUpdates,
-    activeDropdownId,
+    itemBeingDeleted,
+    itemBeingToggled,
+    itemsBeingUpdated,
+    isCheckingUpdates,
+    isUpdatingAll,
+    handleUpdateContentItem,
+    selectedItemIds,
     setActiveDropdownId,
-    shaderPackModrinthIcons,
+    dropdownRef,
+    modrinthIcons,
     localArchiveIcons,
   ]);
 
@@ -589,32 +283,35 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
       <div className="flex items-center gap-2">
         <SearchInput
           value={searchQuery}
-          onChange={setSearchQuery}
+          onChange={(val) => setSearchQuery(val)}
           placeholder="Search shader packs..."
           className="flex-grow !h-9"
-          disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates /* || isUpdatingAll*/}
+          disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
         />
         <IconButton
-            icon={<Icon icon="solar:add-circle-bold-duotone" />} // Using a consistent icon
+            icon={<Icon icon="solar:add-circle-bold-duotone" />}
             onClick={handleAddShaderPacks}
-            disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates /* || isUpdatingAll*/}
+            disabled={isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
             colorScheme="secondary"
             size="sm"
             title="Add Shader Packs"
             className="!h-9 !w-9 flex-shrink-0"
         />
         <IconButton
-            icon={isLoading ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />} // Using a consistent icon
-            onClick={fetchShaderPacksData}
-            disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates /* || isUpdatingAll*/}
+            icon={isLoading ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
+            onClick={fetchData}
+            disabled={isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates || isUpdatingAll}
             colorScheme="secondary"
             size="sm"
             title={isLoading ? "Refreshing..." : "Refresh Shader Packs"}
             className="!h-9 !w-9 flex-shrink-0 ml-auto"
         />
       </div>
-      {/* Show horizontal divider and select all only if there are items, or if some are selected */} 
-      {/* This logic might be further refined based on UX for V2 tabs */} 
+      {contentUpdateError && (
+         <div className="text-xs text-red-400 p-1 bg-red-900/30 border border-red-700/50 rounded">
+            Update Check Error: {contentUpdateError}
+        </div>
+      )}
       <>
         <div 
           className="h-px w-full my-1"
@@ -625,68 +322,95 @@ export function ShaderPacksTabV2({ profile, onRefreshRequired }: ShaderPacksTabV
             customSize="md" 
             checked={areAllFilteredSelected}
             onChange={(e) => handleSelectAllToggle(e.target.checked)}
-            disabled={filteredShaderPacks.length === 0 || isBatchToggling || isBatchDeleting || isLoading || checkingUpdates /* Add other relevant disabled states */}
-            label={selectedPackIds.size > 0 ? `${selectedPackIds.size} selected` : "Select All"}
+            disabled={filteredItems.length === 0 || isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
+            label={selectedItemIds.size > 0 ? `${selectedItemIds.size} selected` : "Select All"}
             title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
-            // className="self-start" // Ensure this is removed or commented out
           />
           <div className="flex items-center gap-2">
-            {selectedPackIds.size > 0 && (
+            {selectedItemIds.size > 0 && (
               <>
-                <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates} icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedPackIds.size})`}
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={handleBatchToggleSelected}
+                  disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
+                  icon={isBatchToggling ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}
+                >
+                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
                 </Button>
-                <Button size="sm" variant="destructive" onClick={handleBatchDeleteSelected} disabled={isBatchToggling || isBatchDeleting || isLoading || checkingUpdates} icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchDeleting ? "Deleting..." : `Delete (${selectedPackIds.size})`}
+                <Button 
+                  size="sm" 
+                  variant="destructive" 
+                  onClick={handleBatchDeleteSelected}
+                  disabled={isBatchToggling || isBatchDeleting || isLoading || isCheckingUpdates || isUpdatingAll}
+                  icon={isBatchDeleting ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : undefined}
+                >
+                  {isBatchDeleting ? "Deleting..." : `Delete (${selectedItemIds.size})`}
                 </Button>
               </>
             )}
-            {/* Placeholder for Update All button, will add later */}
-            {/* {Object.keys(shaderPackUpdates).length > 0 && ( ... )} */}
+            {Object.keys(contentUpdates).length > 0 && (
+              <Button 
+                size="sm" 
+                variant="success" 
+                onClick={handleUpdateAllAvailableContent}
+                disabled={isUpdatingAll || isLoading || isBatchToggling || isBatchDeleting || isCheckingUpdates} 
+                icon={isUpdatingAll ? <Icon icon="solar:refresh-bold" className="animate-spin mr-1.5" /> : <Icon icon="solar:double-alt-arrow-up-bold-duotone" className="mr-1.5" />} 
+                className={selectedItemIds.size > 0 ? "ml-2" : ""}
+              >
+              {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(contentUpdates).length})`}
+            </Button>
+          )}
           </div>
         </div>
       </>
     </div>
   );
 
-  const primaryRightActionsContent = null; // Or define as needed
+  if (!profile) {
+    return (
+      <div className="p-4 font-minecraft text-center text-white/70">
+        Profile data became unavailable.
+      </div>
+    );
+  }
 
   return (
     <>
       <GenericContentTab<ShaderPackInfo>
-        items={filteredShaderPacks}
+        items={filteredItems}
         renderListItem={renderShaderPackItem}
         isLoading={isLoading}
         error={error}
         searchQuery={searchQuery}
         primaryLeftActions={primaryLeftActionsContent}
-        primaryRightActions={primaryRightActionsContent}
+        primaryRightActions={null}
         emptyStateIcon={SHADER_PACKS_TAB_ICONS_TO_PRELOAD[0]}
         emptyStateMessage={
           error ? "Error loading shader packs" :
           isLoading && shaderPacks.length === 0 ? "Loading shader packs..." :
-          !searchQuery && shaderPacks.length === 0 && selectedPackIds.size === 0 ? "No shader packs found in this profile." :
-          searchQuery && filteredShaderPacks.length === 0 && selectedPackIds.size === 0 ? "No shader packs match your search." :
+          !searchQuery && shaderPacks.length === 0 && selectedItemIds.size === 0 ? "No shader packs found in this profile." :
+          searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0 ? "No shader packs match your search." :
           "Manage your shader packs"
         }
         emptyStateDescription={
           error ? "Please try refreshing or check the console." :
           isLoading && shaderPacks.length === 0 ? "Please wait while packs are being loaded." :
-          !searchQuery && shaderPacks.length === 0 && selectedPackIds.size === 0 ? "You can add shader packs to this profile by placing them in the profile's shaderpacks folder." :
-          searchQuery && filteredShaderPacks.length === 0 && selectedPackIds.size === 0 ? "Try a different search term or clear the search filter." :
+          !searchQuery && shaderPacks.length === 0 && selectedItemIds.size === 0 ? "You can add shader packs to this profile by placing them in the profile's shaderpacks folder." :
+          searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0 ? "Try a different search term or clear the search filter." :
           "Select packs to perform batch actions or manage them individually."
         }
         loadingItemCount={Math.min(shaderPacks.length > 0 ? shaderPacks.length : 5, 10)}
-        showSkeletons={false} // As per previous decision
+        showSkeletons={false}
         accentColorOverride={accentColor.value}
       />
       <ConfirmDeleteDialog 
         isOpen={isConfirmDeleteDialogOpen}
-        itemName={isBatchDeleteConfirmActive ? `${selectedPackIds.size} shader pack${selectedPackIds.size === 1 ? '' : 's'}` : (getShaderPackFileName(packToDelete) || "the selected shader pack")}
+        itemName={itemToDeleteForDialog ? getShaderPackFileName(itemToDeleteForDialog) : `${selectedItemIds.size} shader pack${selectedItemIds.size === 1 ? '' : 's'}`}
         onClose={handleCloseDeleteDialog}
         onConfirm={handleConfirmDeletion}
-        isDeleting={isDialogActionLoading} // This controls the dialog's confirm button state
-        title={isBatchDeleteConfirmActive ? "Delete Selected Shader Packs?" : "Delete Shader Pack?"} // Dynamic title
+        isDeleting={isDialogActionLoading}
+        title={itemToDeleteForDialog ? "Delete Shader Pack?" : "Delete Selected Shader Packs?"}
       />
     </>
   );

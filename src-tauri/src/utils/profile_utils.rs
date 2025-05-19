@@ -520,7 +520,7 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
                 "Checking locally installed resource packs in profile {}...",
                 params.profile_id
             );
-            match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
+            match resourcepack_utils::get_resourcepacks_for_profile(&profile, true).await {
                 Ok(packs) => {
                     for pack_info in &packs {
                         let modrinth_pid = pack_info
@@ -1666,7 +1666,7 @@ async fn process_resourcepack_requests(
     results: &mut Vec<Option<ContentCheckResult>>,
 ) -> Result<()> {
     // Load all resource packs once
-    let packs = match resourcepack_utils::get_resourcepacks_for_profile(profile).await {
+    let packs = match resourcepack_utils::get_resourcepacks_for_profile(profile, true).await {
         Ok(packs) => packs,
         Err(e) => {
             warn!(

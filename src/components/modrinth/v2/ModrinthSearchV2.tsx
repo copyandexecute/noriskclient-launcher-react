@@ -1150,10 +1150,107 @@ export function ModrinthSearchV2({
 
   // Function to handle quick install
   const quickInstall = async (project: ModrinthSearchHit) => {
-    // REMOVED: Block for direct installation if selectedProfile is set
-    // Always open the modal now
+    if (selectedProfile) {
+      setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: true }));
+      
+      try {
+        // Step 1: Fetch versions
+        const versions = await ModrinthService.getModVersions(project.project_id);
+        if (!versions || versions.length === 0) {
+          toast(`No versions found for ${project.title}. Opening selection modal.`);
+          setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+          // Fall through to modal opening logic below
+        } else {
+          // Step 2: Find best version
+          const sortedVersions = versions.sort((a, b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime());
+          const bestVersionForDirectInstall = findBestVersionForProfile(selectedProfile, sortedVersions);
+
+          if (!bestVersionForDirectInstall) {
+            toast(`No compatible version of ${project.title} for profile '${selectedProfile.name}'. Opening selection modal.`);
+            setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+            // Fall through to modal opening logic below
+          } else {
+            // Step 3: Get primary file
+            const primaryFileForDirectInstall = bestVersionForDirectInstall.files.find(f => f.primary) || bestVersionForDirectInstall.files[0];
+            if (!primaryFileForDirectInstall) {
+              toast(`No primary file for selected version of ${project.title}. Opening selection modal.`);
+              setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+              // Fall through to modal opening logic below
+            } else {
+              // Step 4: Check content type
+              const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
+              if (!mappedContentType) {
+                // mapModrinthProjectTypeToNrContentType already shows a toast (e.g., for modpacks).
+                // This means the project type is not suitable for direct content installation.
+                // Do not open the modal in this case.
+                setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+                return; // EXIT: Not suitable for direct install or modal.
+              }
+
+              // Step 5: Attempt direct install
+              const payload: InstallContentPayload = {
+                profile_id: selectedProfile.id,
+                project_id: project.project_id,
+                version_id: bestVersionForDirectInstall.id,
+                file_name: primaryFileForDirectInstall.filename,
+                download_url: primaryFileForDirectInstall.url,
+                file_hash_sha1: primaryFileForDirectInstall.hashes?.sha1 || undefined,
+                content_name: project.title,
+                version_number: bestVersionForDirectInstall.version_number,
+                content_type: mappedContentType,
+                loaders: bestVersionForDirectInstall.loaders,
+                game_versions: bestVersionForDirectInstall.game_versions,
+              };
+
+              await toast.promise(
+                installContentToProfile(payload),
+                {
+                  loading: `Installing ${project.title} (${bestVersionForDirectInstall.version_number}) to ${selectedProfile.name}...`,
+                  success: `Successfully installed ${project.title} (${bestVersionForDirectInstall.version_number}) to ${selectedProfile.name}`,
+                  error: (err) => `Failed to install: ${err.message || String(err)}`,
+                }
+              );
+
+              // Success: update states & exit
+              setInstalledProjects(prev => ({
+                ...prev,
+                [project.project_id]: getStatusForNewInstall(prev[project.project_id])
+              }));
+              setInstalledVersions(prev => {
+                const newState = { ...prev };
+                if (!newState[selectedProfile.id]) newState[selectedProfile.id] = {};
+                newState[selectedProfile.id][bestVersionForDirectInstall.id] = getStatusForNewInstall(
+                  newState[selectedProfile.id][bestVersionForDirectInstall.id]
+                );
+                return newState;
+              });
+              justInstalledOrToggledRef.current = true;
+              if (onInstallSuccess) onInstallSuccess();
+              setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+              return; // EXIT: Direct install successful.
+            }
+          }
+        }
+      } catch (error) { // Catches errors from getModVersions or the installContentToProfile promise
+        console.error(`Direct install attempt for ${project.title} to profile ${selectedProfile.name} failed:`, error);
+        // Toast.promise would have shown an error for installContentToProfile.
+        // For other errors (e.g. getModVersions), a generic toast is good.
+        if (!(error instanceof Error && error.message?.includes('installContentToProfile'))) {
+            toast.error(`An error occurred with direct install for ${project.title}. Opening selection modal.`);
+        }
+        setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+        // Fall through to modal opening logic below
+      }
+      // If we reach here after selectedProfile was true, it means direct install failed (or was bypassed)
+      // and intends to fall through to open the modal. Ensure loading is off.
+      setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+    }
+
+    // ---- Common Modal Opening Logic ----
+    // This part executes if:
+    // 1. selectedProfile was null from the start.
+    // 2. selectedProfile was set, but the direct install attempt failed and fell through.
     
-    // If no profile is selected or direct install failed (logic removed), open the modal as before
     setQuickInstallProject(project);
     setQuickInstallModalOpen(true);
     setQuickInstallLoading(true);
@@ -1162,27 +1259,24 @@ export function ModrinthSearchV2({
     setInstallStatus({});
     
     try {
-      // Fetch versions for this project
-      const versions = await ModrinthService.getModVersions(project.project_id);
+      // Fetch versions for this project (for the modal)
+      const versionsForModal = await ModrinthService.getModVersions(project.project_id);
       
-      if (versions.length === 0) {
+      if (versionsForModal.length === 0) {
         setQuickInstallError('No versions found for this project');
         setQuickInstallLoading(false);
         return;
       }
       
-      // Sort versions by date (newest first)
-      const sortedVersions = versions.sort((a, b) => 
+      const sortedVersionsForModal = versionsForModal.sort((a, b) => 
         new Date(b.date_published).getTime() - new Date(a.date_published).getTime()
       );
       
-      setQuickInstallVersions(sortedVersions);
+      setQuickInstallVersions(sortedVersionsForModal);
       
       const newInstallStatuses: Record<string, boolean> = {};
-
       for (const profile of internalProfiles) {
-        const bestVersion = findBestVersionForProfile(profile, sortedVersions);
-        
+        const bestVersion = findBestVersionForProfile(profile, sortedVersionsForModal);
         if (bestVersion) {
           const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
           if (primaryFile) {
@@ -1194,42 +1288,36 @@ export function ModrinthSearchV2({
               project_type: project.project_type as ModrinthProjectType,
               loader: bestVersion.loaders[0],
               pack_version_number: bestVersion.version_number,
-              request_id: bestVersion.id // Unique ID for the single request in this batch
+              request_id: bestVersion.id
             };
-
             try {
               const batchResults = await ProfileService.batchCheckContentInstalled({
-                profile_id: profile.id, // Batch call specific to this profile
-                requests: [request]     // Containing only the single relevant request
+                profile_id: profile.id,
+                requests: [request]
               });
-
               if (batchResults && batchResults.results && batchResults.results.length > 0 && batchResults.results[0].status) {
                 newInstallStatuses[profile.id] = !!batchResults.results[0].status.is_installed;
               } else {
-                console.warn(`Unexpected batch result for profile ${profile.name} (ID: ${profile.id}), project ${project.title}`);
-                newInstallStatuses[profile.id] = false; // Default if result format is unexpected
+                newInstallStatuses[profile.id] = false;
               }
             } catch (err) {
-              console.error(`Batch check failed for profile ${profile.name} (ID: ${profile.id}) and project ${project.title}:`, err);
-              newInstallStatuses[profile.id] = false; // Default to false on error for this profile
+              console.error(`Batch check failed for profile ${profile.name} (ID: ${profile.id}) and project ${project.title} in modal:`, err);
+              newInstallStatuses[profile.id] = false;
             }
           } else {
-            newInstallStatuses[profile.id] = false; // No primary file, assume not installed
+            newInstallStatuses[profile.id] = false;
           }
         } else {
-          newInstallStatuses[profile.id] = false; // No compatible version, assume not installed
+          newInstallStatuses[profile.id] = false;
         }
       }
       setInstallStatus(newInstallStatuses);
 
     } catch (error) {
-      console.error("Failed to fetch versions for quick install:", error);
-      setQuickInstallError(`Failed to fetch versions: ${error instanceof Error ? error.message : String(error)}`);
-      // Ensure statuses are reset or empty if version fetching fails completely
+      console.error("Failed to fetch versions for quick install modal:", error);
+      setQuickInstallError(`Failed to fetch versions for modal: ${error instanceof Error ? error.message : String(error)}`);
       const fallbackStatuses: Record<string, boolean> = {};
-      internalProfiles.forEach(profile => {
-        fallbackStatuses[profile.id] = false;
-      });
+      internalProfiles.forEach(profile => { fallbackStatuses[profile.id] = false; });
       setInstallStatus(fallbackStatuses);
     } finally {
       setQuickInstallLoading(false);
