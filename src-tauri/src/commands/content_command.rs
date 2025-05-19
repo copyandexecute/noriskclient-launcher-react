@@ -9,6 +9,7 @@ use crate::state::profile_state::ModSource;
 use crate::state::state_manager::State as AppStateManager;
 use crate::utils::hash_utils; // For calculate_sha1
 use crate::utils::{shaderpack_utils, resourcepack_utils, datapack_utils, profile_utils};
+use crate::commands::file_command; // Added import for file_command
 
 // Updated InstallContentPayload struct
 #[derive(Serialize, Deserialize, Debug)]
@@ -129,6 +130,7 @@ async fn uninstall_content_by_sha1_internal(
 pub struct ToggleContentPayload {
     profile_id: Uuid,
     sha1_hash: Option<String>,
+    file_path: Option<String>,
     enabled: bool,
     norisk_mod_identifier: Option<crate::state::profile_state::NoriskModIdentifier>,
     content_type: Option<profile_utils::ContentType>, // Added for targeted toggling
@@ -196,13 +198,22 @@ pub async fn toggle_content_from_profile(
     payload: ToggleContentPayload,
 ) -> Result<(), CommandError> {
     log::info!(
-        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, enabled={}, norisk_mod_identifier={:?}, content_type={:?}",
+        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, file_path={:?}, enabled={}, norisk_mod_identifier={:?}, content_type={:?}",
         payload.profile_id,
         payload.sha1_hash,
+        payload.file_path,
         payload.enabled,
         payload.norisk_mod_identifier,
         payload.content_type
     );
+
+    // New: Prioritize file_path based toggling for non-Mod content types
+    if let Some(ref path_str) = payload.file_path {
+        if payload.content_type != Some(profile_utils::ContentType::Mod) {
+            log::info!("Toggling content via direct file path: {} to enabled={}", path_str, payload.enabled);
+            return file_command::set_file_enabled(path_str.clone(), payload.enabled).await;
+        }
+    }
 
     let state_manager = AppStateManager::get().await.map_err(|e| {
         log::error!("Failed to get AppStateManager: {}", e);

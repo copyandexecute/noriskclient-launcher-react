@@ -20,6 +20,7 @@ export interface UninstallContentPayload {
 export interface ToggleContentPayload {
   profile_id: string; // UUID
   sha1_hash?: string;  // Made optional - SHA1 hash of the content to toggle
+  file_path?: string; // Optional: Direct path to the file to toggle
   enabled: boolean;   // The desired new enabled state
   norisk_mod_identifier?: NoriskModIdentifier; // Optional identifier for NoRisk Pack items
   content_type?: ContentType; // Optional: For targeted asset toggling

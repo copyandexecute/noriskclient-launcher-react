@@ -7,6 +7,7 @@ import { ContentType as NrContentType } from '../types/content';
 import type { ToggleContentPayload } from '../types/content';
 import { ModrinthService } from '../services/modrinth-service';
 import { getLocalContent } from '../services/profile-service';
+import { toggleContentFromProfile } from '../services/content-service';
 
 // Base type for content items managed by this hook - maps to ProfileLocalContentItem
 // We'll use ProfileLocalContentItem directly or ensure T extends it.
@@ -98,6 +99,50 @@ function mapBackendItemToFrontendType<T extends LocalContentItem>(backendItem: P
     ...rest,
     path: path_str, // Map path_str to path
   } as T;
+}
+
+// Helper function to create ToggleContentPayload
+function createTogglePayload<T extends LocalContentItem>(
+  item: T,
+  profileId: string,
+  uiContentType: LocalContentType,
+  targetEnabledState: boolean // This is the 'enabled' field for the payload
+): ToggleContentPayload | null {
+  const backendContentType = mapUiContentTypeToBackend(uiContentType);
+
+  const payloadBase: Omit<ToggleContentPayload, 'sha1_hash' | 'file_path' | 'norisk_mod_identifier'> = {
+    profile_id: profileId,
+    enabled: targetEnabledState,
+    content_type: backendContentType,
+  };
+
+  if (uiContentType === 'Mod') {
+    const noriskId = (item as any).norisk_mod_identifier; 
+    if (noriskId) {
+      return { ...payloadBase, norisk_mod_identifier: noriskId };
+    } else if (item.sha1_hash) {
+      const modPayload: ToggleContentPayload = {...payloadBase, sha1_hash: item.sha1_hash};
+      // Also include file_path if available, backend can prioritize
+      if (item.path) {
+        modPayload.file_path = item.path;
+      }
+      return modPayload;
+    } else if (item.path) {
+      // Local mod with no hash, identified by path
+      return { ...payloadBase, file_path: item.path };
+    } else {
+      toast.error(`Mod item ${item.filename} is missing essential identifiers (SHA1, NoRiskID, or Path) for toggle.`);
+      return null;
+    }
+  } else {
+    // For ResourcePacks, ShaderPacks, DataPacks, use file_path
+    if (item.path) {
+      return { ...payloadBase, file_path: item.path };
+    } else {
+      toast.error(`Path is missing for ${uiContentType} ${item.filename}. Cannot toggle.`);
+      return null;
+    }
+  }
 }
 
 export function useLocalContentManager<T extends LocalContentItem>({
@@ -442,19 +487,30 @@ export function useLocalContentManager<T extends LocalContentItem>({
   }, [filteredItems]);
 
   const handleToggleItemEnabled = useCallback(async (item: T) => {
-    if (!profile || !item.path) { // Use path
-      toast.error("Profile or item path missing for toggle.");
+    if (!profile) { 
+      toast.error("Profile missing for toggle.");
       return;
     }
+    
     setItemBeingToggled(item.filename);
-    const newEnabledState = !(item.is_disabled === false); 
+    // If item.is_disabled is true (it's disabled), targetEnabledState becomes true (to enable it).
+    // If item.is_disabled is false (it's enabled), targetEnabledState becomes false (to disable it).
+    const targetEnabledState = item.is_disabled; 
+
+    const payload = createTogglePayload(item, profile.id, contentType, targetEnabledState);
+
+    if (!payload) {
+      setItemBeingToggled(null);
+      // createTogglePayload already shows a toast for some error cases
+      return;
+    }
 
     try {
-      await invoke("set_file_enabled", { filePath: item.path, enabled: newEnabledState }); // Use path
+      await toggleContentFromProfile(payload);
 
       setItems(prevItems =>
         prevItems.map(i =>
-          i.filename === item.filename ? { ...i, is_disabled: !newEnabledState } : i
+          i.filename === item.filename ? { ...i, is_disabled: !targetEnabledState } : i
         )
       );
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
@@ -465,7 +521,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
     } finally {
       setItemBeingToggled(null);
     }
-  }, [profile, getDisplayFileName]); 
+  }, [profile, contentType, getDisplayFileName]); 
 
   const handleDeleteItem = useCallback((item: T) => {
     if (!item.path) { // Use path
@@ -552,30 +608,51 @@ export function useLocalContentManager<T extends LocalContentItem>({
     setIsBatchToggling(true);
     const errors: string[] = [];
     let successfulOperations = 0;
+    // Determine the most common current state to decide the batch action
+    // This is a simple approach: if most are disabled, enable all selected. Otherwise, disable all selected.
+    // More sophisticated logic could be to toggle each to its opposite state if needed.
+    let disabledCount = 0;
+    selectedItemIds.forEach(itemId => {
+      const item = items.find(i => i.filename === itemId);
+      if (item?.is_disabled) disabledCount++;
+    });
+    const predominantlyDisabled = disabledCount > selectedItemIds.size / 2;
+    const targetBatchEnabledState = predominantlyDisabled; // If mostly disabled, target state is enabled (true)
 
     for (const itemId of selectedItemIds) {
       const item = items.find(i => i.filename === itemId);
-      if (item?.path) { // Use path
-        const newEnabledState = !(item.is_disabled === false);
-        try {
-          await invoke("set_file_enabled", { filePath: item.path, enabled: newEnabledState }); // Use path
-          setItems(prev => prev.map(i => i.filename === itemId ? { ...i, is_disabled: !newEnabledState } : i));
-          successfulOperations++;
-        } catch (err) {
-          const errorDetail = err instanceof Error ? err.message : String(err.message);
-          errors.push(`Failed to toggle ${getDisplayFileName(item)}: ${errorDetail}`);
+      if (item) {
+        // For batch, we determine a single target state for all selected items.
+        // Or, if we want individual toggling logic: const targetEnabledState = item.is_disabled;
+        const payload = createTogglePayload(item, profile.id, contentType, targetBatchEnabledState);
+
+        if (payload) {
+          try {
+            await toggleContentFromProfile(payload);
+            setItems(prev => prev.map(i => 
+              i.filename === itemId ? { ...i, is_disabled: !targetBatchEnabledState } : i
+            ));
+            successfulOperations++;
+          } catch (err) {
+            const errorDetail = err instanceof Error ? err.message : String(err.message);
+            errors.push(`Failed to toggle ${getDisplayFileName(item)}: ${errorDetail}`);
+          }
+        } else {
+          // Error already toasted by createTogglePayload if it returned null
+          errors.push(`Could not create toggle payload for ${getDisplayFileName(item)}.`);
         }
       } else {
-        errors.push(`Could not find path for item ID ${itemId} to toggle.`);
+        errors.push(`Could not find item ID ${itemId} to toggle.`);
       }
     }
     setIsBatchToggling(false);
     if (errors.length > 0) toast.error(`Batch toggle failed for some items: ${errors.join("; ")}`);
     if (successfulOperations > 0) {
+      toast.success(`Successfully toggled ${successfulOperations} item(s).`);
       if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
     }
     setSelectedItemIds(new Set());
-  }, [profile, selectedItemIds, items, getDisplayFileName]); 
+  }, [profile, selectedItemIds, items, contentType, getDisplayFileName]); 
 
   const handleBatchDeleteSelected = useCallback(() => {
     if (!profile || selectedItemIds.size === 0) return;

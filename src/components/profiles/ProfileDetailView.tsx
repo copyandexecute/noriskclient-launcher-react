@@ -14,10 +14,6 @@ import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { ModsTabV2 } from "./detail/v2/ModsTabV2";
 import { NoRiskModsTabV2 } from "./detail/v2/NoRiskModsTabV2";
-import { ShaderPacksTab } from "./detail/ShaderPacksTab";
-import { DataPacksTab } from "./detail/DataPacksTab";
-import { ShaderPacksTabV2 } from "./detail/v2/ShaderPacksTabV2";
-import { DataPacksTabV2 } from "./detail/v2/DataPacksTabV2";
 import { LocalContentTabV2 } from "./detail/v2/LocalContentTabV2";
 import type { LocalContentItem } from "../../hooks/useLocalContentManager";
 
