@@ -1178,29 +1178,40 @@ export function ModrinthSearchV2({
       
       setQuickInstallVersions(sortedVersions);
       
-      // Check installation status for each profile individually
       const newInstallStatuses: Record<string, boolean> = {};
+
       for (const profile of internalProfiles) {
         const bestVersion = findBestVersionForProfile(profile, sortedVersions);
         
         if (bestVersion) {
           const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
           if (primaryFile) {
+            const request: ContentCheckRequest = {
+              project_id: project.project_id,
+              version_id: bestVersion.id,
+              file_hash_sha1: primaryFile.hashes?.sha1,
+              file_name: primaryFile.filename,
+              project_type: project.project_type as ModrinthProjectType,
+              loader: bestVersion.loaders[0],
+              pack_version_number: bestVersion.version_number,
+              request_id: bestVersion.id // Unique ID for the single request in this batch
+            };
+
             try {
-              const status = await ProfileService.isContentInstalled({
-                profile_id: profile.id,
-                project_id: project.project_id,
-                version_id: bestVersion.id,
-                file_hash_sha1: primaryFile.hashes?.sha1,
-                file_name: primaryFile.filename,
-                project_type: project.project_type as ModrinthProjectType,
-                loader: bestVersion.loaders[0],
-                pack_version_number: bestVersion.version_number,
+              const batchResults = await ProfileService.batchCheckContentInstalled({
+                profile_id: profile.id, // Batch call specific to this profile
+                requests: [request]     // Containing only the single relevant request
               });
-              newInstallStatuses[profile.id] = !!status.is_installed;
+
+              if (batchResults && batchResults.results && batchResults.results.length > 0 && batchResults.results[0].status) {
+                newInstallStatuses[profile.id] = !!batchResults.results[0].status.is_installed;
+              } else {
+                console.warn(`Unexpected batch result for profile ${profile.name} (ID: ${profile.id}), project ${project.title}`);
+                newInstallStatuses[profile.id] = false; // Default if result format is unexpected
+              }
             } catch (err) {
-              console.error(`Failed to check install status for profile ${profile.name} (ID: ${profile.id}) and project ${project.title}:`, err);
-              newInstallStatuses[profile.id] = false; // Default to false on error
+              console.error(`Batch check failed for profile ${profile.name} (ID: ${profile.id}) and project ${project.title}:`, err);
+              newInstallStatuses[profile.id] = false; // Default to false on error for this profile
             }
           } else {
             newInstallStatuses[profile.id] = false; // No primary file, assume not installed
