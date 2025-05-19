@@ -1178,72 +1178,48 @@ export function ModrinthSearchV2({
       
       setQuickInstallVersions(sortedVersions);
       
-      // Create batch requests for checking status across all profiles
-      const requests: ContentCheckRequest[] = [];
-      
+      // Check installation status for each profile individually
+      const newInstallStatuses: Record<string, boolean> = {};
       for (const profile of internalProfiles) {
-        // Find the best version for this profile
         const bestVersion = findBestVersionForProfile(profile, sortedVersions);
         
-        // If no compatible version, skip installation check
-        if (!bestVersion) continue;
-        
-        // Find primary file for the best version
-        const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
-        if (!primaryFile) continue;
-        
-        // Create request for this profile/version combination
-        requests.push({
-          project_id: project.project_id,
-          version_id: bestVersion.id,
-          file_hash_sha1: primaryFile.hashes?.sha1,
-          file_name: primaryFile.filename,
-          project_type: project.project_type,
-          game_version: bestVersion.game_versions[0],
-          loader: bestVersion.loaders[0],
-          pack_version_number: bestVersion.version_number,
-          request_id: profile.id // Use profile.id as request_id for mapping
-        });
-      }
-      
-      if (requests.length > 0) {
-        try {
-          const statuses: Record<string, boolean> = {};
-          internalProfiles.forEach(profile => {
-            statuses[profile.id] = false;
-          });
-          
-          const batchResults = await ProfileService.batchCheckContentInstalled({
-            profile_id: internalProfiles[0]?.id, // Use any profile_id, as it's not the primary context here
-            requests
-          });
-          
-          if (batchResults && batchResults.results) {
-            batchResults.results.forEach(result => {
-              if (result && result.request_id && result.status) {
-                statuses[result.request_id] = !!result.status.is_installed;
-              }
-            });
+        if (bestVersion) {
+          const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
+          if (primaryFile) {
+            try {
+              const status = await ProfileService.isContentInstalled({
+                profile_id: profile.id,
+                project_id: project.project_id,
+                version_id: bestVersion.id,
+                file_hash_sha1: primaryFile.hashes?.sha1,
+                file_name: primaryFile.filename,
+                project_type: project.project_type as ModrinthProjectType,
+                loader: bestVersion.loaders[0],
+                pack_version_number: bestVersion.version_number,
+              });
+              newInstallStatuses[profile.id] = !!status.is_installed;
+            } catch (err) {
+              console.error(`Failed to check install status for profile ${profile.name} (ID: ${profile.id}) and project ${project.title}:`, err);
+              newInstallStatuses[profile.id] = false; // Default to false on error
+            }
+          } else {
+            newInstallStatuses[profile.id] = false; // No primary file, assume not installed
           }
-          setInstallStatus(statuses);
-        } catch (error) {
-          console.error("Failed to batch check installation status for quick install:", error);
-          const statuses: Record<string, boolean> = {};
-          internalProfiles.forEach(profile => {
-            statuses[profile.id] = false;
-          });
-          setInstallStatus(statuses);
+        } else {
+          newInstallStatuses[profile.id] = false; // No compatible version, assume not installed
         }
-      } else {
-        const statuses: Record<string, boolean> = {};
-        internalProfiles.forEach(profile => {
-          statuses[profile.id] = false;
-        });
-        setInstallStatus(statuses);
       }
+      setInstallStatus(newInstallStatuses);
+
     } catch (error) {
-      console.error("Failed to fetch versions:", error);
+      console.error("Failed to fetch versions for quick install:", error);
       setQuickInstallError(`Failed to fetch versions: ${error instanceof Error ? error.message : String(error)}`);
+      // Ensure statuses are reset or empty if version fetching fails completely
+      const fallbackStatuses: Record<string, boolean> = {};
+      internalProfiles.forEach(profile => {
+        fallbackStatuses[profile.id] = false;
+      });
+      setInstallStatus(fallbackStatuses);
     } finally {
       setQuickInstallLoading(false);
     }
@@ -1483,23 +1459,23 @@ export function ModrinthSearchV2({
     checkNewResultsInstallation();
   }, [searchResults.length, selectedProfile, installedProjects]);
 
-  // Reset installation status when no profile is selected
+  // Reset project-level installation status when no profile is selected.
+  // Version statuses in `installedVersions` are kept as a cache.
   useEffect(() => {
     if (!selectedProfile) {
-      // Reset installation status when no profile is selected
-      console.log("No profile selected - resetting installation status");
+      console.log("No profile selected - resetting project installation status");
       setInstalledProjects({});
-      setInstalledVersions({});
+      // NOTE: setInstalledVersions({}); is intentionally removed here to persist version status cache.
     }
   }, [selectedProfile]);
 
-  // Additional check when project type changes to update installation status
+  // Additional check when project type changes to update project-level installation status
   useEffect(() => {
     if (selectedProfile) {
-      // Reset installation status when project type changes
+      // Reset project-level installation status when project type changes, as it's view-specific
       setInstalledProjects({});
     }
-  }, [projectType]);
+  }, [projectType, selectedProfile]);
 
   const accentColor = useThemeStore((state) => state.accentColor); // Get accent color
   const [hoveredVersionId, setHoveredVersionId] = useState<string | null>(null); // New state for version hover
