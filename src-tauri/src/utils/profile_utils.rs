@@ -1831,7 +1831,7 @@ async fn process_shaderpack_requests(
                     item_type: ContentType::ShaderPack,
                     item_id: None,
                     file_name: Some(pack_info.filename.clone()),
-                    display_name: Some(pack_info.filename.clone()),
+                    display_name: Some(pack_info.filename.clone()), // Use filename as display_name
                 });
                 break;
             }
@@ -1913,7 +1913,7 @@ async fn process_datapack_requests(
                     item_type: ContentType::DataPack,
                     item_id: None,
                     file_name: Some(pack_info.filename.clone()),
-                    display_name: Some(pack_info.filename.clone()),
+                    display_name: Some(pack_info.filename.clone()), // Use filename as display_name
                 });
                 break;
             }
@@ -1952,6 +1952,7 @@ pub struct LocalContentItem {
     pub is_directory: bool, // Wichtig für Shader
     pub content_type: ContentType, // Um den Typ mitzuführen
     pub modrinth_info: Option<GenericModrinthInfo>,
+    pub source_type: Option<String>, // Zur Kennzeichnung von Custom Mods
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)] // Ensure Serialize and Deserialize are here
@@ -1979,30 +1980,30 @@ impl LocalContentLoader {
             profile.name, params.profile_id, params.content_type, params.calculate_hashes, params.fetch_modrinth_data
         );
 
-        let content_dir = match params.content_type {
-            ContentType::ResourcePack => resourcepack_utils::get_resourcepacks_dir(&profile).await?,
-            ContentType::ShaderPack => shaderpack_utils::get_shaderpacks_dir(&profile).await?,
-            ContentType::DataPack => datapack_utils::get_datapacks_dir(&profile).await?,
+        let content_dirs = match params.content_type {
+            ContentType::ResourcePack => vec![resourcepack_utils::get_resourcepacks_dir(&profile).await?],
+            ContentType::ShaderPack => vec![shaderpack_utils::get_shaderpacks_dir(&profile).await?],
+            ContentType::DataPack => vec![datapack_utils::get_datapacks_dir(&profile).await?],
             ContentType::Mod => {
-                // For mods, we don't read a directory in the same way.
-                // We'll process profile.mods directly.
-                // We still need the instance path for constructing full paths to mod files.
+                // For mods, get both standard and custom mods directories
                 let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
-                instance_path.join("mods") // Return mods directory path for consistency, though iteration logic will differ.
+                vec![
+                    instance_path.join("custom_mods")
+                ]
             }
         };
 
         let mut preliminary_items: Vec<LocalContentItem> = Vec::new();
 
         if params.content_type == ContentType::Mod {
-            let mods_dir = content_dir; // This is <instance_path>/mods
+            // First process profile.mods entries (for tracking enabled status)
             for mod_item in &profile.mods {
                 let mut filename = mod_item.file_name_override.clone();
                 if filename.is_none() {
-                    match mod_item.source { // Removed & before mod_item.source and Some() wrapper
+                    match mod_item.source {
                         crate::state::profile_state::ModSource::Modrinth { ref file_name, .. } => filename = Some(file_name.clone()),
                         crate::state::profile_state::ModSource::Local { ref file_name, .. } => filename = Some(file_name.clone()),
-                        crate::state::profile_state::ModSource::Url { ref file_name, .. } => filename = file_name.clone(), // file_name in ModSourceUrl is Option<String>
+                        crate::state::profile_state::ModSource::Url { ref file_name, .. } => filename = file_name.clone(),
                         _ => {
                             warn!("Mod {} has no derivable filename. Skipping.", mod_item.id);
                             continue;
@@ -2018,17 +2019,28 @@ impl LocalContentLoader {
                     }
                 };
                 
-                let path_buf = mods_dir.join(&actual_filename);
+                // Try to find the mod in any of the content directories
+                let mut found_path = None;
+                for dir in &content_dirs {
+                    let path_buf = dir.join(&actual_filename);
+                    if path_buf.exists() {
+                        found_path = Some(path_buf);
+                        break;
+                    }
+                }
+                
+                // Use the first directory as fallback if file not found
+                let path_buf = found_path.unwrap_or_else(|| content_dirs[0].join(&actual_filename));
                 let path_str = path_buf.to_string_lossy().into_owned();
 
                 let file_size = 0; // Placeholder due to cache logic - will revisit
 
-                let sha1_hash = match mod_item.source { // Removed & and Some() wrapper
+                let sha1_hash = match mod_item.source {
                     crate::state::profile_state::ModSource::Modrinth { ref file_hash_sha1, .. } => file_hash_sha1.clone(),
                     _ => None,
                 };
 
-                let modrinth_info = match mod_item.source { // Removed & and Some() wrapper
+                let modrinth_info = match mod_item.source {
                     crate::state::profile_state::ModSource::Modrinth { ref project_id, ref version_id, .. } => {
                         Some(GenericModrinthInfo {
                             project_id: project_id.clone(),
@@ -2044,24 +2056,31 @@ impl LocalContentLoader {
                 preliminary_items.push(LocalContentItem {
                     filename: actual_filename,
                     path_str,
-                    sha1_hash, // May be None, will be calculated if params.calculate_hashes is true
-                    file_size, // May be 0, might be updated if file is read for hashing
+                    sha1_hash,
+                    file_size,
                     is_disabled: !mod_item.enabled,
-                    is_directory: false, // Mods are files
+                    is_directory: false,
                     content_type: ContentType::Mod,
                     modrinth_info,
+                    source_type: None,
                 });
             }
-        } else {
-            // Existing logic for ResourcePack, ShaderPack, DataPack
+        }
+        
+        // Process files directly from content directories for all content types
+        for content_dir in &content_dirs {
             if !content_dir.exists() {
-                debug!("Content directory {} does not exist. Returning empty list.", content_dir.display());
-                return Ok(Vec::new());
+                debug!("Content directory {} does not exist. Skipping.", content_dir.display());
+                continue;
             }
 
-            let mut entries = fs::read_dir(&content_dir)
-                .await
-                .map_err(|e| AppError::Io(e))?; 
+            let mut entries = match fs::read_dir(&content_dir).await {
+                Ok(entries) => entries,
+                Err(e) => {
+                    warn!("Failed to read directory {}: {}. Skipping.", content_dir.display(), e);
+                    continue;
+                }
+            };
 
             let mut items_to_process_with_paths: Vec<(PathBuf, bool)> = Vec::new(); 
 
@@ -2075,15 +2094,13 @@ impl LocalContentLoader {
                     ContentType::ResourcePack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
                     ContentType::ShaderPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) || is_directory,
                     ContentType::DataPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
-                    ContentType::Mod => false, // Should have been caught by the if block above
+                    ContentType::Mod => (file_name_str.ends_with(".jar") || file_name_str.ends_with(".jar.disabled")) && !is_directory,
                 };
 
                 if is_valid_item {
                     items_to_process_with_paths.push((path.clone(), is_directory));
                 } else {
-                    if params.content_type != ContentType::Mod { // Avoid double logging for mods
-                        debug!("Skipping invalid item for {:?}: {}", params.content_type, path.display());
-                    }
+                    debug!("Skipping invalid item for {:?}: {}", params.content_type, path.display());
                 }
             }
             
@@ -2099,6 +2116,21 @@ impl LocalContentLoader {
                     file_name_str
                 };
 
+                // Determine source_type based on parent directory name
+                let source_type = if params.content_type == ContentType::Mod {
+                    // Check if this mod is in the custom_mods directory
+                    if path.parent().map(|p| p.file_name())
+                        .flatten()
+                        .map(|name| name.to_string_lossy().to_string() == "custom_mods")
+                        .unwrap_or(false) {
+                        Some("custom".to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 preliminary_items.push(LocalContentItem {
                     filename: base_filename,
                     path_str: path.to_string_lossy().into_owned(),
@@ -2108,6 +2140,7 @@ impl LocalContentLoader {
                     is_directory: is_dir_flag,
                     content_type: params.content_type.clone(), 
                     modrinth_info: None,
+                    source_type,
                 });
             }
         }

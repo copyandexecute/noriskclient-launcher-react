@@ -207,6 +207,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
           {!item.is_disabled ? "Enabled" : "Disabled"}
         </TagBadge>
         {item.modrinth_info && <TagBadge size="sm" variant="info">Modrinth</TagBadge>}
+        {item.source_type === "custom" && <TagBadge size="sm" variant="warning">Custom</TagBadge>}
       </>
     );
     

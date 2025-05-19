@@ -336,6 +336,7 @@ export interface LocalContentItem {
   is_directory: boolean;
   content_type: ContentType; 
   modrinth_info?: GenericModrinthInfo | null;
+  source_type?: string | null; // For identifying "custom" mods
   // Frontend specific fields can be added here if needed, e.g., for UI state
   // local_icon_data_url?: string; // Example if we were to add this later
 }
