@@ -27,6 +27,7 @@ import { formatFileSize } from "../../../../utils/format-file-size";
 import { toast } from 'react-hot-toast';
 import { toggleContentFromProfile } from "../../../../services/content-service";
 import type { ToggleContentPayload } from "../../../../types/content";
+import { ContentType } from "../../../../types/content";
 
 // Icons specific to ResourcePacksTabV2
 const RESOURCE_PACKS_TAB_ICONS_TO_PRELOAD = [
@@ -226,6 +227,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       profile_id: profile.id,
       sha1_hash: pack.sha1_hash,
       enabled: newEnabledStateForBackend, 
+      content_type: ContentType.ResourcePack,
     };
 
     try {
@@ -460,6 +462,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
           profile_id: profile.id,
           sha1_hash: pack.sha1_hash,
           enabled: newEnabledStateForBackend,
+          content_type: ContentType.ResourcePack,
         };
         const toastMessage = newEnabledStateForBackend ? "Enabling" : "Disabling"; // For error message
 
@@ -654,7 +657,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
             itemUpdateActionNode = (
                 <IconButton
                 size="sm"
-                variant="success"
+                colorScheme="success"
                 onClick={() => handleUpdateResourcePack(pack, updateAvailableVersion)}
                 disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
                 icon={<Icon icon="solar:cloud-download-bold-duotone" className="w-3.5 h-3.5" />}
@@ -666,7 +669,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       itemUpdateActionNode = (
          <IconButton
           size="sm"
-          variant="secondary"
+          colorScheme="secondary"
           disabled={true}
           icon={<Icon icon="solar:refresh-bold" className="animate-spin w-3.5 h-3.5" />}
           title={`Updating...`} 
@@ -689,7 +692,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       <IconButton
         title="Delete Resource Pack"
         icon={isDeleting ? <Icon icon="solar:refresh-circle-bold-duotone" className="animate-spin w-3.5 h-3.5" /> : <Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />} 
-        variant="destructive"
+        colorScheme="destructive"
         size="sm"
         onClick={() => handleDeleteResourcePack(pack)}
         disabled={isToggling || isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
@@ -700,11 +703,11 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
       <IconButton
         title="More Actions"
         icon={<Icon icon="solar:menu-dots-bold" className="w-3.5 h-3.5" />} 
-        variant="ghost"
+        colorScheme="ghost"
         size="sm"
         onClick={(e) => {
           e.stopPropagation();
-          setActiveDropdownId(prevId => prevId === pack.filename ? null : prevId);
+          setActiveDropdownId(prevId => prevId === pack.filename ? null : pack.filename);
         }}
         disabled={isDeleting || isBatchToggling || isBatchDeleting || checkingUpdates || isCurrentlyUpdating}
         data-item-id={pack.filename} 
@@ -784,7 +787,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
             icon={<Icon icon="solar:add-circle-bold-duotone" />}
             onClick={handleAddResourcePacks} 
             disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
-            variant="secondary"
+            colorScheme="secondary"
             size="sm"
             title="Add Resource Packs" 
             className="!h-9 !w-9 flex-shrink-0"
@@ -793,7 +796,7 @@ export function ResourcePacksTabV2({ profile, onRefreshRequired }: ResourcePacks
             icon={isLoading ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
             onClick={fetchResourcePacksData} 
             disabled={isLoading || isBatchToggling || isBatchDeleting || checkingUpdates || isUpdatingAll}
-            variant="secondary"
+            colorScheme="secondary"
             size="sm"
             title={isLoading ? "Refreshing..." : "Refresh Resource Packs"} 
             className="!h-9 !w-9 flex-shrink-0 ml-auto"

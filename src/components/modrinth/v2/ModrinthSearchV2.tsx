@@ -1889,6 +1889,26 @@ export function ModrinthSearchV2({
     // Get current installation status for the version
     const currentVersionStatus = installedVersions[selectedProfile.id]?.[version.id];
 
+    // Determine NrContentType from project.project_type
+    let nrContentType: NrContentType | undefined = undefined;
+    switch (project.project_type as ModrinthProjectType) {
+      case 'mod':
+        nrContentType = NrContentType.Mod;
+        break;
+      case 'resourcepack':
+        nrContentType = NrContentType.ResourcePack;
+        break;
+      case 'shader':
+        nrContentType = NrContentType.ShaderPack;
+        break;
+      case 'datapack':
+        nrContentType = NrContentType.DataPack;
+        break;
+      default:
+        // Optionally log a warning for unhandled project types if needed
+        console.warn("[ModrinthSearchV2] Unhandled project_type for NrContentType mapping in toggle:", project.project_type);
+    }
+
     // Check if this is a NoRisk Pack item
     if (currentVersionStatus?.norisk_pack_item_details?.norisk_mod_identifier) {
       const noriskIdentifier = currentVersionStatus.norisk_pack_item_details.norisk_mod_identifier;
@@ -1901,7 +1921,11 @@ export function ModrinthSearchV2({
           const payload: ToggleContentPayload = {
             profile_id: profileId,
             enabled: newEnabledState,
-            norisk_mod_identifier: noriskIdentifier
+            norisk_mod_identifier: noriskIdentifier,
+            content_type: nrContentType, // Pass content_type here as well
+            // sha1_hash is not strictly needed for norisk_mod_identifier-based toggling by current backend logic,
+            // but can be included for consistency if desired or if backend logic changes.
+            sha1_hash: sha1Hash, 
           };
           
           await toggleContentFromProfile(payload);
@@ -1978,7 +2002,9 @@ export function ModrinthSearchV2({
         const payload: ToggleContentPayload = {
           profile_id: profileId,
           sha1_hash: sha1Hash,
-          enabled: newEnabledState
+          enabled: newEnabledState,
+          content_type: nrContentType, // Add mapped content_type
+          norisk_mod_identifier: undefined, // Explicitly undefined for non-NoRisk items
         };
         
         await toggleContentFromProfile(payload);

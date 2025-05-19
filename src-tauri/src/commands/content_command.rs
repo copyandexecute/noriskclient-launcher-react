@@ -131,6 +131,7 @@ pub struct ToggleContentPayload {
     sha1_hash: Option<String>,
     enabled: bool,
     norisk_mod_identifier: Option<crate::state::profile_state::NoriskModIdentifier>,
+    content_type: Option<profile_utils::ContentType>, // Added for targeted toggling
 }
 
 /// Helper function to toggle a single asset file (shader, resourcepack, datapack)
@@ -195,11 +196,12 @@ pub async fn toggle_content_from_profile(
     payload: ToggleContentPayload,
 ) -> Result<(), CommandError> {
     log::info!(
-        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, enabled={}, norisk_mod_identifier={:?}",
+        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, enabled={}, norisk_mod_identifier={:?}, content_type={:?}",
         payload.profile_id,
         payload.sha1_hash,
         payload.enabled,
-        payload.norisk_mod_identifier
+        payload.norisk_mod_identifier,
+        payload.content_type
     );
 
     let state_manager = AppStateManager::get().await.map_err(|e| {
@@ -272,14 +274,19 @@ pub async fn toggle_content_from_profile(
 
     let mut mod_entries_toggled_count = 0;
     let mut mod_entry_toggle_errors = false;
+    let mut asset_files_toggled_count = 0;
+    let mut asset_file_toggle_errors = false;
 
     // --- Phase 1: Toggle Modrinth Mod Entries (in profile.mods list) ---
-    for mod_entry in profile.mods.iter() { // Iterate over a clone or ensure no modification invalidates iter
+    // Always check mods if SHA1 is provided, as it's a primary place for managed content.
+    // If content_type is explicitly Mod, we'd primarily expect a hit here.
+    // If content_type is an asset, a mod might still share a SHA1 if manually placed or due to other reasons.
+    for mod_entry in profile.mods.iter() { 
         if let ModSource::Modrinth { file_hash_sha1: Some(mod_hash), .. } = &mod_entry.source {
             if mod_hash == &current_sha1_hash {
                 if mod_entry.enabled == payload.enabled {
                     log::info!("Mod entry {} in profile {} is already state enabled={}. Skipping DB update.", mod_entry.id, payload.profile_id, payload.enabled);
-                    mod_entries_toggled_count += 1;
+                    mod_entries_toggled_count += 1; // Count as processed even if no change needed
                     continue;
                 }
                 match state_manager
@@ -300,78 +307,127 @@ pub async fn toggle_content_from_profile(
         }
     }
     
-    let mut asset_files_toggled_count = 0;
-    let mut asset_file_toggle_errors = false;
-
-    // --- Phase 2a: Toggle Shader Packs ---
-    match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
-        Ok(shader_packs) => {
-            for pack_info in shader_packs {
-                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
-                    match toggle_single_asset_file(
-                        &pack_info.path,
-                        &pack_info.filename,
-                        pack_info.is_disabled,
-                        payload.enabled,
-                        "shader pack"
-                    ).await {
-                        Ok(_) => asset_files_toggled_count += 1,
-                        Err(_) => asset_file_toggle_errors = true,
+    // --- Phase 2: Toggle Asset Files (ShaderPacks, ResourcePacks, DataPacks) ---
+    // Only proceed with asset file toggling if a specific asset content_type is given,
+    // or if content_type is None (in which case, for safety, we might scan all - though for optimization, we avoid this if possible).
+    // For this optimization: if content_type is Some(AssetType), only scan that type.
+    // If content_type is Some(Mod) or None, and a mod was already toggled above, we might stop to avoid asset scans.
+    // However, if a mod was NOT found by SHA1, and type is None, we might fall back to scanning assets.
+    //
+    // Revised logic for Phase 2:
+    // Only enter this phase if payload.content_type targets an asset type.
+    match payload.content_type {
+        Some(profile_utils::ContentType::ShaderPack) => {
+            log::debug!("Targeted toggle for ShaderPacks with SHA1: {}", current_sha1_hash);
+            match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
+                Ok(shader_packs) => {
+                    for pack_info in shader_packs {
+                        if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                            match toggle_single_asset_file(
+                                &pack_info.path,
+                                &pack_info.filename,
+                                pack_info.is_disabled,
+                                payload.enabled,
+                                "shader pack"
+                            ).await {
+                                Ok(_) => asset_files_toggled_count += 1,
+                                Err(_) => asset_file_toggle_errors = true,
+                            }
+                        }
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to list shader packs for profile {}: {}. Skipping shader toggle.", payload.profile_id, e);
+                    asset_file_toggle_errors = true;
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to list shader packs for profile {}: {}. Skipping shader toggle.", payload.profile_id, e);
-            asset_file_toggle_errors = true; // Consider this an error for asset toggling phase
-        }
-    }
-
-    // --- Phase 2b: Toggle Resource Packs ---
-    match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
-        Ok(resource_packs) => {
-            for pack_info in resource_packs {
-                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
-                    match toggle_single_asset_file(
-                        &pack_info.path,
-                        &pack_info.filename,
-                        pack_info.is_disabled,
-                        payload.enabled,
-                        "resource pack"
-                    ).await {
-                        Ok(_) => asset_files_toggled_count += 1,
-                        Err(_) => asset_file_toggle_errors = true,
+        Some(profile_utils::ContentType::ResourcePack) => {
+            log::debug!("Targeted toggle for ResourcePacks with SHA1: {}", current_sha1_hash);
+            match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
+                Ok(resource_packs) => {
+                    for pack_info in resource_packs {
+                        if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                            match toggle_single_asset_file(
+                                &pack_info.path,
+                                &pack_info.filename,
+                                pack_info.is_disabled,
+                                payload.enabled,
+                                "resource pack"
+                            ).await {
+                                Ok(_) => asset_files_toggled_count += 1,
+                                Err(_) => asset_file_toggle_errors = true,
+                            }
+                        }
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to list resource packs for profile {}: {}. Skipping resource pack toggle.", payload.profile_id, e);
+                    asset_file_toggle_errors = true;
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to list resource packs for profile {}: {}. Skipping resource pack toggle.", payload.profile_id, e);
-            asset_file_toggle_errors = true;
-        }
-    }
-    
-    // --- Phase 2c: Toggle Datapacks ---
-    match datapack_utils::get_datapacks_for_profile(&profile).await {
-        Ok(data_packs) => {
-            for pack_info in data_packs {
-                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
-                    match toggle_single_asset_file(
-                        &pack_info.path,
-                        &pack_info.filename,
-                        pack_info.is_disabled,
-                        payload.enabled,
-                        "datapack"
-                    ).await {
-                        Ok(_) => asset_files_toggled_count += 1,
-                        Err(_) => asset_file_toggle_errors = true,
+        Some(profile_utils::ContentType::DataPack) => {
+            log::debug!("Targeted toggle for DataPacks with SHA1: {}", current_sha1_hash);
+            match datapack_utils::get_datapacks_for_profile(&profile).await {
+                Ok(data_packs) => {
+                    for pack_info in data_packs {
+                        if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                            match toggle_single_asset_file(
+                                &pack_info.path,
+                                &pack_info.filename,
+                                pack_info.is_disabled,
+                                payload.enabled,
+                                "datapack"
+                            ).await {
+                                Ok(_) => asset_files_toggled_count += 1,
+                                Err(_) => asset_file_toggle_errors = true,
+                            }
+                        }
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to list datapacks for profile {}: {}. Skipping datapack toggle.", payload.profile_id, e);
+                    asset_file_toggle_errors = true;
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to list datapacks for profile {}: {}. Skipping datapack toggle.", payload.profile_id, e);
-            asset_file_toggle_errors = true; // Consider this an error for asset toggling phase
+        Some(profile_utils::ContentType::Mod) => {
+            // Mod type was handled in Phase 1. If mod_entries_toggled_count is 0 here, it means no mod matched.
+            // No further asset scanning is done if ContentType::Mod was specified.
+            log::debug!("ContentType::Mod specified, mod processing already done in Phase 1.");
+            if mod_entries_toggled_count == 0 {
+                 log::warn!(
+                    "ContentType::Mod specified, but no Modrinth entry found with SHA1 '{}' in profile {} to toggle.",
+                    current_sha1_hash, payload.profile_id
+                );
+                // We don't return an error here yet, as the final check below will handle it if nothing at all was toggled.
+            }
+        }
+        None => {
+            // ContentType is None. This case is tricky for optimization.
+            // Current "safe" behavior without content_type was to scan all.
+            // For this optimization, if mods were checked (Phase 1) and nothing was found,
+            // and no specific asset type was given, we might log a warning or error.
+            // If a mod WAS found and toggled in Phase 1, we likely don't need to scan assets.
+            // However, if a mod was NOT found and no content type was given, we might log a warning or error.
+            if mod_entries_toggled_count > 0 {
+                 log::debug!("ContentType is None, but a mod was found and toggled by SHA1. Skipping asset scans.");
+            } else {
+                // No mod found by SHA1, and no content type specified.
+                // This implies the SHA1 might belong to an unmanaged asset or an asset whose type isn't known by the frontend.
+                // To maintain previous exhaustive behavior (at the cost of performance for this specific call),
+                // one *could* scan all asset types here as a fallback.
+                // However, for the purpose of this specific optimization task, if type is None and no mod matched,
+                // we'll assume the frontend should have provided a type if it was an asset.
+                // For now, we'll log and the final check will determine if an error is returned.
+                log::warn!(
+                    "ContentType is None and no Modrinth entry found with SHA1 '{}'. \
+                    For targeted asset toggling, provide content_type. \
+                    No asset folders will be scanned in this specific optimized path if a mod wasn't found.",
+                    current_sha1_hash
+                );
+            }
         }
     }
     
