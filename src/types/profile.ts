@@ -258,6 +258,48 @@ export interface ContentInstallStatus {
   norisk_pack_item_details?: NoRiskPackItemDetails;
 }
 
+/**
+ * Request parameters for a single content item in a batch check
+ */
+export interface ContentCheckRequest {
+  project_id?: string | null;
+  version_id?: string | null;
+  file_hash_sha1?: string | null;
+  file_name?: string | null;
+  project_type?: string | null;
+  game_version?: string | null;
+  loader?: string | null;
+  pack_version_number?: string | null;
+  request_id?: string | null; // Optional client ID to match requests with responses
+}
+
+/**
+ * Parameters for the `batch_check_content_installed` Tauri command.
+ */
+export interface BatchCheckContentParams {
+  profile_id: string; // Uuid -> string
+  requests: ContentCheckRequest[];
+}
+
+/**
+ * Result for a single content check request in the batch response
+ */
+export interface ContentCheckResult {
+  request_id?: string | null; // Same ID that was provided in the request
+  status: ContentInstallStatus;
+  project_id?: string | null;
+  version_id?: string | null;
+  file_name?: string | null;
+  project_type?: string | null;
+}
+
+/**
+ * Return type for the `batch_check_content_installed` Tauri command.
+ */
+export interface BatchContentInstallStatus {
+  results: ContentCheckResult[];
+}
+
 // Added: Type for Screenshot Information
 export interface ScreenshotInfo {
   filename: string;

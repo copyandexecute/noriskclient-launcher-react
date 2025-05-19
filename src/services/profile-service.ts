@@ -9,6 +9,8 @@ import type {
   Profile,
   UpdateProfileParams,
   AllProfilesAndLastPlayed,
+  BatchCheckContentParams,
+  BatchContentInstallStatus,
 } from "../types/profile";
 import type {
   DataPackInfo,
@@ -277,6 +279,12 @@ export async function isContentInstalled(
   params: CheckContentParams,
 ): Promise<ContentInstallStatus> {
   return invoke<ContentInstallStatus>("is_content_installed", { params });
+}
+
+export async function batchCheckContentInstalled(
+  params: BatchCheckContentParams,
+): Promise<BatchContentInstallStatus> {
+  return invoke<BatchContentInstallStatus>("batch_check_content_installed", { params });
 }
 
 export async function getNoriskPacks(): Promise<any> {

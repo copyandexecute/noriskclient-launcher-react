@@ -1,8 +1,8 @@
 use crate::error::{AppError, Result};
 use crate::integrations::modrinth::{ModrinthProjectType, ModrinthVersion};
 use crate::integrations::norisk_packs;
-use crate::state::profile_state::Profile;
 use crate::state::profile_state::ModSource;
+use crate::state::profile_state::Profile;
 use crate::state::state_manager::State;
 use crate::utils::file_utils;
 use crate::utils::{datapack_utils, hash_utils, resourcepack_utils, shaderpack_utils};
@@ -183,7 +183,9 @@ async fn get_content_directory(profile: &Profile, content_type: &ContentType) ->
         ContentType::Mod => {
             // For mods, the target directory is the 'mods' folder within the profile's instance path.
             let state = State::get().await?;
-            let instance_path = state.profile_manager.calculate_instance_path_for_profile(profile)?;
+            let instance_path = state
+                .profile_manager
+                .calculate_instance_path_for_profile(profile)?;
             Ok(instance_path.join("mods"))
         }
     }
@@ -249,9 +251,9 @@ pub struct CheckContentParams {
 // --- Return Type ---
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct FoundItemDetails {
-    pub item_type: ContentType, // Changed from String
-    pub item_id: Option<String>, // e.g., Mod ID (UUID) if it's a mod
-    pub file_name: Option<String>, // The actual filename on disk
+    pub item_type: ContentType,       // Changed from String
+    pub item_id: Option<String>,      // e.g., Mod ID (UUID) if it's a mod
+    pub file_name: Option<String>,    // The actual filename on disk
     pub display_name: Option<String>, // Display name if available
 }
 
@@ -262,7 +264,7 @@ pub struct NoRiskPackItemDetails {
     pub norisk_mod_identifier: Option<crate::state::profile_state::NoriskModIdentifier>,
 }
 
-#[derive(Serialize, Debug, Default, Clone)]
+#[derive(Serialize, Debug, Default, Clone, Deserialize)]
 pub struct ContentInstallStatus {
     pub is_included_in_norisk_pack: bool,
     pub is_installed: bool,
@@ -374,18 +376,24 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
 
                                 // New addition: Add NoRiskPackItemDetails
                                 let mod_identifier = norisk_mod.id.clone();
-                                
+
                                 // Create a proper NoriskModIdentifier
-                                let norisk_mod_identifier = crate::state::profile_state::NoriskModIdentifier {
-                                    pack_id: pack_id.clone(),
-                                    mod_id: mod_identifier.clone(),
-                                    game_version: target_game_version.to_string(),
-                                    loader: crate::state::profile_state::ModLoader::from_str(target_loader_str).unwrap_or(profile.loader.clone()),
-                                };
-                                
+                                let norisk_mod_identifier =
+                                    crate::state::profile_state::NoriskModIdentifier {
+                                        pack_id: pack_id.clone(),
+                                        mod_id: mod_identifier.clone(),
+                                        game_version: target_game_version.to_string(),
+                                        loader: crate::state::profile_state::ModLoader::from_str(
+                                            target_loader_str,
+                                        )
+                                        .unwrap_or(profile.loader.clone()),
+                                    };
+
                                 // Check if it's disabled in the profile
-                                let is_pack_mod_enabled = !profile.disabled_norisk_mods_detailed.contains(&norisk_mod_identifier);
-                                
+                                let is_pack_mod_enabled = !profile
+                                    .disabled_norisk_mods_detailed
+                                    .contains(&norisk_mod_identifier);
+
                                 status.norisk_pack_item_details = Some(NoRiskPackItemDetails {
                                     is_enabled: is_pack_mod_enabled,
                                     norisk_mod_identifier: Some(norisk_mod_identifier),
@@ -720,7 +728,10 @@ pub async fn check_content_installed(params: CheckContentParams) -> Result<Conte
     }
 
     if status.is_installed {
-        debug!("Final status: Found content installed locally. Enabled: {:?}. Details: {:?}", status.is_enabled, status.found_item_details);
+        debug!(
+            "Final status: Found content installed locally. Enabled: {:?}. Details: {:?}",
+            status.is_enabled, status.found_item_details
+        );
     } else {
         debug!("Final status: Content not found locally.");
     }
@@ -1121,19 +1132,20 @@ fn add_dir_to_zip<'a>(
             // And normalize path separators to forward slashes for zip compatibility.
             let rel_path_str = path
                 .strip_prefix(root_dir)
-                .map_err(|e| AppError::Other(format!(
-                    "Path prefix error stripping {:?} from {:?}: {}", 
-                    root_dir, 
-                    path, 
-                    e
-                )))?
+                .map_err(|e| {
+                    AppError::Other(format!(
+                        "Path prefix error stripping {:?} from {:?}: {}",
+                        root_dir, path, e
+                    ))
+                })?
                 .to_string_lossy()
                 .to_string()
                 .replace('\\', "/"); // Normalize to forward slashes
 
             if path.is_dir() {
                 // For directories, ensure the entry name ends with a forward slash.
-                let dir_entry_name = if rel_path_str.is_empty() { // Should not happen if root_dir itself is not added directly with empty name
+                let dir_entry_name = if rel_path_str.is_empty() {
+                    // Should not happen if root_dir itself is not added directly with empty name
                     // Potentially skip adding the root dir itself as an explicit entry if it's meant to be implicit
                     // Or handle as needed, e.g., if zipping contents *of* root_dir, rel_path_str might be empty for root_dir's direct children's parent dir entry
                     // For now, if rel_path_str is empty for a dir, it implies we are at the root_dir itself, which shouldn't be added as named entry.
@@ -1145,8 +1157,10 @@ fn add_dir_to_zip<'a>(
                     format!("{}/", rel_path_str)
                 };
 
-                if !dir_entry_name.is_empty() { // Only add non-empty directory names
-                    let dir_builder = ZipEntryBuilder::new(dir_entry_name.into(), Compression::Stored);
+                if !dir_entry_name.is_empty() {
+                    // Only add non-empty directory names
+                    let dir_builder =
+                        ZipEntryBuilder::new(dir_entry_name.into(), Compression::Stored);
                     writer
                         .write_entry_whole(dir_builder, &[])
                         .await
@@ -1161,8 +1175,11 @@ fn add_dir_to_zip<'a>(
                 // For files, read the content and add it
                 let file_data = fs::read(&path).await.map_err(|e| AppError::Io(e))?;
                 // Ensure rel_path_str is not empty for a file (should always be the case if not zipping root_dir itself as an entry)
-                if rel_path_str.is_empty(){
-                    return Err(AppError::Other(format!("Attempted to add file with empty relative path: {:?}", path)));
+                if rel_path_str.is_empty() {
+                    return Err(AppError::Other(format!(
+                        "Attempted to add file with empty relative path: {:?}",
+                        path
+                    )));
                 }
                 let file_builder = ZipEntryBuilder::new(rel_path_str.into(), Compression::Deflate);
 
@@ -1269,4 +1286,647 @@ pub async fn get_screenshots_for_profile(profile_id: Uuid) -> Result<Vec<Screens
         screenshots_path
     );
     Ok(screenshots)
+}
+
+// --- Batch Content Check Types ---
+#[derive(Deserialize, Debug, Clone, Serialize)]
+pub struct BatchCheckContentParams {
+    pub profile_id: Uuid,
+    pub requests: Vec<ContentCheckRequest>,
+}
+
+#[derive(Deserialize, Debug, Clone, Serialize)]
+pub struct ContentCheckRequest {
+    pub project_id: Option<String>,
+    pub version_id: Option<String>,
+    pub file_hash_sha1: Option<String>,
+    pub file_name: Option<String>,
+    pub project_type: Option<String>,
+    pub game_version: Option<String>,
+    pub loader: Option<String>,
+    pub pack_version_number: Option<String>,
+    pub request_id: Option<String>, // Optional client-provided ID to match requests with responses
+}
+
+#[derive(Serialize, Debug, Clone, Deserialize)]
+pub struct BatchContentInstallStatus {
+    pub results: Vec<ContentCheckResult>,
+}
+
+#[derive(Serialize, Debug, Clone, Deserialize)]
+pub struct ContentCheckResult {
+    pub request_id: Option<String>, // Same ID that was provided in the request
+    pub status: ContentInstallStatus,
+    pub project_id: Option<String>, // Echo back key identifiers for easier matching
+    pub version_id: Option<String>,
+    pub file_name: Option<String>,
+    pub project_type: Option<String>,
+}
+
+/// Checks the installation status of multiple Modrinth content items in batch.
+///
+/// This function is optimized to minimize repeated operations when checking multiple items
+/// of the same content type. For example, when checking multiple resource packs, it will
+/// load the list of installed resource packs only once.
+///
+/// # Arguments
+///
+/// * `params` - A struct containing the profile ID and a list of content check requests.
+///
+/// # Returns
+///
+/// Returns `Ok(BatchContentInstallStatus)` with the status for each request, or `Err` if errors occur.
+pub async fn check_content_installed_batch(
+    params: BatchCheckContentParams,
+) -> Result<BatchContentInstallStatus> {
+    info!(
+        "Batch checking installation status for {} items in profile {}",
+        params.requests.len(),
+        params.profile_id
+    );
+
+    // If empty request list, return empty result
+    if params.requests.is_empty() {
+        return Ok(BatchContentInstallStatus {
+            results: Vec::new(),
+        });
+    }
+
+    // Get the profile once for all requests
+    let state = State::get().await?;
+    let profile = state.profile_manager.get_profile(params.profile_id).await?;
+
+    // Group requests by content type to avoid repeated operations
+    let mut mod_requests: Vec<(&ContentCheckRequest, usize)> = Vec::new();
+    let mut resourcepack_requests: Vec<(&ContentCheckRequest, usize)> = Vec::new();
+    let mut shaderpack_requests: Vec<(&ContentCheckRequest, usize)> = Vec::new();
+    let mut datapack_requests: Vec<(&ContentCheckRequest, usize)> = Vec::new();
+    let mut other_requests: Vec<(&ContentCheckRequest, usize)> = Vec::new();
+
+    // Categorize requests while preserving original indices
+    for (idx, request) in params.requests.iter().enumerate() {
+        let target_type = request.project_type.as_deref().unwrap_or("mod");
+        match target_type {
+            "mod" => mod_requests.push((request, idx)),
+            "resourcepack" => resourcepack_requests.push((request, idx)),
+            "shader" => shaderpack_requests.push((request, idx)),
+            "datapack" => datapack_requests.push((request, idx)),
+            _ => other_requests.push((request, idx)),
+        }
+    }
+
+    // Create results array with the capacity but don't pre-fill it
+    let mut results = Vec::<Option<ContentCheckResult>>::with_capacity(params.requests.len());
+    // Make sure all slots are initialized to None
+    for _ in 0..params.requests.len() {
+        results.push(None);
+    }
+
+    // Process mods
+    if !mod_requests.is_empty() {
+        debug!("Processing {} mod requests", mod_requests.len());
+        process_mod_requests(&profile, &mod_requests, &mut results).await?;
+    }
+
+    // Process resource packs
+    if !resourcepack_requests.is_empty() {
+        debug!(
+            "Processing {} resource pack requests",
+            resourcepack_requests.len()
+        );
+        process_resourcepack_requests(&profile, &resourcepack_requests, &mut results).await?;
+    }
+
+    // Process shader packs
+    if !shaderpack_requests.is_empty() {
+        debug!(
+            "Processing {} shader pack requests",
+            shaderpack_requests.len()
+        );
+        process_shaderpack_requests(&profile, &shaderpack_requests, &mut results).await?;
+    }
+
+    // Process data packs
+    if !datapack_requests.is_empty() {
+        debug!("Processing {} data pack requests", datapack_requests.len());
+        process_datapack_requests(&profile, &datapack_requests, &mut results).await?;
+    }
+
+    // Process other content types individually
+    for (request, idx) in other_requests {
+        debug!(
+            "Processing individual request for content type: {:?}",
+            request.project_type
+        );
+
+        // Convert to the old params format
+        let old_params = CheckContentParams {
+            profile_id: params.profile_id,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_hash_sha1: request.file_hash_sha1.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+            game_version: request.game_version.clone(),
+            loader: request.loader.clone(),
+            pack_version_number: request.pack_version_number.clone(),
+        };
+
+        // Call the original function
+        let status = check_content_installed(old_params).await?;
+
+        // Store the result
+        results[idx] = Some(ContentCheckResult {
+            request_id: request.request_id.clone(),
+            status,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+        });
+    }
+
+    // Unwrap results and handle any None values (shouldn't happen if implementation is correct)
+    let final_results = results
+        .into_iter()
+        .enumerate()
+        .map(|(idx, result)| {
+            result.unwrap_or_else(|| {
+                warn!("No result was generated for request index {}", idx);
+                // Create a default result
+                ContentCheckResult {
+                    request_id: params.requests[idx].request_id.clone(),
+                    status: ContentInstallStatus::default(),
+                    project_id: params.requests[idx].project_id.clone(),
+                    version_id: params.requests[idx].version_id.clone(),
+                    file_name: params.requests[idx].file_name.clone(),
+                    project_type: params.requests[idx].project_type.clone(),
+                }
+            })
+        })
+        .collect();
+
+    Ok(BatchContentInstallStatus {
+        results: final_results,
+    })
+}
+
+/// Process all mod requests efficiently
+async fn process_mod_requests(
+    profile: &Profile,
+    requests: &[(&ContentCheckRequest, usize)],
+    results: &mut Vec<Option<ContentCheckResult>>,
+) -> Result<()> {
+    // For each request, we need to check both in NoRisk Pack and local installation
+    for (request, idx) in requests {
+        // Convert to the old params format for reusing norisk pack check logic
+        let old_params = CheckContentParams {
+            profile_id: profile.id,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_hash_sha1: request.file_hash_sha1.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+            game_version: request.game_version.clone(),
+            loader: request.loader.clone(),
+            pack_version_number: request.pack_version_number.clone(),
+        };
+
+        // Initialize the status struct
+        let mut status = ContentInstallStatus::default();
+
+        // Determine target contexts
+        let target_loader_str = match &request.loader {
+            Some(loader_str) => loader_str.as_str(),
+            None => profile.loader.as_str(),
+        };
+
+        let target_game_version_str_buf;
+        let target_game_version = match &request.game_version {
+            Some(gv_str) => gv_str.as_str(),
+            None => {
+                target_game_version_str_buf = profile.game_version.clone();
+                target_game_version_str_buf.as_str()
+            }
+        };
+
+        // Check if included in NoRisk Pack
+        if let Some(pack_id) = &profile.selected_norisk_pack_id {
+            let state = State::get().await?;
+            let config = state.norisk_pack_manager.get_config().await;
+
+            if let Ok(resolved_pack) = config.get_resolved_pack_definition(pack_id) {
+                for norisk_mod in &resolved_pack.mods {
+                    let mut is_potential_project_match = false;
+                    if let (
+                        Some(pid_arg),
+                        norisk_packs::NoriskModSourceDefinition::Modrinth {
+                            project_id: norisk_pid,
+                            ..
+                        },
+                    ) = (&request.project_id, &norisk_mod.source)
+                    {
+                        if pid_arg == norisk_pid {
+                            is_potential_project_match = true;
+                        }
+                    }
+
+                    if is_potential_project_match {
+                        if let Some(loader_map) = norisk_mod.compatibility.get(target_game_version)
+                        {
+                            if let Some(target) = loader_map.get(target_loader_str) {
+                                status.is_included_in_norisk_pack = true;
+
+                                // Check specific version match
+                                if let Some(v_num_arg) = &request.pack_version_number {
+                                    if v_num_arg == &target.identifier {
+                                        status.is_specific_version_in_pack = true;
+                                    }
+                                }
+
+                                // Add NoRiskPackItemDetails
+                                let mod_identifier = norisk_mod.id.clone();
+
+                                let norisk_mod_identifier =
+                                    crate::state::profile_state::NoriskModIdentifier {
+                                        pack_id: pack_id.clone(),
+                                        mod_id: mod_identifier.clone(),
+                                        game_version: target_game_version.to_string(),
+                                        loader: crate::state::profile_state::ModLoader::from_str(
+                                            target_loader_str,
+                                        )
+                                        .unwrap_or(profile.loader.clone()),
+                                    };
+
+                                let is_pack_mod_enabled = !profile
+                                    .disabled_norisk_mods_detailed
+                                    .contains(&norisk_mod_identifier);
+
+                                status.norisk_pack_item_details = Some(NoRiskPackItemDetails {
+                                    is_enabled: is_pack_mod_enabled,
+                                    norisk_mod_identifier: Some(norisk_mod_identifier),
+                                });
+
+                                if status.is_specific_version_in_pack {
+                                    break; // Found specific version
+                                }
+                            }
+                        }
+                    }
+                    if status.is_specific_version_in_pack {
+                        break; // Found specific version
+                    }
+                }
+            }
+        }
+
+        // Check if locally installed
+        for installed_mod in &profile.mods {
+            let mut mod_project_id: Option<&str> = None;
+            let mut mod_version_id: Option<&str> = None;
+            let mut mod_sha1_hash: Option<&str> = None;
+            let mut mod_file_name_str: Option<&str> = None;
+
+            if let ModSource::Modrinth {
+                project_id: pid,
+                version_id: vid,
+                file_hash_sha1: hash_opt,
+                file_name: fname,
+                ..
+            } = &installed_mod.source
+            {
+                mod_project_id = Some(pid);
+                mod_version_id = Some(vid);
+                mod_sha1_hash = hash_opt.as_deref();
+                mod_file_name_str = Some(fname);
+            }
+
+            let mut match_project = true;
+            if let Some(pid) = &request.project_id {
+                match_project = mod_project_id == Some(pid.as_str());
+            }
+            let mut match_version = true;
+            if let Some(vid) = &request.version_id {
+                match_version = mod_version_id == Some(vid.as_str());
+            }
+            let mut match_hash = true;
+            if let Some(hash) = &request.file_hash_sha1 {
+                match_hash = mod_sha1_hash == Some(hash.as_str());
+            }
+            let mut match_name = true;
+            if let Some(name) = &request.file_name {
+                match_name = mod_file_name_str == Some(name.as_str());
+            }
+            let mut match_game_version = true;
+            if let Some(installed_versions) = &installed_mod.game_versions {
+                match_game_version = installed_versions.contains(&target_game_version.to_string());
+            }
+            let mut match_loader = true;
+            if let Some(installed_loader_enum) = &installed_mod.associated_loader {
+                match_loader = installed_loader_enum.as_str() == target_loader_str;
+            }
+
+            if match_project
+                && match_version
+                && match_hash
+                && match_name
+                && match_game_version
+                && match_loader
+            {
+                status.is_installed = true;
+                status.is_enabled = Some(installed_mod.enabled);
+                status.found_item_details = Some(FoundItemDetails {
+                    item_type: ContentType::Mod,
+                    item_id: Some(installed_mod.id.to_string()),
+                    file_name: mod_file_name_str.map(String::from),
+                    display_name: installed_mod.display_name.clone(),
+                });
+                break;
+            }
+        }
+
+        // Store the result
+        results[*idx] = Some(ContentCheckResult {
+            request_id: request.request_id.clone(),
+            status,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Process all resource pack requests efficiently
+async fn process_resourcepack_requests(
+    profile: &Profile,
+    requests: &[(&ContentCheckRequest, usize)],
+    results: &mut Vec<Option<ContentCheckResult>>,
+) -> Result<()> {
+    // Load all resource packs once
+    let packs = match resourcepack_utils::get_resourcepacks_for_profile(profile).await {
+        Ok(packs) => packs,
+        Err(e) => {
+            warn!(
+                "Failed to list resource packs: {}. Assuming none installed.",
+                e
+            );
+            Vec::new()
+        }
+    };
+
+    for (request, idx) in requests {
+        // Initialize the status struct
+        let mut status = ContentInstallStatus::default();
+
+        // Check NoRisk Pack - reuse old function for now
+        let old_params = CheckContentParams {
+            profile_id: profile.id,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_hash_sha1: request.file_hash_sha1.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+            game_version: request.game_version.clone(),
+            loader: request.loader.clone(),
+            pack_version_number: request.pack_version_number.clone(),
+        };
+
+        // Check if in NoRisk Pack
+        if let Some(pack_id) = &profile.selected_norisk_pack_id {
+            let state = State::get().await?;
+            let config = state.norisk_pack_manager.get_config().await;
+
+            if let Ok(resolved_pack) = config.get_resolved_pack_definition(pack_id) {
+                // Check if the pack includes this resource pack
+                // (Note: This would need to be expanded if NoRisk Packs can contain resource packs)
+                // For now, this is a placeholder as the original function doesn't handle this case specifically
+            }
+        }
+
+        // Check local installation against the preloaded packs
+        for pack_info in &packs {
+            let modrinth_pid = pack_info
+                .modrinth_info
+                .as_ref()
+                .map(|m| m.project_id.as_str());
+            let modrinth_vid = pack_info
+                .modrinth_info
+                .as_ref()
+                .map(|m| m.version_id.as_str());
+            let pack_hash = pack_info.sha1_hash.as_deref();
+            let pack_filename_str = Some(pack_info.filename.as_str());
+
+            // Match against provided parameters
+            let mut match_project = true;
+            if let Some(pid) = &request.project_id {
+                match_project = modrinth_pid == Some(pid.as_str());
+            }
+            let mut match_version = true;
+            if let Some(vid) = &request.version_id {
+                match_version = modrinth_vid == Some(vid.as_str());
+            }
+            let mut match_hash = true;
+            if let Some(hash) = &request.file_hash_sha1 {
+                match_hash = pack_hash == Some(hash.as_str());
+            }
+            let mut match_name = true;
+            if let Some(name) = &request.file_name {
+                match_name = pack_filename_str == Some(name.as_str());
+            }
+
+            if match_project && match_version && match_hash && match_name {
+                status.is_installed = true;
+                status.is_enabled = Some(!pack_info.is_disabled);
+                status.found_item_details = Some(FoundItemDetails {
+                    item_type: ContentType::ResourcePack,
+                    item_id: None,
+                    file_name: Some(pack_info.filename.clone()),
+                    display_name: Some(pack_info.filename.clone()),
+                });
+                break;
+            }
+        }
+
+        // Store the result
+        results[*idx] = Some(ContentCheckResult {
+            request_id: request.request_id.clone(),
+            status,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Process all shader pack requests efficiently
+async fn process_shaderpack_requests(
+    profile: &Profile,
+    requests: &[(&ContentCheckRequest, usize)],
+    results: &mut Vec<Option<ContentCheckResult>>,
+) -> Result<()> {
+    // Load all shader packs once
+    let packs = match shaderpack_utils::get_shaderpacks_for_profile(profile).await {
+        Ok(packs) => packs,
+        Err(e) => {
+            warn!(
+                "Failed to list shader packs: {}. Assuming none installed.",
+                e
+            );
+            Vec::new()
+        }
+    };
+
+    for (request, idx) in requests {
+        // Initialize the status struct
+        let mut status = ContentInstallStatus::default();
+
+        // Check if in NoRisk Pack - placeholder for future NoRisk Pack shader support
+        if let Some(pack_id) = &profile.selected_norisk_pack_id {
+            // Placeholder for future implementation
+        }
+
+        // Check local installation against the preloaded packs
+        for pack_info in &packs {
+            let modrinth_pid = pack_info
+                .modrinth_info
+                .as_ref()
+                .map(|m| m.project_id.as_str());
+            let modrinth_vid = pack_info
+                .modrinth_info
+                .as_ref()
+                .map(|m| m.version_id.as_str());
+            let pack_hash = pack_info.sha1_hash.as_deref();
+            let pack_filename_str = Some(pack_info.filename.as_str());
+
+            // Match against provided parameters
+            let mut match_project = true;
+            if let Some(pid) = &request.project_id {
+                match_project = modrinth_pid == Some(pid.as_str());
+            }
+            let mut match_version = true;
+            if let Some(vid) = &request.version_id {
+                match_version = modrinth_vid == Some(vid.as_str());
+            }
+            let mut match_hash = true;
+            if let Some(hash) = &request.file_hash_sha1 {
+                match_hash = pack_hash == Some(hash.as_str());
+            }
+            let mut match_name = true;
+            if let Some(name) = &request.file_name {
+                match_name = pack_filename_str == Some(name.as_str());
+            }
+
+            if match_project && match_version && match_hash && match_name {
+                status.is_installed = true;
+                status.is_enabled = Some(!pack_info.is_disabled);
+                status.found_item_details = Some(FoundItemDetails {
+                    item_type: ContentType::ShaderPack,
+                    item_id: None,
+                    file_name: Some(pack_info.filename.clone()),
+                    display_name: Some(pack_info.filename.clone()),
+                });
+                break;
+            }
+        }
+
+        // Store the result
+        results[*idx] = Some(ContentCheckResult {
+            request_id: request.request_id.clone(),
+            status,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Process all data pack requests efficiently
+async fn process_datapack_requests(
+    profile: &Profile,
+    requests: &[(&ContentCheckRequest, usize)],
+    results: &mut Vec<Option<ContentCheckResult>>,
+) -> Result<()> {
+    // Load all data packs once
+    let packs = match datapack_utils::get_datapacks_for_profile(profile).await {
+        Ok(packs) => packs,
+        Err(e) => {
+            warn!("Failed to list data packs: {}. Assuming none installed.", e);
+            Vec::new()
+        }
+    };
+
+    for (request, idx) in requests {
+        // Initialize the status struct
+        let mut status = ContentInstallStatus::default();
+
+        // Check if in NoRisk Pack - placeholder for future NoRisk Pack datapack support
+        if let Some(pack_id) = &profile.selected_norisk_pack_id {
+            // Placeholder for future implementation
+        }
+
+        // Check local installation against the preloaded packs
+        for pack_info in &packs {
+            let modrinth_pid = pack_info
+                .modrinth_info
+                .as_ref()
+                .map(|m| m.project_id.as_str());
+            let modrinth_vid = pack_info
+                .modrinth_info
+                .as_ref()
+                .map(|m| m.version_id.as_str());
+            let pack_hash = pack_info.sha1_hash.as_deref();
+            let pack_filename_str = Some(pack_info.filename.as_str());
+
+            // Match against provided parameters
+            let mut match_project = true;
+            if let Some(pid) = &request.project_id {
+                match_project = modrinth_pid == Some(pid.as_str());
+            }
+            let mut match_version = true;
+            if let Some(vid) = &request.version_id {
+                match_version = modrinth_vid == Some(vid.as_str());
+            }
+            let mut match_hash = true;
+            if let Some(hash) = &request.file_hash_sha1 {
+                match_hash = pack_hash == Some(hash.as_str());
+            }
+            let mut match_name = true;
+            if let Some(name) = &request.file_name {
+                match_name = pack_filename_str == Some(name.as_str());
+            }
+
+            if match_project && match_version && match_hash && match_name {
+                status.is_installed = true;
+                status.is_enabled = Some(!pack_info.is_disabled);
+                status.found_item_details = Some(FoundItemDetails {
+                    item_type: ContentType::DataPack,
+                    item_id: None,
+                    file_name: Some(pack_info.filename.clone()),
+                    display_name: Some(pack_info.filename.clone()),
+                });
+                break;
+            }
+        }
+
+        // Store the result
+        results[*idx] = Some(ContentCheckResult {
+            request_id: request.request_id.clone(),
+            status,
+            project_id: request.project_id.clone(),
+            version_id: request.version_id.clone(),
+            file_name: request.file_name.clone(),
+            project_type: request.project_type.clone(),
+        });
+    }
+
+    Ok(())
 }

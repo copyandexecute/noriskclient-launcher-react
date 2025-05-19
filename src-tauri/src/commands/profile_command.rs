@@ -1421,6 +1421,20 @@ pub async fn is_content_installed(
     Ok(profile_utils::check_content_installed(params).await?)
 }
 
+/// Batch checks the installation status of multiple content items for a profile.
+#[tauri::command]
+pub async fn batch_check_content_installed(
+    params: profile_utils::BatchCheckContentParams,
+) -> Result<profile_utils::BatchContentInstallStatus, CommandError> {
+    info!(
+        "Executing batch_check_content_installed command for profile {} with {} items",
+        params.profile_id,
+        params.requests.len()
+    );
+    // Call the batch utility function and map the error
+    Ok(profile_utils::check_content_installed_batch(params).await?)
+}
+
 /// Opens the latest log file for the specified profile using the system default application.
 #[tauri::command]
 pub async fn open_profile_latest_log<R: tauri::Runtime>(
