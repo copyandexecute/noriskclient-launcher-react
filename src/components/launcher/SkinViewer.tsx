@@ -28,17 +28,20 @@ export function SkinViewer({
 
   useEffect(() => {
     setHasError(false);
+    let determinedUrl: string | null = null;
     if (playerName) {
       // Korrekter Endpunkt basierend auf der Nutzerinformation
-      setImageUrl(`${STARLIGHT_API_BASE}/render/default/${encodeURIComponent(playerName)}/full`);
+      determinedUrl = `${STARLIGHT_API_BASE}/render/default/${encodeURIComponent(playerName)}/full`;
     } else if (skinUrl) {
       // Fallback, falls kein Spielername, aber skinUrl vorhanden ist.
       // Zeigt direkt die skinUrl, wenn es ein valides Bild ist oder ein Placeholder.
       // Eine API-Umwandlung von skinUrl zu Render ist hier nicht implementiert, da API-Details fehlen.
-      setImageUrl(skinUrl); 
+      determinedUrl = skinUrl; 
     } else {
       setHasError(true); // Kein Spielername und keine Skin-URL
     }
+    setImageUrl(determinedUrl);
+    console.log("SkinViewer imageUrl:", determinedUrl);
   }, [playerName, skinUrl]);
 
   const handleError = () => {
