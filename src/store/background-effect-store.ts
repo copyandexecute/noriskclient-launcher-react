@@ -1,17 +1,19 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const BACKGROUND_EFFECTS = {
-  MATRIX_RAIN: "matrix_rain",
-  ENCHANTMENT_PARTICLES: "enchantment_particles",
-  NEBULA_WAVES: "nebula_waves",
-  NEBULA_PARTICLES: "nebula_particles",
-  NEBULA_GRID: "nebula_grid",
-  NEBULA_VOXELS: "nebula_voxels",
-  NEBULA_LIGHTNING: "nebula_lightning",
-  NEBULA_LIQUID_CHROME: "nebula_liquid_chrome",
-  RETRO_GRID: "retro_grid",
-};
+export enum BACKGROUND_EFFECTS {
+  NONE = "none",
+  MATRIX_RAIN = "matrix-rain",
+  ENCHANTMENT_PARTICLES = "enchantment-particles",
+  NEBULA_WAVES = "nebula-waves",
+  NEBULA_PARTICLES = "nebula-particles",
+  NEBULA_GRID = "nebula-grid",
+  NEBULA_VOXELS = "nebula-voxels",
+  NEBULA_LIGHTNING = "nebula-lightning",
+  NEBULA_LIQUID_CHROME = "nebula-liquid-chrome",
+  RETRO_GRID = "retro-grid",
+  PLAIN_BACKGROUND = "plain-background",
+}
 
 interface BackgroundEffectState {
   currentEffect: string;

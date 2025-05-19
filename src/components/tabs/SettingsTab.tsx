@@ -92,6 +92,11 @@ export function SettingsTab() {
       name: "Retro Grid",
       icon: "solar:squares-four-bold",
     },
+    {
+      id: BACKGROUND_EFFECTS.PLAIN_BACKGROUND,
+      name: "Plain Color",
+      icon: "solar:palette-bold-duotone",
+    },
   ];
 
   const qualityOptions: { value: QualityLevel; label: string; icon: string }[] =

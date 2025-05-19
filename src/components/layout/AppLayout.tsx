@@ -22,6 +22,7 @@ import { NebulaVoxels } from ".././effects/NebulaVoxels";
 import { NebulaLightning } from ".././effects/NebulaLightning";
 import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
 import { RetroGridEffect } from "../effects/RetroGridEffect";
+import PlainBackground from "../effects/PlainBackground";
 import * as ConfigService from "../../services/launcher-config-service";
 
 const navItems = [
@@ -241,6 +242,8 @@ export function AppLayout({
             style={{ backgroundColor: hexToRgbaWithLowOpacity(themeAccentColor.value) }}
           ></div>
         );
+      case BACKGROUND_EFFECTS.PLAIN_BACKGROUND:
+        return <PlainBackground accentColorValue={themeAccentColor.value} />;
       default:
         return (
           <div className="absolute inset-0 bg-red-500/20">
