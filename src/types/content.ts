@@ -1,4 +1,4 @@
-import { NoriskModIdentifier } from "./profile";
+import { NoriskModIdentifier, type LocalContentItem as ProfileLocalContentItem } from "./profile";
 import type { ModrinthVersion } from "./modrinth";
 
 /**
@@ -76,10 +76,10 @@ export interface InstallLocalContentPayload {
  * Mirrors the Rust struct `SwitchContentVersionPayload` in `content_command.rs`.
  */
 export interface SwitchContentVersionPayload {
-  profile_id: string; // UUID
-  content_type: ContentType;
-  identifier?: string; // Optional UUID to directly identify the mod/content entry
-  current_project_id?: string; // Modrinth project ID of the item to update, optional if identifier is used
-  current_version_id?: string; // Modrinth version ID of the currently installed item, optional
-  new_modrinth_version_details?: ModrinthVersion; // Full details of the new version, optional but required for mods
-} 
+  profile_id: string; // Uuid
+  content_type: ContentType; // Backend ContentType enum
+  current_item_details?: ProfileLocalContentItem | null; // Pass the whole item from frontend
+  new_modrinth_version_details?: ModrinthVersion | null;
+}
+
+// Represents a NoriskMod item as expected by the backend for add/remove operations 
