@@ -123,13 +123,13 @@ export async function switchContentVersion(
   try {
     await invoke<void>('switch_content_version', { payload });
     console.log(
-      `Successfully requested content version switch for profile ${payload.profile_id}, type: ${payload.content_type}, identifier: ${payload.identifier || 'N/A'}, new_version: ${payload.new_modrinth_version_details?.version_number || 'N/A'}`,
+      `Successfully requested content version switch for profile ${payload.profile_id}, type: ${payload.content_type}, new_version: ${payload.new_modrinth_version_details?.version_number || 'N/A'}`,
       payload
     );
     // Consider toast: toast.success("Content version switch initiated.");
   } catch (error) {
     console.error(
-      `Error switching content version for profile ${payload.profile_id}, type: ${payload.content_type}, identifier: ${payload.identifier || 'N/A'}`,
+      `Error switching content version for profile ${payload.profile_id}, type: ${payload.content_type}`,
       payload,
       '\nError:',
       error
