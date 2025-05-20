@@ -46,10 +46,6 @@ export function PlayTab() {
     profileId: profile.id,
   }));
 
-  const skinUrl = activeAccount?.id
-    ? `https://crafatar.com/skins/${activeAccount.id}`
-    : `https://crafatar.com/skins/606e2ff0-ed77-4842-9d6c-e1d3321c7838`;
-
   return (
     <div className="flex h-full relative">
       <div className="flex-grow flex flex-col items-center justify-center p-8 relative z-10 overflow-hidden">
@@ -71,7 +67,6 @@ export function PlayTab() {
 
           <PlayerActionsDisplay
             displayMode="playerName"
-            skinUrl={skinUrl}
             playerName={activeAccount?.minecraft_username || activeAccount?.username}
             launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
             onLaunchVersionChange={handleVersionChange}

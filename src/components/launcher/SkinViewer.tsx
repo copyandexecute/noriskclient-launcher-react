@@ -4,76 +4,60 @@ import React, { useState, useEffect } from "react";
 import { cn } from "../../lib/utils";
 
 interface SkinViewerProps {
-  skinUrl: string; // Bleibt für Fallback oder wenn API es doch unterstützt
-  playerName?: string; // Wird primär für API-Endpunkt verwendet
+  skinUrl: string; // This will now be the direct URL (file:// or http:// or /path)
+  playerName?: string;
   width?: number;
   height?: number;
   className?: string;
-  style?: React.CSSProperties; // Style-Prop hinzugefügt
-  // autoRotate und enableZoom sind nicht mehr relevant für statische Bilder
+  style?: React.CSSProperties;
 }
 
-const STARLIGHT_API_BASE = "https://starlightskins.lunareclipse.studio";
-
 export function SkinViewer({
-  skinUrl,
+  skinUrl, // Directly use this prop
   playerName,
-  width = 300, // Wird als CSS-Style für das img-Tag verwendet
-  height = 400, // Wird als CSS-Style für das img-Tag verwendet
+  width = 300,
+  height = 400,
   className,
-  style, // Style-Prop destrukturieren
+  style,
 }: SkinViewerProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
 
+  // Reset error state if skinUrl changes, to allow retrying if a new valid URL is provided
   useEffect(() => {
     setHasError(false);
-    let determinedUrl: string | null = null;
-    if (playerName) {
-      // Korrekter Endpunkt basierend auf der Nutzerinformation
-      determinedUrl = `${STARLIGHT_API_BASE}/render/default/${encodeURIComponent(playerName)}/full`;
-    } else if (skinUrl) {
-      // Fallback, falls kein Spielername, aber skinUrl vorhanden ist.
-      // Zeigt direkt die skinUrl, wenn es ein valides Bild ist oder ein Placeholder.
-      // Eine API-Umwandlung von skinUrl zu Render ist hier nicht implementiert, da API-Details fehlen.
-      determinedUrl = skinUrl; 
-    } else {
-      setHasError(true); // Kein Spielername und keine Skin-URL
-    }
-    setImageUrl(determinedUrl);
-    console.log("SkinViewer imageUrl:", determinedUrl);
-  }, [playerName, skinUrl]);
+  }, [skinUrl]);
 
   const handleError = () => {
+    console.warn(`[SkinViewer] Error loading image from skinUrl: ${skinUrl}`);
     setHasError(true);
   };
 
-  if (hasError || !imageUrl) {
+  if (hasError || !skinUrl) { // Show fallback if error or no skinUrl provided
     return (
       <div
         className={cn(
           "flex items-center justify-center bg-gray-700/50 rounded-md",
           className
         )}
-        style={{ width, height, ...style }} // Style hier auch für den Fehlerfall anwenden (optional)
+        style={{ width, height, ...style }}
       >
-        <span className="text-gray-500 text-3xl">?</span> {/* Placeholder bei Fehler */}
+        <span className="text-gray-500 text-3xl">?</span>
       </div>
     );
   }
 
   return (
     <img
-      src={imageUrl}
+      src={skinUrl} // Use the skinUrl prop directly
       alt={playerName ? `${playerName}'s Skin` : "Minecraft Skin"}
       width={width}
       height={height}
-      className={cn("object-contain rounded-md", className)} // object-contain, damit Skin nicht verzerrt wird
-      style={{ 
+      className={cn("object-contain rounded-md", className)}
+      style={{
         imageRendering: "pixelated",
-        ...style // Übergebene Styles hier mergen
-      }} // Wichtig für Minecraft-Skins
-      onError={handleError}
+        ...style,
+      }}
+      onError={handleError} // Keep error handling for the img tag itself
     />
   );
 }
