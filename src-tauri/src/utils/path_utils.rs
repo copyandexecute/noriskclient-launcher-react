@@ -6,6 +6,9 @@ use crate::integrations::norisk_packs::{
 use log::{error, info, warn};
 use std::path::{Path, PathBuf};
 use tokio::fs; // Verwende tokio::fs für async checks
+use tokio::sync::Semaphore; // Added for io_semaphore
+use std::sync::Arc; // Added for Arc<Semaphore>
+use futures::future::try_join_all; // Added for joining futures
 use uuid::Uuid;
 
 /// Findet einen eindeutigen Verzeichnisnamen (Segment) in einem Basisverzeichnis.
@@ -381,6 +384,10 @@ pub async fn copy_profile_with_includes(
         dest_root.display()
     );
 
+    // Get the io_semaphore from global state
+    let state = crate::state::State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
     // Get the complete file structure
     let source_structure = get_directory_structure(source_root, false).await?;
 
@@ -412,20 +419,65 @@ pub async fn copy_profile_with_includes(
     }
 
     // Copy the files according to the filtered structure
-    let files_copied = copy_profile_files(&filtered_structure, source_root, dest_root).await?;
+    let files_copied = copy_profile_files(&filtered_structure, source_root, dest_root, io_semaphore).await?;
 
     info!("Profile copy completed. Copied {} files.", files_copied);
 
     Ok(files_copied)
 }
 
+/// Helper function to recursively collect file copy operations and create directories.
+async fn collect_file_ops_and_create_dirs(
+    structure: &FileNode,
+    source_root: &Path,
+    dest_root: &Path,
+    file_ops: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<()> {
+    if structure.is_dir {
+        let rel_path = structure
+            .path
+            .strip_prefix(source_root)
+            .map_err(|e| AppError::Other(format!("Path prefix error (dir): {} for path {}", e, structure.path.display())))?;
+        let dest_dir_path = dest_root.join(rel_path);
+
+        if !dest_dir_path.exists() {
+            fs::create_dir_all(&dest_dir_path)
+                .await
+                .map_err(|e| AppError::Io(e))?;
+            info!("Created directory: {}", dest_dir_path.display());
+        }
+
+        for child in &structure.children {
+            Box::pin(collect_file_ops_and_create_dirs(child, source_root, dest_root, file_ops)).await?;
+        }
+    } else {
+        // It's a file, calculate source and dest paths
+        let rel_path = structure
+            .path
+            .strip_prefix(source_root)
+            .map_err(|e| AppError::Other(format!("Path prefix error (file): {} for path {}", e, structure.path.display())))?;
+        let dest_file_path = dest_root.join(rel_path);
+        
+        // Ensure parent directory of the file exists (it should have been created by the dir part)
+        if let Some(parent_dir) = dest_file_path.parent() {
+            if !parent_dir.exists() {
+                 fs::create_dir_all(parent_dir).await.map_err(|e| AppError::Io(e))?;
+                 info!("Created parent directory for file: {}", parent_dir.display());
+            }
+        }
+        file_ops.push((structure.path.clone(), dest_file_path));
+    }
+    Ok(())
+}
+
 /// Copies files and directories from a source profile to a destination profile
-/// based on the filtered directory structure.
+/// based on the filtered directory structure, using a semaphore for parallelism.
 ///
 /// # Arguments
 /// * `structure` - The filtered directory structure to copy
 /// * `source_root` - The root directory of the source profile
 /// * `dest_root` - The root directory of the destination profile
+/// * `semaphore` - Semaphore to limit concurrent I/O operations
 ///
 /// # Returns
 /// Result with the number of files copied
@@ -433,70 +485,61 @@ pub async fn copy_profile_files(
     structure: &FileNode,
     source_root: &Path,
     dest_root: &Path,
+    semaphore: Arc<Semaphore>,
 ) -> Result<u64> {
     info!(
-        "Copying profile files from {} to {}",
+        "Collecting file operations and creating directories from {} to {}",
         source_root.display(),
         dest_root.display()
     );
 
-    let mut files_copied = 0;
+    let mut file_ops: Vec<(PathBuf, PathBuf)> = Vec::new();
+    collect_file_ops_and_create_dirs(structure, source_root, dest_root, &mut file_ops).await?;
 
-    // Create the directory if needed
-    if structure.is_dir {
-        // Get relative path from source_root
-        let rel_path = structure
-            .path
-            .strip_prefix(source_root)
-            .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?;
+    info!("Collected {} file copy operations. Starting parallel copy.", file_ops.len());
 
-        let dest_path = dest_root.join(rel_path);
+    let mut copy_tasks = Vec::new();
 
-        if !dest_path.exists() {
-            fs::create_dir_all(&dest_path)
-                .await
-                .map_err(|e| AppError::Io(e))?;
-
-            info!("Created directory: {}", dest_path.display());
-        }
-
-        // Process children
-        for child in &structure.children {
-            // Using Box::pin to handle recursion
-            files_copied += Box::pin(copy_profile_files(child, source_root, dest_root)).await?;
-        }
-    } else {
-        // This is a file, copy it
-        let rel_path = structure
-            .path
-            .strip_prefix(source_root)
-            .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?;
-
-        let dest_path = dest_root.join(rel_path);
-
-        // Create parent directories if they don't exist
-        if let Some(parent) = dest_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| AppError::Io(e))?;
+    for (source_file, dest_file) in file_ops {
+        let sem_clone = semaphore.clone();
+        let task = tokio::spawn(async move {
+            let _permit = sem_clone.acquire_owned().await.map_err(|e| AppError::Other(format!("Semaphore acquire error: {}",e)))?;
+            
+            // Ensure parent directory exists one last time (should be redundant if collect_file_ops_and_create_dirs worked)
+            if let Some(parent_dir) = dest_file.parent() {
+                if !parent_dir.exists() {
+                    fs::create_dir_all(parent_dir).await.map_err(|e| AppError::Io(e))?;
+                }
             }
-        }
 
-        // Copy the file
-        fs::copy(&structure.path, &dest_path)
-            .await
-            .map_err(|e| AppError::Io(e))?;
-
-        info!(
-            "Copied file: {} to {}",
-            structure.path.display(),
-            dest_path.display()
-        );
-        files_copied += 1;
+            fs::copy(&source_file, &dest_file).await.map_err(|e| {
+                error!("Failed to copy file {} to {}: {}", source_file.display(), dest_file.display(), e);
+                AppError::Io(e)
+            })?;
+            info!("Copied file: {} to {}", source_file.display(), dest_file.display());
+            Ok::<_, AppError>(1u64) // Return 1 for one copied file
+        });
+        copy_tasks.push(task);
     }
 
-    Ok(files_copied)
+    let results = try_join_all(copy_tasks).await.map_err(|e| {
+        error!("Error during parallel copy task execution: {:?}", e);
+        // If it's a JoinError, it means a task panicked. Otherwise, it's our AppError.
+        if e.is_panic() {
+            AppError::Other(format!("A file copy task panicked: {:?}", e))
+        } else {
+             // If we got an AppError from one of the tasks, it means fs::copy failed.
+             // The actual error was logged in the task. Here we just propagate a general error.
+            AppError::Other(format!("One or more file copy operations failed. See logs for details. Task error: {:?}", e))
+        }
+    })?;
+    
+
+    let total_files_copied = results.into_iter().filter_map(Result::ok).sum::<u64>();
+    
+    info!("Successfully copied {} files in parallel.", total_files_copied);
+
+    Ok(total_files_copied)
 }
 
 /// Example function showing how to copy a profile with exclusions.
@@ -520,6 +563,10 @@ pub async fn copy_profile_with_exclusions(
         dest_profile_path.display(),
         excluded_paths.len()
     );
+    
+    // Get the io_semaphore from global state
+    let state = crate::state::State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
 
     // Convert excluded paths to strings and put them in a HashSet for efficient lookup
     let excluded_set: std::collections::HashSet<String> = excluded_paths
@@ -543,7 +590,7 @@ pub async fn copy_profile_with_exclusions(
 
     // Copy the files according to the filtered structure
     let files_copied =
-        copy_profile_files(&filtered_structure, source_profile_path, dest_profile_path).await?;
+        copy_profile_files(&filtered_structure, source_profile_path, dest_profile_path, io_semaphore).await?;
 
     info!("Profile copy completed. Copied {} files.", files_copied);
 
