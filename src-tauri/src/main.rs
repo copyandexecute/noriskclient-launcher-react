@@ -352,6 +352,7 @@ async fn main() {
             commands::profile_command::get_all_profiles_and_last_played,
             commands::profile_command::get_local_content,
             commands::content_command::install_local_content_to_profile,
+            commands::content_command::switch_content_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

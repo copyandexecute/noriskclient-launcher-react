@@ -11,6 +11,7 @@ use crate::state::state_manager::State as AppStateManager;
 use crate::utils::hash_utils; // For calculate_sha1
 use crate::utils::{shaderpack_utils, resourcepack_utils, datapack_utils, profile_utils};
 use crate::commands::file_command; // Added import for file_command
+use crate::integrations::modrinth::ModrinthVersion; // Added for new payload
 
 // Updated InstallContentPayload struct
 #[derive(Serialize, Deserialize, Debug)]
@@ -885,4 +886,129 @@ pub async fn install_local_content_to_profile(
         payload.profile_id
     );
     Ok(())
+}
+
+// --- New Struct and Command for Switching Content Version ---
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SwitchContentVersionPayload {
+    profile_id: Uuid,
+    content_type: profile_utils::ContentType,
+    identifier: Option<Uuid>, // Optional UUID to directly identify the mod/content entry
+    current_project_id: Option<String>, // Modrinth project ID of the item to update, now optional if identifier is used
+    current_version_id: Option<String>, // Modrinth version ID of the currently installed item, now optional
+    new_modrinth_version_details: Option<ModrinthVersion>, // Full details of the new version, now optional
+}
+
+#[tauri::command]
+pub async fn switch_content_version(
+    payload: SwitchContentVersionPayload,
+) -> Result<(), CommandError> {
+    log::info!(
+        "Attempting to switch content version: profile_id={}, type={:?}, identifier={:?}, project_id={:?}, current_version_id={:?}, new_version_id={:?}",
+        payload.profile_id,
+        payload.content_type,
+        payload.identifier,
+        payload.current_project_id,
+        payload.current_version_id,
+        payload.new_modrinth_version_details.as_ref().map(|v| &v.id)
+    );
+
+    let state_manager = AppStateManager::get().await?;
+
+    match payload.content_type {
+        profile_utils::ContentType::Mod => {
+            // New version details are required for switching mod versions via Modrinth
+            let new_version_details = match payload.new_modrinth_version_details {
+                Some(details) => details,
+                None => {
+                    log::error!("new_modrinth_version_details is required for switching Mod content type.");
+                    return Err(CommandError::from(AppError::InvalidInput(
+                        "Missing new_modrinth_version_details for Mod type.".to_string(),
+                    )));
+                }
+            };
+
+            let profile = state_manager.profile_manager.get_profile(payload.profile_id).await?;
+            let mut mod_to_update_id: Option<Uuid> = None;
+
+            if let Some(id_from_payload) = payload.identifier {
+                // Try to find by provided Uuid first
+                if profile.mods.iter().any(|m| m.id == id_from_payload) {
+                    mod_to_update_id = Some(id_from_payload);
+                    log::info!("Found mod entry by identifier: {}", id_from_payload);
+                }
+            } else if let (Some(project_id_str), Some(version_id_str)) = (&payload.current_project_id, &payload.current_version_id) {
+                // Fallback to project_id and version_id matching
+                for mod_entry in &profile.mods {
+                    if let ModSource::Modrinth { project_id, version_id, .. } = &mod_entry.source {
+                        if project_id == project_id_str && version_id == version_id_str {
+                            mod_to_update_id = Some(mod_entry.id);
+                            log::info!("Found mod entry by project_id {} and version_id {}: {}", project_id_str, version_id_str, mod_entry.id);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                 log::error!("Either identifier or (current_project_id AND current_version_id) must be provided for Mod type.");
+                 return Err(CommandError::from(AppError::InvalidInput(
+                    "Missing identification criteria for Mod (identifier or project_id/version_id).".to_string(),
+                )));
+            }
+
+            if let Some(mod_id) = mod_to_update_id {
+                log::info!("Proceeding with version switch for mod ID: {}. New version: {}", mod_id, new_version_details.id);
+                state_manager
+                    .profile_manager
+                    .update_profile_modrinth_mod_version(
+                        payload.profile_id,
+                        mod_id,
+                        &new_version_details, // Pass the unwrapped details
+                    )
+                    .await
+                    .map_err(CommandError::from)
+            } else {
+                log::error!(
+                    "Could not find mod with identifier {:?} or project_id {:?}/version_id {:?} in profile {} to update.",
+                    payload.identifier,
+                    payload.current_project_id,
+                    payload.current_version_id,
+                    payload.profile_id
+                );
+                Err(CommandError::from(AppError::NotFound(format!(
+                    "Mod to update (identifier: {:?}, project: {:?}, version: {:?}) not found in profile.",
+                    payload.identifier, payload.current_project_id, payload.current_version_id
+                ))))
+            }
+        }
+        profile_utils::ContentType::ResourcePack => {
+            log::warn!("Switching version for ResourcePacks not yet implemented.");
+            // TODO: Implement logic for ResourcePacks
+            // This might involve: deleting the old pack file, downloading the new one from new_modrinth_version_details.files[0].url,
+            // and placing it in the resourcepacks folder.
+            Err(CommandError::from(AppError::NotImplemented(
+                "Switching version for ResourcePacks".to_string(),
+            )))
+        }
+        profile_utils::ContentType::ShaderPack => {
+            log::warn!("Switching version for ShaderPacks not yet implemented.");
+            // TODO: Implement logic for ShaderPacks
+            Err(CommandError::from(AppError::NotImplemented(
+                "Switching version for ShaderPacks".to_string(),
+            )))
+        }
+        profile_utils::ContentType::DataPack => {
+            log::warn!("Switching version for DataPacks not yet implemented.");
+            // TODO: Implement logic for DataPacks
+             Err(CommandError::from(AppError::NotImplemented(
+                "Switching version for DataPacks".to_string(),
+            )))
+        }
+        profile_utils::ContentType::NoRiskMod => {
+            log::error!("Switching version for NoRiskMod is not supported via this command.");
+            Err(CommandError::from(AppError::InvalidOperation(
+                "NoRiskMod versions are managed by pack configuration.".to_string(),
+            )))
+        }
+    }
 } 

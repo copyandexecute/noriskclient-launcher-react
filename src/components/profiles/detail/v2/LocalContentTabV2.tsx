@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useMemo, useState } from "react";
+import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../../ui/buttons/Button";
@@ -30,6 +30,8 @@ import { open, type DialogFilter } from "@tauri-apps/plugin-dialog"; // Correcte
 import { Select, type SelectOption } from "../../../ui/Select";
 import { ThemedSurface } from "../../../ui/ThemedSurface";
 import { useAppDragDropStore } from "../../../../store/appStore"; // Import the store
+import { createPortal } from "react-dom";
+import { ModrinthService } from "../../../../services/modrinth-service"; // Added import
 
 // Generic icons that can be used across different content types
 const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
@@ -48,6 +50,7 @@ const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
   "solar:add-circle-bold-duotone",              // For Add Content button
   "solar:refresh-outline",                      // For primary refresh button normal state
   "solar:double-alt-arrow-up-bold-duotone",      // For Update All button
+  "solar:alt-arrow-down-bold",                   // For version dropdown button
 ];
 
 interface LocalContentTabV2Props<T extends LocalContentItem> {
@@ -86,6 +89,14 @@ export function LocalContentTabV2<T extends LocalContentItem>({
   const [noriskPacksConfig, setNoriskPacksConfig] = useState<NoriskModpacksConfig | null>(null);
   const [isFetchingPacksConfig, setIsFetchingPacksConfig] = useState(false);
   const [isRefreshingPacksList, setIsRefreshingPacksList] = useState(false);
+  const [openVersionDropdownId, setOpenVersionDropdownId] = useState<string | null>(null);
+  const versionDropdownRef = useRef<HTMLDivElement>(null);
+  const versionButtonRef = useRef<HTMLButtonElement | null>(null); // Allow null
+
+  // State for version dropdown content
+  const [availableVersions, setAvailableVersions] = useState<ModrinthVersion[] | null>(null);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
 
   const {
     items,
@@ -158,6 +169,17 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       unregisterRefreshCallback(backendContentTypeForStore);
     };
   }, [profile, backendContentTypeForStore, setActiveDropContext, registerRefreshCallback, unregisterRefreshCallback]);
+
+  // Helper to convert LocalContentType to URL-friendly string for BrowseTab
+  const getBrowseTabContentType = (currentTabContentType: LocalContentType): string => {
+    switch (currentTabContentType) {
+      case 'Mod': return 'mods';
+      case 'ResourcePack': return 'resourcepacks';
+      case 'ShaderPack': return 'shaderpacks';
+      case 'DataPack': return 'datapacks';
+      default: return 'mods'; // Fallback
+    }
+  };
 
   // Fetch NoRiskPacksConfig if content type is NoRiskMod
   useEffect(() => {
@@ -310,16 +332,109 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     preloadIcons(LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD);
   }, []);
 
-  // Helper to convert LocalContentType to URL-friendly string for BrowseTab
-  const getBrowseTabContentType = (currentTabContentType: LocalContentType): string => {
-    switch (currentTabContentType) {
-      case 'Mod': return 'mods';
-      case 'ResourcePack': return 'resourcepacks';
-      case 'ShaderPack': return 'shaderpacks';
-      case 'DataPack': return 'datapacks';
-      default: return 'mods'; // Fallback
+  // Update dropdown position and fetch versions
+  useEffect(() => {
+    const updatePosition = () => {
+      if (openVersionDropdownId && versionDropdownRef.current && versionButtonRef.current) {
+        if (!versionButtonRef.current.isConnected) {
+          setOpenVersionDropdownId(null); // Close if button is detached
+          return;
+        }
+        const buttonRect = versionButtonRef.current.getBoundingClientRect();
+        const dropdownElement = versionDropdownRef.current;
+
+        if (buttonRect.width === 0 && buttonRect.height === 0 && buttonRect.x === 0 && buttonRect.y === 0) {
+          // Button likely not properly laid out yet, or invisible
+          // Hide dropdown until next frame attempts to position it
+          dropdownElement.style.visibility = 'hidden';
+          requestAnimationFrame(updatePosition); // Retry positioning on next frame
+          return;
+        }
+
+        dropdownElement.style.top = `${buttonRect.bottom + 2}px`;
+        dropdownElement.style.left = `${buttonRect.left}px`;
+        dropdownElement.style.visibility = 'visible';
+      } else if (versionDropdownRef.current) {
+        versionDropdownRef.current.style.visibility = 'hidden';
+      }
+    };
+
+    const fetchVersionsForDropdown = async () => {
+      if (openVersionDropdownId) {
+        const currentItem = items.find(it => it.filename === openVersionDropdownId);
+        if (currentItem && currentItem.modrinth_info?.project_id) {
+          setIsLoadingVersions(true);
+          setAvailableVersions(null);
+          setVersionsError(null);
+          try {
+            let loadersArg: string[] | undefined = undefined;
+            if (contentType === 'Mod') {
+              loadersArg = profile?.loader ? [profile.loader] : undefined;
+            }
+
+            const versions = await ModrinthService.getModVersions(
+              currentItem.modrinth_info.project_id,
+              loadersArg,
+              profile?.game_version ? [profile.game_version] : undefined
+            );
+            setAvailableVersions(versions);
+          } catch (error) {
+            console.error("Failed to fetch Modrinth versions:", error);
+            setVersionsError(error instanceof Error ? error.message : "Failed to load versions.");
+          }
+          setIsLoadingVersions(false);
+        } else {
+          // Item is not from Modrinth or no project_id, or no item found
+          setAvailableVersions(null);
+          setIsLoadingVersions(false);
+          setVersionsError(currentItem?.modrinth_info?.project_id ? null : "Version history not available.");
+        }
+      }
+    };
+
+    if (openVersionDropdownId) {
+      requestAnimationFrame(updatePosition);
+      fetchVersionsForDropdown();
+    } else {
+      if (versionDropdownRef.current) {
+        versionDropdownRef.current.style.visibility = 'hidden';
+      }
+      versionButtonRef.current = null;
+      // Reset version states when dropdown closes
+      setAvailableVersions(null);
+      setIsLoadingVersions(false);
+      setVersionsError(null);
     }
-  };
+
+    // Event listeners for keeping position updated and closing
+    const scrollableParents = document.querySelectorAll('.custom-scrollbar');
+    const handleScrollOrResize = () => requestAnimationFrame(updatePosition);
+    
+    scrollableParents.forEach(el => el.addEventListener('scroll', handleScrollOrResize));
+    window.addEventListener('scroll', handleScrollOrResize);
+    window.addEventListener('resize', handleScrollOrResize);
+    document.addEventListener('wheel', handleScrollOrResize, { passive: true });
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        versionDropdownRef.current &&
+        !versionDropdownRef.current.contains(event.target as Node) &&
+        versionButtonRef.current &&
+        !versionButtonRef.current.contains(event.target as Node)
+      ) {
+        setOpenVersionDropdownId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      scrollableParents.forEach(el => el.removeEventListener('scroll', handleScrollOrResize));
+      window.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
+      document.removeEventListener('wheel', handleScrollOrResize);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openVersionDropdownId]); // Effect runs when dropdown open state changes
 
   const renderListItem = useCallback((item: T) => {
     const itemTitle = getDisplayFileName(item);
@@ -329,10 +444,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     
     const updateAvailableVersion = item.sha1_hash ? contentUpdates[item.sha1_hash] : null;
 
-    // Determine if this specific item is still waiting for hash or modrinth details
-    // These flags help in showing per-item loading indicators if needed, though not explicitly used in UI yet
-    const isItemWaitingForHash = item.sha1_hash === null && (isLoading || isFetchingHashes);
-    const isItemWaitingForModrinth = item.sha1_hash !== null && !item.modrinth_info && (isLoading || isFetchingHashes || isFetchingModrinthDetails);
+    const isItemOpen = openVersionDropdownId === item.filename;
 
     let iconToShow: React.ReactNode;
     const modrinthProjectId = item.modrinth_info?.project_id;
@@ -368,20 +480,21 @@ export function LocalContentTabV2<T extends LocalContentItem>({
         </div>
     );
 
-    // Reverting to IIFE for itemDescriptionNode to avoid "Rendered more hooks" error
     const itemDescriptionNode = (() => {
       let descriptionText: string;
       let titleText: string;
+      let versionText: string | null = null;
 
       const isItemWaitingForHash = item.sha1_hash === null && isFetchingHashes;
       const isItemStillLoadingDetails = isItemWaitingForHash || 
                                       (item.sha1_hash !== null && !item.modrinth_info && isFetchingModrinthDetails);
 
-      // First check for fallback_version, especially useful for NoRisk mods
       if (item.fallback_version) {
+        versionText = item.fallback_version;
         descriptionText = `Version: ${item.fallback_version}`;
         titleText = `Version: ${item.fallback_version}`;
       } else if (item.modrinth_info?.version_number) {
+        versionText = item.modrinth_info.version_number;
         descriptionText = `Version: ${item.modrinth_info.version_number}`;
         titleText = `Modrinth Version: ${item.modrinth_info.version_number}`;
       } else if (isItemStillLoadingDetails) {
@@ -393,12 +506,135 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       }
 
       return (
-        <span title={titleText}>
-          {descriptionText}
+        <span title={titleText} className="flex items-center">
+          {versionText ? (
+            <>
+              <span>Version: {versionText}</span>
+              {contentType !== 'NoRiskMod' && (
+                <div className="relative">
+                  <button
+                    ref={el => {
+                      if (isItemOpen && el) {
+                        versionButtonRef.current = el;
+                      }
+                    }}
+                    className="ml-1 px-1 text-xs hover:bg-white/10 flex items-center border border-transparent hover:border-white/20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isItemOpen) {
+                          setOpenVersionDropdownId(null);
+                      } else {
+                          versionButtonRef.current = e.currentTarget;
+                          setIsLoadingVersions(true);
+                          setAvailableVersions(null);
+                          setVersionsError(null);
+                          setOpenVersionDropdownId(item.filename);
+                      }
+                    }}
+                    title="View version options"
+                  >
+                    <span 
+                      className={`font-minecraft-ten transition-transform duration-200 ${isItemOpen ? 'rotate-90' : ''}`}
+                    >
+                      &gt;
+                    </span>
+                  </button>
+                  {isItemOpen && createPortal(
+                    <div 
+                      ref={versionDropdownRef}
+                      className="fixed z-[100] font-minecraft-ten"
+                      style={{
+                        backgroundColor: "rgb(20, 20, 20)",
+                        border: `2px solid rgba(${parseInt(accentColor.value.substring(1, 3), 16)}, ${parseInt(accentColor.value.substring(3, 5), 16)}, ${parseInt(accentColor.value.substring(5, 7), 16)}, 0.6)`,
+                        boxShadow: `0 6px 16px rgba(0, 0, 0, 0.7)`,
+                        padding: "12px",
+                        minWidth: "170px",
+                        visibility: 'hidden',
+                      }}
+                    >
+                      {isLoadingVersions ? (
+                        <div className="text-white/70 text-sm tracking-wider">Loading versions...</div>
+                      ) : versionsError ? (
+                        <div className="text-red-400 text-sm tracking-wider">{versionsError}</div>
+                      ) : availableVersions && availableVersions.length > 0 ? (
+                        <>
+                          <div className="font-bold mb-2 text-sm tracking-wider">Available Versions:</div>
+                          <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                            {availableVersions.map((version) => {
+                              const localModrinthInfo = item.modrinth_info;
+                              let isCurrent = false;
+
+                              if (localModrinthInfo) {
+                                // Prioritize version_id if it exists on localModrinthInfo (typical for GenericModrinthInfo)
+                                if (typeof localModrinthInfo === 'object' && localModrinthInfo !== null && 'version_id' in localModrinthInfo && localModrinthInfo.version_id === version.id) {
+                                  isCurrent = true;
+                                } 
+                                // Fallback to id if version_id didn't match or doesn't exist (typical for full ModrinthVersion object)
+                                else if (typeof localModrinthInfo === 'object' && localModrinthInfo !== null && 'id' in localModrinthInfo && localModrinthInfo.id === version.id) {
+                                  isCurrent = true;
+                                }
+                                // Optional: secondary check by version_number if no ID match - can be less reliable if IDs truly differ for same version string
+                                // else if (typeof localModrinthInfo === 'object' && localModrinthInfo !== null && 'version_number' in localModrinthInfo && localModrinthInfo.version_number === version.version_number) {
+                                //   isCurrent = true; 
+                                // }
+                              }
+
+                              // DEBUGGING LOGS START
+                              if (item.filename === openVersionDropdownId && localModrinthInfo) { 
+                                  const installedVersionStr = ('version_number' in localModrinthInfo && localModrinthInfo.version_number) ? String(localModrinthInfo.version_number) : 'N/A';
+                                  const installedIdToCompare = ('version_id' in localModrinthInfo && localModrinthInfo.version_id) ? localModrinthInfo.version_id : (('id' in localModrinthInfo && localModrinthInfo.id) ? localModrinthInfo.id : 'N/A');
+                                  
+                                  console.log(
+                                      `[${item.filename}] Checking: List ver: ${version.version_number} (ID: ${version.id}) vs Installed: ${installedVersionStr} (Stored ID for compare: ${installedIdToCompare}) -> isCurrent: ${isCurrent}`
+                                  );
+                                  if (!isCurrent && installedVersionStr === version.version_number) {
+                                      console.warn(
+                                          `[${item.filename}] MISMATCH OR NO ID MATCH DETAIL FOR VERSION ${version.version_number}:
+                                           Installed Info (item.modrinth_info): ${JSON.stringify(localModrinthInfo, null, 2)}
+                                           Current Version in List (version): ${JSON.stringify(version, null, 2)}
+                                           Comparing (Stored ID for compare: ${installedIdToCompare}) === (List version.id: ${version.id})`
+                                      );
+                                  }
+                              }
+                              // DEBUGGING LOGS END
+
+                              return (
+                                <div 
+                                  key={version.id} 
+                                  className={`p-1.5 text-xs hover:bg-white/10 cursor-pointer rounded-sm ${isCurrent ? 'font-bold text-white' : 'text-white/80'}`}
+                                  style={{
+                                    // No specific background for individual items unless it's the current one, which is handled by font-bold
+                                  }}
+                                  onClick={() => {
+                                    // TODO: Handle version selection
+                                    console.log("Selected version:", version);
+                                    setOpenVersionDropdownId(null); // Close dropdown after selection
+                                  }}
+                                >
+                                  {version.name} ({version.version_number})
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : availableVersions && availableVersions.length === 0 ? (
+                        <div className="text-white/70 text-sm tracking-wider">No other compatible versions found.</div>
+                      ) : (
+                        <div className="text-white/70 text-sm tracking-wider">Version history not available.</div> // Fallback for non-Modrinth items or if project_id missing
+                      )}
+                    </div>,
+                    document.body
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <span>{descriptionText}</span>
+          )}
           {item.is_directory && <span className="ml-1 text-xs text-white/60">(Folder)</span>}
         </span>
       );
-    })(); // Immediately invoke the function
+    })();
 
     const itemBadgesNode = (
       <>
@@ -546,7 +782,13 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     isFetchingHashes,
     isFetchingModrinthDetails,
     itemTypeName,
-    emptyStateIconOverride
+    emptyStateIconOverride,
+    openVersionDropdownId,
+    setOpenVersionDropdownId,
+    versionButtonRef,
+    availableVersions,
+    isLoadingVersions,
+    versionsError
   ]);
 
   const isBusyWithEssentialLoad = isLoading || (contentType === 'NoRiskMod' && (isFetchingPacksConfig || isRefreshingPacksList));

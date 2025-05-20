@@ -172,6 +172,15 @@ pub enum AppError {
     },
     #[error("Filesystem operation error (fs_extra): {0}")]
     FsExtra(#[from] FsExtraError),
+
+    #[error("Feature not implemented: {0}")]
+    NotImplemented(String),
+
+    #[error("Resource not found: {0}")]
+    NotFound(String),
+
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
 }
 
 #[derive(Serialize, Debug)]

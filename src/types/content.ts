@@ -1,4 +1,5 @@
 import { NoriskModIdentifier } from "./profile";
+import type { ModrinthVersion } from "./modrinth";
 
 /**
  * Payload for uninstalling content from a profile.
@@ -68,4 +69,17 @@ export interface InstallLocalContentPayload {
   profile_id: string;      // UUID
   file_paths: string[];    // Array of absolute string paths to the local files
   content_type: ContentType; // The type of content being installed
+}
+
+/**
+ * Payload for switching the version of an installed content item.
+ * Mirrors the Rust struct `SwitchContentVersionPayload` in `content_command.rs`.
+ */
+export interface SwitchContentVersionPayload {
+  profile_id: string; // UUID
+  content_type: ContentType;
+  identifier?: string; // Optional UUID to directly identify the mod/content entry
+  current_project_id?: string; // Modrinth project ID of the item to update, optional if identifier is used
+  current_version_id?: string; // Modrinth version ID of the currently installed item, optional
+  new_modrinth_version_details?: ModrinthVersion; // Full details of the new version, optional but required for mods
 } 
