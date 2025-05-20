@@ -31,6 +31,7 @@ pub struct InstallContentPayload {
 pub struct UninstallContentPayload {
     profile_id: Uuid,
     sha1_hash: Option<String>,
+    file_path: Option<String>,
     // Add other parameters here later if needed, e.g., content_type (mod, resourcepack, etc.)
 }
 
@@ -486,9 +487,10 @@ pub async fn uninstall_content_from_profile(
     payload: UninstallContentPayload,
 ) -> Result<(), CommandError> {
     log::info!(
-        "Uninstall command received: profile_id={}, sha1_hash={:?}",
+        "Uninstall command received: profile_id={}, sha1_hash={:?}, file_path={:?}",
         payload.profile_id,
-        payload.sha1_hash
+        payload.sha1_hash,
+        payload.file_path
     );
 
     let state_manager = AppStateManager::get().await.map_err(|e| {
@@ -496,7 +498,35 @@ pub async fn uninstall_content_from_profile(
         CommandError::from(AppError::Other(format!("Failed to get internal state: {}", e)))
     })?;
 
-    if let Some(sha1_hash_to_delete) = payload.sha1_hash {
+    if let Some(path_to_delete) = payload.file_path {
+        log::info!(
+            "Proceeding with uninstallation by file_path: {}",
+            path_to_delete
+        );
+        match file_command::delete_file(path_to_delete.clone()).await {
+            Ok(_) => {
+                log::info!(
+                    "Successfully deleted file {} for profile {}",
+                    path_to_delete, payload.profile_id
+                );
+                // Optional: If custom mods deleted by path are also tracked in profile.mods
+                // (e.g., as ModSource::Local with a matching path), you might want to
+                // remove that entry here. This example assumes direct file deletion is sufficient
+                // for items uninstalled via path.
+                // Example: state_manager.profile_manager.remove_mod_by_path(payload.profile_id, &path_to_delete).await?;
+                return Ok(()); // Successfully deleted by path
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to delete file {} for profile {}: {:?}",
+                    path_to_delete, payload.profile_id, e
+                );
+                // Decide on error handling: return error directly or fall back to SHA1 if available?
+                // For now, return error directly if path deletion fails.
+                return Err(CommandError::from(e));
+            }
+        }
+    } else if let Some(sha1_hash_to_delete) = payload.sha1_hash {
         log::info!(
             "Proceeding with uninstallation by SHA1: {}",
             sha1_hash_to_delete
@@ -541,7 +571,7 @@ pub async fn uninstall_content_from_profile(
         }
     } else {
         // Handle other uninstall criteria in the future or return error
-        log::warn!("No SHA1 hash provided and no other uninstall criteria met for profile {}.", payload.profile_id);
+        log::warn!("No SHA1 hash or file_path provided and no other uninstall criteria met for profile {}.", payload.profile_id);
         Err(CommandError::from(AppError::Other(
             "No valid uninstallation criteria provided.".to_string(),
         )))

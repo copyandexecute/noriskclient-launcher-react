@@ -4,10 +4,10 @@ import { toast } from 'react-hot-toast';
 import type { Profile, LocalContentItem as ProfileLocalContentItem, GenericModrinthInfo as ProfileGenericModrinthInfo, LoadItemsParams } from '../types/profile';
 import type { ModrinthVersion, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm, ResourcePackModrinthInfo, ShaderPackModrinthInfo, DataPackModrinthInfo } from '../types/modrinth';
 import { ContentType as NrContentType } from '../types/content';
-import type { ToggleContentPayload } from '../types/content';
+import type { ToggleContentPayload, UninstallContentPayload } from '../types/content';
 import { ModrinthService } from '../services/modrinth-service';
 import { getLocalContent } from '../services/profile-service';
-import { toggleContentFromProfile } from '../services/content-service';
+import { toggleContentFromProfile, uninstallContentFromProfile } from '../services/content-service';
 
 // Base type for content items managed by this hook - maps to ProfileLocalContentItem
 // We'll use ProfileLocalContentItem directly or ensure T extends it.
@@ -107,6 +107,44 @@ function mapBackendItemToFrontendType<T extends LocalContentItem>(rawItem: Profi
   // delete (outputItem as any).path_str;
   console.log(`mapBackendItemToFrontendType: Mapped item - Path: ${outputItem.path}, Filename: ${outputItem.filename}`);
   return outputItem as T;
+}
+
+// Helper function to create UninstallContentPayload
+function createUninstallPayload<T extends LocalContentItem>(
+  item: T,
+  profileId: string,
+  uiContentType: LocalContentType
+): UninstallContentPayload | null {
+  if (uiContentType === 'Mod') {
+    if (item.source_type === "custom") {
+      if (!item.path) {
+        toast.error(`Custom Mod item ${item.filename} must have a valid path for uninstallation.`);
+        return null;
+      }
+      return { profile_id: profileId, file_path: item.path };
+    } else {
+      // For Modrinth or other non-custom mods, require SHA1 for uninstallation
+      // as this is likely used to remove it from the profile's mod list as well.
+      if (!item.sha1_hash) {
+        toast.error(`Mod item ${item.filename} is missing an SHA1 hash, which is required for uninstallation.`);
+        return null;
+      }
+      return { profile_id: profileId, sha1_hash: item.sha1_hash };
+    }
+  } else if (uiContentType === 'ResourcePack' || uiContentType === 'ShaderPack' || uiContentType === 'DataPack') {
+    if (!item.path) {
+      toast.error(`${uiContentType} item ${item.filename} must have a valid path for uninstallation.`);
+      return null;
+    }
+    return { profile_id: profileId, file_path: item.path };
+  } else if (uiContentType === 'NoRiskMod') {
+    toast.error("Direct uninstallation of NoRiskMod items is not supported via this method. Please manage NoRisk Packs directly.");
+    console.error("[useLocalContentManager] Attempted to create uninstall payload for NoRiskMod. This is generally not supported here.");
+    return null;
+  }
+
+  toast.error(`Unsupported content type for uninstallation: ${uiContentType}`);
+  return null;
 }
 
 // Helper function to create ToggleContentPayload
@@ -623,41 +661,52 @@ export function useLocalContentManager<T extends LocalContentItem>({
       setIsBatchDeleting(true);
       for (const itemId of selectedItemIds) {
         const item = items.find(i => i.filename === itemId);
-        if (item?.path) { // Use path
-          try {
-            await invoke("delete_file", { filePath: item.path }); // Use path
-            successfulOperations++;
-          } catch (err) {
-            const errorDetail = err instanceof Error ? err.message : String(err.message);
-            errors.push(`Failed to delete ${getDisplayFileName(item)}: ${errorDetail}`);
+        if (item) {
+          const payload = createUninstallPayload(item, profile.id, contentType);
+          if (payload) {
+            try {
+              await uninstallContentFromProfile(payload);
+              successfulOperations++;
+            } catch (err) {
+              const errorDetail = err instanceof Error ? err.message : String(err.message);
+              errors.push(`Failed to delete ${getDisplayFileName(item)}: ${errorDetail}`);
+            }
+          } else {
+             // Error already toasted by createUninstallPayload
+            errors.push(`Could not create uninstall payload for ${getDisplayFileName(item)}.`);
           }
         } else {
-          errors.push(`Could not find path for item ID ${itemId} to delete.`);
+          errors.push(`Could not find item ID ${itemId} to delete.`);
         }
       }
       if (errors.length > 0) toast.error(`Batch delete failed for some items: ${errors.join("; ")}`);
       if (successfulOperations > 0) toast.success(`Successfully deleted ${successfulOperations} item(s).`);
       setIsBatchDeleting(false);
       setSelectedItemIds(new Set());
-    } else if (itemToDeleteForDialog?.path) { // Use path
+    } else if (itemToDeleteForDialog) {
       setItemBeingDeleted(itemToDeleteForDialog.filename);
-      try {
-        await invoke("delete_file", { filePath: itemToDeleteForDialog.path }); // Use path
-        toast.success(`Deleted ${getDisplayFileName(itemToDeleteForDialog)}.`);
-        successfulOperations++;
-        setItems(prevItems => prevItems.filter(i => i.filename !== itemToDeleteForDialog.filename));
-        setSelectedItemIds(prevIds => {
-          const newSet = new Set(prevIds);
-          newSet.delete(itemToDeleteForDialog.filename);
-          return newSet;
-        });
-      } catch (err) {
-        const errorDetail = err instanceof Error ? err.message : String(err.message);
-        toast.error(`Failed to delete ${getDisplayFileName(itemToDeleteForDialog)}: ${errorDetail}`);
-        errors.push(`Failed to delete ${getDisplayFileName(itemToDeleteForDialog)}: ${errorDetail}`);
-      } finally {
-        setItemBeingDeleted(null);
+      const payload = createUninstallPayload(itemToDeleteForDialog, profile.id, contentType);
+      if (payload) {
+        try {
+          await uninstallContentFromProfile(payload);
+          toast.success(`Deleted ${getDisplayFileName(itemToDeleteForDialog)}.`);
+          successfulOperations++;
+          setItems(prevItems => prevItems.filter(i => i.filename !== itemToDeleteForDialog.filename));
+          setSelectedItemIds(prevIds => {
+            const newSet = new Set(prevIds);
+            newSet.delete(itemToDeleteForDialog.filename);
+            return newSet;
+          });
+        } catch (err) {
+          const errorDetail = err instanceof Error ? err.message : String(err.message);
+          toast.error(`Failed to delete ${getDisplayFileName(itemToDeleteForDialog)}: ${errorDetail}`);
+          errors.push(`Failed to delete ${getDisplayFileName(itemToDeleteForDialog)}: ${errorDetail}`);
+        }
+      } else {
+        // Error already toasted by createUninstallPayload
+        // No specific error push here as it's a single item, and the toast is the primary feedback
       }
+      setItemBeingDeleted(null);
     }
 
     setIsDialogActionLoading(false);
