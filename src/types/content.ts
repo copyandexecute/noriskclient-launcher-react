@@ -8,6 +8,7 @@ export interface UninstallContentPayload {
   profile_id: string; // UUID
   sha1_hash?: string; // Optional SHA1 hash of the content to remove
   file_path?: string; // Optional: Direct path to the file to delete
+  content_type?: ContentType; // Optional: Specify the type of content being uninstalled
   // Future potential fields:
   // mod_id_to_remove?: string; // UUID of a specific mod entry
   // filename_to_remove?: string; // Specific filename for custom mods/assets

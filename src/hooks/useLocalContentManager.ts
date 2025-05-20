@@ -129,7 +129,7 @@ function createUninstallPayload<T extends LocalContentItem>(
         toast.error(`Mod item ${item.filename} is missing an SHA1 hash, which is required for uninstallation.`);
         return null;
       }
-      return { profile_id: profileId, sha1_hash: item.sha1_hash };
+      return { profile_id: profileId, sha1_hash: item.sha1_hash, content_type: NrContentType.Mod };
     }
   } else if (uiContentType === 'ResourcePack' || uiContentType === 'ShaderPack' || uiContentType === 'DataPack') {
     if (!item.path) {

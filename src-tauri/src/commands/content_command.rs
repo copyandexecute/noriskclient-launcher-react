@@ -27,11 +27,12 @@ pub struct InstallContentPayload {
     game_versions: Option<Vec<String>>,       // Added game_versions
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UninstallContentPayload {
     profile_id: Uuid,
     sha1_hash: Option<String>,
     file_path: Option<String>,
+    content_type: Option<profile_utils::ContentType>, // Added content_type
     // Add other parameters here later if needed, e.g., content_type (mod, resourcepack, etc.)
 }
 
@@ -39,6 +40,7 @@ async fn uninstall_content_by_sha1_internal(
     profile_id: Uuid,
     sha1_to_delete: &str,
     state_manager: &Arc<AppStateManager>,
+    content_type: Option<profile_utils::ContentType>, // Added content_type parameter
 ) -> crate::error::Result<(usize, usize, bool, bool)> {
     let profile = state_manager
         .profile_manager
@@ -82,41 +84,53 @@ async fn uninstall_content_by_sha1_internal(
     // Part 2: Delete physical files from asset directories
     let mut asset_files_deleted_count = 0;
     let mut asset_file_deletion_errors_occurred = false;
-    match state_manager.profile_manager.get_profile_instance_path(profile_id).await {
-        Ok(profile_instance_path) => {
-            let asset_dirs_to_scan = vec!["shaderpacks", "resourcepacks", "datapacks"];
-            for dir_name in asset_dirs_to_scan {
-                let asset_dir_path = profile_instance_path.join(dir_name);
-                if asset_dir_path.is_dir() {
-                    match fs::read_dir(&asset_dir_path).await {
-                        Ok(mut entries) => {
-                            while let Some(entry_result) = entries.next_entry().await.map_err(AppError::Io)? {
-                                let file_path = entry_result.path();
-                                if file_path.is_file() {
-                                    match hash_utils::calculate_sha1(&file_path).await {
-                                        Ok(file_sha1) => {
-                                            if file_sha1 == sha1_to_delete {
-                                                if let Err(e) = fs::remove_file(&file_path).await {
-                                                    log::error!("Internal: Failed to delete asset file {:?}: {}", file_path, e);
-                                                    asset_file_deletion_errors_occurred = true;
-                                                } else {
-                                                    asset_files_deleted_count += 1;
+
+    // Only scan asset directories if content_type is None or not ContentType::Mod
+    let should_scan_assets = match content_type {
+        Some(profile_utils::ContentType::Mod) => {
+            log::info!("Content type is Mod, skipping asset directory scan for SHA1 uninstallation.");
+            false
+        }
+        _ => true, // Includes None or other asset types
+    };
+
+    if should_scan_assets {
+        match state_manager.profile_manager.get_profile_instance_path(profile_id).await {
+            Ok(profile_instance_path) => {
+                let asset_dirs_to_scan = vec!["shaderpacks", "resourcepacks", "datapacks"];
+                for dir_name in asset_dirs_to_scan {
+                    let asset_dir_path = profile_instance_path.join(dir_name);
+                    if asset_dir_path.is_dir() {
+                        match fs::read_dir(&asset_dir_path).await {
+                            Ok(mut entries) => {
+                                while let Some(entry_result) = entries.next_entry().await.map_err(AppError::Io)? {
+                                    let file_path = entry_result.path();
+                                    if file_path.is_file() {
+                                        match hash_utils::calculate_sha1(&file_path).await {
+                                            Ok(file_sha1) => {
+                                                if file_sha1 == sha1_to_delete {
+                                                    if let Err(e) = fs::remove_file(&file_path).await {
+                                                        log::error!("Internal: Failed to delete asset file {:?}: {}", file_path, e);
+                                                        asset_file_deletion_errors_occurred = true;
+                                                    } else {
+                                                        asset_files_deleted_count += 1;
+                                                    }
                                                 }
                                             }
+                                            Err(e) => log::warn!("Internal: Could not calculate SHA1 for asset file {:?}: {}. Skipping deletion.", file_path, e),
                                         }
-                                        Err(e) => log::warn!("Internal: Could not calculate SHA1 for asset file {:?}: {}. Skipping deletion.", file_path, e),
                                     }
                                 }
                             }
+                            Err(e) => log::warn!("Internal: Could not read asset directory {:?}: {}. Skipping.", asset_dir_path, e),
                         }
-                        Err(e) => log::warn!("Internal: Could not read asset directory {:?}: {}. Skipping.", asset_dir_path, e),
                     }
                 }
             }
-        }
-        Err(e) => {
-            log::error!("Internal: Failed to get profile instance path for {} to scan asset dirs: {}. Asset file deletion will be skipped.", profile_id, e);
-            asset_file_deletion_errors_occurred = true; 
+            Err(e) => {
+                log::error!("Internal: Failed to get profile instance path for {} to scan asset dirs: {}. Asset file deletion will be skipped.", profile_id, e);
+                asset_file_deletion_errors_occurred = true; 
+            }
         }
     }
     Ok((
@@ -535,7 +549,8 @@ pub async fn uninstall_content_from_profile(
         match uninstall_content_by_sha1_internal(
             payload.profile_id, 
             &sha1_hash_to_delete, 
-            &state_manager
+            &state_manager,
+            payload.content_type
         ).await {
             Ok((mod_count, asset_count, mod_errors, asset_errors)) => {
                 if mod_count == 0 && asset_count == 0 {
