@@ -842,19 +842,42 @@ export function useLocalContentManager<T extends LocalContentItem>({
     setContentUpdateError(null);
     try {
       let command = "";
-      let payload: any = { profileId: profile.id, newVersionDetails: updateVersion };
+      let payload: any;
 
-      // The 'item' itself might need to be mapped to specific structs like 'ResourcePackInfo' for the backend.
-      // For now, we pass the generic 'item', assuming the backend commands can handle it or it matches structure.
-      // If not, specific mapping will be needed here based on 'contentType'.
-      const itemPayloadKey = contentType.toLowerCase(); // e.g., 'resourcepack', 'shaderpack'
-      payload[itemPayloadKey] = item; 
+      if (contentType === 'Mod' && item.id && !item.source_type && !item.norisk_info) { // Check for Mod, ID, not custom, not NoRisk
+        command = "update_modrinth_mod_version";
+        payload = {
+          profileId: profile.id,
+          modInstanceId: item.id,
+          newVersionDetails: updateVersion,
+        };
+        console.log(`[${contentType}] Using update_modrinth_mod_version for item ID: ${item.id}`);
+      } else {
+        // Original logic for other content types or fallback
+        payload = { profileId: profile.id, newVersionDetails: updateVersion };
+        const itemPayloadKey = contentType.toLowerCase(); 
+        payload[itemPayloadKey] = item; 
 
-      switch (contentType) {
-        case 'ShaderPack': command = "update_shaderpack_from_modrinth"; break;
-        case 'ResourcePack': command = "update_resourcepack_from_modrinth"; break;
-        case 'DataPack': command = "update_datapack_from_modrinth"; break;
-        default: throw new Error(`Unsupported content type for update: ${contentType}`);
+        switch (contentType) {
+          case 'ShaderPack': command = "update_shaderpack_from_modrinth"; break;
+          case 'ResourcePack': command = "update_resourcepack_from_modrinth"; break;
+          case 'DataPack': command = "update_datapack_from_modrinth"; break;
+          case 'Mod': // This case will now only be hit by mods not matching the above if-condition (e.g. custom mods if we decide to support updates for them via a generic command)
+            // For now, if it's a Mod and didn't match the `update_modrinth_mod_version` criteria, it's an unsupported update scenario.
+            if (item.source_type === "custom" || item.norisk_info) {
+              toast.error(`Automatic updates for this type of mod (${item.filename}) are not supported.`);
+              setItemsBeingUpdated(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(item.filename);
+                return newSet;
+              });
+              return; 
+            }
+            // Fallback for mods that somehow don't have an item.id but are not custom/NoRisk - though this should be rare.
+            throw new Error(`Unsupported mod update scenario for ${item.filename}. Missing ID or Modrinth link.`);
+          default: throw new Error(`Unsupported content type for update: ${contentType}`);
+        }
+        console.log(`[${contentType}] Using generic update command: ${command} for item: ${item.filename}`);
       }
 
       await invoke(command, payload);

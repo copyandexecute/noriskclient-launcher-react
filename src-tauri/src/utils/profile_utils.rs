@@ -1965,6 +1965,7 @@ pub struct LocalContentItem {
     pub source_type: Option<String>, // Zur Kennzeichnung von Custom Mods
     pub norisk_info: Option<crate::state::profile_state::NoriskModIdentifier>, // Identifier für NoRiskMods
     pub fallback_version: Option<String>, // Fallback Version aus dem compatibility target
+    pub id: Option<String>, // Added optional ID field
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)] // Ensure Serialize and Deserialize are here
@@ -2103,6 +2104,7 @@ impl LocalContentLoader {
                                 source_type: source_type_str.map(|s| s.to_string()),
                                 norisk_info: Some(norisk_mod_identifier),
                                 fallback_version: fallback_version,
+                                id: None,
                             });
                         }
                     },
@@ -2181,6 +2183,7 @@ impl LocalContentLoader {
                     source_type: None,
                     norisk_info: None,
                     fallback_version: mod_item.version.clone(),
+                    id: Some(mod_item.id.to_string()), // Set the ID from ModProfileEntry
                 });
             }
         }
@@ -2262,6 +2265,7 @@ impl LocalContentLoader {
                     source_type,
                     norisk_info: None,
                     fallback_version: None,
+                    id: None,
                 });
             }
         }

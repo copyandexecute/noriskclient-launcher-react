@@ -339,6 +339,7 @@ export interface LocalContentItem {
   source_type?: string | null; // For identifying "custom" mods
   norisk_info?: NoriskModIdentifier | null; // Identifier for NoRiskMods
   fallback_version?: string | null; // Fallback version from compatibility target
+  id?: string | null; // Added optional ID field from ModProfileEntry.id
   // Frontend specific fields can be added here if needed, e.g., for UI state
   // local_icon_data_url?: string; // Example if we were to add this later
 }
