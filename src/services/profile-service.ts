@@ -21,6 +21,7 @@ import type {
   ShaderPackInfo,
 } from "../types/modrinth";
 import { NoriskVersionsConfig } from "../types/noriskVersions";
+import { FileNode } from "../types/fileSystem";
 
 export async function listProfiles(): Promise<Profile[]> {
   return invoke<Profile[]>("list_profiles");
@@ -195,8 +196,8 @@ export async function openProfileFolder(profileId: string): Promise<void> {
 
 export async function getProfileDirectoryStructure(
   profileId: string,
-): Promise<any> {
-  return invoke<any>("get_profile_directory_structure", { profileId });
+): Promise<FileNode> {
+  return invoke<FileNode>("get_profile_directory_structure", { profileId });
 }
 
 export async function setNoriskModStatus(

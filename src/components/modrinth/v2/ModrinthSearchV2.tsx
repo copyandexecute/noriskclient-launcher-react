@@ -1777,8 +1777,9 @@ export function ModrinthSearchV2({
         // Verwende die Store-Methode copyProfile
         newProfileId = await store.copyProfile(
           sourceProfileIdToCopy, 
-          profileName
-          // Optional: includeFiles hier hinzufügen, falls benötigt
+          profileName,
+          undefined, // includeFiles is undefined, as we want to include all
+          true       // includeAll is true
         );
         successMessageDetail = `Successfully copied profile '${profileName}' from '${sourceProfileName}'`;
 

@@ -6,6 +6,7 @@ import type {
   AllProfilesAndLastPlayed,
 } from "../types/profile";
 import * as ProfileService from "../services/profile-service";
+import type { FileNode } from "../types/fileSystem";
 
 interface ProfileState {
   profiles: Profile[];
@@ -27,6 +28,7 @@ interface ProfileState {
     sourceId: string,
     newName: string,
     includeFiles?: string[],
+    includeAll?: boolean,
   ) => Promise<string>;
   exportProfile: (
     profileId: string,
@@ -171,12 +173,36 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     sourceId: string,
     newName: string,
     includeFiles?: string[],
+    includeAll?: boolean,
   ) => {
     try {
+      let filesToInclude = includeFiles;
+      if (includeAll) {
+        const profileDirectoryStructure = await ProfileService.getProfileDirectoryStructure(sourceId);
+        // Helper function to recursively get all file paths
+        const getAllFilePaths = (node: FileNode): string[] => {
+          let paths: string[] = [];
+          if (node.children && node.children.length > 0) {
+            for (const child of node.children) {
+              paths = paths.concat(getAllFilePaths(child));
+            }
+          } else if (!node.is_dir) {
+            // 'path' attribute holds the relative path of the file from the profile root
+            if (node.path) {
+              paths.push(node.path);
+            }
+          }
+          return paths;
+        };
+        filesToInclude = getAllFilePaths(profileDirectoryStructure);
+      }
+
+      console.log('[ProfileStore] Copying profile with filesToInclude:', filesToInclude);
+
       const params = {
         source_profile_id: sourceId,
         new_profile_name: newName,
-        include_files: includeFiles,
+        include_files: filesToInclude,
       };
       const newProfileId = await ProfileService.copyProfile(params);
       await get().fetchProfiles();

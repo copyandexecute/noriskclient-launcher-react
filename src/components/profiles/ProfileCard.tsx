@@ -103,7 +103,7 @@ export function ProfileCard({
         setIsCloning(true);
         const clonePromise = useProfileStore
           .getState()
-          .copyProfile(profile.id, newName, null);
+          .copyProfile(profile.id, newName, null, true);
 
         toast
           .promise(clonePromise, {
