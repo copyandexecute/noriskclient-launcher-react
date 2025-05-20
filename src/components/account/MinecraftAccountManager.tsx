@@ -331,7 +331,7 @@ function AccountItem({
       <div className="flex items-center gap-1 flex-shrink-0 p-1">
         {isDropdownItem ? (
           <IconButton
-            variant="destructive"
+            colorScheme="ghost"
             onClick={handleRemoveClick}
             disabled={effectiveIsLoading}
             shadowDepth="short"

@@ -302,7 +302,6 @@ export function LaunchButton({
           <Button
             onClick={handleLaunch}
             disabled={!selectedVersion}
-            variant={getButtonVariant()}
             size="lg"
             icon={getMainButtonIcon()}
             className="flex-1"
@@ -313,7 +312,7 @@ export function LaunchButton({
           <IconButton
             onClick={handleOpenModal}
             disabled={isLaunching || !versions || versions.length === 0}
-            variant="secondary"
+            colorScheme="secondary"
             size="lg"
             className="relative overflow-hidden transition-all duration-300"
             style={{

@@ -89,7 +89,6 @@ const SkinPreview = memo(
             width={130}
             height={260}
             className="mx-auto"
-            enableZoom={false}
           />
         </div>
 
@@ -125,7 +124,7 @@ const SkinPreview = memo(
               title="Edit skin properties"
               disabled={isDisabled}
               size="xs"
-              variant="secondary"
+              colorScheme="secondary"
               icon={<Icon icon="solar:pen-bold" className="w-4 h-4" />}
             />
           )}
@@ -139,7 +138,7 @@ const SkinPreview = memo(
               title="Delete skin"
               disabled={isDisabled}
               size="xs"
-              variant="destructive"
+              colorScheme="destructive"
               icon={
                 <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
               }
@@ -176,7 +175,6 @@ const AddSkinCard = memo(
             width={130}
             height={260}
             className="mx-auto opacity-70 group-hover:opacity-100 transition-opacity"
-            enableZoom={false}
           />
         </div>
 
@@ -376,7 +374,7 @@ const EditSkinModal = memo(
                   title="Upload Skin from file"
                   disabled={localSkinsLoading}
                   size="md"
-                  variant="secondary"
+                  colorScheme="secondary"
                   icon={<Icon icon="solar:folder-bold" className="w-5 h-5" />}
                 />
               </div>

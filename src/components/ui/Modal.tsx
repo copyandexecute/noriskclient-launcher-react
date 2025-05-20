@@ -210,20 +210,12 @@ export function Modal({
           <div className="flex items-center space-x-2">
             {headerActions}
             <IconButton
-              ref={closeButtonRef as any}
-              icon={
-                <Icon
-                  icon="solar:close-square-bold"
-                  className="w-4 h-4 text-white"
-                />
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClose();
-              }}
-              variant="secondary"
+              ref={closeButtonRef}
+              icon={<Icon icon="solar:close-circle-bold" />}
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              colorScheme="ghost"
               size="sm"
-              aria-label="Close"
+              aria-label="Close modal"
             />
           </div>
         </div>

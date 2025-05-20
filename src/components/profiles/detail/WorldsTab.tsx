@@ -707,14 +707,14 @@ export function WorldsTab({
               title="Copy World"
               disabled={isCopyingWorld}
               icon={<Icon icon="solar:copy-bold" />}
-              variant="secondary"
+              colorScheme="secondary"
               size="xs"
             />
             <IconButton
               onClick={() => handleOpenWorldFolder(item)}
               title="Open World Folder"
               icon={<Icon icon="solar:folder-open-bold-duotone" />}
-              variant="secondary"
+              colorScheme="secondary"
               size="xs"
             />
             <IconButton
@@ -728,7 +728,7 @@ export function WorldsTab({
                   <Icon icon="solar:trash-bin-trash-bold" />
                 )
               }
-              variant="destructive"
+              colorScheme="destructive"
               size="xs"
             />
           </div>

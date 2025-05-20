@@ -326,7 +326,7 @@ export function RunningInstancesIndicator({
                       <IconButton
                         onClick={(e) => handleStopProcess(process.id, e)}
                         disabled={stoppingId === process.id}
-                        variant="destructive"
+                        colorScheme="destructive"
                         size="xs"
                         className="h-8 w-8 p-1.5 bg-white/10 hover:bg-white/20 hover:text-red-400 ring-1 ring-red-500 focus:ring-2 focus:ring-red-500/50"
                         icon={

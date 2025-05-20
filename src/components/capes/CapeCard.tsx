@@ -91,7 +91,7 @@ export function CapeCard({ cape, onEquip, isSelected, isLoading, index, isActual
           <IconButton 
             className="absolute top-1 right-1 z-20 shadow-md opacity-85 hover:opacity-100"
             size="xs"
-            variant="destructive"
+            colorScheme="destructive"
             icon={<Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />}
             onClick={onDelete}
             aria-label="Delete Cape"

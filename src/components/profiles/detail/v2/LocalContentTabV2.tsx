@@ -24,6 +24,7 @@ import {
 import type { NoriskModpacksConfig } from "../../../../types/noriskPacks";
 import * as ProfileService from "../../../../services/profile-service";
 import { Select, type SelectOption } from "../../../ui/Select";
+import { ThemedSurface } from "../../../ui/ThemedSurface";
 
 // Generic icons that can be used across different content types
 const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
@@ -351,21 +352,24 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     );
     
     const itemDropdownNode = (
-      <div 
-        ref={dropdownRef}
-        className="absolute top-full right-0 mt-1 w-44 bg-opacity-80 backdrop-blur-md border rounded-md shadow-lg z-20 p-1 flex flex-col gap-0.5"
-        onClick={(e) => e.stopPropagation()}
-        style={{ backgroundColor: `${accentColor.value}CC`, borderColor: `${accentColor.value}50` }}
+      <ThemedSurface 
+        className="absolute top-full right-0 mt-1 w-44 z-20" 
       >
-        <button 
-          onClick={() => { if(item.path) handleOpenItemFolder(item); setActiveDropdownId(null); }}
-          className="w-full text-left px-2 py-1.5 text-[11px] font-minecraft-ten hover:bg-[var(--accent-color-soft)] rounded-sm text-white/80 hover:text-white transition-colors duration-100 flex items-center gap-1.5 disabled:opacity-50"
+        <div 
+          ref={dropdownRef}
+          className="flex flex-col gap-0.5"
+          onClick={(e) => e.stopPropagation()}
         >
-          <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[5]} className="w-3 h-3 flex-shrink-0" />
-          Open Folder
-        </button>
-        {/* Add other generic actions here if needed */}
-      </div>
+          <button 
+            onClick={() => { if(item.path) handleOpenItemFolder(item); setActiveDropdownId(null); }}
+            className="w-full text-left px-2 py-1.5 text-[11px] font-minecraft-ten hover:bg-[var(--accent-color-soft)] rounded-sm text-white/80 hover:text-white transition-colors duration-100 flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[5]} className="w-3 h-3 flex-shrink-0" />
+            Open Folder
+          </button>
+          {/* Add other generic actions here if needed */}
+        </div>
+      </ThemedSurface>
     );
 
     return (

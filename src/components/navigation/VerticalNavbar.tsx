@@ -126,7 +126,7 @@ export function VerticalNavbar({
           className,
         )}
         style={{
-          backgroundColor: `rgba(${parseInt(accentColor.value.slice(1, 3), 16)}, ${parseInt(accentColor.value.slice(3, 5), 16)}, ${parseInt(accentColor.value.slice(5, 7), 16)}, 0.2)`,
+          backgroundColor: `rgba(${parseInt(accentColor.value.slice(1, 3), 16)}, ${parseInt(accentColor.value.slice(3, 5), 16)}, ${parseInt(accentColor.value.slice(5, 7), 16)}, 0.4)`,
           borderRight: `2px solid ${accentColor.value}60`,
           borderLeft: `2px solid ${accentColor.value}60`,
           boxShadow: `0 0 10px ${accentColor.value}30 inset`,
