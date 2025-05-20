@@ -460,7 +460,21 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                 continue;
             }
 
-            let final_dest_path = target_dir.join(sanitized_relative_path);
+            let final_dest_path = {
+                let relative_path_str = sanitized_relative_path.to_string_lossy();
+                // Check for both / and \ to be platform-agnostic for path separators within the string
+                if relative_path_str.starts_with("mods/") || relative_path_str.starts_with("mods\\") {
+                    // Construct the new path by taking the part of the string *after* "mods"
+                    // e.g., if relative_path_str is "mods/foo.jar", then &relative_path_str["mods".len()..] is "/foo.jar"
+                    // We then prepend "custom_mods"
+                    let new_relative_path = format!("custom_mods{}", &relative_path_str["mods".len()..]);
+                    target_dir.join(new_relative_path)
+                } else {
+                    // If sanitized_relative_path is used again after this block, ensure it's cloned if needed.
+                    // Here, it seems it's only used for final_dest_path construction.
+                    target_dir.join(sanitized_relative_path)
+                }
+            };
             
             let task_pack_path = pack_path.to_path_buf();
             let task_io_semaphore = io_semaphore.clone();
