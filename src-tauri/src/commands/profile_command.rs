@@ -895,6 +895,74 @@ pub async fn import_profile_from_file(app_handle: tauri::AppHandle) -> Result<()
     }
 }
 
+/// Imports a profile from a specified file path.
+#[tauri::command]
+pub async fn import_profile(file_path_str: String) -> Result<Uuid, CommandError> {
+    log::info!(
+        "Executing import_profile command with file_path: {}",
+        file_path_str
+    );
+
+    let file_path_buf = PathBuf::from(file_path_str);
+
+    if !file_path_buf.exists() {
+        log::error!("File path does not exist: {:?}", file_path_buf);
+        return Err(CommandError::from(AppError::Other(format!(
+            "File not found at path: {}",
+            file_path_buf.display()
+        ))));
+    }
+
+    log::info!(
+        "Processing modpack file: {:?}. Triggering processing...",
+        file_path_buf
+    );
+
+    // Check the file extension
+    let file_extension = file_path_buf
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase());
+
+    let new_profile_id = match file_extension.as_deref() {
+        Some("mrpack") => {
+            log::info!("File extension is .mrpack, proceeding with mrpack processing.");
+            mrpack::import_mrpack_as_profile(file_path_buf).await?
+        }
+        Some("noriskpack") => {
+            log::info!("File extension is .noriskpack, proceeding with noriskpack processing.");
+            crate::integrations::norisk_packs::import_noriskpack_as_profile(file_path_buf).await?
+        }
+        _ => {
+            log::error!(
+                "Selected file has an invalid extension: {:?}",
+                file_path_buf
+            );
+            return Err(CommandError::from(AppError::Other(
+                "Invalid file type selected. Please select a .mrpack or .noriskpack file."
+                    .to_string(),
+            )));
+        }
+    };
+
+    // Get state to emit event
+    let state = State::get().await?;
+    // Emit event to trigger UI update for the newly created profile
+    if let Err(e) = state
+        .event_state
+        .trigger_profile_update(new_profile_id)
+        .await
+    {
+        log::error!(
+            "Failed to emit TriggerProfileUpdate event for new profile {}: {}",
+            new_profile_id,
+            e
+        );
+    }
+
+    Ok(new_profile_id)
+}
+
 // Command to get all resourcepacks in a profile
 #[tauri::command]
 pub async fn get_local_resourcepacks(

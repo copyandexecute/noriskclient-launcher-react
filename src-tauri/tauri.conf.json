@@ -16,6 +16,9 @@
       "endpoints": [],
       "dialog": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5QkZBNTBGNjhDQTBGOEYKUldTUEQ4cG9ENlcvbVpVTVdnVkNNSGlXWXVXRklqcGFxNnBuRW1LM3VDTXpKcXU2MmdCNVc5S2IK"
+    },
+    "singleInstance": {
+      "active": true
     }
   },
   "app": {
@@ -50,6 +53,13 @@
     "active": true,
     "targets": ["app", "dmg", "deb", "appimage", "nsis"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "fileAssociations": [
+      {
+        "ext": ["noriskpack"],
+        "name": "NoriskPack File",
+        "description": "NoRiskClient Modpack File"
+      }
+    ]
   }
 }

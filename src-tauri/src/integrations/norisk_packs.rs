@@ -17,6 +17,8 @@ use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
 use uuid::Uuid; // Added for env! macro
+use tauri::Manager; // Required for app_handle.get_window() and window.emit()
+use url; // Added for URL parsing
 
 /// Represents the overall structure of the norisk_modpacks.json file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -463,6 +465,106 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     );
 
     Ok(profile_id)
+}
+
+/// Handles the opening of a .noriskpack file, either on app startup or second instance.
+/// It will call the `import_profile` command if a valid file path is found in the arguments.
+pub async fn handle_noriskpack_file_paths<R: tauri::Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    args: Vec<String>, // Changed from Vec<PathBuf>
+) {
+    let mut noriskpack_to_import: Option<PathBuf> = None;
+
+    // Iterate over string arguments. Skip the first one if these are direct command line args.
+    // For single-instance plugin, all args might be relevant, but filtering by extension handles it.
+    let args_to_check = if args.len() > 1 && PathBuf::from(&args[0]).is_file() {
+        args.iter().skip(1) // Likely std::env::args(), skip executable path
+    } else {
+        args.iter().skip(0) // Potentially from single-instance, check all
+    };
+
+    for arg_str in args_to_check {
+        // Attempt to parse as URL first for file:// scheme, then as direct path
+        let path_candidate = if let Ok(url) = url::Url::parse(arg_str) {
+            if url.scheme() == "file" {
+                url.to_file_path().ok()
+            } else {
+                info!("Skipping non-file URL argument: {}", arg_str);
+                None // Skip other URL schemes
+            }
+        } else {
+            // If not a valid URL, treat as a potential file path
+            Some(PathBuf::from(arg_str))
+        };
+
+        if let Some(path) = path_candidate {
+            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("noriskpack") {
+                info!(
+                    "Found .noriskpack file to process: {}",
+                    path.display()
+                );
+                noriskpack_to_import = Some(path);
+                break; // Handle the first .noriskpack file found
+            }
+        }
+    }
+
+    if let Some(file_path_to_import) = noriskpack_to_import {
+        if let Some(file_path_str) = file_path_to_import.to_str() {
+            info!(
+                "Attempting to import profile from path: {}",
+                file_path_str
+            );
+            let import_app_handle = app_handle.clone();
+            let path_string_for_task = file_path_str.to_string();
+
+            // Spawn an async task to handle the import
+            tauri::async_runtime::spawn(async move {
+                match crate::commands::profile_command::import_profile(path_string_for_task).await {
+                    Ok(profile_id) => {
+                        info!(
+                            "Profile {} imported successfully.",
+                            profile_id
+                        );
+                        // Attempt to bring the main window to the front and focus it.
+                        if let Some(window) = import_app_handle.get_webview_window("main") {
+                            if let Err(e) = window.unminimize() {
+                                warn!("Failed to unminimize window: {:?}", e);
+                            }
+                            if let Err(e) = window.set_focus() {
+                                warn!("Failed to focus window: {:?}", e);
+                            }
+                            // The import_profile command should already emit an event for UI update.
+                        } else {
+                            warn!("Could not get main window handle to unminimize/focus.");
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            "Error importing profile from path ({}): {:?}",
+                            file_path_to_import.display(), e // Use {:?} for CommandError
+                        );
+                        // Optionally, send an event to the frontend to show an error toast/dialog
+                        if let Some(window) = import_app_handle.get_webview_window("main") {
+                            let error_message = format!(
+                                "Failed to import noriskpack ({}): {:?}",
+                                file_path_to_import.display(), e
+                            );
+                            /*if let Err(emit_err) = window.emit("show-error-toast", error_message) {
+                                warn!("Failed to emit show-error-toast event: {:?}", emit_err);
+                            }*/
+                        } else {
+                             warn!("Could not get main window to emit error toast for import failure.");
+                        }
+                    }
+                }
+            });
+        } else {
+            error!("Failed to convert .noriskpack path to string: {}", file_path_to_import.display());
+        }
+    } else {
+        info!("No .noriskpack file found in the provided paths.");
+    }
 }
 
 impl NoriskModpacksConfig {
