@@ -323,3 +323,7 @@ export async function getLocalContent(
 ): Promise<LocalContentItem[]> {
   return invoke<LocalContentItem[]>("get_local_content", { params });
 }
+
+export async function importProfileByPath(filePathStr: string): Promise<string> {
+  return invoke<string>("import_profile", { filePathStr });
+}

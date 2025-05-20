@@ -3,9 +3,12 @@ import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import type { UnlistenFn, Event as TauriEvent } from '@tauri-apps/api/event';
 import type { PhysicalPosition } from '@tauri-apps/api/window'; // For payload.position
 import { toast } from 'react-hot-toast';
+// import { invoke } from '@tauri-apps/api/core'; // No longer directly needed here
 
 import { useAppDragDropStore } from '../store/appStore'; // Use the real store
+import { useProfileStore } from '../store/profile-store'; // Import useProfileStore
 import * as ContentService from '../services/content-service';
+import * as ProfileService from '../services/profile-service'; // Import ProfileService
 import { ContentType as BackendContentType } from '../types/content';
 
 // Define the expected structure of the drag-drop event payload based on common Tauri patterns
@@ -32,7 +35,7 @@ export function useGlobalDragAndDrop() {
       try {
         const currentWebviewWindow = getCurrentWebviewWindow();
         
-        unlistenDragDrop = await currentWebviewWindow.onDragDropEvent((event: TauriEvent<unknown>) => {
+        unlistenDragDrop = await currentWebviewWindow.onDragDropEvent(async (event: TauriEvent<unknown>) => {
           const eventTimestamp = new Date().toISOString();
           console.log(`[DragDrop Hook ${instanceId}] Event received: ${event.payload ? (event.payload as any).type : 'unknown type'} at ${eventTimestamp}`);
           
@@ -48,21 +51,48 @@ export function useGlobalDragAndDrop() {
               return;
             }
 
-            // Create a unique key for this set of paths to deduplicate
             const pathKey = droppedPaths.slice().sort().join('|');
 
             if (recentlyProcessedPaths.has(pathKey)) {
               console.log(`[DragDrop Hook ${instanceId}] Duplicate drop event ignored (paths already processed recently): ${pathKey} at ${eventTimestamp}`);
-              return; // Ignore if recently processed
+              return; 
             }
 
-            // Add to cache and set a timeout to remove it
             console.log(`[DragDrop Hook ${instanceId}] Processing new drop event for paths: ${pathKey} at ${eventTimestamp}`);
             recentlyProcessedPaths.add(pathKey);
             setTimeout(() => {
               recentlyProcessedPaths.delete(pathKey);
               console.log(`[DragDrop Hook ${instanceId}] Cleared pathKey from cache: ${pathKey}`);
             }, PROCESS_COOLDOWN_MS);
+
+            const profilePackPath = droppedPaths.find(path => 
+              path.toLowerCase().endsWith('.noriskpack') || path.toLowerCase().endsWith('.mrpack')
+            );
+
+            if (profilePackPath) {
+              const operationId = `profile-import-${Date.now()}`;
+              console.log(`[DragDrop Hook ${instanceId}] Initiating profile import (OpID: ${operationId}) for: ${profilePackPath} at ${eventTimestamp}`);
+              const loadingToastId = `loading-${operationId}`;
+              const fileName = profilePackPath.substring(profilePackPath.lastIndexOf('/') + 1).substring(profilePackPath.lastIndexOf('\\') + 1); // Get file name for toast
+              toast.loading(`Importing profile from ${fileName}...`, { id: loadingToastId });
+
+              try {
+                await ProfileService.importProfileByPath(profilePackPath);
+                console.log(`[DragDrop Hook ${instanceId}] Profile import SUCCESS (OpID: ${operationId}) for: ${profilePackPath} at ${new Date().toISOString()}`);
+                toast.success(
+                  `Profile import initiated for ${fileName}. Profile list will refresh.`,
+                  { id: loadingToastId }
+                );
+                useProfileStore.getState().fetchProfiles(); // Fetch profiles after successful import
+              } catch (err) {
+                console.error(`[DragDrop Hook ${instanceId}] Profile import ERROR (OpID: ${operationId}) for: ${profilePackPath} at ${new Date().toISOString()}:`, err);
+                toast.error(
+                  `Failed to import profile from ${fileName}: ${err instanceof Error ? err.message : String(err)}`,
+                  { id: loadingToastId }
+                );
+              }
+              return; 
+            }
 
             const {
               activeDropProfileId: currentProfileId,
@@ -102,7 +132,7 @@ export function useGlobalDragAndDrop() {
 
               if (relevantFiles.length > 0) {
                 const operationId = `op-${Date.now()}`;
-                console.log(`[DragDrop Hook ${instanceId}] Initiating import (OpID: ${operationId}) for ${relevantFiles.length} files at ${eventTimestamp}`);
+                console.log(`[DragDrop Hook ${instanceId}] Initiating content import (OpID: ${operationId}) for ${relevantFiles.length} files at ${eventTimestamp}`);
                 
                 const loadingToastId = `loading-${operationId}`;
                 toast.loading(`Importing ${relevantFiles.length} ${itemTypeName} via drag & drop...`, { id: loadingToastId });
@@ -113,25 +143,25 @@ export function useGlobalDragAndDrop() {
                   content_type: currentContentType,
                 })
                 .then(() => {
-                  console.log(`[DragDrop Hook ${instanceId}] Import SUCCESS (OpID: ${operationId}) at ${new Date().toISOString()}`);
+                  console.log(`[DragDrop Hook ${instanceId}] Content import SUCCESS (OpID: ${operationId}) at ${new Date().toISOString()}`);
                   toast.success(
                     `${relevantFiles.length} ${itemTypeName} import initiated. List will refresh.`,
-                    { id: loadingToastId } // Replace loading toast with success
+                    { id: loadingToastId } 
                   );
                   useAppDragDropStore.getState().triggerRefresh(currentContentType);
                 })
                 .catch((err) => {
-                  console.error(`[DragDrop Hook ${instanceId}] Import ERROR (OpID: ${operationId}) at ${new Date().toISOString()}:`, err);
+                  console.error(`[DragDrop Hook ${instanceId}] Content import ERROR (OpID: ${operationId}) at ${new Date().toISOString()}:`, err);
                   toast.error(
                     `Failed to import ${itemTypeName}: ${err instanceof Error ? err.message : String(err)}`,
-                    { id: loadingToastId } // Replace loading toast with error
+                    { id: loadingToastId } 
                   );
                 });
               } else {
                 toast(`No files matching expected types (${expectedExtensions.join(', ')}) for ${itemTypeName} were dropped.`);
               }
             } else {
-              toast('Drop files onto an active profile content area to import them.');
+              toast('Drop files onto an active profile content area to import them, or drop a .noriskpack/.mrpack file anywhere to import a profile.');
             }
           } else if (payload.type === 'cancel') {
             console.log(`[DragDrop Hook ${instanceId}] File drop cancelled at ${eventTimestamp}`);
