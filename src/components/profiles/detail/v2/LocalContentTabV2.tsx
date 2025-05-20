@@ -28,6 +28,7 @@ import { ContentType as BackendContentType } from "../../../../types/content"; /
 import { open, type DialogFilter } from "@tauri-apps/plugin-dialog"; // Corrected: DialogFile is not exported directly
 import { Select, type SelectOption } from "../../../ui/Select";
 import { ThemedSurface } from "../../../ui/ThemedSurface";
+import { useAppDragDropStore } from "../../../../store/appStore"; // Import the store
 
 // Generic icons that can be used across different content types
 const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
@@ -72,6 +73,11 @@ export function LocalContentTabV2<T extends LocalContentItem>({
   onRefreshRequired,
 }: LocalContentTabV2Props<T>) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const {
+    setActiveDropContext,
+    registerRefreshCallback,
+    unregisterRefreshCallback
+  } = useAppDragDropStore();
 
   const [noriskPacksConfig, setNoriskPacksConfig] = useState<NoriskModpacksConfig | null>(null);
   const [isFetchingPacksConfig, setIsFetchingPacksConfig] = useState(false);
@@ -125,6 +131,29 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     getDisplayFileName,
     onRefreshRequired,
   });
+
+  // Map UI contentType to BackendContentType for the store
+  const backendContentTypeForStore = useMemo(() => {
+    return contentType as BackendContentType; 
+  }, [contentType]);
+
+  useEffect(() => {
+    if (profile && backendContentTypeForStore) {
+      setActiveDropContext(profile.id, backendContentTypeForStore);
+      
+      // Register refresh callback for this specific content type instance
+      const refreshThisTabData = () => fetchData(true);
+      registerRefreshCallback(backendContentTypeForStore, refreshThisTabData);
+    }
+    return () => {
+      // Clear context when this specific tab instance is no longer focused or unmounted
+      // Only clear if this was the one setting it (or manage this more globally)
+      // For simplicity, we clear based on this instance. 
+      // A more robust solution might involve checking if the current global context matches this instance before clearing.
+      setActiveDropContext(null, null); 
+      unregisterRefreshCallback(backendContentTypeForStore);
+    };
+  }, [profile, backendContentTypeForStore, setActiveDropContext, registerRefreshCallback, unregisterRefreshCallback]);
 
   // Fetch NoRiskPacksConfig if content type is NoRiskMod
   useEffect(() => {
@@ -673,7 +702,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       <GenericContentTab<T> 
         items={contentType === 'NoRiskMod' && !profile?.selected_norisk_pack_id ? [] : filteredItems}
         renderListItem={renderListItem} 
-        isLoading={isLoading} 
+        isLoading={isBusyWithEssentialLoad} 
         error={error} 
         searchQuery={searchQuery} 
         primaryLeftActions={primaryLeftActionsContent}

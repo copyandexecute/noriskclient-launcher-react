@@ -25,6 +25,7 @@ import {
   getLauncherConfig,
   setProfileGroupingPreference,
 } from "./services/launcher-config-service";
+import { useGlobalDragAndDrop } from './hooks/useGlobalDragAndDrop';
 
 export type ProfilesTabContext = {
   currentGroupingCriterion: string;
@@ -151,6 +152,8 @@ export function App() {
     currentGroupingCriterion,
     onGroupingChange: handleProfileGroupingChange,
   };
+
+  useGlobalDragAndDrop();
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden">
