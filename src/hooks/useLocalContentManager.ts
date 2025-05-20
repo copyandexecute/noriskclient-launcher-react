@@ -8,6 +8,7 @@ import type { ToggleContentPayload, UninstallContentPayload } from '../types/con
 import { ModrinthService } from '../services/modrinth-service';
 import { getLocalContent } from '../services/profile-service';
 import { toggleContentFromProfile, uninstallContentFromProfile } from '../services/content-service';
+import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
 
 // Base type for content items managed by this hook - maps to ProfileLocalContentItem
 // We'll use ProfileLocalContentItem directly or ensure T extends it.
@@ -775,16 +776,25 @@ export function useLocalContentManager<T extends LocalContentItem>({
     setIsConfirmDeleteDialogOpen(true);
   }, [profile, selectedItemIds]);
 
-  const handleOpenItemFolder = useCallback((item: T) => {
-    if (!item.path) { // Use path
+  const handleOpenItemFolder = useCallback(async (item: T) => {
+    if (!item.path) {
       toast.error("Path not available for this item.");
       return;
     }
-    invoke("open_file_directory", { filePath: item.path }) // Use path
-      .catch(err => {
-        const errorMsg = err instanceof Error ? err.message : String(err.message);
-        toast.error(`Failed to open directory: ${errorMsg}`);
-      });
+    try {
+      await revealItemInDir(item.path);
+      console.log(`[Opener] Successfully revealed item in directory: ${item.path}`);
+    } catch (revealError: any) {
+      console.warn(`[Opener] revealItemInDir failed for ${item.path}:`, revealError);
+      try {
+        await openPath(item.path);
+        console.log(`[Opener] Successfully opened path (fallback): ${item.path}`);
+      } catch (openError: any) {
+        console.error(`[Opener] openPath also failed for ${item.path}:`, openError);
+        const errorMsg = openError?.message || revealError?.message || "Failed to open item location.";
+        toast.error(`Failed to open location: ${errorMsg}`);
+      }
+    }
   }, []);
   
   const checkForContentUpdates = useCallback(async (currentProfile = profile, currentItems = items) => {
