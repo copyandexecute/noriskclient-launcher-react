@@ -123,7 +123,7 @@ export function ProfileDetailView({
   };
 
   const handleContentTypeChange = (type: ContentSubType) => {
-    if (activeContentType === type) return;
+    if (activeContentType === type && activeMainTab === "content") return;
 
     if (isBackgroundAnimationEnabled) {
       gsap.to(`#dot-${activeContentType}`, {
@@ -153,6 +153,9 @@ export function ProfileDetailView({
     }
 
     setActiveContentType(type);
+    if (activeMainTab === "browse") {
+      setActiveMainTab("content");
+    }
   };
 
   const mainTabs = profile.is_standard_version
@@ -316,7 +319,7 @@ export function ProfileDetailView({
 
                 {/* Content sub-navigation - directly below Content button */}
                 {tab.id === "content" &&
-                  activeMainTab === "content" &&
+                  (activeMainTab === "content" || activeMainTab === "browse") &&
                   !profile.is_standard_version && (
                     <div ref={subMenuRef} className="ml-3 pl-4 relative">
                       {/* Vertical line connecting subpoints */}
@@ -408,6 +411,7 @@ export function ProfileDetailView({
                     addContentButtonText="Add Mods"
                     emptyStateIconOverride="solar:gallery-bold-duotone"
                     onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
                   />
                 )}
                 {activeContentType === "resourcepacksv2" && (
@@ -420,6 +424,7 @@ export function ProfileDetailView({
                     addContentButtonText="Add Resource Packs"
                     emptyStateIconOverride="solar:gallery-bold-duotone"
                     onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
                   />
                 )}
                 {activeContentType === "shaderpacksv2" && (
@@ -432,6 +437,7 @@ export function ProfileDetailView({
                     addContentButtonText="Add Shader Packs"
                     emptyStateIconOverride="solar:sun-bold-duotone"
                     onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
                   />
                 )}
                 {activeContentType === "datapacksv2" && (
@@ -444,6 +450,7 @@ export function ProfileDetailView({
                     addContentButtonText="Add Data Packs"
                     emptyStateIconOverride="solar:database-bold-duotone"
                     onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
                   />
                 )}
                   {activeContentType === "noriskv2" && (
@@ -456,6 +463,7 @@ export function ProfileDetailView({
                     addContentButtonText="Add NoRisk Mods"
                     emptyStateIconOverride="solar:shield-check-bold-duotone"
                     onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
                   />
                 )}
               </>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useCallback, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../../ui/buttons/Button";
 import { IconButton } from "../../../ui/buttons/IconButton";
 import { GenericDetailListItem } from "../items/GenericDetailListItem";
@@ -59,6 +60,7 @@ interface LocalContentTabV2Props<T extends LocalContentItem> {
   onAddContent?: () => void; // Action for the add button
   emptyStateIconOverride?: string; // Optional override for the main empty/fallback icon
   onRefreshRequired?: () => void;
+  onBrowseContentRequest?: (browseContentType: string) => void; // Added new prop
 }
 
 export function LocalContentTabV2<T extends LocalContentItem>({
@@ -71,7 +73,9 @@ export function LocalContentTabV2<T extends LocalContentItem>({
   onAddContent: onAddContentProp,
   emptyStateIconOverride,
   onRefreshRequired,
+  onBrowseContentRequest, // Destructure new prop
 }: LocalContentTabV2Props<T>) {
+  const navigate = useNavigate();
   const accentColor = useThemeStore((state) => state.accentColor);
   const {
     setActiveDropContext,
@@ -305,6 +309,17 @@ export function LocalContentTabV2<T extends LocalContentItem>({
   useEffect(() => {
     preloadIcons(LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD);
   }, []);
+
+  // Helper to convert LocalContentType to URL-friendly string for BrowseTab
+  const getBrowseTabContentType = (currentTabContentType: LocalContentType): string => {
+    switch (currentTabContentType) {
+      case 'Mod': return 'mods';
+      case 'ResourcePack': return 'resourcepacks';
+      case 'ShaderPack': return 'shaderpacks';
+      case 'DataPack': return 'datapacks';
+      default: return 'mods'; // Fallback
+    }
+  };
 
   const renderListItem = useCallback((item: T) => {
     const itemTitle = getDisplayFileName(item);
@@ -546,15 +561,35 @@ export function LocalContentTabV2<T extends LocalContentItem>({
           placeholder={`Search ${itemTypeNamePlural}...`}
           className="flex-grow !h-9"
         />
-        {effectiveOnAddContent && contentType !== 'NoRiskMod' && (
-            <IconButton
-                icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[12]} />}
-                onClick={effectiveOnAddContent}
-                colorScheme="secondary"
-                size="sm"
-                title={addContentButtonText}
-                className="!h-9 !w-9 flex-shrink-0"
+        {effectiveOnAddContent && contentType !== 'NoRiskMod' && profile && (
+          <div className="flex flex-shrink-0">
+            <Button
+              onClick={() => {
+                if (profile && onBrowseContentRequest) { // Check if onBrowseContentRequest is available
+                  const browseContentType = getBrowseTabContentType(contentType);
+                  onBrowseContentRequest(browseContentType); // Call the new prop
+                } else if (profile) {
+                  // Fallback or original navigation logic if prop not provided (though it should be)
+                  const browseContentType = getBrowseTabContentType(contentType);
+                  navigate(`/profiles/${profile.id}/browse/${browseContentType}`);
+                }
+              }}
+              variant="secondary"
+              size="sm"
+              className="!h-9 rounded-r-none border-r-transparent focus:z-10" 
+              title="Browse for content online"
+            >
+              Browse
+            </Button>
+            <IconButton 
+              icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[12]} />}
+              onClick={effectiveOnAddContent}
+              colorScheme="secondary" 
+              size="xs" 
+              className="!h-9 !w-9 rounded-l-none focus:z-10" 
+              title={addContentButtonText} 
             />
+          </div>
         )}
         <IconButton
             icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[13]} />}
@@ -725,4 +760,4 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       />
     </>
   );
-} 
+}

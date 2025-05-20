@@ -1,49 +1,83 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import type { Profile } from "../../../types/profile";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { useDisplayContextStore } from "../../../store/useDisplayContextStore";
 import { Icon } from "@iconify/react";
 import { Card } from "../../ui/Card";
 import { ModrinthSearchV2 } from "../../modrinth/v2/ModrinthSearchV2";
+import * as ProfileService from "../../../services/profile-service";
+import type { ModrinthProjectType } from "../../../types/modrinth";
 
 interface BrowseTabProps {
-  profile: Profile;
+  profile?: Profile;
   initialContentType?: string;
   onRefresh?: () => void;
   parentTransitionActive?: boolean;
 }
 
 export function BrowseTab({
-  profile,
-  initialContentType = "mods",
+  profile: initialProfile,
+  initialContentType: initialContentTypeFromProp = "mods",
   onRefresh,
   parentTransitionActive,
 }: BrowseTabProps) {
+  const { profileId, contentType: contentTypeFromUrl } = useParams<{ profileId: string; contentType: string }>();
   const accentColor = useThemeStore((state) => state.accentColor);
   const setDisplayContext = useDisplayContextStore((state) => state.setContext);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Set display context to 'detail' when component mounts
+  const [currentProfile, setCurrentProfile] = useState<Profile | undefined | null>(initialProfile);
+  const [isLoading, setIsLoading] = useState<boolean>(!initialProfile && !!profileId);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeContentType = contentTypeFromUrl || initialContentTypeFromProp;
+
   useEffect(() => {
     setDisplayContext("detail");
-
-    // Optional: Reset to default when component unmounts
     return () => {
       setDisplayContext("standalone");
     };
   }, [setDisplayContext]);
 
+  useEffect(() => {
+    if (profileId && !initialProfile) {
+      setIsLoading(true);
+      setError(null);
+      ProfileService.getProfile(profileId)
+        .then(fetchedProfile => {
+          setCurrentProfile(fetchedProfile);
+        })
+        .catch(err => {
+          console.error(`Failed to fetch profile ${profileId}:`, err);
+          setError(`Failed to load profile: ${err instanceof Error ? err.message : String(err)}`);
+          setCurrentProfile(null);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else if (initialProfile) {
+      setCurrentProfile(initialProfile);
+      setIsLoading(false);
+    }
+  }, [profileId, initialProfile]);
+
   const getProjectType = () => {
-    switch (initialContentType) {
+    switch (activeContentType) {
       case "mods":
+      case "mod":
         return "mod";
       case "resourcepacks":
+      case "resourcepack":
         return "resourcepack";
       case "shaderpacks":
+      case "shaderpack":
+      case "shader":
         return "shader";
       case "datapacks":
+      case "datapack":
         return "datapack";
       default:
         return "mod";
@@ -51,73 +85,73 @@ export function BrowseTab({
   };
 
   const getContentTypeIcon = () => {
-    switch (initialContentType) {
-      case "mods":
-        return "solar:cube-bold";
-      case "resourcepacks":
-        return "solar:image-gallery-bold";
-      case "shaderpacks":
-        return "solar:sun-bold";
-      case "datapacks":
-        return "solar:database-bold";
-      default:
-        return "solar:cube-bold";
+    switch (activeContentType) {
+      case "mods": case "mod": return "solar:cube-bold";
+      case "resourcepacks": case "resourcepack": return "solar:image-gallery-bold";
+      case "shaderpacks": case "shaderpack": case "shader": return "solar:sun-bold";
+      case "datapacks": case "datapack": return "solar:database-bold";
+      default: return "solar:cube-bold";
     }
   };
 
   const getContentTypeTitle = () => {
-    switch (initialContentType) {
-      case "mods":
-        return "Browse Mods";
-      case "resourcepacks":
-        return "Browse Resource Packs";
-      case "shaderpacks":
-        return "Browse Shader Packs";
-      case "datapacks":
-        return "Browse Data Packs";
-      default:
-        return "Browse Content";
+    switch (activeContentType) {
+      case "mods": case "mod": return "Browse Mods";
+      case "resourcepacks": case "resourcepack": return "Browse Resource Packs";
+      case "shaderpacks": case "shaderpack": case "shader": return "Browse Shader Packs";
+      case "datapacks": case "datapack": return "Browse Data Packs";
+      default: return "Browse Content";
     }
   };
 
-  if (!profile || !profile.id) {
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4 gap-6">
+        <Icon icon="eos-icons:loading" className="w-16 h-16 text-[var(--accent)]" />
+        <p className="text-white/70 font-minecraft text-lg">Loading profile data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
     return (
       <div className="h-full flex flex-col p-4 gap-6">
-        <Card variant="flat" className="p-4 border-red-500">
+        <Card variant="flat" className="p-4 border-red-500 bg-red-900/30">
           <div className="flex items-center gap-2">
-            <Icon
-              icon="solar:danger-triangle-bold"
-              className="w-5 h-5 text-red-400"
-            />
+            <Icon icon="solar:danger-triangle-bold" className="w-6 h-6 text-red-400" />
+            <span className="text-white font-minecraft text-lg">Error</span>
+          </div>
+          <p className="text-red-300 font-minecraft mt-2 text-sm">{error}</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!currentProfile || !currentProfile.id) {
+    return (
+      <div className="h-full flex flex-col p-4 gap-6">
+        <Card variant="flat" className="p-4 border-orange-500 bg-orange-900/30">
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:question-circle-bold" className="w-6 h-6 text-orange-400" />
             <span className="text-white font-minecraft text-lg">
-              No profile selected. Please select a profile first.
+              Profile Not Found
             </span>
           </div>
+           <p className="text-orange-300 font-minecraft mt-2 text-sm">
+            The requested profile (ID: {profileId || 'N/A'}) could not be loaded or does not exist.
+          </p>
         </Card>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Icon
-              icon="solar:user-broken"
-              className="w-16 h-16 text-white/30 mx-auto mb-4"
-            />
-            <p className="text-white/60 font-minecraft text-xl tracking-wide lowercase select-none">
-              no profile selected
-            </p>
-            <p className="text-white/40 font-minecraft text-sm mt-2 tracking-wide lowercase select-none">
-              please select a profile to browse content
-            </p>
-          </div>
-        </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col p-4 gap-6">
+    <div ref={containerRef} className="h-full flex flex-col p-4 gap-4">
       <div className="flex-1 overflow-hidden">
         <ModrinthSearchV2
-          profiles={[profile]}
-          selectedProfileId={profile.id}
+          profiles={[currentProfile]}
+          selectedProfileId={currentProfile.id}
+          initialProjectType={getProjectType() as ModrinthProjectType}
           className="h-full"
           initialSidebarVisible={false}
           overrideDisplayContext="detail"

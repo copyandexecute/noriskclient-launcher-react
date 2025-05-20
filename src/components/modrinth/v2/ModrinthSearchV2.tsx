@@ -65,6 +65,7 @@ export interface ModrinthSearchV2Props {
   selectedProfileId?: string; // Optional ID of pre-selected profile
   initialSidebarVisible?: boolean; // New prop for initial sidebar visibility
   overrideDisplayContext?: "detail" | "standalone"; // New prop
+  initialProjectType?: ModrinthProjectType; // Added new prop
 }
 
 const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'];
@@ -85,10 +86,11 @@ export function ModrinthSearchV2({
   selectedProfileId,
   initialSidebarVisible = true, // Default to true if not provided
   overrideDisplayContext, // Destructure new prop
+  initialProjectType, // Added new prop
 }: ModrinthSearchV2Props) {
   const searchResultsAreaRef = useRef<HTMLDivElement>(null); // Ref for the scrollable area
   const [searchTerm, setSearchTerm] = useState('');
-  const [projectType, setProjectType] = useState<ModrinthProjectType>('mod');
+  const [projectType, setProjectType] = useState<ModrinthProjectType>(initialProjectType || 'mod');
   const [searchResults, setSearchResults] = useState<ModrinthSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
