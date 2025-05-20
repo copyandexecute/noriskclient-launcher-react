@@ -568,7 +568,7 @@ export function NoRiskModsTabV2({ profile, onRefreshRequired }: NoRiskModsTabV2P
             icon={isRefreshingPacks ? <Icon icon="solar:refresh-bold" className="animate-spin" /> : <Icon icon="solar:refresh-outline" />}
             onClick={handleRefreshPacks}
             disabled={isLoading || isRefreshingPacks || isBatchToggling || !profile.selected_norisk_pack_id}
-            variant="secondary"
+            colorScheme="secondary"
             size="sm"
             title={isRefreshingPacks ? "Refreshing..." : "Refresh NoRisk Packs List"}
             className="!h-9 !w-9 flex-shrink-0"

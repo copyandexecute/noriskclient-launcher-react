@@ -370,14 +370,16 @@ export function useLocalContentManager<T extends LocalContentItem>({
       setContentUpdates({}); // Clear previous updates
       setContentUpdateError(null);
       setIsInitialLoadProcessComplete(false); // Reset flag for new load process
+      setSearchQuery(""); // Clear search query on refresh
     }
-    await fetchBasicInfo(); 
-  }, [fetchBasicInfo]);
+    await fetchBasicInfo();
+  }, [fetchBasicInfo, setSearchQuery]); // Added setSearchQuery to dependencies
 
   // Initial data fetch (Phase 1)
   useEffect(() => {
     fetchBasicInfo();
-  }, [fetchBasicInfo]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchBasicInfo, profile?.selected_norisk_pack_id]); // Added profile.selected_norisk_pack_id to ensure refetch on pack change
   
   // Phase 2: Trigger Fetch Hashes (for all content types)
   useEffect(() => {
@@ -626,7 +628,9 @@ export function useLocalContentManager<T extends LocalContentItem>({
           return i;
         })
       );
-      if (onRefreshRequiredRef.current) onRefreshRequiredRef.current();
+      if (contentType !== 'NoRiskMod' && onRefreshRequiredRef.current) {
+        onRefreshRequiredRef.current();
+      }
     } catch (err) {
       console.error(`Failed to toggle ${getDisplayFileName(item)}:`, err);
       const errorMsg = err instanceof Error ? err.message : String(err.message);
@@ -782,6 +786,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       return;
     }
     try {
+      //TODO Reveal profilemods
       await revealItemInDir(item.path);
       console.log(`[Opener] Successfully revealed item in directory: ${item.path}`);
     } catch (revealError: any) {

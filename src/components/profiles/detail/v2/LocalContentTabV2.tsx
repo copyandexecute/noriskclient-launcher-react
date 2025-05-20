@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useCallback, useMemo } from "react";
+import React, { useEffect, useCallback, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Button } from "../../../ui/buttons/Button";
 import { IconButton } from "../../../ui/buttons/IconButton";
@@ -21,7 +21,9 @@ import {
   type LocalContentType, // UI type for specifying content
   type LocalContentItem // Base item type from the hook
 } from "../../../../hooks/useLocalContentManager";
-// import { debugLog } from "../../../../lib/debugLog"; // Commented out or remove if not used elsewhere
+import type { NoriskModpacksConfig } from "../../../../types/noriskPacks";
+import * as ProfileService from "../../../../services/profile-service";
+import { Select, type SelectOption } from "../../../ui/Select";
 
 // Generic icons that can be used across different content types
 const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
@@ -39,7 +41,7 @@ const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
   "solar:refresh-bold",                         // For Check for Updates loading spinner / general loading
   "solar:add-circle-bold-duotone",              // For Add Content button
   "solar:refresh-outline",                      // For primary refresh button normal state
-  "solar:double-alt-arrow-up-bold-duotone"      // For Update All button
+  "solar:double-alt-arrow-up-bold-duotone",      // For Update All button
 ];
 
 interface LocalContentTabV2Props<T extends LocalContentItem> {
@@ -66,6 +68,10 @@ export function LocalContentTabV2<T extends LocalContentItem>({
   onRefreshRequired,
 }: LocalContentTabV2Props<T>) {
   const accentColor = useThemeStore((state) => state.accentColor);
+
+  const [noriskPacksConfig, setNoriskPacksConfig] = useState<NoriskModpacksConfig | null>(null);
+  const [isFetchingPacksConfig, setIsFetchingPacksConfig] = useState(false);
+  const [isRefreshingPacksList, setIsRefreshingPacksList] = useState(false);
 
   const {
     items,
@@ -115,6 +121,71 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     getDisplayFileName,
     onRefreshRequired,
   });
+
+  // Fetch NoRiskPacksConfig if content type is NoRiskMod
+  useEffect(() => {
+    if (contentType === 'NoRiskMod' && profile) {
+      const fetchPacks = async () => {
+        setIsFetchingPacksConfig(true);
+        try {
+          const config = await ProfileService.getNoriskPacksResolved();
+          setNoriskPacksConfig(config);
+        } catch (err) {
+          console.error("Failed to fetch NoRisk packs config:", err);
+          toast.error("Failed to load NoRisk pack list.");
+          setNoriskPacksConfig(null);
+        } finally {
+          setIsFetchingPacksConfig(false);
+        }
+      };
+      fetchPacks();
+    } else {
+      setNoriskPacksConfig(null); // Clear if not NoRiskMod or no profile
+    }
+  }, [contentType, profile]);
+
+  const handleRefreshPacksList = useCallback(async () => {
+    if (contentType !== 'NoRiskMod') return;
+    setIsRefreshingPacksList(true);
+    try {
+      await ProfileService.refreshNoriskPacks();
+      const config = await ProfileService.getNoriskPacksResolved();
+      setNoriskPacksConfig(config);
+      toast.success("NoRisk Pack list refreshed.");
+    } catch (err) {
+      console.error("Failed to refresh NoRisk packs list:", err);
+      toast.error("Failed to refresh NoRisk pack list.");
+    } finally {
+      setIsRefreshingPacksList(false);
+    }
+  }, [contentType]);
+
+  const noriskPackOptions = useMemo((): SelectOption[] => {
+    if (contentType !== 'NoRiskMod' || !noriskPacksConfig) {
+      return [{ value: "", label: "- No Pack Selected -" }];
+    }
+    const options = Object.entries(noriskPacksConfig.packs).map(([id, packDef]) => ({
+      value: id,
+      label: packDef.displayName || id,
+    }));
+    options.sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: "", label: "- No Pack Selected -" }, ...options];
+  }, [contentType, noriskPacksConfig]);
+
+  const handleSelectedPackChange = useCallback(async (newPackId: string | null) => {
+    if (!profile || newPackId === profile.selected_norisk_pack_id) return;
+    try {
+      await ProfileService.updateProfile(profile.id, {
+        selected_norisk_pack_id: newPackId,
+      });
+      if (onRefreshRequired) {
+        onRefreshRequired();
+      }
+    } catch (err) {
+      console.error("Failed to update selected NoRisk pack:", err);
+      toast.error(`Failed to switch NoRisk pack: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [profile, onRefreshRequired]);
 
   console.log(`LocalContentTabV2 (${contentType}): Render. isLoading: ${isLoading}, hook items: ${items.length}, filteredItems: ${filteredItems.length}, error: ${error}, searchQuery: '${searchQuery}'`);
 
@@ -228,7 +299,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
                 size="sm"
                 colorScheme="success"
                 onClick={() => handleUpdateContentItem(item, updateAvailableVersion)}
-                disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting || isUpdatingAll || isAnyTaskRunning}
                 icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[10]} className="w-3.5 h-3.5" />}
                 title={`Update to ${updateAvailableVersion.version_number}`}
                 />
@@ -239,7 +309,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
          <IconButton
           size="sm"
           colorScheme="secondary"
-          disabled={true}
           icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin w-3.5 h-3.5" />}
           title={`Updating...`} 
         />
@@ -251,7 +320,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
         size="sm"
         variant={!item.is_disabled ? "secondary" : "default"}
         onClick={() => handleToggleItemEnabled(item)}
-        disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting || isAnyTaskRunning}
       >
         {isToggling ? "..." : (!item.is_disabled ? "Disable" : "Enable")}
       </Button>
@@ -265,7 +333,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
         colorScheme="destructive"
         size="sm"
         onClick={() => handleDeleteItem(item)}
-        disabled={isToggling || isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting || isAnyTaskRunning}
       />
     );
 
@@ -279,7 +346,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
           e.stopPropagation();
           setActiveDropdownId(activeDropdownId === item.filename ? null : item.filename);
         }}
-        disabled={isDeleting || isCurrentlyUpdating || isBatchToggling || isBatchDeleting || isAnyTaskRunning}
         data-item-id={item.filename} 
       />
     );
@@ -293,7 +359,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       >
         <button 
           onClick={() => { if(item.path) handleOpenItemFolder(item); setActiveDropdownId(null); }}
-          disabled={!item.path}
           className="w-full text-left px-2 py-1.5 text-[11px] font-minecraft-ten hover:bg-[var(--accent-color-soft)] rounded-sm text-white/80 hover:text-white transition-colors duration-100 flex items-center gap-1.5 disabled:opacity-50"
         >
           <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[5]} className="w-3 h-3 flex-shrink-0" />
@@ -353,35 +418,35 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     emptyStateIconOverride
   ]);
 
+  const isBusyWithEssentialLoad = isLoading || (contentType === 'NoRiskMod' && (isFetchingPacksConfig || isRefreshingPacksList));
+  const isAnyBatchActionInProgress = isBatchToggling || isBatchDeleting || isUpdatingAll;
+
   const primaryLeftActionsContent = (
     <div className="flex flex-col gap-2 flex-grow min-w-0">
       <div className="flex items-center gap-2">
         <SearchInput
           value={searchQuery}
           onChange={(val) => setSearchQuery(val)}
-          placeholder={`Search ${itemTypeNamePlural}...`} 
+          placeholder={`Search ${itemTypeNamePlural}...`}
           className="flex-grow !h-9"
-          disabled={isAnyTaskRunning || isLoading}
         />
-        {onAddContent && (
+        {onAddContent && contentType !== 'NoRiskMod' && (
             <IconButton
                 icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[12]} />}
-                onClick={onAddContent} 
-                disabled={isAnyTaskRunning || isLoading}
+                onClick={onAddContent}
                 colorScheme="secondary"
                 size="sm"
-                title={addContentButtonText} 
+                title={addContentButtonText}
                 className="!h-9 !w-9 flex-shrink-0"
             />
         )}
         <IconButton
-            icon={isAnyTaskRunning || isLoading ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin" /> : <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[13]} />}
-            onClick={() => fetchData(true)} 
-            disabled={isAnyTaskRunning || isLoading}
+            icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[13]} />}
+            onClick={() => fetchData(true)}
             colorScheme="secondary"
             size="sm"
-            title={isAnyTaskRunning || isLoading ? "Refreshing..." : `Refresh ${itemTypeNamePlural}`} 
-            className="!h-9 !w-9 flex-shrink-0 ml-auto"
+            title="Refresh List"
+            className="!h-9 !w-9 flex-shrink-0"
         />
       </div>
       {contentUpdateError && (
@@ -395,36 +460,74 @@ export function LocalContentTabV2<T extends LocalContentItem>({
           style={{ backgroundColor: `${accentColor.value}30` }} 
         />
         <div className="flex items-center justify-between w-full min-h-14">
+          {/* Left side: Select All Checkbox */} 
           <Checkbox
-            customSize="md" 
+            customSize="md"
             checked={areAllFilteredSelected}
             onChange={(e) => handleSelectAllToggle(e.target.checked)}
-            disabled={filteredItems.length === 0 || isAnyTaskRunning || isLoading}
             label={selectedItemIds.size > 0 ? `${selectedItemIds.size} selected` : "Select All"}
             title={areAllFilteredSelected ? "Deselect all visible" : "Select all visible"}
           />
+
+          {/* Right side: Action Buttons and NoRiskPack Dropdown */} 
           <div className="flex items-center gap-2">
-            {selectedItemIds.size > 0 && contentType !== 'NoRiskMod' && (
+            {/* Batch Toggle Button - Common for all types if items are selected */} 
+            {selectedItemIds.size > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleBatchToggleSelected}
+                icon={isBatchToggling ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}
+              >
+                {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
+              </Button>
+            )}
+
+            {/* NoRisk Pack Selector - Only for NoRiskMod type */} 
+            {contentType === 'NoRiskMod' && noriskPacksConfig && noriskPackOptions.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={profile?.selected_norisk_pack_id || ""}
+                  onChange={(value) => handleSelectedPackChange(value === "" ? null : value)}
+                  options={noriskPackOptions}
+                  placeholder="Select Pack..."
+                  className="!h-9 text-sm min-w-[180px] max-w-[250px] truncate"
+                  size="sm"
+                />
+                {profile?.selected_norisk_pack_id && noriskPacksConfig?.packs[profile.selected_norisk_pack_id]?.isExperimental && (
+                  <div className="text-xs text-yellow-500/80 font-minecraft">
+                    (Experimental)
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Delete and Update All buttons - Only for non-NoRiskMod types */} 
+            {contentType !== 'NoRiskMod' && (
               <>
-                <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchToggling ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
-                </Button>
-                <Button size="sm" variant="destructive" onClick={handleBatchDeleteSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchDeleting ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchDeleting ? "Deleting..." : `Delete (${selectedItemIds.size})`}
-                </Button>
+                {selectedItemIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleBatchDeleteSelected}
+                    icon={isBatchDeleting ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}
+                  >
+                    {isBatchDeleting ? "Deleting..." : `Delete (${selectedItemIds.size})`}
+                  </Button>
+                )}
+                {Object.keys(contentUpdates).length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="success"
+                    onClick={handleUpdateAllAvailableContent}
+                    icon={isUpdatingAll ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[14]} className="mr-1.5" />}
+                    className={selectedItemIds.size > 0 ? "ml-2" : ""}
+                  >
+                    {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(contentUpdates).length})`}
+                  </Button>
+                )}
               </>
             )}
-            {/* For NoRiskMod, only show batch toggle if items are selected */}
-            {selectedItemIds.size > 0 && contentType === 'NoRiskMod' && (
-                 <Button size="sm" variant="secondary" onClick={handleBatchToggleSelected} disabled={isAnyTaskRunning || isLoading} icon={isBatchToggling ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : undefined}>
-                  {isBatchToggling ? "Toggling..." : `Toggle (${selectedItemIds.size})`}
-                </Button>
-            )}
-            {Object.keys(contentUpdates).length > 0 && contentType !== 'NoRiskMod' && (
-              <Button size="sm" variant="success" onClick={handleUpdateAllAvailableContent} disabled={isAnyTaskRunning || isLoading} icon={isUpdatingAll ? <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[11]} className="animate-spin mr-1.5" /> : <Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[14]} className="mr-1.5" />} className={selectedItemIds.size > 0 ? "ml-2" : ""}>
-              {isUpdatingAll ? "Updating All..." : `Update All (${Object.keys(contentUpdates).length})`}
-            </Button>
-          )}
           </div>
         </div>
       </>
@@ -441,33 +544,58 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     );
   }
 
+  const hasSelectedItems = selectedItemIds.size > 0;
+  const showNoRiskPackSelector = contentType === 'NoRiskMod';
+  const isNoRiskPackSelected = showNoRiskPackSelector && profile?.selected_norisk_pack_id;
+
+  // Dynamic empty state messages
+  const getEmptyStateMessage = () => {
+    if (contentType === 'NoRiskMod' && !profile?.selected_norisk_pack_id) {
+      return "No NoRisk Pack Selected";
+    } else if (error) {
+      return `Error loading ${itemTypeNamePlural}`;
+    } else if ((isLoading || isFetchingPacksConfig) && items.length === 0) {
+      return `Loading ${itemTypeNamePlural}...`;
+    } else if (!searchQuery && items.length === 0 && selectedItemIds.size === 0) {
+      return `No ${itemTypeNamePlural} found in this profile.`;
+    } else if (searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0) {
+      return `No ${itemTypeNamePlural} match your search.`;
+    } else {
+      return `Manage your ${itemTypeNamePlural}`;
+    }
+  };
+
+  const getEmptyStateDescription = () => {
+    if (contentType === 'NoRiskMod' && !profile?.selected_norisk_pack_id) {
+      return "Please select a NoRisk Modpack from the dropdown to manage its mods.";
+    } else if (error) {
+      return "Please try refreshing or check the console.";
+    } else if ((isLoading || isFetchingPacksConfig) && items.length === 0) {
+      return "Please wait while content is being loaded.";
+    } else if (!searchQuery && items.length === 0 && selectedItemIds.size === 0) {
+      return `You can add ${itemTypeNamePlural} to this profile or via Modrinth (if supported).`;
+    } else if (searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0) {
+      return "Try a different search term or clear the search filter.";
+    } else {
+      return `Select ${itemTypeNamePlural} to perform batch actions or manage them individually.`;
+    }
+  };
+
   return (
     <>
       <GenericContentTab<T> 
-        items={filteredItems}
+        items={contentType === 'NoRiskMod' && !profile?.selected_norisk_pack_id ? [] : filteredItems}
         renderListItem={renderListItem} 
-        isLoading={isLoading} // Only initial full load now
+        isLoading={isLoading} 
         error={error} 
         searchQuery={searchQuery} 
         primaryLeftActions={primaryLeftActionsContent}
         primaryRightActions={primaryRightActionsContent}
         emptyStateIcon={emptyStateIconOverride || LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[0]} 
-        emptyStateMessage={ 
-          error ? `Error loading ${itemTypeNamePlural}` :
-          isLoading && items.length === 0 ? `Loading ${itemTypeNamePlural}...` :
-          !searchQuery && items.length === 0 && selectedItemIds.size === 0 ? `No ${itemTypeNamePlural} found in this profile.` :
-          searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0 ? `No ${itemTypeNamePlural} match your search.` :
-          `Manage your ${itemTypeNamePlural}`
-        }
-        emptyStateDescription={
-          error ? "Please try refreshing or check the console." :
-          isLoading && items.length === 0 ? "Please wait while content is being loaded." :
-          !searchQuery && items.length === 0 && selectedItemIds.size === 0 ? `You can add ${itemTypeNamePlural} to this profile or via Modrinth (if supported).` :
-          searchQuery && filteredItems.length === 0 && selectedItemIds.size === 0 ? "Try a different search term or clear the search filter." :
-          `Select ${itemTypeNamePlural} to perform batch actions or manage them individually.`
-        }
+        emptyStateMessage={getEmptyStateMessage()}
+        emptyStateDescription={getEmptyStateDescription()}
         loadingItemCount={Math.min(items.length > 0 ? items.length : 5, 10)}
-        showSkeletons={false} // Skeletons are handled by GenericContentTab if isLoading is true and items are empty
+        showSkeletons={false} 
         accentColorOverride={accentColor.value}
       />
     
