@@ -350,7 +350,8 @@ async fn main() {
             commands::minecraft_command::add_skin_locally,
             commands::cape_command::download_template_and_open_explorer,
             commands::profile_command::get_all_profiles_and_last_played,
-            commands::profile_command::get_local_content
+            commands::profile_command::get_local_content,
+            commands::content_command::install_local_content_to_profile,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

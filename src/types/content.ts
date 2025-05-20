@@ -58,4 +58,14 @@ export interface InstallContentPayload {
   content_type: ContentType; // Using the ContentType enum
   loaders?: string[];
   game_versions?: string[];
+}
+
+/**
+ * Payload for installing local content (e.g., JARs, resource packs) into a profile.
+ * Mirrors the Rust struct `InstallLocalContentPayload` in `content_command.rs`.
+ */
+export interface InstallLocalContentPayload {
+  profile_id: string;      // UUID
+  file_paths: string[];    // Array of absolute string paths to the local files
+  content_type: ContentType; // The type of content being installed
 } 

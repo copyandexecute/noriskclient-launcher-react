@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
+use tauri_plugin_fs::FilePath;
 use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 use tokio::fs;
-
+use tokio::sync::Semaphore;
 use crate::error::{AppError, CommandError};
 use crate::state::profile_state::ModSource;
 use crate::state::state_manager::State as AppStateManager;
@@ -671,4 +672,217 @@ pub async fn install_content_to_profile(payload: InstallContentPayload) -> Resul
         }
         // No default needed as ContentType from profile_utils is an enum and all variants are handled
     }
+}
+
+// --- New Struct and Command for Installing Local Content (e.g., JARs) ---
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InstallLocalContentPayload {
+    profile_id: Uuid,
+    file_paths: Vec<String>,
+    content_type: profile_utils::ContentType, // Added content_type field
+}
+
+#[tauri::command]
+pub async fn install_local_content_to_profile(
+    payload: InstallLocalContentPayload,
+) -> Result<(), CommandError> {
+    log::info!(
+        "Executing install_local_content_to_profile for profile {} with {} file paths and content type {:?}.",
+        payload.profile_id,
+        payload.file_paths.len(),
+        payload.content_type
+    );
+
+    let state_manager = AppStateManager::get().await?;
+
+    match payload.content_type {
+        profile_utils::ContentType::Mod => {
+            log::info!("Processing local file installation as Mod for profile {}.", payload.profile_id);
+            let jar_file_paths_str: Vec<String> = payload.file_paths
+                .into_iter()
+                .filter(|path_str| {
+                    let lower_path = path_str.to_lowercase();
+                    lower_path.ends_with(".jar") || lower_path.ends_with(".jar.disabled")
+                })
+                .collect();
+
+            if jar_file_paths_str.is_empty() {
+                log::info!("No .jar or .jar.disabled files found in the provided paths for profile {} to import as Mod.", payload.profile_id);
+                return Ok(()); // No compatible files to process for Mod type
+            }
+
+            log::info!(
+                "Found {} .jar or .jar.disabled files from input to import as Mod for profile {}.",
+                jar_file_paths_str.len(),
+                payload.profile_id
+            );
+
+            let tauri_file_paths: Vec<tauri_plugin_fs::FilePath> = jar_file_paths_str
+                .iter()
+                .map(|path_str| tauri_plugin_fs::FilePath::Path(PathBuf::from(path_str)))
+                .collect();
+
+            state_manager
+                .profile_manager
+                .import_local_mods_to_profile(payload.profile_id, tauri_file_paths)
+                .await?;
+            log::info!("Successfully processed local Mod(s) import for profile {}.", payload.profile_id);
+        }
+        profile_utils::ContentType::ResourcePack |
+        profile_utils::ContentType::ShaderPack |
+        profile_utils::ContentType::DataPack => {
+            log::info!("Processing local file installation as {:?} for profile {}.", payload.content_type, payload.profile_id);
+            let profile_instance_path = state_manager
+                .profile_manager
+                .get_profile_instance_path(payload.profile_id)
+                .await?;
+
+            let target_subdir_name = match payload.content_type {
+                profile_utils::ContentType::ResourcePack => "resourcepacks",
+                profile_utils::ContentType::ShaderPack => "shaderpacks",
+                profile_utils::ContentType::DataPack => "datapacks",
+                _ => unreachable!(), // Already matched by outer arm
+            };
+
+            let target_dir = profile_instance_path.join(target_subdir_name);
+            if !target_dir.exists() {
+                fs::create_dir_all(&target_dir).await.map_err(AppError::Io)?;
+                log::info!("Created directory: {:?}", target_dir);
+            }
+
+            let mut files_skipped_pre_copy = 0;
+            let mut copy_tasks = Vec::new();
+            let io_semaphore = state_manager.io_semaphore.clone(); // Clone Arc<Semaphore>
+
+            for path_str in payload.file_paths {
+                let source_path = PathBuf::from(&path_str);
+                
+                if !source_path.is_file() {
+                    log::warn!("Provided path '{:?}' is not a file or does not exist. Skipping.", source_path);
+                    files_skipped_pre_copy += 1;
+                    continue;
+                }
+
+                let file_name = match source_path.file_name() {
+                    Some(name) => name.to_os_string(), // Keep as OsString for PathBuf::join
+                    None => {
+                        log::error!("Could not get file name for path: '{}'. Skipping.", path_str);
+                        files_skipped_pre_copy += 1;
+                        continue;
+                    }
+                };
+                let dest_path = target_dir.join(&file_name);
+
+                if dest_path.exists() {
+                    log::warn!(
+                        "File {:?} already exists in target directory {:?}. Skipping copy.",
+                        dest_path,
+                        target_dir
+                    );
+                    files_skipped_pre_copy += 1;
+                    continue;
+                }
+
+                // Acquire permit before spawning the task
+                let permit = match io_semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => { // Semaphore closed error
+                        log::error!("Failed to acquire semaphore permit as it might be closed. Halting further copy tasks.");
+                        return Err(CommandError::from(AppError::Other("IO Semaphore closed, cannot proceed with file copies.".to_string())));
+                    }
+                };
+                
+                let current_source_path = source_path.clone();
+                let current_dest_path = dest_path.clone();
+
+                copy_tasks.push(tokio::spawn(async move {
+                    let _permit_guard = permit; // Permit is moved into the task and dropped when the task finishes.
+                    
+                    match fs::copy(&current_source_path, &current_dest_path).await {
+                        Ok(_) => {
+                            log::info!("Copied local content file {:?} to {:?}", current_source_path, current_dest_path);
+                            Ok(current_dest_path) // Return Ok(dest_path) for logging or tracking
+                        }
+                        Err(e) => {
+                            log::error!("Failed to copy file {:?} to {:?}: {}", current_source_path, current_dest_path, e);
+                            Err(AppError::Io(e)) // Propagate the specific error
+                        }
+                    }
+                }));
+            }
+
+            let mut successful_copies = 0;
+            let mut failed_copies = 0;
+            let mut task_results = Vec::new();
+
+            for task_handle in copy_tasks {
+                match task_handle.await { // This handles JoinError (task panicked)
+                    Ok(Ok(copied_path)) => { // Task completed, fs::copy was Ok
+                        task_results.push(Ok(copied_path));
+                        successful_copies += 1;
+                    }
+                    Ok(Err(app_err)) => { // Task completed, fs::copy returned an AppError
+                        task_results.push(Err(app_err));
+                        failed_copies += 1;
+                    }
+                    Err(join_err) => { // Task panicked or was cancelled
+                        log::error!("A copy task panicked or was cancelled: {}", join_err);
+                        task_results.push(Err(AppError::Other(format!("Copy task failed: {}", join_err))));
+                        failed_copies += 1;
+                    }
+                }
+            }
+            
+            log::info!(
+                "Finished copy operations for {:?}. Successful copies: {}. Failed copies: {}. Skipped pre-copy: {}. Profile: {}.",
+                payload.content_type, successful_copies, failed_copies, files_skipped_pre_copy, payload.profile_id
+            );
+
+            if failed_copies > 0 {
+                let error_messages: Vec<String> = task_results.iter().filter_map(|r| r.as_ref().err().map(|e| e.to_string())).collect();
+                return Err(CommandError::from(AppError::Other(format!(
+                    "{} file(s) failed to copy for profile {}. Errors: [{}]",
+                    failed_copies, payload.profile_id, error_messages.join("; ")
+                ))));
+            }
+        }
+        profile_utils::ContentType::NoRiskMod => {
+            log::error!(
+                "ContentType::NoRiskMod is not supported for local installation via this command. Profile: {}",
+                payload.profile_id
+            );
+            return Err(CommandError::from(AppError::Other(
+                "Local installation of NoRiskMod content type is not supported.".to_string(),
+            )));
+        }
+        // Handle any other ContentType variants not explicitly covered, if any exist or are added later.
+        _ => {
+            log::warn!(
+                "Local installation for content type {:?} is not yet implemented for profile {}.",
+                payload.content_type,
+                payload.profile_id
+            );
+            return Err(CommandError::from(AppError::Other(format!(
+                "Local installation for content type {:?} is not yet implemented.",
+                payload.content_type
+            ))));
+        }
+    }
+
+    // Emit event to trigger UI update for this profile, so the frontend can refresh.
+    if let Err(e) = state_manager.event_state.trigger_profile_update(payload.profile_id).await {
+        log::error!(
+            "Failed to emit TriggerProfileUpdate event for profile {} after local content install: {}",
+            payload.profile_id,
+            e
+        );
+        // Do not fail the entire command if event emission fails, log and continue.
+    }
+
+    log::info!(
+        "Successfully processed request to install local content (JARs) for profile {}.",
+        payload.profile_id
+    );
+    Ok(())
 } 

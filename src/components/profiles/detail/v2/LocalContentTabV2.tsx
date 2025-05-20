@@ -23,6 +23,9 @@ import {
 } from "../../../../hooks/useLocalContentManager";
 import type { NoriskModpacksConfig } from "../../../../types/noriskPacks";
 import * as ProfileService from "../../../../services/profile-service";
+import * as ContentService from "../../../../services/content-service"; // Added import
+import { ContentType as BackendContentType } from "../../../../types/content"; // Added import
+import { open, type DialogFilter } from "@tauri-apps/plugin-dialog"; // Corrected: DialogFile is not exported directly
 import { Select, type SelectOption } from "../../../ui/Select";
 import { ThemedSurface } from "../../../ui/ThemedSurface";
 
@@ -64,7 +67,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
   itemTypeName,
   itemTypeNamePlural,
   addContentButtonText,
-  onAddContent = () => toast(`PROTOTYPE: ${addContentButtonText} feature not implemented yet.`),
+  onAddContent: onAddContentProp,
   emptyStateIconOverride,
   onRefreshRequired,
 }: LocalContentTabV2Props<T>) {
@@ -187,6 +190,86 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       toast.error(`Failed to switch NoRisk pack: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [profile, onRefreshRequired]);
+
+  // Update default onAddContent to use the new dialog and service call
+  const defaultOnAddContent = async () => {
+    if (!profile) {
+      toast.error("Profile data is not available to add content.");
+      return;
+    }
+
+    let dialogFilters: DialogFilter[] = [];
+    const currentContentType = contentType; // from component props
+
+    switch (currentContentType) {
+      case 'Mod':
+        dialogFilters = [{ name: 'Java Archives', extensions: ['jar', 'jar.disabled'] }];
+        break;
+      case 'ResourcePack':
+        dialogFilters = [
+          { name: 'Resource Pack Archives', extensions: ['zip', 'zip.disabled'] }, 
+        ];
+        break;
+      case 'ShaderPack':
+        dialogFilters = [{ name: 'Shader Pack Archives', extensions: ['zip', 'zip.disabled'] }];
+        break;
+      case 'DataPack':
+        dialogFilters = [{ name: 'Data Pack Archives', extensions: ['zip', 'zip.disabled'] }];
+        break;
+      default:
+        toast.error(`Local import is not configured for content type: ${currentContentType}`);
+        return;
+    }
+
+    try {
+      // `open` with `multiple: true` and `directory: false` returns `Promise<string[] | null>` 
+      // representing absolute paths if no `baseDir` is specified.
+      const selectedPathsArray = await open({
+        multiple: true,
+        directory: false, 
+        filters: dialogFilters,
+        title: `Select ${itemTypeNamePlural} to Import for profile: ${profile.name}`,
+      });
+
+      if (selectedPathsArray && selectedPathsArray.length > 0) {
+        // selectedPathsArray is already string[]
+        const filePaths = selectedPathsArray;
+
+        const toastId = toast.loading(`Importing ${filePaths.length} ${itemTypeNamePlural.toLowerCase()}...`);
+        try {
+          await ContentService.installLocalContentToProfile({
+            profile_id: profile.id,
+            file_paths: filePaths,
+            content_type: currentContentType as BackendContentType,
+          });
+          toast.success(
+            `${filePaths.length} ${itemTypeNamePlural.toLowerCase()} import process initiated. List will refresh.`, 
+            { id: toastId }
+          );
+          fetchData(true); 
+          if (onRefreshRequired) {
+            onRefreshRequired();
+          }
+        } catch (importError) {
+          console.error(`Error importing local ${itemTypeNamePlural.toLowerCase()}:`, importError);
+          toast.error(
+            `Failed to import ${itemTypeNamePlural.toLowerCase()}: ${importError instanceof Error ? importError.message : String(importError)}`,
+            { id: toastId }
+          );
+        }
+      } else {
+        // User cancelled or selected no files
+      }
+    } catch (dialogError) {
+      console.error("Error opening file dialog:", dialogError);
+      toast.error(
+        `Could not open file dialog: ${dialogError instanceof Error ? dialogError.message : String(dialogError)}`
+      );
+    }
+  };
+
+  // Use the provided onAddContent prop if available, otherwise use the new default implementation.
+  const effectiveOnAddContent = onAddContentProp || defaultOnAddContent;
 
   console.log(`LocalContentTabV2 (${contentType}): Render. isLoading: ${isLoading}, hook items: ${items.length}, filteredItems: ${filteredItems.length}, error: ${error}, searchQuery: '${searchQuery}'`);
 
@@ -434,10 +517,10 @@ export function LocalContentTabV2<T extends LocalContentItem>({
           placeholder={`Search ${itemTypeNamePlural}...`}
           className="flex-grow !h-9"
         />
-        {onAddContent && contentType !== 'NoRiskMod' && (
+        {effectiveOnAddContent && contentType !== 'NoRiskMod' && (
             <IconButton
                 icon={<Icon icon={LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD[12]} />}
-                onClick={onAddContent}
+                onClick={effectiveOnAddContent}
                 colorScheme="secondary"
                 size="sm"
                 title={addContentButtonText}
