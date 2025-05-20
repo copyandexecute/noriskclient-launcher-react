@@ -25,7 +25,10 @@ import {
 import type { NoriskModpacksConfig } from "../../../../types/noriskPacks";
 import * as ProfileService from "../../../../services/profile-service";
 import * as ContentService from "../../../../services/content-service"; // Added import
-import { ContentType as BackendContentType } from "../../../../types/content"; // Added import
+import { 
+  ContentType as BackendContentType,
+  type SwitchContentVersionPayload // Added import
+} from "../../../../types/content"; // Added import
 import { open, type DialogFilter } from "@tauri-apps/plugin-dialog"; // Corrected: DialogFile is not exported directly
 import { Select, type SelectOption } from "../../../ui/Select";
 import { ThemedSurface } from "../../../ui/ThemedSurface";
@@ -245,6 +248,54 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       toast.error(`Failed to switch NoRisk pack: ${err instanceof Error ? err.message : String(err)}`);
     }
   }, [profile, onRefreshRequired]);
+
+  // New method to handle version switching
+  const handleSwitchContentVersion = useCallback(async (item: T, newVersion: ModrinthVersion) => {
+    if (!profile || !item.modrinth_info) {
+      toast.error("Cannot switch version: Missing profile or Modrinth info.");
+      setOpenVersionDropdownId(null);
+      return;
+    }
+
+    const currentProjectId = item.modrinth_info.project_id;
+    let currentInstalledVersionId: string | undefined = undefined;
+
+    // Type-safe access to version ID
+    if ('id' in item.modrinth_info && typeof item.modrinth_info.id === 'string') {
+      currentInstalledVersionId = item.modrinth_info.id;
+    } else if ('version_id' in item.modrinth_info && typeof item.modrinth_info.version_id === 'string') {
+      currentInstalledVersionId = item.modrinth_info.version_id;
+    }
+
+    if (!currentProjectId || !currentInstalledVersionId) {
+      toast.error("Cannot switch version: Missing current project or version ID.");
+      setOpenVersionDropdownId(null);
+      return;
+    }
+
+    const payload: SwitchContentVersionPayload = {
+      profile_id: profile.id,
+      content_type: contentType as BackendContentType,
+      identifier: item.id ?? undefined,
+      current_project_id: currentProjectId,
+      current_version_id: currentInstalledVersionId,
+      new_modrinth_version_details: newVersion,
+    };
+
+    const promise = ContentService.switchContentVersion(payload);
+
+    toast.promise(promise, {
+      loading: `Switching to ${newVersion.name}...`,
+      success: () => {
+        onRefreshRequired?.();
+        fetchData(true); // Refresh data from the hook as well
+        return `${getDisplayFileName(item)} switched to ${newVersion.name}.`;
+      },
+      error: (err) => `Failed to switch version: ${err.toString()}`,
+    });
+
+    setOpenVersionDropdownId(null); // Close dropdown after initiating
+  }, [profile, contentType, onRefreshRequired, fetchData, getDisplayFileName]);
 
   // Update default onAddContent to use the new dialog and service call
   const defaultOnAddContent = async () => {
@@ -605,11 +656,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
                                   style={{
                                     // No specific background for individual items unless it's the current one, which is handled by font-bold
                                   }}
-                                  onClick={() => {
-                                    // TODO: Handle version selection
-                                    console.log("Selected version:", version);
-                                    setOpenVersionDropdownId(null); // Close dropdown after selection
-                                  }}
+                                  onClick={() => handleSwitchContentVersion(item, version)}
                                 >
                                   {version.name} ({version.version_number})
                                 </div>
@@ -788,7 +835,8 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     versionButtonRef,
     availableVersions,
     isLoadingVersions,
-    versionsError
+    versionsError,
+    handleSwitchContentVersion
   ]);
 
   const isBusyWithEssentialLoad = isLoading || (contentType === 'NoRiskMod' && (isFetchingPacksConfig || isRefreshingPacksList));
