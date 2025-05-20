@@ -159,7 +159,7 @@ export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       accentColor: ACCENT_COLORS.blue,
-      isBackgroundAnimationEnabled: true,
+      isBackgroundAnimationEnabled: false,
       isDetailViewSidebarOnLeft: true,
       profileGroupingCriterion: "none",
 

@@ -23,7 +23,7 @@ interface BackgroundEffectState {
 export const useBackgroundEffectStore = create<BackgroundEffectState>()(
   persist(
     (set) => ({
-      currentEffect: BACKGROUND_EFFECTS.MATRIX_RAIN,
+      currentEffect: BACKGROUND_EFFECTS.RETRO_GRID,
       setCurrentEffect: (effect) => set({ currentEffect: effect }),
     }),
     {
