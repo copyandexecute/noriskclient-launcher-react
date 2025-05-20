@@ -1444,7 +1444,7 @@ impl ProfileManager {
                                     Some(modrinth_version.version_number.clone()),
                                     Some(modrinth_version.loaders.clone()),
                                     Some(modrinth_version.game_versions.clone()),
-                                    true, // add_dependencies = true
+                                    false, // add_dependencies = true
                                 )
                                 .await
                             {
