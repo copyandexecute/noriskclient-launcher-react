@@ -31,6 +31,7 @@ pub enum EventType {
     ProfileUpdate,
     TriggerProfileUpdate,
     MinecraftProcessExited,
+    StarlightSkinUpdated,
     Error,
     LaunchSuccessful,
 }

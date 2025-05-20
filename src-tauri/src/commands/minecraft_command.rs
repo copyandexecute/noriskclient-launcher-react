@@ -15,6 +15,9 @@ use crate::utils::mc_utils;
 use log::{debug, info, error};
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
+use std::sync::Arc;
+use crate::minecraft::api::starlight_api::{GetSkinRenderPayload, StarlightApiService};
+use std::path::PathBuf;
 
 // --- New Imports for add_skin_locally ---
 use crate::minecraft::dto::skin_payloads::{AddLocalSkinCommandPayload, SkinSource, SkinModelVariant};
@@ -675,4 +678,50 @@ pub async fn add_skin_locally(
         skin_to_add.id
     );
     Ok(skin_to_add)
+}
+
+#[tauri::command]
+pub async fn get_starlight_skin_render(
+    payload: GetSkinRenderPayload,
+) -> Result<PathBuf, CommandError> {
+    debug!(
+        "Command called: get_starlight_skin_render with payload: {:?}",
+        payload
+    );
+
+    let starlight_service = match StarlightApiService::new() {
+        Ok(service) => service,
+        Err(e) => {
+            error!(
+                "[CMD] get_starlight_skin_render: Failed to create StarlightApiService: {:?}",
+                e
+            );
+            return Err(CommandError::from(e));
+        }
+    };
+
+    match starlight_service
+        .get_skin_render(
+            &payload.player_name,
+            &payload.render_type,
+            &payload.render_view,
+            payload.base64_skin_data,
+        )
+        .await
+    {
+        Ok(path_buf) => {
+            debug!(
+                "Command completed: get_starlight_skin_render, path: {:?}",
+                path_buf
+            );
+            Ok(path_buf)
+        }
+        Err(e) => {
+            error!(
+                "Command failed: get_starlight_skin_render: {:?}",
+                e
+            );
+            Err(CommandError::from(e))
+        }
+    }
 }

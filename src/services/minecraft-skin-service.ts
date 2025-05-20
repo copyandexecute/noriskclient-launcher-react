@@ -6,6 +6,7 @@ import type {
     MinecraftSkin, 
     SkinVariant, 
     AddLocalSkinCommandPayload, 
+    GetStarlightSkinRenderPayload, // Added new payload type
     SkinSourceDetails // Keep this for internal construction
 } from "../types/localSkin"; // Relative path
 
@@ -151,5 +152,16 @@ export class MinecraftSkinService {
      */
     static async removeSkin(skinId: string): Promise<boolean> {
         return await invoke<boolean>("remove_skin", { id: skinId });
+    }
+
+    /**
+     * Fetches a cached skin render from the Starlight API via the backend.
+     * The backend handles caching and potential background updates.
+     * @param payload - The parameters for the skin render.
+     * @returns A promise resolving to the local file path (string) of the cached rendered skin image.
+     */
+    static async getStarlightSkinRender(payload: GetStarlightSkinRenderPayload): Promise<string> {
+        // The Rust command returns a PathBuf, which will be serialized as a string (the path).
+        return await invoke<string>("get_starlight_skin_render", { payload });
     }
 } 
