@@ -88,24 +88,38 @@ export function GenericList<T>({
     if (loadingComponent) {
       return <>{loadingComponent}</>;
     }
-    // Default skeleton loading state
-    return (
-      <div
-        className={`flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm ${listContainerClassName}`}
-        style={{
-          backgroundColor: `${effectiveAccentColor}08`,
-          borderColor: `${effectiveAccentColor}20`,
-        }}
-      >
-        <div className="h-full overflow-y-auto custom-scrollbar">
-          <ul className={ulClassName}>
-            {Array.from({ length: loadingItemCount }).map((_, index) => (
-              <GenericListItemSkeleton key={`skeleton-${index}`} accentColor={effectiveAccentColor} />
-            ))}
-          </ul>
+    // Default skeleton loading state OR loading message if no skeletons and no items
+    if (loadingItemCount && loadingItemCount > 0) {
+      return (
+        <div
+          className={`flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm ${listContainerClassName}`}
+          style={{
+            backgroundColor: `${effectiveAccentColor}08`,
+            borderColor: `${effectiveAccentColor}20`,
+          }}
+        >
+          <div className="h-full overflow-y-auto custom-scrollbar">
+            <ul className={ulClassName}>
+              {Array.from({ length: loadingItemCount }).map((_, index) => (
+                <GenericListItemSkeleton key={`skeleton-${index}`} accentColor={effectiveAccentColor} />
+              ))}
+            </ul>
+          </div>
         </div>
-      </div>
-    );
+      );
+    } else if (items.length === 0) {
+      // If loading, but no skeletons to show (loadingItemCount is 0 or undefined) AND no items yet,
+      // display the provided empty state (which should be the "Loading..." message).
+      return (
+        <EmptyState
+          icon={emptyStateIcon}
+          message={emptyStateMessage} // This will be "Loading items..." from LocalContentTabV2
+          description={emptyStateDescription}
+        />
+      );
+    }
+    // If isLoading, but loadingItemCount is 0 AND items.length > 0, fall through to render the list.
+    // This allows the list to be visible while individual items might still be fetching details.
   }
   // Error display can be customized via errorComponent
   if (error && errorComponent) {
