@@ -805,7 +805,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       const requestBody: ModrinthBulkUpdateRequestBody = {
         hashes,
         algorithm: "sha1" as ModrinthHashAlgorithm,
-        loaders: currentProfile.loader ? [currentProfile.loader] : [],
+        loaders: (contentType === 'Mod' || contentType === 'NoRiskMod') && currentProfile.loader ? [currentProfile.loader] : [],
         game_versions: [currentProfile.game_version],
       };
       const updates = await invoke<Record<string, ModrinthVersion | null>>(
