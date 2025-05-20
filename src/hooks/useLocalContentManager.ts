@@ -490,17 +490,22 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
   // Fetch local archive icons
   useEffect(() => {
-    console.log(`[${contentType}] Running useEffect for fetchLocalArchiveIcons. Items count: ${items.length}`);
+    console.log(`[${contentType}] Running useEffect for fetchLocalArchiveIcons. Items count: ${items.length}, localArchiveIcons keys: ${Object.keys(localArchiveIcons).length}`);
     const fetchLocalArchiveIcons = async () => {
       if (!items || items.length === 0) {
-        setLocalArchiveIcons({});
-        console.log(`[${contentType}] fetchLocalArchiveIcons: No items or items array empty, clearing localArchiveIcons.`);
+        // Only set to empty if it's not already empty, to prevent infinite loop
+        if (Object.keys(localArchiveIcons).length > 0) {
+          setLocalArchiveIcons({});
+          console.log(`[${contentType}] fetchLocalArchiveIcons: No items or items array empty, clearing localArchiveIcons because it wasn't empty.`);
+        } else {
+          // console.log(`[${contentType}] fetchLocalArchiveIcons: No items and localArchiveIcons already empty. Doing nothing to prevent loop.`);
+        }
         return;
       }
 
-      console.log(`[${contentType}] fetchLocalArchiveIcons: Current localArchiveIcons keys:`, Object.keys(localArchiveIcons));
+      // console.log(`[${contentType}] fetchLocalArchiveIcons: Current localArchiveIcons keys:`, Object.keys(localArchiveIcons));
       items.forEach(item => {
-        console.log(`[${contentType}] fetchLocalArchiveIcons: Checking item - Path: ${item.path}, Filename: ${item.filename}, Cached: ${localArchiveIcons[item.path!] !== undefined}`);
+        // console.log(`[${contentType}] fetchLocalArchiveIcons: Checking item - Path: ${item.path}, Filename: ${item.filename}, Cached: ${localArchiveIcons[item.path!] !== undefined}`);
       });
 
       const pathsToFetchIconsFor = items
