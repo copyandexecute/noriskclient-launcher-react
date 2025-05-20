@@ -5,10 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { useProfileStore } from "../../store/profile-store";
-import {
-  LaunchState,
-  useLaunchStateStore,
-} from "../../store/launch-state-store";
 import { IconButton } from "../ui/buttons/IconButton";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useThemeStore } from "../../store/useThemeStore";
@@ -35,27 +31,32 @@ export function ProfileCard({
   onDelete,
   onShouldExport,
 }: ProfileCardProps) {
-  const {
-    initializeProfile,
-    getProfileState,
-  } = useLaunchStateStore();
   const accentColorValue = useThemeStore((state) => state.accentColor.value);
 
-  const [isLaunching, setIsLaunching] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [isCardHovered, setIsCardHovered] = useState(false);
+  const [shouldShowSpinnerForThisProfile, setShouldShowSpinnerForThisProfile] = useState(false);
+  const [detailedLaunchMessage, setDetailedLaunchMessage] = useState<string | null>(null);
+
   const { confirm, confirmDialog } = useConfirmDialog();
   const cardRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    if (profile.id) {
-      initializeProfile(profile.id);
-    }
-  }, [profile.id, initializeProfile]);
+  const handleLaunchButtonStateChange = (isLaunchingFromButton: boolean) => {
+    setShouldShowSpinnerForThisProfile(isLaunchingFromButton);
+  };
 
-  const { launchState } = getProfileState(profile.id);
+  const handleLaunchEventMessage = (message: string | null) => {
+    setDetailedLaunchMessage(message);
+  };
+
+  useEffect(() => {
+    if (!shouldShowSpinnerForThisProfile) {
+      setDetailedLaunchMessage(null);
+    }
+  }, [shouldShowSpinnerForThisProfile]);
 
   const getModLoaderIcon = () => {
     switch (profile.loader) {
@@ -82,7 +83,10 @@ export function ProfileCard({
 
   const handleClone = async (e: React.MouseEvent) => {
     e.stopPropagation();
-
+    if (!profile.id) {
+      toast.error("Profile ID is missing, cannot clone.");
+      return;
+    }
     try {
       const newName = await confirm({
         title: "clone profile",
@@ -97,11 +101,6 @@ export function ProfileCard({
 
       if (newName && typeof newName === "string") {
         setIsCloning(true);
-        if (!profile.id) {
-          toast.error("Profile ID is missing, cannot clone.");
-          setIsCloning(false);
-          return;
-        }
         const clonePromise = useProfileStore
           .getState()
           .copyProfile(profile.id, newName, null);
@@ -143,7 +142,8 @@ export function ProfileCard({
     }
   };
 
-  const handleOpenFolder = async () => {
+  const handleOpenFolder = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const openPromise = ProfileService.openProfileFolder(profile.id);
 
     toast.promise(openPromise, {
@@ -208,11 +208,16 @@ export function ProfileCard({
     }
   };
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit();
+  };
+
   const handleDivClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const isInteractiveElementClick =
       target.closest('button') ||
-      target.closest('[data-context-menu-trigger="true"]') ||
+      target.closest('a') ||
       (contextMenuRef.current && contextMenuRef.current.contains(target));
 
     if (!isInteractiveElementClick) {
@@ -222,65 +227,121 @@ export function ProfileCard({
 
   return (
     <>
+    <div
+      style={{
+        opacity: isCloning ? 0.7 : 1,
+      }}
+      className="transition-opacity duration-150 ease-in-out"
+      onMouseEnter={() => setIsCardHovered(true)}
+      onMouseLeave={() => setIsCardHovered(false)}
+    >
       <ThemedSurface
         surfaceRef={cardRef}
         onClick={handleDivClick}
         onContextMenu={handleContextMenu}
-        className="flex items-center"
+        className="p-4 rounded-lg flex flex-col gap-3 transition-all duration-150 ease-in-out hover:shadow-xl relative"
       >
-        <div
-          className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden mr-4 border-2 border-b-4 flex items-center justify-center"
-          style={{
-            backgroundColor: `${accentColorValue}1A`,
-            borderColor: `${accentColorValue}3A`,
-            borderBottomColor: `${accentColorValue}59`,
-          }}
-        >
-          {profileIconSrc ? (
-            <img
-              src={profileIconSrc}
-              alt={profile.name}
-              className="w-full h-full object-contain"
-              style={{ imageRendering: "pixelated" }}
-              onError={(e) => {
-                  (e.target as HTMLImageElement).src = "/icons/minecraft.png"; 
-                  (e.target as HTMLImageElement).style.width = '75%';
-                  (e.target as HTMLImageElement).style.height = '75%';
-              }}
-            />
-          ) : (
-            <Icon icon="solar:widget-bold" className="w-10 h-10 text-white/70" />
-          )}
-        </div>
-
-        <div className="flex-grow overflow-hidden flex flex-col min-w-0 pr-3 justify-between h-20">
-          <h3
-            className="text-base font-minecraft-ten text-white whitespace-nowrap overflow-hidden text-ellipsis mb-1"
-            title={profile.name}
+        <div className="flex items-center gap-4">
+          <div
+            className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border flex items-center justify-center group"
+            style={{
+              backgroundColor: `${accentColorValue}1A`,
+              borderColor: `${accentColorValue}4D`,
+            }}
           >
-            {profile.name}
-          </h3>
-          <div className="flex items-center">
-            <img
-              src={getModLoaderIcon()}
-              alt={profile.loader || "vanilla"}
-              className="w-4 h-4 mr-1.5 flex-shrink-0"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = "/icons/minecraft.png";
-              }}
-            />
-            <span className="text-sm text-white/60 font-minecraft-ten whitespace-nowrap lowercase">
-              {profile.game_version}
-            </span>
+            {profileIconSrc ? (
+              <img
+                src={profileIconSrc}
+                alt={profile.name}
+                className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${
+                  isCardHovered && !isCloning && !shouldShowSpinnerForThisProfile ? "brightness-75" : ""
+                }`}
+                style={{ imageRendering: "pixelated" }}
+                onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = "/icons/minecraft.png";
+                    target.style.width = '70%';
+                    target.style.height = '70%';
+                    target.style.objectFit = 'contain';
+                }}
+              />
+            ) : (
+              <Icon icon="ph:package-duotone" className="w-10 h-10" style={{color: accentColorValue}} />
+            )}
+
+            {/* Overlay: Visible if spinner should show OR if hovered (and not cloning) */}
+            {!isCloning && (shouldShowSpinnerForThisProfile || isCardHovered) && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-150">
+                <LaunchButton
+                  id={profile.id}
+                  name={profile.name}
+                  isIconOnly={true}
+                  disabled={isCloning}
+                  forceDisplaySpinner={shouldShowSpinnerForThisProfile}
+                  onInternalLaunchStateChange={handleLaunchButtonStateChange}
+                  onEventMessage={handleLaunchEventMessage}
+                  className="text-white"
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="flex-grow min-w-0">
+            <h3
+              className="text-lg font-minecraft-ten text-white whitespace-nowrap overflow-hidden text-ellipsis"
+              title={profile.name}
+            >
+              {profile.name}
+            </h3>
+            {/* Combined version info / status message line */}
+            <div 
+              className="flex items-center text-xs text-white/60 mt-1 font-minecraft-ten whitespace-nowrap overflow-hidden text-ellipsis h-4"
+              title={
+                isCloning ? "Cloning profile..." :
+                shouldShowSpinnerForThisProfile ? (detailedLaunchMessage || "Starting...") :
+                `${profile.loader || "Vanilla"} - ${profile.game_version}`
+              }
+            >
+              {isCloning ? (
+                <span>Cloning profile...</span>
+              ) : shouldShowSpinnerForThisProfile ? (
+                detailedLaunchMessage ? (
+                  <span>{detailedLaunchMessage}</span>
+                ) : (
+                  <span>Starting...</span>
+                )
+              ) : (
+                <>
+                  {/* <img
+                    src={getModLoaderIcon()}
+                    alt={profile.loader || "vanilla"}
+                    className="w-4 h-4 mr-1.5 flex-shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+                    }}
+                  /> */}
+                  <span>
+                    {profile.loader || "Vanilla"} {profile.game_version}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 ml-auto flex-shrink-0 pl-2">
-          {/* Settings IconButton removed */}
-          {/* More actions IconButton (context menu trigger) removed - context menu still available via right-click */}
-          {/* LaunchButton removed */}
-        </div>
+        {/* Bottom section: Actions - Removed as per user request */}
+        {/* <div className=\"flex items-center justify-start mt-3 pt-3\"> */}
+        {/*  <LaunchButton */}
+        {/*    id={profile.id} */}
+        {/*    name={profile.name} */}
+        {/*    size=\"sm\" */}
+        {/*    disabled={isCloning || launchState === LaunchState.LAUNCHING} */}
+        {/*    className=\"!py-1 !px-2.5\" */}
+        {/*  /> */}
+        {/* </div> */}
+
       </ThemedSurface>
+    </div>
 
       {confirmDialog}
       <ProfileContextMenu

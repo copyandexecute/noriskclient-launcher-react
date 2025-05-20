@@ -108,6 +108,9 @@ export function ProfilesTab() {
     return true;
   });
 
+  // Ensure consistent sorting by name, even before grouping
+  initiallyFilteredProfiles.sort((a, b) => a.name.localeCompare(b.name));
+
   const groupedProfiles = (() => {
     if (profileGroupingCriterion === "none") {
       return { "All Profiles": initiallyFilteredProfiles };
@@ -128,6 +131,8 @@ export function ProfilesTab() {
           acc[key] = [];
         }
         acc[key].push(profile);
+        // Sort profiles within the current group by name (maintains consistency if already sorted)
+        acc[key].sort((a, b) => a.name.localeCompare(b.name));
         return acc;
       },
       {} as Record<string, Profile[]>,
@@ -319,7 +324,7 @@ export function ProfilesTab() {
                   <div key={groupKey}>
                     {profileGroupingCriterion !== "none" && (
                       <h2
-                        className="text-2xl font-minecraft lowercase text-white mb-3 pb-1 border-b-2"
+                        className="text-2xl font-minecraft text-white mb-3 pb-1 border-b-2"
                         style={{ borderColor: `${accentColor.value}40` }}
                       >
                         {groupKey}
