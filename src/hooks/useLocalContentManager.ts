@@ -795,11 +795,12 @@ export function useLocalContentManager<T extends LocalContentItem>({
     const hashes = itemsWithHashes.map(item => item.sha1_hash!);
     setIsCheckingUpdates(true);
     setContentUpdateError(null);
+    console.log("Current Items:", currentItems);
     try {
       const requestBody: ModrinthBulkUpdateRequestBody = {
         hashes,
         algorithm: "sha1" as ModrinthHashAlgorithm,
-        loaders: [], 
+        loaders: currentProfile.loader ? [currentProfile.loader] : [],
         game_versions: [currentProfile.game_version],
       };
       const updates = await invoke<Record<string, ModrinthVersion | null>>(
@@ -830,71 +831,109 @@ export function useLocalContentManager<T extends LocalContentItem>({
   }, [profile, items, contentType]);
 
   const handleUpdateContentItem = useCallback(async (item: T, updateVersion: ModrinthVersion, preventRefetch: boolean = false) => {
-    if (!profile || !item.path) { // Use path
-      toast.error("Profile or item path missing, cannot update.");
+    // 1. Initial checks
+    if (!profile) {
+      toast.error("Profile missing, cannot update.");
       return;
     }
-    if (!item.modrinth_info || !item.sha1_hash) {
-      toast.error(`Item ${getDisplayFileName(item)} is not linked to Modrinth or missing hash, cannot auto-update.`);
-        return;
-    }
-    setItemsBeingUpdated(prev => new Set(prev).add(item.filename));
-    setContentUpdateError(null);
-    try {
-      let command = "";
-      let payload: any;
 
-      if (contentType === 'Mod' && item.id && !item.source_type && !item.norisk_info) { // Check for Mod, ID, not custom, not NoRisk
-        command = "update_modrinth_mod_version";
-        payload = {
-          profileId: profile.id,
-          modInstanceId: item.id,
-          newVersionDetails: updateVersion,
-        };
-        console.log(`[${contentType}] Using update_modrinth_mod_version for item ID: ${item.id}`);
-      } else {
-        // Original logic for other content types or fallback
-        payload = { profileId: profile.id, newVersionDetails: updateVersion };
-        const itemPayloadKey = contentType.toLowerCase(); 
-        payload[itemPayloadKey] = item; 
+    let command = "";
+    let payload: any;
+    let isModUpdateById = false;
 
-        switch (contentType) {
-          case 'ShaderPack': command = "update_shaderpack_from_modrinth"; break;
-          case 'ResourcePack': command = "update_resourcepack_from_modrinth"; break;
-          case 'DataPack': command = "update_datapack_from_modrinth"; break;
-          case 'Mod': // This case will now only be hit by mods not matching the above if-condition (e.g. custom mods if we decide to support updates for them via a generic command)
-            // For now, if it's a Mod and didn't match the `update_modrinth_mod_version` criteria, it's an unsupported update scenario.
-            if (item.source_type === "custom" || item.norisk_info) {
-              toast.error(`Automatic updates for this type of mod (${item.filename}) are not supported.`);
-              setItemsBeingUpdated(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(item.filename);
-                return newSet;
-              });
-              return; 
-            }
-            // Fallback for mods that somehow don't have an item.id but are not custom/NoRisk - though this should be rare.
-            throw new Error(`Unsupported mod update scenario for ${item.filename}. Missing ID or Modrinth link.`);
-          default: throw new Error(`Unsupported content type for update: ${contentType}`);
-        }
-        console.log(`[${contentType}] Using generic update command: ${command} for item: ${item.filename}`);
+    // 2. Determine command, payload, and handle unsupported scenarios
+    if (contentType === 'Mod' && item.id && !item.source_type && !item.norisk_info) {
+      if (!item.modrinth_info) { 
+          toast.error(`Mod ${getDisplayFileName(item)} is not recognized as a Modrinth mod. Cannot update.`);
+          return;
+      }
+      command = "update_modrinth_mod_version";
+      payload = {
+        profileId: profile.id,
+        modInstanceId: item.id,
+        newVersionDetails: updateVersion,
+      };
+      isModUpdateById = true;
+      console.log(`[${contentType}] Using update_modrinth_mod_version for item ID: ${item.id}`);
+    } else {
+      if (!item.path) {
+          toast.error(`Item path missing for ${getDisplayFileName(item)}, cannot update.`);
+          return;
+      }
+      // For non-ID based updates (assets or fallback mods), modrinth_info and sha1_hash are crucial.
+      if (!item.modrinth_info || !item.sha1_hash) {
+          toast.error(`Item ${getDisplayFileName(item)} is not linked to Modrinth correctly or missing hash, cannot auto-update.`);
+          return;
       }
 
-      await invoke(command, payload);
-      toast.success(`Successfully updated ${getDisplayFileName(item)} to ${updateVersion.version_number}`);
-      if (item.sha1_hash) {
+      payload = { profileId: profile.id, newVersionDetails: updateVersion };
+      const itemPayloadKey = contentType.toLowerCase(); 
+      payload[itemPayloadKey] = item; 
+
+      switch (contentType) {
+        case 'ShaderPack': command = "update_shaderpack_from_modrinth"; break;
+        case 'ResourcePack': command = "update_resourcepack_from_modrinth"; break;
+        case 'DataPack': command = "update_datapack_from_modrinth"; break;
+        case 'Mod':
+          if (item.source_type === "custom" || item.norisk_info) {
+            toast.error(`Automatic updates for this type of mod (${getDisplayFileName(item)}) are not supported.`);
+            return; 
+          }
+          toast.error(`Unsupported mod update scenario for ${getDisplayFileName(item)}. Please check item details.`);
+          return;
+        default:
+          toast.error(`Unsupported content type for update: ${contentType}`);
+          return;
+      }
+      console.log(`[${contentType}] Using generic update command: ${command} for item: ${item.filename}`);
+    }
+
+    if (!command) { // Should ideally be caught by earlier checks
+        toast.error(`Could not determine update action for ${getDisplayFileName(item)}.`);
+        return;
+    }
+
+    // 3. Setup for the operation
+    setItemsBeingUpdated(prev => new Set(prev).add(item.filename));
+    setContentUpdateError(null);
+
+    const promiseAction = async () => {
+      await invoke(command, payload); // Core operation
+
+      // Post-invoke success actions:
+      if (item.sha1_hash && !isModUpdateById) { 
         setContentUpdates(prevUpdates => {
           const newUpdates = { ...prevUpdates };
           delete newUpdates[item.sha1_hash!];
           return newUpdates;
         });
       }
-      if (!preventRefetch) await fetchData(true); // Full refresh
+      
+      if (!preventRefetch) {
+        await fetchData(true); // Refreshes the entire list
+      }
+    };
+
+    // 4. Execute with toast.promise and cleanup
+    try {
+      await toast.promise(
+        promiseAction(),
+        {
+          loading: `Updating ${getDisplayFileName(item)} to ${updateVersion.version_number}...`,
+          success: `Successfully updated ${getDisplayFileName(item)} to ${updateVersion.version_number}!`,
+          error: (err: any) => {
+            console.error(`Failed to update ${contentType} for ${getDisplayFileName(item)}:`, err);
+            const displayName = getDisplayFileName(item);
+            const errorMsg = err?.message || (typeof err === 'string' ? err : "An unknown error occurred during the update.");
+            return `Failed to update ${displayName}: ${errorMsg}`;
+          }
+        }
+      );
     } catch (err) {
-      console.error(`Failed to update ${contentType}:`, err);
-      const displayName = getDisplayFileName(item);
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to update ${displayName}: ${errorMsg}`);
+      // This catch is for issues if toast.promise itself or the promise chain has an unhandled rejection
+      // not already processed by the 'error' callback of toast.promise.
+      console.error(`Outer catch during update process for ${getDisplayFileName(item)}:`, err);
+      // No additional user-facing toast here, as toast.promise's error handler should cover it.
     } finally {
       setItemsBeingUpdated(prev => {
         const newSet = new Set(prev);
@@ -902,7 +941,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
         return newSet;
       });
     }
-  }, [profile, contentType, getDisplayFileName, fetchData]);
+  }, [profile, contentType, getDisplayFileName, fetchData, setItemsBeingUpdated, setContentUpdateError, setContentUpdates]);
 
   const handleUpdateAllAvailableContent = useCallback(async () => {
     if (Object.keys(contentUpdates).length === 0 || !profile) return;
