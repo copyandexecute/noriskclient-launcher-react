@@ -2276,6 +2276,11 @@ impl LocalContentLoader {
         
         let mut final_items = preliminary_items; 
 
+        // If the content type is NoRiskMod, sort the items by filename for consistent ordering
+        if params.content_type == ContentType::NoRiskMod {
+            final_items.sort_by(|a, b| a.filename.cmp(&b.filename));
+        }
+
         if params.calculate_hashes { 
             let mut hash_tasks: Vec<JoinHandle<(usize, std::result::Result<String, AppError>)>> = Vec::new();
             // Collect indices of items that need hashing (files only, or non-Modrinth mods if hash not present)
