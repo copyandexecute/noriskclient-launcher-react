@@ -189,9 +189,9 @@ pub async fn check_for_updates(
     emit_status(&app_handle, "checking", format!("Checking for {} updates...", channel), None);
 
     let update_url_str = if is_beta_channel {
-        "https://api-staging.norisk.gg/api/v1/launcher/releases/{{target}}/{{arch}}/{{current_version}}".to_string()
+        "https://api-staging.norisk.gg/api/v1/launcher/releases-v2/{{target}}/{{arch}}/{{current_version}}".to_string()
     } else {
-        "https://api.norisk.gg/api/v1/launcher/releases/{{target}}/{{arch}}/{{current_version}}".to_string()
+        "https://api.norisk.gg/api/v1/launcher/releases-v2/{{target}}/{{arch}}/{{current_version}}".to_string()
     };
 
     info!("Using update endpoint: {}", update_url_str);
