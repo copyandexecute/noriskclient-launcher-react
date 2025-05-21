@@ -1,20 +1,200 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import type { CosmeticCape } from '../../types/noriskCapes';
-import { CapeCard } from './CapeCard';
 import { EmptyState } from '../ui/EmptyState';
-import { InView } from 'react-intersection-observer';
 import { Icon } from '@iconify/react';
+import { CapeImage } from './CapeImage';
+import { getPlayerProfileByUuidOrName } from '../../services/cape-service';
+import { VirtuosoGrid } from 'react-virtuoso';
+import { useThemeStore } from '../../store/useThemeStore';
+import { ThemedSurface } from '../ui/ThemedSurface';
+import { cn } from '../../lib/utils';
+
+interface CapeItemDisplayProps {
+  cape: CosmeticCape;
+  imageUrl: string;
+  isCurrentlyEquipping: boolean;
+  onEquipCape: (capeId: string) => void;
+  canDelete?: boolean;
+  onDeleteCapeClick?: (cape: CosmeticCape, e: React.MouseEvent) => void;
+  creatorNameCache: Map<string, string>;
+}
+
+function CapeItemDisplay({ 
+  cape, 
+  imageUrl, 
+  isCurrentlyEquipping, 
+  onEquipCape, 
+  canDelete, 
+  onDeleteCapeClick,
+  creatorNameCache
+}: CapeItemDisplayProps) {
+  const [creatorName, setCreatorName] = useState<string | null>(null);
+  const [creatorLoading, setCreatorLoading] = useState<boolean>(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (cape.firstSeen) {
+      if (creatorNameCache.has(cape.firstSeen)) {
+        setCreatorName(creatorNameCache.get(cape.firstSeen)!);
+        setCreatorLoading(false);
+        return;
+      }
+
+      setCreatorLoading(true);
+      getPlayerProfileByUuidOrName(cape.firstSeen)
+        .then((profile) => {
+          if (isMounted) {
+            const nameToCache = (profile && profile.name) ? profile.name : 'Unknown';
+            setCreatorName(nameToCache);
+            creatorNameCache.set(cape.firstSeen, nameToCache);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            const errorNameToCache = 'Error';
+            setCreatorName(errorNameToCache);
+            creatorNameCache.set(cape.firstSeen, errorNameToCache);
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setCreatorLoading(false);
+          }
+        });
+    }
+    return () => { isMounted = false; };
+  }, [cape.firstSeen, creatorNameCache]);
+
+  const capeImageWidth = 140;
+  const capeImageHeight = Math.round(capeImageWidth * (16 / 10));
+  // const nameTextHeight = 24;
+  // const usesTextHeight = 20;
+  // const totalItemHeight = nameTextHeight + capeImageHeight + usesTextHeight + 4 + 4;
+
+  return (
+    <ThemedSurface
+      className="flex flex-col items-center group cursor-pointer h-full justify-between"
+      onClick={() => !isCurrentlyEquipping && onEquipCape(cape._id)}
+      // title={creatorName && creatorName !== 'Unknown' && creatorName !== 'Error' ? `Cape by ${creatorName} (Uses: ${cape.uses.toLocaleString()})` : `Cape ID: ${cape._id} (Uses: ${cape.uses.toLocaleString()})`}
+    >
+      {isCurrentlyEquipping && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-md z-30">
+          <Icon icon="solar:refresh-bold" className="w-10 h-10 text-[var(--accent)] animate-spin mb-2" />
+          <span className="font-minecraft text-base text-white lowercase">Equipping</span>
+        </div>
+      )}
+
+      <p 
+        className="font-minecraft-ten text-white lowercase truncate text-sm w-full text-center h-6 flex items-center justify-center mb-1"
+        style={{ minHeight: '24px' }}
+        title={creatorName || cape.firstSeen}
+      >
+        {creatorLoading ? 'Loading...' : creatorName || '-'}
+      </p>
+
+      <div className="relative" style={{ width: `${capeImageWidth}px`, height: `${capeImageHeight}px` }}>
+        <CapeImage
+          imageUrl={imageUrl}
+          part="front"
+          width={capeImageWidth}
+          className="rounded-sm block"
+        />
+      </div>
+
+      <p 
+        className="font-minecraft-ten text-white/70 text-xs w-full text-center mt-1 h-5 flex items-center justify-center"
+        title={`Used ${cape.uses.toLocaleString()} times`}
+      >
+        <Icon icon="solar:download-minimalistic-outline" className="w-3 h-3 mr-1 text-white/50" />
+        {cape.uses.toLocaleString()}
+      </p>
+
+      {canDelete && onDeleteCapeClick && (
+        <button
+          onClick={(e) => onDeleteCapeClick(cape, e)}
+          className="absolute top-1.5 right-1.5 p-0.5 bg-black/60 hover:bg-red-700/80 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 m-0"
+          title="Delete Cape"
+          disabled={isCurrentlyEquipping}
+        >
+          <Icon icon="solar:close-circle-bold" className="w-4 h-4 text-white/80 hover:text-white" />
+        </button>
+      )}
+    </ThemedSurface>
+  );
+}
+
+interface AddCapeCardProps {
+  onClick: () => void;
+  onDownloadTemplate?: () => void;
+}
+
+function AddCapeCard({ onClick, onDownloadTemplate }: AddCapeCardProps) {
+  const capeImageWidth = 140;
+  const capeImageHeight = Math.round(capeImageWidth * (16 / 10));
+  const nameTextHeight = 24;
+  const usesTextHeight = 20;
+  const totalItemHeight = nameTextHeight + capeImageHeight + usesTextHeight + 4 + 4;
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.download-template-button')) {
+      return;
+    }
+    onClick();
+  };
+
+  return (
+    <ThemedSurface
+      className="flex flex-col items-center justify-between p-3 group cursor-pointer h-full border-dashed relative"
+      onClick={handleCardClick}
+    >
+      <div className="flex flex-col items-center justify-center flex-grow">
+        <Icon icon="solar:add-square-bold-duotone" className="w-16 h-16 text-[var(--accent)] opacity-70 group-hover:opacity-100 transition-opacity" />
+        <p className="font-minecraft lowercase text-2xl text-white/70 mt-2">
+          Add Cape
+        </p>
+      </div>
+      {onDownloadTemplate && (
+        <ThemedSurface
+          onClick={(e) => { 
+            e.stopPropagation(); // Prevent card click
+            onDownloadTemplate(); 
+          }}
+          className="download-template-button w-full mt-2 cursor-pointer rounded-md transition-colors duration-150 group/template-btn"
+          // Use a less prominent border style for the button appearance or rely on ThemedSurface defaults
+          // borderVisibility={{ top: true, bottom: true, left: true, right: true }} // Example: enable all borders
+        >
+          <div className="flex items-center justify-center gap-2 px-3 py-0.5">
+            <Icon 
+              icon="solar:download-minimalistic-bold" 
+              className="w-4 h-4 text-[var(--accent)] group-hover/template-btn:text-white transition-colors duration-150"
+            />
+            <span className="font-minecraft text-xl text-[var(--accent)] group-hover/template-btn:text-white transition-colors duration-150 lowercase">
+              TEMPLATE
+            </span>
+          </div>
+        </ThemedSurface>
+      )}
+    </ThemedSurface>
+  );
+}
+
+export const ADD_CAPE_PLACEHOLDER_ID = '__ADD_CAPE_PLACEHOLDER__';
 
 export interface CapeListProps {
-  capes: CosmeticCape[];
+  capes: (CosmeticCape | { _id: typeof ADD_CAPE_PLACEHOLDER_ID })[];
   onEquipCape: (capeHash: string) => void;
   isLoading?: boolean;
   isEquippingCapeId?: string | null;
   searchQuery?: string;
   canDelete?: boolean;
   onDeleteCape?: (cape: CosmeticCape) => void;
+  loadMoreItems?: () => void;
+  hasMoreItems?: boolean;
+  isFetchingMore?: boolean;
+  onTriggerUpload?: () => void;
+  onDownloadTemplate?: () => void;
 }
 
 export function CapeList({ 
@@ -24,51 +204,146 @@ export function CapeList({
   isEquippingCapeId = null,
   searchQuery = '',
   canDelete = false,
-  onDeleteCape
+  onDeleteCape,
+  loadMoreItems,
+  hasMoreItems = false,
+  isFetchingMore = false,
+  onTriggerUpload,
+  onDownloadTemplate
 }: CapeListProps) {
   
-  const handleDeleteClick = useCallback((cape: CosmeticCape, e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering the cape selection/equip action
+  const accentColor = useThemeStore((state) => state.accentColor.value);
+  const creatorNameCacheRef = useRef<Map<string, string>>(new Map());
+
+  const [isDebouncedLoading, setIsDebouncedLoading] = useState(false);
+  const debouncedLoadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const showLoadingSkeleton = isLoading && capes.length === 0 && !searchQuery;
+
+    if (showLoadingSkeleton) {
+      if (debouncedLoadingTimerRef.current) {
+        clearTimeout(debouncedLoadingTimerRef.current);
+      }
+      debouncedLoadingTimerRef.current = setTimeout(() => {
+        setIsDebouncedLoading(true);
+      }, 300);
+    } else {
+      if (debouncedLoadingTimerRef.current) {
+        clearTimeout(debouncedLoadingTimerRef.current);
+      }
+      setIsDebouncedLoading(false);
+    }
+
+    return () => {
+      if (debouncedLoadingTimerRef.current) {
+        clearTimeout(debouncedLoadingTimerRef.current);
+      }
+    };
+  }, [isLoading, capes.length, searchQuery]);
+
+  const handleDeleteClickInternal = useCallback((cape: CosmeticCape, e: React.MouseEvent) => {
+    e.stopPropagation(); 
     if (onDeleteCape) {
       onDeleteCape(cape);
     }
   }, [onDeleteCape]);
   
-  // Empty state with appropriate messaging
-  if (!isLoading && capes.length === 0) {
+  const itemsToRender = useMemo(() => {
+    const allItems: (CosmeticCape | { _id: typeof ADD_CAPE_PLACEHOLDER_ID })[] = [...capes];
+    return allItems;
+  }, [capes]);
+
+  if (isDebouncedLoading) {
+    return (
+      <div 
+        className={cn(
+          "flex flex-col items-center justify-center h-[calc(100vh-200px)] text-white/70 transition-opacity duration-500",
+          isDebouncedLoading ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <Icon icon="solar:hourglass-bold-duotone" className="w-16 h-16 text-[var(--accent)] mb-4 animate-pulse" />
+        <p className="font-minecraft text-2xl lowercase">Loading Capes...</p>
+      </div>
+    );
+  }
+
+  if (!isLoading && itemsToRender.filter(item => item._id !== ADD_CAPE_PLACEHOLDER_ID).length === 0 && !itemsToRender.find(item => item._id === ADD_CAPE_PLACEHOLDER_ID && onTriggerUpload)) {
     return (
       <div className="flex-grow flex items-center justify-center p-5">
         <EmptyState
-          icon="pixel:ghost" 
+          icon="solar:hanger-wave-line-duotone"
           message={searchQuery ? `No capes found for "${searchQuery}"` : "No capes available"}
         />
       </div>
     );
   }
+  
+  const handleEndReached = () => {
+    if (hasMoreItems && !isFetchingMore && loadMoreItems) {
+      console.log("[CapeList] Reached end, loading more items...");
+      loadMoreItems();
+    } else if (!hasMoreItems) {
+      console.log("[CapeList] Reached end, no more items to load.");
+    }
+  };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4">
-      {capes.map((cape, index) => (
-        <InView key={cape._id} threshold={0.1}>
-          {({ ref, inView }) => (
-            <div 
-              ref={ref} 
-              className="transition-opacity duration-300"
-              style={{ opacity: inView ? 1 : 0.3 }}
-            >
-              <CapeCard
-                cape={cape}
-                onEquip={() => onEquipCape(cape._id)}
-                isLoading={isEquippingCapeId === cape._id}
-                isSelected={isEquippingCapeId === cape._id}
-                index={index}
-                isActuallyVisible={inView}
-                onDelete={canDelete ? (e) => handleDeleteClick(cape, e) : undefined}
-              />
-            </div>
-          )}
-        </InView>
-      ))}
+    <div className={cn("flex-grow overflow-auto custom-scrollbar h-full", onTriggerUpload ? "" : "p-4")}>
+      <VirtuosoGrid
+        style={{ height: '100%' }}
+        data={itemsToRender}
+        endReached={handleEndReached}
+        overscan={200}
+        components={{
+          Footer: () => {
+            if (!isFetchingMore) return null;
+            return (
+              <div className="flex justify-center items-center p-4">
+                <Icon icon="eos-icons:loading" className="w-8 h-8" style={{ color: accentColor }} />
+              </div>
+            );
+          },
+          List: React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ style, children, ...props }, ref) => {
+            return (
+              <div
+                ref={ref}
+                {...props}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+                  gap: '16px',
+                  padding: '16px',
+                  ...style,
+                }}
+              >
+                {children}
+              </div>
+            );
+          }),
+        }}
+        itemContent={(index, item) => {
+          if (item._id === ADD_CAPE_PLACEHOLDER_ID) {
+            if (!onTriggerUpload) return null;
+            return <AddCapeCard onClick={onTriggerUpload} onDownloadTemplate={onDownloadTemplate} />;
+          }
+          const cape = item as CosmeticCape;
+          const imageUrl = `https://cdn.norisk.gg/capes-staging/prod/${cape._id}.png`;
+          return (
+            <CapeItemDisplay
+              key={cape._id}
+              cape={cape}
+              imageUrl={imageUrl}
+              isCurrentlyEquipping={isEquippingCapeId === cape._id}
+              onEquipCape={onEquipCape}
+              canDelete={canDelete}
+              onDeleteCapeClick={handleDeleteClickInternal}
+              creatorNameCache={creatorNameCacheRef.current}
+            />
+          );
+        }}
+        className="custom-scrollbar"
+      />
     </div>
   );
 } 

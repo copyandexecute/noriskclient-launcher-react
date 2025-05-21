@@ -13,7 +13,7 @@ interface SearchInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
-  onSearch?: () => void;
+  onSearch?: (searchTerm: string) => void;
   loading?: boolean;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
@@ -132,6 +132,9 @@ export function SearchInput({
   const handleClear = () => {
     if (disabled) return;
     onChange("");
+    if (onSearch) {
+      onSearch("");
+    }
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -139,7 +142,7 @@ export function SearchInput({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && onSearch) {
-      onSearch();
+      onSearch(value);
     }
   };
 
@@ -246,40 +249,38 @@ export function SearchInput({
         onBlur={handleBlur}
       />
 
-      {value && !loading && (
+      {value && !disabled && (
         <button
           type="button"
           onClick={handleClear}
           className={cn(
-            "flex items-center justify-center h-full transition-opacity duration-200 hover:opacity-80 text-white",
-            sizeConfig[size].padding.replace("px-", "px-"),
-            variant === "themed-surface" ? "w-auto" : "w-8"
+            "absolute inset-y-0 flex items-center",
+            "right-3",
+            "text-gray-400 hover:text-gray-500",
           )}
-          tabIndex={-1}
+          aria-label="Clear search"
         >
-          <Icon
-            icon="solar:close-circle-bold"
-            className={sizeConfig[size].icon}
-          />
+          <Icon icon="lucide:x" className={sizeConfig[size].icon} />
         </button>
       )}
 
-      {onSearch && (
+      {onSearch && false && (
         <button
           type="button"
-          onClick={onSearch}
+          onClick={() => onSearch(value)}
           disabled={disabled || loading}
           className={cn(
-            "flex items-center justify-center h-full transition-opacity duration-200 hover:opacity-80 text-white",
-            sizeConfig[size].padding.replace("px-", "px-"),
-            variant === "themed-surface" ? "border-l-0" : "border-l border-white/20",
-            variant === "themed-surface" ? "w-auto" : ""
+            "absolute inset-y-0 right-0 flex items-center pr-3",
+            "text-gray-400 hover:text-gray-500",
+            disabled && "cursor-not-allowed opacity-50",
           )}
+          aria-label="Search"
         >
-          <Icon
-            icon="solar:arrow-right-bold"
-            className={sizeConfig[size].icon}
-          />
+          {loading ? (
+            <Icon icon="lucide:loader" className={cn("animate-spin", sizeConfig[size].icon)} />
+          ) : (
+            <Icon icon="lucide:search" className={sizeConfig[size].icon} />
+          )}
         </button>
       )}
     </>

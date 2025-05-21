@@ -3,14 +3,12 @@
 import React, { useState } from 'react';
 import { SearchInput } from '../ui/SearchInput';
 import { Select, type SelectOption } from '../ui/Select';
-import { Checkbox } from '../ui/Checkbox';
 import { Icon } from '@iconify/react';
 import { Button } from '../ui/buttons/Button';
 import { useMinecraftAuthStore } from '../../store/minecraft-auth-store';
 
 export interface CapeFiltersData {
   sortBy?: string;
-  filterHasElytra?: boolean;
   timeFrame?: string; // Added for time frame filtering
   showOwnedOnly?: boolean; // Add filter for showing only owned capes
   // filterCreator and timeFrame can be added back if UI elements are implemented
@@ -33,19 +31,19 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
   };
 
   // Function to handle search submission
-  const handleSearch = () => {
-    // Always call onSearchSubmit, even with empty string to allow resetting search
+  const handleSearch = (searchTerm: string) => {
+    // If 'My Capes' is active, deactivate it before searching
+    if (currentFilters.showOwnedOnly) {
+      onFilterChange({ ...currentFilters, showOwnedOnly: false });
+    }
+    // Always call onSearchSubmit
     if (onSearchSubmit) {
-      onSearchSubmit(searchInputValue.trim());
+      onSearchSubmit(searchTerm.trim());
     }
   };
 
   const handleSortChange = (value: string) => {
     onFilterChange({ ...currentFilters, sortBy: value || undefined });
-  };
-
-  const handleElytraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onFilterChange({ ...currentFilters, filterHasElytra: e.target.checked });
   };
 
   const handleTimeFrameChange = (value: string) => {
@@ -62,61 +60,43 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
   // Sort options for the Select component
   const sortOptions: SelectOption[] = [
     { value: '', label: 'Newest', icon: <Icon icon="solar:sort-by-time-linear" className="w-5 h-5" /> },
-    { value: 'oldest', label: 'Oldest', icon: <Icon icon="solar:sort-by-time-down-linear" className="w-5 h-5" /> },
+    { value: 'oldest', label: 'Oldest', icon: <Icon icon="mdi:arrow-up-bold-circle-outline" className="w-5 h-5" /> },
     { value: 'mostUsed', label: 'Most Used', icon: <Icon icon="solar:heart-bold" className="w-5 h-5" /> },
   ];
 
   // Time frame options for the Select component
   const timeFrameOptions: SelectOption[] = [
     { value: '', label: 'All Time', icon: <Icon icon="solar:calendar-mark-linear" className="w-5 h-5" /> },
-    { value: 'weekly', label: 'Weekly', icon: <Icon icon="solar:calendar-week-linear" className="w-5 h-5" /> },
+    { value: 'weekly', label: 'Weekly', icon: <Icon icon="mdi:calendar-week-outline" className="w-5 h-5" /> },
     { value: 'monthly', label: 'Monthly', icon: <Icon icon="solar:calendar-date-linear" className="w-5 h-5" /> },
   ];
 
   return (
-    <div className="p-3 sm:p-4 border-b border-white/10 bg-background-secondary flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2">
-      <div className="flex-grow min-w-[180px] sm:min-w-[200px]">
+    <div className="flex w-full items-center gap-2">
+      <div className="flex-grow min-w-[180px] sm:min-w-[200px] md:max-w-[250px]">
         <SearchInput 
           value={searchInputValue} 
           onChange={handleSearchChange} 
           onSearch={handleSearch}
           placeholder="Search capes..." 
-          className="text-xl w-full h-[38px]"
+          className="text-xl w-full h-[42px]"
         />
       </div>
       
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <label htmlFor="sort-by" className="font-minecraft text-lg text-white/80 lowercase whitespace-nowrap">
-          Sort:
-        </label>
-        <Select 
-          value={currentFilters.sortBy || ''}
-          onChange={handleSortChange}
-          options={sortOptions}
-          size="sm"
-          className="w-[160px]"
-        />
-      </div>
+      <Select 
+        value={currentFilters.sortBy || ''}
+        onChange={handleSortChange}
+        options={sortOptions}
+        className="w-[140px] md:w-[160px]"
+        aria-label="Sort by"
+      />
 
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <label htmlFor="time-frame" className="font-minecraft text-lg text-white/80 lowercase whitespace-nowrap">
-          Period:
-        </label>
-        <Select
-          value={currentFilters.timeFrame || ''}
-          onChange={handleTimeFrameChange}
-          options={timeFrameOptions}
-          size="sm"
-          className="w-[160px]"
-        />
-      </div>
-
-      <Checkbox
-        checked={currentFilters.filterHasElytra || false}
-        onChange={handleElytraChange}
-        label="Elytra"
-        customSize="sm"
-        className="pt-1"
+      <Select
+        value={currentFilters.timeFrame || ''}
+        onChange={handleTimeFrameChange}
+        options={timeFrameOptions}
+        className="w-[140px] md:w-[160px]"
+        aria-label="Filter by period"
       />
 
       <Button
@@ -124,9 +104,9 @@ export function CapeFilters({ onFilterChange, currentFilters, onSearchSubmit }: 
         variant={currentFilters.showOwnedOnly ? "default" : "secondary"}
         size="sm"
         icon={<Icon icon="solar:user-id-broken" className="w-4 h-4" />}
-        className="min-w-0"
+        className="min-w-0 h-[42px]"
         disabled={!activeAccount}
-        title={!activeAccount ? "No active Minecraft account" : undefined}
+        title={!activeAccount ? "No active Minecraft account" : (currentFilters.showOwnedOnly ? "Show All Capes" : "Show My Capes")}
       >
         My Capes
       </Button>

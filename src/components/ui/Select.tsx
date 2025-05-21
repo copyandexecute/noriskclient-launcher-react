@@ -132,7 +132,7 @@ export function Select({
 
   const sizeClasses = {
     sm: "h-8 text-sm",
-    md: "h-[42px] text-sm",
+    md: "h-[42px] text-lg",
     lg: "h-14 text-lg",
   };
 
