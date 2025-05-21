@@ -248,7 +248,9 @@ export function ProfilesTab() {
 
   return (
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
-      {showDetailView && selectedProfile && !selectedProfile.is_standard_version ? (
+      {routeProfileId && loading ? (
+        <LoadingState message="Loading profile details..." />
+      ) : showDetailView && selectedProfile && !selectedProfile.is_standard_version ? (
         <ProfileDetailView
           profile={selectedProfile}
           onClose={() => {
