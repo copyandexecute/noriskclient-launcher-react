@@ -294,10 +294,13 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
     {} as Record<string, number>,
   );
 
+  const categoryActiveCount = (categoriesGroup && dynamicGroupCounts[categoriesGroup.headerValue]) || 0;
+
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
 
   React.useEffect(() => {
-    if (sidebarRef.current) {
+    if (sidebarRef.current && isAnimationEnabled) {
       gsap.fromTo(
         sidebarRef.current,
         { opacity: 0, x: -20 },
@@ -309,7 +312,7 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
         },
       );
     }
-  }, []);
+  }, [isAnimationEnabled]);
 
   return (
     <div 
@@ -382,26 +385,30 @@ export const ModrinthFilterSidebarV2: React.FC<ModrinthFilterSidebarV2Props> = (
           </div>
         </AccordionItem>
 
-        {/* Render Categories group here if it exists */}
-        {categoriesGroup && (
-          <AccordionItem 
-            key={categoriesGroup.headerValue} 
-            title={categoriesGroup.accordionTitle} 
-            defaultOpen={dynamicGroupCounts[categoriesGroup.headerValue] > 0}
-            activeCount={dynamicGroupCounts[categoriesGroup.headerValue]}
+        {/* Hardcoded Categories filter for project types other than 'datapack' */}
+        {projectType !== 'datapack' && (
+          <AccordionItem
+            key={categoriesGroup?.headerValue || "categories_filter_accordion"} // Use a fallback key
+            title={categoriesGroup?.accordionTitle || "Categories"} // Use a fallback title
+            defaultOpen={categoryActiveCount > 0}
+            activeCount={categoryActiveCount}
           >
             <div className="space-y-1 pr-1 overflow-y-auto hide-scrollbar max-h-96">
-              {categoriesGroup.options.length > 0 ? categoriesGroup.options.map(cat => (
-                <FilterOption
-                  key={cat.name}
-                  label={cat.name}
-                  icon={cat.icon}
-                  isSelected={currentSelectedCategories.includes(cat.name)}
-                  onClick={() => onCategoryToggle(cat.name)}
-                  accentColor={accentColor}
-                />
-              )) : (
-                <p className="text-xs text-gray-500 italic p-1 text-center">No options for {categoriesGroup.accordionTitle}.</p>
+              {categoriesGroup && categoriesGroup.options.length > 0 ? (
+                categoriesGroup.options.map(cat => (
+                  <FilterOption
+                    key={cat.name}
+                    label={cat.name}
+                    icon={cat.icon}
+                    isSelected={currentSelectedCategories.includes(cat.name)}
+                    onClick={() => onCategoryToggle(cat.name)}
+                    accentColor={accentColor}
+                  />
+                ))
+              ) : (
+                <p className="text-xs text-gray-500 italic p-1 text-center">
+                  No category options available.
+                </p>
               )}
             </div>
           </AccordionItem>

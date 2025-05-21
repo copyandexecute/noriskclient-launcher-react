@@ -214,7 +214,6 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
           installStatus?.is_installed &&
             installStatus?.is_included_in_norisk_pack &&
             "border-l-blue-500",
-          // "backdrop-blur-sm" // Temporarily removed for performance testing
         )}
         borderVisibility={{
           top: itemIndex === 0,
