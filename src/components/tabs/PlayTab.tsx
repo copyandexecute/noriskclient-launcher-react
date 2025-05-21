@@ -48,7 +48,7 @@ export function PlayTab() {
 
   return (
     <div className="flex h-full relative">
-      <div className="flex-grow flex flex-col items-center justify-center p-8 relative z-10 overflow-hidden">
+      <div className="flex-grow flex flex-col items-center justify-center p-8 relative z-20">
         {currentEffect === BACKGROUND_EFFECTS.RETRO_GRID && (
           <RetroGridEffect
             renderMode="both"

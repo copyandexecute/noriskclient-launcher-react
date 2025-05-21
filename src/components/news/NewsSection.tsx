@@ -181,7 +181,7 @@ export function NewsSection({ className }: NewsSectionProps) {
   return (
     <div
       ref={newsRef}
-      className={cn("h-full flex flex-col !p-3", className)}
+      className={cn("h-full flex flex-col !p-3 z-0", className)}
       style={{
         borderLeft: `2px solid ${accentColor.value}60`,
         borderRight: `2px solid ${accentColor.value}60`,

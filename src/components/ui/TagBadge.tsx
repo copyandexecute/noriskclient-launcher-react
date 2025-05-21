@@ -195,6 +195,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           className,
         )}
         baseColorHex={variantStyles.main}
+        alwaysActive={true}
         onClick={isClickable ? handleRipple : undefined}
         onMouseDown={isClickable ? handleMouseDown : undefined}
         onMouseUp={isClickable ? handleMouseUp : undefined}

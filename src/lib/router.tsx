@@ -22,6 +22,10 @@ export const router = createHashRouter([
         element: <PlayTab />,
       },
       {
+        path: "profiles/:profileId",
+        element: <ProfilesTab />,
+      },
+      {
         path: "profiles",
         element: <ProfilesTab />,
       },
