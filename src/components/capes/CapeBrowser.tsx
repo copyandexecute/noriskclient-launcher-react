@@ -26,7 +26,6 @@ export function CapeBrowser() {
   const [isUnequipping, setIsUnequipping] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [filters, setFilters] = useState<CapeFiltersData>({ sortBy: '', timeFrame: '', showOwnedOnly: false });
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -53,7 +52,6 @@ export function CapeBrowser() {
     } else {
       setIsLoading(true);
     }
-    setError(null);
 
     try {
       let response;
@@ -82,7 +80,7 @@ export function CapeBrowser() {
     } catch (err: any) {
       console.error('Error fetching capes:', err);
       const errorMessage = err?.message || 'Failed to load capes. Please try again later.';
-      setError(errorMessage);
+      toast.error(errorMessage);
       if (!append) {
         setCapesData([]);
       }
@@ -260,11 +258,11 @@ export function CapeBrowser() {
 
   const capesForList = useMemo(() => {
     const items: (CosmeticCape | { _id: typeof ADD_CAPE_PLACEHOLDER_ID })[] = [...capesData];
-    if (activeAccount && !isLoading) {
+    if (activeAccount) {
       items.unshift({ _id: ADD_CAPE_PLACEHOLDER_ID });
     }
     return items;
-  }, [capesData, activeAccount, isLoading]);
+  }, [capesData, activeAccount]);
 
   const actionButtons = (
     <CapeFilters 
@@ -281,16 +279,10 @@ export function CapeBrowser() {
       actions={actionButtons}
       contentClassName={capesForList.length > 0 ? "py-6 px-0" : "py-6 px-0"}
     >
-      {error && (
-        <div className="p-4">
-          <p className="text-red-500 font-minecraft text-center">{error}</p>
-        </div>
-      )}
-
       <CapeList
         capes={capesForList}
         onEquipCape={handleEquipCape}
-        isLoading={isLoading && capesData.length === 0 && !error}
+        isLoading={isLoading}
         isEquippingCapeId={isEquippingCapeId}
         searchQuery={searchQuery}
         canDelete={filters.showOwnedOnly && !!activeAccount}

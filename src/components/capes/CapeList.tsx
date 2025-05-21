@@ -255,7 +255,9 @@ export function CapeList({
   const debouncedLoadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const showLoadingSkeleton = isLoading && capes.length === 0 && !searchQuery;
+    // Determine if actual capes (excluding placeholder) are present
+    const actualCapesCount = capes.filter(c => c._id !== ADD_CAPE_PLACEHOLDER_ID).length;
+    const showLoadingSkeleton = isLoading && actualCapesCount === 0 && !searchQuery;
 
     if (showLoadingSkeleton) {
       if (debouncedLoadingTimerRef.current) {
@@ -276,7 +278,7 @@ export function CapeList({
         clearTimeout(debouncedLoadingTimerRef.current);
       }
     };
-  }, [isLoading, capes.length, searchQuery]);
+  }, [isLoading, capes, searchQuery]);
 
   const handleDeleteClickInternal = useCallback((cape: CosmeticCape, e: React.MouseEvent) => {
     e.stopPropagation(); 
@@ -286,8 +288,9 @@ export function CapeList({
   }, [onDeleteCape]);
   
   const itemsToRender = useMemo(() => {
-    const allItems: (CosmeticCape | { _id: typeof ADD_CAPE_PLACEHOLDER_ID })[] = [...capes];
-    return allItems;
+    // This can be simplified as CapeBrowser now always includes the placeholder if activeAccount exists.
+    // However, keeping it consistent with the passed `capes` prop is fine.
+    return capes;
   }, [capes]);
 
   const virtuosoComponents = useMemo(() => ({
@@ -316,7 +319,11 @@ export function CapeList({
     );
   }
 
-  if (!isLoading && itemsToRender.filter(item => item._id !== ADD_CAPE_PLACEHOLDER_ID).length === 0 && !itemsToRender.find(item => item._id === ADD_CAPE_PLACEHOLDER_ID && onTriggerUpload)) {
+  // Adjusted empty state condition to also consider if ADD_CAPE_PLACEHOLDER_ID is the only item
+  const noActualCapesToDisplay = itemsToRender.filter(item => item._id !== ADD_CAPE_PLACEHOLDER_ID).length === 0;
+  const addCapeCardIsPresent = itemsToRender.some(item => item._id === ADD_CAPE_PLACEHOLDER_ID);
+
+  if (!isLoading && noActualCapesToDisplay && !(addCapeCardIsPresent && onTriggerUpload)) {
     return (
       <div className="flex-grow flex items-center justify-center p-5">
         <EmptyState
