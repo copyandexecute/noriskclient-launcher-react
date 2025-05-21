@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::sync::Arc;
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Pid, ProcessesToUpdate, System, Signal};
 use tauri::Manager;
 use tokio::fs::{self as async_fs, File};
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
@@ -332,13 +332,12 @@ impl ProcessManager {
             let state = match state_clone_res {
                 Ok(s) => s,
                 Err(e) => {
-                    log::error!("Monitor task for process {} failed to get global state: {}. Cannot report exit.", process_id, e);
+                    log::error!("Monitor task for process {} failed to get global state: {}. Cannot report exit or save.", process_id, e);
+                    // Attempt to remove from in-memory map even if global state fails
                     let mut processes_map = processes_arc_clone.write().await;
-                    processes_map.remove(&process_id);
-                    log::warn!(
-                        "Removed process entry {} due to state access failure in monitor task.",
-                        process_id
-                    );
+                    if processes_map.remove(&process_id).is_some() {
+                        log::warn!("Removed process entry {} due to state access failure in monitor task (before exit processing).", process_id);
+                    }
                     return;
                 }
             };
@@ -374,14 +373,29 @@ impl ProcessManager {
             };
 
             let exit_code: Option<i32> = exit_status.and_then(|s| s.code());
-            let success: bool = exit_code == Some(0);
+            let mut success: bool = exit_code == Some(0); // Default success based on exit code
+
+            // Check if the process was intentionally stopped
+            let was_intentionally_stopped = {
+                let processes_map = processes_arc_clone.read().await;
+                if let Some(process_entry) = processes_map.get(&process_id) {
+                    process_entry.metadata.state == ProcessState::Stopping
+                } else {
+                    false // Process not found, shouldn't happen if started correctly
+                }
+            };
+
+            if was_intentionally_stopped {
+                log::info!("Process {} was intentionally stopped. Marking exit as success.", process_id);
+                success = true;
+            }
 
             // Create the specific payload
             let specific_payload = MinecraftProcessExitedPayload {
-                profile_id,
+                profile_id, // This comes from the start_process context
                 process_id,
                 exit_code,
-                success,
+                success, // Uses the potentially overridden success value
             };
 
             // Serialize the specific payload to JSON
@@ -392,7 +406,6 @@ impl ProcessManager {
                         process_id,
                         e
                     );
-                    // Provide a fallback JSON error message if serialization fails
                     format!(
                         "{{\"error\":\"Failed to serialize payload: {}\", \"process_id\":\"{}\"}}",
                         e, process_id
@@ -410,13 +423,12 @@ impl ProcessManager {
                 event_id: Uuid::new_v4(),
                 event_type: EventType::MinecraftProcessExited,
                 target_id: Some(process_id),
-                message: specific_payload_json, // <-- Use the JSON string here
+                message: specific_payload_json,
                 progress: None,
-                // Error field just indicates if there was an error, details are in the message JSON
-                error: if success {
+                error: if success { // Error field reflects the final success status
                     None
                 } else {
-                    Some("Process exited non-zero".to_string())
+                    Some(format!("Process exited with code {:?}. Intentionally stopped: {}", exit_code.unwrap_or(-1), was_intentionally_stopped))
                 },
             };
 
@@ -428,15 +440,25 @@ impl ProcessManager {
                 );
             }
 
-            log::info!("Removing process entry {} from manager.", process_id);
-            {
+            log::info!("Removing process entry {} from manager post-exit.", process_id);
+            let removed_process_metadata = { // Scope for the write lock
                 let mut processes_map = processes_arc_clone.write().await;
-                if processes_map.remove(&process_id).is_none() {
-                    log::warn!(
-                        "Process entry {} was already removed before monitor task cleanup.",
-                        process_id
-                    );
-                }
+                processes_map.remove(&process_id)
+            };
+
+            if removed_process_metadata.is_none() {
+                log::warn!(
+                    "Process entry {} was already removed before final monitor task cleanup.",
+                    process_id
+                );
+            }
+
+            // Persist the removal of the process
+            // The `state` variable holds the global `State` which has `process_manager`
+            if let Err(e) = state.process_manager.save_processes().await {
+                 log::error!("Monitor task for process {} failed to save processes state after removal: {}. In-memory map updated, but persistence failed.", process_id, e);
+            } else {
+                log::info!("Successfully saved processes state after removing {} via monitor task.", process_id);
             }
 
             log::debug!("Monitor task finished for process {}", process_id);
@@ -449,7 +471,6 @@ impl ProcessManager {
         log::info!("Attempting to stop process {}", process_id);
 
         let mut kill_successful = false;
-        let mut final_state = ProcessState::Stopped;
         let mut pid_for_error: u32 = 0;
 
         let mut processes_map = self.processes.write().await;
@@ -474,8 +495,6 @@ impl ProcessManager {
                     kill_successful = true;
                 } else {
                     log::error!("Failed to send kill signal to PID {}.", pid_to_kill);
-                    final_state =
-                        ProcessState::Crashed(format!("Failed to kill PID {}", pid_to_kill));
                 }
             } else {
                 log::warn!(
@@ -485,24 +504,6 @@ impl ProcessManager {
                 kill_successful = true;
             }
 
-            // Update state based on kill attempt outcome
-            process.metadata.state = final_state.clone(); // Clone here before potential move
-
-            // Only remove if kill was considered successful (process gone or signal sent)
-            if kill_successful {
-                processes_map.remove(&process_id);
-                log::info!(
-                    "Removed process {} from manager after stop attempt.",
-                    process_id
-                );
-            } else {
-                // Use the cloned state for logging
-                log::warn!(
-                    "Process {} could not be stopped successfully, leaving entry with state {:?}.",
-                    process_id,
-                    process.metadata.state // Log the state that was actually set
-                );
-            }
         } else {
             drop(processes_map);
             log::warn!("Process {} not found in manager for stopping.", process_id);
@@ -513,16 +514,10 @@ impl ProcessManager {
 
         if let Err(e) = self.save_processes().await {
             log::error!(
-                "Failed to save processes state after stopping attempt for {}: {}",
+                "Failed to save processes state after initiating stop for {}: {}",
                 process_id,
                 e
             );
-            if kill_successful {
-                return Err(AppError::Other(format!(
-                    "Failed to save state after stopping process {}: {}",
-                    process_id, e
-                )));
-            }
         }
 
         if kill_successful {

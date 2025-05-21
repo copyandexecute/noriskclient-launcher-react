@@ -104,12 +104,14 @@ export function RunningInstancesIndicator({
     setStoppingId(processId);
     try {
       await ProcessService.stopProcess(processId);
-      console.log("Process stopped successfully.");
-      await fetchProcesses();
+      console.log("[RunningInstancesIndicator] Process stop initiated successfully via service.");
+      setProcesses(prevProcesses => prevProcesses.filter(p => p.id !== processId));
     } catch (err) {
-      console.error(`Failed to stop process: ${err}`);
+      console.error(`[RunningInstancesIndicator] Failed to stop process ${processId}:`, err);
+      await fetchProcesses();
     } finally {
       setStoppingId(null);
+      setTimeout(() => fetchProcesses(), 500);
     }
   };
 
@@ -130,13 +132,16 @@ export function RunningInstancesIndicator({
 
   const handleStopAll = async () => {
     try {
+      const idsToStop = processes.map(p => p.id);
       for (const process of processes) {
         await ProcessService.stopProcess(process.id);
       }
-      await fetchProcesses();
+      console.log("[RunningInstancesIndicator] Stop all processes initiated.");
+      setProcesses(prevProcesses => prevProcesses.filter(p => !idsToStop.includes(p.id)));
       handleCloseDropdown();
     } catch (err) {
-      console.error(`Failed to stop all processes: ${err}`);
+      console.error(`[RunningInstancesIndicator] Failed to stop all processes:`, err);
+      await fetchProcesses();
     }
   };
 
