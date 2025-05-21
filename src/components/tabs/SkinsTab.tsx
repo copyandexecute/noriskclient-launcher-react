@@ -21,8 +21,6 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { ThemedSurface } from "../ui/ThemedSurface";
 import { Input } from "../ui/Input";
 import { RadioButton } from "../ui/RadioButton";
-import { Skeleton } from "../ui/Skeleton";
-import { SkeletonSkinCard } from "../ui/SkeletonSkinCard";
 import { TabLayout } from "../ui/TabLayout";
 import { cn } from "../../lib/utils";
 
@@ -62,11 +60,24 @@ const SkinPreview = memo(
 
     const [starlightRenderUrl, setStarlightRenderUrl] = useState<string | null>(null);
     const [isRenderLoading, setIsRenderLoading] = useState<boolean>(true);
+    const [canShowSpinner, setCanShowSpinner] = useState<boolean>(false);
+    const spinnerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useEffect(() => {
       let isMounted = true;
       setIsRenderLoading(true);
       setStarlightRenderUrl(null);
+      setCanShowSpinner(false);
+
+      if (spinnerTimeoutRef.current) {
+        clearTimeout(spinnerTimeoutRef.current);
+      }
+
+      spinnerTimeoutRef.current = setTimeout(() => {
+        if (isMounted && isRenderLoading) {
+          setCanShowSpinner(true);
+        }
+      }, 500);
 
       const fetchRender = async () => {
         if (skin && skin.name) {
@@ -86,12 +97,16 @@ const SkinPreview = memo(
                 setStarlightRenderUrl("");
               }
               setIsRenderLoading(false);
+              setCanShowSpinner(false);
+              if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
             }
           } catch (error) {
             console.error(`[SkinPreview] Failed to fetch Starlight skin render for ${skin.name}:`, error);
             if (isMounted) {
               setStarlightRenderUrl("");
               setIsRenderLoading(false);
+              setCanShowSpinner(false);
+              if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
             }
           }
         } else {
@@ -99,6 +114,8 @@ const SkinPreview = memo(
             console.warn(`[SkinPreview] No skin.name provided, cannot fetch Starlight render.`);
             setStarlightRenderUrl("");
             setIsRenderLoading(false);
+            setCanShowSpinner(false);
+            if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
           }
         }
       };
@@ -107,6 +124,9 @@ const SkinPreview = memo(
 
       return () => {
         isMounted = false;
+        if (spinnerTimeoutRef.current) {
+          clearTimeout(spinnerTimeoutRef.current);
+        }
       };
     }, [skin.name]);
 
@@ -141,16 +161,16 @@ const SkinPreview = memo(
           </p>
 
           <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center">
-            {isRenderLoading ? (
+            {isRenderLoading && canShowSpinner ? (
               <div className="w-12 h-12 border-4 border-t-transparent border-[var(--accent)] rounded-full animate-spin"></div>
-            ) : (
+            ) : !isRenderLoading ? (
               <SkinViewer
                 skinUrl={starlightRenderUrl || ""}
                 width={130}
                 height={260}
                 className="mx-auto"
               />
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center justify-between mt-auto">
@@ -505,7 +525,6 @@ export function SkinsTab() {
   const [editingSkin, setEditingSkin] = useState<MinecraftSkin | null>(null);
   const [search, setSearch] = useState<string>("");
   const [currentSkinId, setCurrentSkinId] = useState<string | null>(null);
-  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const debouncedSearch = useDebounce(search, 250);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -561,49 +580,24 @@ export function SkinsTab() {
 
   const loadLocalSkins = useCallback(async () => {
     setLocalSkinsLoading(true);
-
-    if (loadingTimerRef.current) {
-      clearTimeout(loadingTimerRef.current);
-    }
-
-    const startTime = Date.now();
+    setLocalSkinsError(null);
 
     try {
       const skins = await MinecraftSkinService.getAllSkins();
 
-      const elapsedTime = Date.now() - startTime;
-      const minimumLoadingTime = 1200;
+      setLocalSkins(skins);
+      console.log(`Loaded ${skins.length} local skins`);
 
-      if (elapsedTime < minimumLoadingTime) {
-        loadingTimerRef.current = setTimeout(() => {
-          setLocalSkins(skins);
-          console.log(`Loaded ${skins.length} local skins`);
-
-          if (selectedSkinId) {
-            const selectedSkin = skins.find(
-              (skin) => skin.id === selectedSkinId,
-            );
-            if (selectedSkin) {
-              setSelectedLocalSkin(selectedSkin);
-            }
-          }
-
-          setLocalSkinsLoading(false);
-          loadingTimerRef.current = null;
-        }, minimumLoadingTime - elapsedTime);
-      } else {
-        setLocalSkins(skins);
-        console.log(`Loaded ${skins.length} local skins`);
-
-        if (selectedSkinId) {
-          const selectedSkin = skins.find((skin) => skin.id === selectedSkinId);
-          if (selectedSkin) {
-            setSelectedLocalSkin(selectedSkin);
-          }
+      if (selectedSkinId) {
+        const selectedSkin = skins.find(
+          (skin) => skin.id === selectedSkinId,
+        );
+        if (selectedSkin) {
+          setSelectedLocalSkin(selectedSkin);
         }
-
-        setLocalSkinsLoading(false);
       }
+      setLocalSkinsLoading(false);
+
     } catch (err) {
       console.error("Error loading local skins:", err);
       setLocalSkinsError(err instanceof Error ? err.message : String(err));
@@ -621,12 +615,6 @@ export function SkinsTab() {
     if (!activeAccount && !accountLoading) {
       initializeAccounts();
     }
-
-    return () => {
-      if (loadingTimerRef.current) {
-        clearTimeout(loadingTimerRef.current);
-      }
-    };
   }, [
     activeAccount,
     loadSkinData,
@@ -789,19 +777,20 @@ export function SkinsTab() {
     return skin.id === currentSkinId;
   };
 
-  const renderSkeletonGrid = () => {
-    return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <SkeletonSkinCard
-            key={`skeleton-${index}`}
-            index={index}
-            skinVariant={index % 2 === 0 ? "classic" : "slim"}
-          />
-        ))}
-      </div>
-    );
-  };
+  // Removed renderSkeletonGrid function
+  // const renderSkeletonGrid = () => {
+  //   return (
+  //     <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+  //       {Array.from({ length: 6 }).map((_, index) => (
+  //         <SkeletonSkinCard
+  //           key={`skeleton-${index}`}
+  //           index={index}
+  //           skinVariant={index % 2 === 0 ? "classic" : "slim"}
+  //         />
+  //       ))}
+  //     </div>
+  //   );
+  // };
 
   // Add skin button for the TabLayout
   const addSkinButton = (
@@ -831,20 +820,22 @@ export function SkinsTab() {
     >
       <div className="space-y-8">
         {accountLoading ? (
-          <div className="space-y-4">
-            <Skeleton
-              variant="text"
-              height={28}
-              width="50%"
-              className="mx-auto"
-            />
-            <Skeleton
-              variant="text"
-              height={20}
-              width="70%"
-              className="mx-auto"
-            />
-          </div>
+          // Skeletons for accountLoading removed
+          // <div className="space-y-4">
+          //   <Skeleton
+          //     variant="text"
+          //     height={28}
+          //     width="50%"
+          //     className="mx-auto"
+          //   />
+          //   <Skeleton
+          //     variant="text"
+          //     height={20}
+          //     width="70%"
+          //     className="mx-auto"
+          //   />
+          // </div>
+          null // Or a minimal loading indicator like <p>Loading account...</p>
         ) : accountError ? (
           <StatusMessage
             type="error"
@@ -859,7 +850,8 @@ export function SkinsTab() {
           <>
             <div className="space-y-5 text-center">
               {localSkinsLoading && !editingSkin ? (
-                renderSkeletonGrid()
+                // renderSkeletonGrid() call removed
+                null // Or a minimal loading indicator like <p>Loading skins...</p>
               ) : localSkinsError && !editingSkin ? (
                 <StatusMessage
                   type="error"

@@ -1161,7 +1161,16 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
 /// Downloads an image from a URL and encodes it as a Base64 string.
 pub async fn fetch_image_as_base64(url: &str) -> Result<String> {
     debug!("[MC Utils] Fetching image from URL: {}", url);
-    let response = reqwest::get(url).await.map_err(AppError::MinecraftApi)?;
+    // Use the global HTTP_CLIENT from config.rs
+    let response = crate::config::HTTP_CLIENT
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| {
+            error!("[MC Utils] Request to {} failed: {}", url, e);
+            AppError::MinecraftApi(e) // Or a more specific error type if suitable
+        })?;
+
     if !response.status().is_success() {
         error!(
             "[MC Utils] Failed to download image from {}. Status: {}",
