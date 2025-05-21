@@ -315,33 +315,43 @@ impl StarlightApiService {
         let cache_path = self.cache_dir.join(&file_name);
 
         if cache_path.exists() {
-            debug!(
-                "Cache hit for player {} (type: {}, view: {}, custom_skin: {}): {:?}. Returning cached path and spawning background update.",
-                player_name,
-                render_type,
-                render_view,
-                base64_skin_data.is_some(),
-                cache_path
-            );
+            if base64_skin_data.is_some() {
+                // Custom skin data provided and cache exists for this specific custom skin.
+                // Assume it hasn't changed, so return directly without background update.
+                debug!(
+                    "Cache hit for custom skin data for player {} (type: {}, view: {}): {:?}. Returning cached path without background update.",
+                    player_name, render_type, render_view, cache_path
+                );
+                Ok(cache_path)
+            } else {
+                // No custom skin data provided (it's None), but cache exists (for player_name default skin).
+                // Return cached path and spawn background update as usual, as default skin might change.
+                debug!(
+                    "Cache hit for default skin for player {} (type: {}, view: {}): {:?}. Returning cached path and spawning background update.",
+                    player_name, render_type, render_view, cache_path
+                );
 
-            let cache_dir_clone = self.cache_dir.clone();
-            let player_name_clone = player_name.to_string();
-            let render_type_clone = render_type.to_string();
-            let render_view_clone = render_view.to_string();
-            let base64_skin_data_clone = base64_skin_data.clone(); // Clone Option<String>
+                let cache_dir_clone = self.cache_dir.clone();
+                let player_name_clone = player_name.to_string();
+                let render_type_clone = render_type.to_string();
+                let render_view_clone = render_view.to_string();
+                // base64_skin_data is None in this branch, so cloning it as None is fine for background_skin_update signature.
+                let base64_skin_data_clone = base64_skin_data.clone(); 
 
-            tokio::spawn(async move {
-                Self::background_skin_update(
-                    cache_dir_clone,
-                    player_name_clone,
-                    render_type_clone,
-                    render_view_clone,
-                    base64_skin_data_clone,
-                )
-                .await;
-            });
-            Ok(cache_path)
+                tokio::spawn(async move {
+                    Self::background_skin_update(
+                        cache_dir_clone,
+                        player_name_clone,
+                        render_type_clone,
+                        render_view_clone,
+                        base64_skin_data_clone, // This will be None
+                    )
+                    .await;
+                });
+                Ok(cache_path)
+            }
         } else {
+            // Cache miss, fetch and cache in foreground.
             debug!(
                 "Cache miss for player {} (type: {}, view: {}, custom_skin: {}). Fetching and caching in foreground.",
                 player_name,
@@ -353,7 +363,7 @@ impl StarlightApiService {
                 player_name,
                 render_type,
                 render_view,
-                base64_skin_data.as_deref(),
+                base64_skin_data.as_deref(), // Pass as Option<&str>
                 &cache_path,
             )
             .await
