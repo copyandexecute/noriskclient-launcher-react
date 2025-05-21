@@ -234,33 +234,48 @@ export function ProfilesTab() {
 
   console.log("[ProfilesTab] Current state before return: showDetailView:", showDetailView, "selectedProfile ID:", selectedProfile?.id, "routeProfileId:", routeProfileId);
 
-  return (
-    <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
-      {routeProfileId && loading ? (
-        <LoadingState message="Loading profile details..." />
-      ) : showDetailView && selectedProfile ? (
-        <ProfileDetailView
-          profile={selectedProfile}
-          onClose={() => {
-            console.log("[ProfilesTab] ProfileDetailView onClose called. Current routeProfileId:", params.profileId);
-            setShowDetailView(false);
-            setSelectedProfile(null);
-            if (params.profileId) {
-                navigate("/profiles");
-                console.log("[ProfilesTab] Navigated to /profiles after closing detail view from /profiles/:id.");
-            } else {
-                console.log("[ProfilesTab] DetailView closed, but not on a specific profile URL. No navigation needed from onClose.");
-            }
-          }}
-          onEdit={() => {
-            console.log("[ProfilesTab] ProfileDetailView onEdit called for:", selectedProfile);
-            if (selectedProfile && !selectedProfile.is_standard_version) {
-                setShowDetailView(false); 
-                handleEditProfile(selectedProfile); 
-            }
-          }}
-        />
-      ) : (
+  const renderMainContent = () => {
+    const currentRouteProfileId = params.profileId;
+
+    if (currentRouteProfileId) {
+      // We are trying to show a detail view.
+      if (loading) {
+        // If the main list of profiles is still loading.
+        return <LoadingState message="Loading profiles..." />;
+      }
+      // Main profile list is loaded. Check if the *specific* profile for detail view is ready.
+      if (selectedProfile && selectedProfile.id === currentRouteProfileId && showDetailView) {
+        // All set, show the detail view.
+        return (
+          <ProfileDetailView
+            profile={selectedProfile}
+            onClose={() => {
+              console.log("[ProfilesTab] ProfileDetailView onClose called. Current routeProfileId:", params.profileId);
+              setShowDetailView(false);
+              setSelectedProfile(null);
+              if (params.profileId) {
+                  navigate("/profiles");
+                  console.log("[ProfilesTab] Navigated to /profiles after closing detail view from /profiles/:id.");
+              } else {
+                  console.log("[ProfilesTab] DetailView closed, but not on a specific profile URL. No navigation needed from onClose.");
+              }
+            }}
+            onEdit={() => {
+              console.log("[ProfilesTab] ProfileDetailView onEdit called for:", selectedProfile);
+              if (selectedProfile && !selectedProfile.is_standard_version) {
+                  setShowDetailView(false); 
+                  handleEditProfile(selectedProfile); 
+              }
+            }}
+          />
+        );
+      }
+      // Not yet ready to show detail view (useEffect is probably working on it, or profile not found).
+      // Show a loading state specific to the detail view transition.
+      return <LoadingState message="Loading profile details..." />;
+    } else {
+      // No routeProfileId, so we're showing the list view.
+      return (
         <TabLayout
           title="Profiles"
           icon="solar:widget-bold"
@@ -303,7 +318,13 @@ export function ProfilesTab() {
             )}
           </div>
         </TabLayout>
-      )}
+      );
+    }
+  };
+
+  return (
+    <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
+      {renderMainContent()}
 
       {showWizard && <ProfileWizard onClose={() => { setShowWizard(false); navigate("/profiles"); }} onSave={handleCreateProfile} />}
       {showSettings && selectedProfile && !selectedProfile.is_standard_version && (

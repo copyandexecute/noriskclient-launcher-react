@@ -13,6 +13,7 @@ import { ProfileContextMenu } from "./ProfileContextMenu";
 import * as ProfileService from "../../services/profile-service";
 import { LaunchButton } from "../ui/buttons/LaunchButton";
 import { ThemedSurface } from '../ui/ThemedSurface';
+import { useNavigate } from 'react-router-dom';
 
 interface ProfileCardProps {
   profile: Profile;
@@ -21,6 +22,8 @@ interface ProfileCardProps {
   onProfileCloned: () => void;
   onDelete: (profileId: string, profileName: string) => void;
   onShouldExport: (profile: Profile) => void;
+  interactionMode?: "launch" | "settings";
+  onSettingsNavigation?: () => void;
 }
 
 export function ProfileCard({
@@ -30,8 +33,11 @@ export function ProfileCard({
   onProfileCloned,
   onDelete,
   onShouldExport,
+  interactionMode = "launch",
+  onSettingsNavigation,
 }: ProfileCardProps) {
   const accentColorValue = useThemeStore((state) => state.accentColor.value);
+  const navigate = useNavigate();
 
   const [isCloning, setIsCloning] = useState(false);
   const [isCardHovered, setIsCardHovered] = useState(false);
@@ -50,6 +56,16 @@ export function ProfileCard({
 
   const handleLaunchEventMessage = (message: string | null) => {
     setDetailedLaunchMessage(message);
+  };
+
+  const handleSettingsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigate(`/profiles/${profile.id}`);
+    if (onSettingsNavigation) {
+      setTimeout(() => {
+        onSettingsNavigation();
+      }, 150);
+    }
   };
 
   useEffect(() => {
@@ -269,19 +285,33 @@ export function ProfileCard({
               <Icon icon="ph:package-duotone" className="w-10 h-10" style={{color: accentColorValue}} />
             )}
 
-            {/* Overlay: Visible if spinner should show OR if hovered (and not cloning) */}
+            {/* Overlay: Conditional rendering based on interactionMode */}
             {!isCloning && (shouldShowSpinnerForThisProfile || isCardHovered) && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-150">
-                <LaunchButton
-                  id={profile.id}
-                  name={profile.name}
-                  isIconOnly={true}
-                  disabled={isCloning}
-                  forceDisplaySpinner={shouldShowSpinnerForThisProfile}
-                  onInternalLaunchStateChange={handleLaunchButtonStateChange}
-                  onEventMessage={handleLaunchEventMessage}
-                  className="text-white"
-                />
+              <div 
+                className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-150 cursor-pointer"
+                onClick={interactionMode === "settings" ? handleSettingsClick : undefined}
+                aria-label={interactionMode === "settings" ? `Settings for ${profile.name}` : undefined}
+                role={interactionMode === "settings" ? "button" : undefined}
+                tabIndex={interactionMode === "settings" ? 0 : undefined}
+                onKeyDown={interactionMode === "settings" ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleSettingsClick(e as any); } : undefined}
+              >
+                {interactionMode === "launch" ? (
+                  <LaunchButton
+                    id={profile.id}
+                    name={profile.name}
+                    isIconOnly={true}
+                    disabled={isCloning}
+                    forceDisplaySpinner={shouldShowSpinnerForThisProfile}
+                    onInternalLaunchStateChange={handleLaunchButtonStateChange}
+                    onEventMessage={handleLaunchEventMessage}
+                    className="text-white"
+                  />
+                ) : (
+                  <Icon 
+                    icon="solar:settings-bold"
+                    className="w-12 h-12 text-white hover:text-white/80 transition-colors" 
+                  />
+                )}
               </div>
             )}
           </div>

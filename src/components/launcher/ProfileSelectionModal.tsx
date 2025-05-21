@@ -57,6 +57,8 @@ export function ProfileSelectionModal({
                 onProfileCloned={() => { console.log("Cloned in modal for", profile.name); }}
                 onDelete={() => { console.log("Delete in modal for", profile.name); }}
                 onShouldExport={() => { console.log("Export in modal for", profile.name); }}
+                interactionMode="settings"
+                onSettingsNavigation={closeModal}
               />
             ))}
           </div>
