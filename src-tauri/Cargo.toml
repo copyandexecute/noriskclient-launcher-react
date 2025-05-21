@@ -1,8 +1,8 @@
 [package]
 name = "noriskclient-launcher-v3"
-version = "0.0.3-beta.14"
+version = "0.0.3-beta.15"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["NoRiskk"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
