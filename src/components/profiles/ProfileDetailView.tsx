@@ -10,6 +10,7 @@ import * as ProfileService from "../../services/profile-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
+import { LaunchButton } from "../ui/buttons/LaunchButton";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { ModsTabV2 } from "./detail/v2/ModsTabV2";
@@ -35,9 +36,7 @@ export function ProfileDetailView({
   onClose,
   onEdit,
 }: ProfileDetailViewProps) {
-  const [activeMainTab, setActiveMainTab] = useState<MainTabType>(
-    profile.is_standard_version ? "logs" : "content",
-  );
+  const [activeMainTab, setActiveMainTab] = useState<MainTabType>("content");
   const [activeContentType, setActiveContentType] =
     useState<ContentSubType>("modsv2");
   const [currentProfile, setCurrentProfile] = useState<Profile>(profile);
@@ -57,6 +56,17 @@ export function ProfileDetailView({
 
   // Memoized callback for getDisplayFileName
   const getGenericDisplayFileName = useCallback((item: LocalContentItem) => item.filename, []);
+
+  useEffect(() => {
+    // This effect ensures that if the profile prop changes (e.g., after cloning and navigating),
+    // the internal currentProfile state is updated, and relevant view states are reset.
+    setCurrentProfile(profile);
+    setActiveMainTab("content"); // Reset to default tab
+    setActiveContentType("modsv2"); // Reset to default sub-tab
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0; // Scroll to top for new profile
+    }
+  }, [profile]); // Depend on the entire profile object or profile.id if more stable
 
   useEffect(() => {
     if (containerRef.current && isBackgroundAnimationEnabled) {
@@ -158,18 +168,13 @@ export function ProfileDetailView({
     }
   };
 
-  const mainTabs = profile.is_standard_version
-    ? [
-      { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
-      { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
-      { id: "content", label: "Content", icon: "solar:widget-bold" },
-    ]
-    : [
-      { id: "content", label: "Content", icon: "solar:widget-bold" },
-      { id: "browse", label: "Browse", icon: "solar:magnifer-bold" },
-      { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
-      { id: "logs", label: "Logs", icon: "solar:code-bold" },
-    ];
+  const mainTabs = [
+    { id: "content", label: "Content", icon: "solar:widget-bold" },
+    // Browse tab is only for non-standard profiles
+    ...(profile.is_standard_version ? [] : [{ id: "browse" as MainTabType, label: "Browse", icon: "solar:magnifer-bold" }]),
+    { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+    { id: "logs", label: "Logs", icon: "solar:code-bold" }, // solar:file-text-bold was for standard logs, solar:code-bold for non-standard. Let's unify to solar:code-bold or pick one. Using solar:code-bold for now.
+  ];
 
   const contentSubTabs = [
     { id: "modsv2" as ContentSubType, label: "Mods", icon: "solar:bolt-bold" },
@@ -319,8 +324,7 @@ export function ProfileDetailView({
 
                 {/* Content sub-navigation - directly below Content button */}
                 {tab.id === "content" &&
-                  (activeMainTab === "content" || activeMainTab === "browse") &&
-                  !profile.is_standard_version && (
+                  (activeMainTab === "content" || activeMainTab === "browse") && (
                     <div ref={subMenuRef} className="ml-3 pl-4 relative">
                       {/* Vertical line connecting subpoints */}
                       <div
@@ -387,6 +391,20 @@ export function ProfileDetailView({
             ))}
           </div>
         </div>
+
+        {/* Divider and Launch Button (Moved here and classes updated) */}
+        <div className="mt-auto p-3">
+          <div 
+            className="h-px w-full mb-3"
+            style={{ backgroundColor: `${accentColor.value}30` }} 
+          />
+          <LaunchButton 
+            id={profile.id} 
+            name={profile.name} 
+            size="md" 
+            className="w-full"
+          />
+        </div>
       </div>
 
       {/* Main content */}
@@ -399,7 +417,7 @@ export function ProfileDetailView({
           }}
         >
           <>
-            {activeMainTab === "content" && !profile.is_standard_version && (
+            {activeMainTab === "content" && (
               <>
                 {activeContentType === "modsv2" && (
                   <LocalContentTabV2<LocalContentItem>

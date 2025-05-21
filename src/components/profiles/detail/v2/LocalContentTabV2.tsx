@@ -35,6 +35,9 @@ import { ThemedSurface } from "../../../ui/ThemedSurface";
 import { useAppDragDropStore } from "../../../../store/appStore"; // Import the store
 import { createPortal } from "react-dom";
 import { ModrinthService } from "../../../../services/modrinth-service"; // Added import
+import { EmptyState } from "../../../ui/EmptyState"; // Added import
+import { useProfileStore } from "../../../../store/profile-store"; // Added import
+import { useConfirmDialog } from "../../../../hooks/useConfirmDialog"; // Added import
 
 // Generic icons that can be used across different content types
 const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
@@ -83,6 +86,8 @@ export function LocalContentTabV2<T extends LocalContentItem>({
 }: LocalContentTabV2Props<T>) {
   const navigate = useNavigate();
   const accentColor = useThemeStore((state) => state.accentColor);
+  const { confirm, confirmDialog } = useConfirmDialog(); // Added hook
+  const { copyProfile, fetchProfiles, updateProfile } = useProfileStore(); // Added updateProfile
   const {
     setActiveDropContext,
     registerRefreshCallback,
@@ -239,6 +244,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     try {
       await ProfileService.updateProfile(profile.id, {
         selected_norisk_pack_id: newPackId,
+        clear_selected_norisk_pack: newPackId === null,
       });
       if (onRefreshRequired) {
         onRefreshRequired();
@@ -988,6 +994,90 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       <div className="p-4 font-minecraft text-center text-white/70">
         Profile data is not available. Cannot display {itemTypeNamePlural.toLowerCase()}.
       </div>
+    );
+  }
+
+  // Determine if the special empty state for standard profiles should be shown
+  const shouldShowStandardProfileEmptyState = 
+    profile.is_standard_version &&
+    (contentType === 'NoRiskMod' && !profile?.selected_norisk_pack_id ? true : filteredItems.length === 0) && 
+    !error;
+
+  if (shouldShowStandardProfileEmptyState) {
+    const handleCloneProfile = async () => {
+      if (!profile) return;
+
+      try {
+        const newName = await confirm({
+          title: "Clone Profile",
+          inputLabel: "New profile name",
+          inputPlaceholder: "Enter a name for the cloned profile",
+          inputInitialValue: `${profile.name} (Copy)`,
+          inputRequired: true,
+          confirmText: "CLONE",
+          type: "input",
+          fullscreen: true, // Or false, depending on desired dialog style
+        });
+
+        if (newName && typeof newName === "string") {
+          const clonePromise = copyProfile(profile.id, newName, undefined, true);
+
+          toast.promise(clonePromise, {
+            loading: `Cloning profile '${profile.name}' as '${newName}'...`,
+            success: (newProfileId) => {
+              // Immediately attempt to update the group after cloning is successful
+              updateProfile(newProfileId, { group: "CUSTOM" })
+                .then(() => {
+                  //toast.success(`Profile '${newName}' set to group CUSTOM.`);
+                  // Refresh data after group update as well if needed, or rely on fetchProfiles below
+                })
+                .catch(updateError => {
+                  console.error("Failed to update group for cloned profile:", updateError);
+                  //toast.error(`Failed to set group for '${newName}'.`);
+                });
+
+              fetchProfiles(); // Refresh profiles list in the store
+              if (onRefreshRequired) onRefreshRequired(); // Refresh parent view if callback provided
+              navigate(`/profiles/${newProfileId}`); // Navigate to the new profile's detail view
+              return `Profile '${newName}' cloned successfully!`; // Toast for cloning success
+            },
+            error: (err) =>
+              `Failed to clone profile: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      } catch (err) {
+        // This catch block is for errors from the confirm dialog itself (e.g., user cancelled)
+        // If it's a cancel, we don't need to show an error toast.
+        if (err !== "cancel") { // Check if it's not a cancellation
+          console.error("Error in clone setup or dialog: ", err);
+          toast.error("Could not initiate cloning process.");
+        }
+      }
+    };
+
+    const cloneButton = (
+      <Button 
+        variant="default" 
+        size="md"
+        onClick={handleCloneProfile} // Updated onClick
+        icon={<Icon icon="solar:copy-bold-duotone" className="mr-2" />}
+      >
+        CLONE PROFILE
+      </Button>
+    );
+
+    return (
+      <>
+        <EmptyState 
+          icon="solar:shield-warning-bold-duotone"
+          message="Standard profiles are read-only."
+          description="Clone to make changes and manage content."
+          action={cloneButton}
+          fullHeight={true}
+          className="justify-center"
+        />
+        {confirmDialog} {/* Added confirm dialog to render */} 
+      </>
     );
   }
 

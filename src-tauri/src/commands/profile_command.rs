@@ -43,7 +43,7 @@ pub struct CreateProfileParams {
     selected_norisk_pack_id: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct UpdateProfileParams {
     name: Option<String>,
     game_version: Option<String>,
@@ -51,6 +51,8 @@ pub struct UpdateProfileParams {
     loader_version: Option<String>,
     settings: Option<ProfileSettings>,
     selected_norisk_pack_id: Option<String>,
+    group: Option<String>,
+    clear_selected_norisk_pack: Option<bool>,
 }
 
 // Neue DTO für den copy_profile Command
@@ -402,27 +404,65 @@ pub async fn get_profile(id: Uuid) -> Result<Profile, CommandError> {
 
 #[tauri::command]
 pub async fn update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(), CommandError> {
+    info!("[CMD] update_profile called for ID: {} with params: {:?}", id, params);
+    match try_update_profile(id, params).await {
+        Ok(_) => {
+            info!("[CMD] update_profile successful for ID: {}", id);
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] update_profile failed for ID: {}: {:?}", id, e);
+            Err(e)
+        }
+    }
+}
+
+// Helper function to contain the actual logic and allow for ? operator
+async fn try_update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(), CommandError> {
+    info!("[CMD] try_update_profile for ID: {}. Received params: {:?}", id, params);
     let state = State::get().await?;
     let mut profile = state.profile_manager.get_profile(id).await?;
 
-    if let Some(name) = params.name {
-        profile.name = name;
+    if let Some(name) = &params.name { // Borrow params.name
+        info!("Updating profile name to: {}", name);
+        profile.name = name.clone();
     }
-    if let Some(game_version) = params.game_version {
-        profile.game_version = game_version;
+    if let Some(game_version) = &params.game_version { // Borrow params.game_version
+        info!("Updating game_version to: {}", game_version);
+        profile.game_version = game_version.clone();
     }
-    if let Some(loader) = params.loader {
-        profile.loader = ModLoader::from_str(&loader)?;
+    if let Some(loader_str) = &params.loader { // Borrow params.loader
+        info!("Updating loader to: {}", loader_str);
+        profile.loader = ModLoader::from_str(loader_str)?;
     }
-    if let Some(loader_version) = params.loader_version {
-        profile.loader_version = Some(loader_version);
+    if let Some(loader_version) = &params.loader_version { // Borrow params.loader_version
+        info!("Updating loader_version to: {}", loader_version);
+        profile.loader_version = Some(loader_version.clone());
     }
-    if let Some(settings) = params.settings {
-        profile.settings = settings;
+    if let Some(settings) = params.settings { // settings can be moved if it's Clone or Copy, or borrowed if not
+        info!("Updating settings: {:?}", settings);
+        profile.settings = settings; // Assuming ProfileSettings is Clone or params.settings is not used after this
     }
-    profile.selected_norisk_pack_id = params.selected_norisk_pack_id;
+
+    // Handle selected_norisk_pack_id based on clear_selected_norisk_pack and new value
+    if params.clear_selected_norisk_pack == Some(true) {
+        info!("Clearing selected_norisk_pack_id for profile {}", id);
+        profile.selected_norisk_pack_id = None;
+    } else if let Some(pack_id) = &params.selected_norisk_pack_id {
+        info!("Updating selected_norisk_pack_id to: {} for profile {}", pack_id, id);
+        profile.selected_norisk_pack_id = Some(pack_id.clone());
+    } else {
+        info!("selected_norisk_pack_id not explicitly changed or cleared for profile {}. Current: {:?}", id, profile.selected_norisk_pack_id);
+        // No change to selected_norisk_pack_id if neither clear is true nor a new value is provided
+    }
+
+    if let Some(new_group) = &params.group { // Borrow params.group
+        info!("Updating group to: {}", new_group);
+        profile.group = Some(new_group.clone());
+    }
 
     state.profile_manager.update_profile(id, profile).await?;
+    info!("Profile {} updated successfully.", id);
     Ok(())
 }
 

@@ -444,7 +444,8 @@ export function NoRiskModsTabV2({ profile, onRefreshRequired }: NoRiskModsTabV2P
     if (newPackId === profile.selected_norisk_pack_id) return; // No change
     try {
       await ProfileService.updateProfile(profile.id, { 
-        selected_norisk_pack_id: newPackId 
+        selected_norisk_pack_id: newPackId,
+        clear_selected_norisk_pack: newPackId === null,
       });
       if (onRefreshRequired) {
         onRefreshRequired(); 

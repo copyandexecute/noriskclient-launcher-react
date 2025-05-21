@@ -187,6 +187,7 @@ export interface UpdateProfileParams {
   selected_norisk_pack_id?: string;
   group?: string | null;
   description?: string | null;
+  clear_selected_norisk_pack?: boolean;
 }
 
 export interface CopyProfileParams {

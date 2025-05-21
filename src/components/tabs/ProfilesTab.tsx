@@ -78,8 +78,8 @@ export function ProfilesTab() {
       const profileFromRoute = profiles.find(p => p.id === currentRouteProfileId);
       console.log("[ProfilesTab] Route Effect: profileFromRoute:", profileFromRoute);
 
-      if (profileFromRoute && !profileFromRoute.is_standard_version) {
-        console.log("[ProfilesTab] Route Effect: Found non-standard profile. current showDetailView:", showDetailView, "selectedProfile?.id:", selectedProfile?.id);
+      if (profileFromRoute) {
+        console.log("[ProfilesTab] Route Effect: Found profile. current showDetailView:", showDetailView, "selectedProfile?.id:", selectedProfile?.id);
         if (selectedProfile?.id !== currentRouteProfileId || !showDetailView) {
             console.log("[ProfilesTab] Route Effect: Setting selected profile and showing detail view for:", profileFromRoute.id);
             setSelectedProfile(profileFromRoute);
@@ -87,11 +87,6 @@ export function ProfilesTab() {
         } else {
             console.log("[ProfilesTab] Route Effect: Detail view already shown for this profile or selectedProfile matches and is already visible.");
         }
-      } else if (profileFromRoute && profileFromRoute.is_standard_version) {
-        console.warn("[ProfilesTab] Route Effect: Attempted to view a standard profile. Navigating to /profiles.", profileFromRoute);
-        navigate("/profiles", { replace: true });
-        setShowDetailView(false); 
-        setSelectedProfile(null);
       } else if (!profileFromRoute && currentRouteProfileId) {
         console.warn(`[ProfilesTab] Route Effect: Profile with ID '${currentRouteProfileId}' not found. Navigating to /profiles.`);
         toast.error(`Profile with ID '${currentRouteProfileId}' not found.`);
@@ -182,13 +177,6 @@ export function ProfilesTab() {
 
   const handleViewProfile = (profile: Profile) => {
     console.log("[ProfilesTab] handleViewProfile called for profile:", profile.id, profile.name);
-    if (profile.is_standard_version) {
-      toast.error("Standard profiles do not have a detailed view.");
-      navigate("/profiles", { replace: true });
-      setShowDetailView(false);
-      console.log("[ProfilesTab] Clicked standard profile, navigating to /profiles.");
-      return;
-    }
     navigate(`/profiles/${profile.id}`);
     console.log("[ProfilesTab] Navigated to /profiles/" + profile.id + ". Detail view should open via useEffect.");
   };
@@ -250,7 +238,7 @@ export function ProfilesTab() {
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
       {routeProfileId && loading ? (
         <LoadingState message="Loading profile details..." />
-      ) : showDetailView && selectedProfile && !selectedProfile.is_standard_version ? (
+      ) : showDetailView && selectedProfile ? (
         <ProfileDetailView
           profile={selectedProfile}
           onClose={() => {
