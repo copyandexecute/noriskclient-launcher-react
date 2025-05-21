@@ -11,6 +11,28 @@ import { useThemeStore } from '../../store/useThemeStore';
 import { ThemedSurface } from '../ui/ThemedSurface';
 import { cn } from '../../lib/utils';
 
+// Define ListComponent outside of CapeList to ensure a stable reference
+const ListComponent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ style, children, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        {...props}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+          gap: '16px',
+          padding: '16px',
+          ...style, // Style from Virtuoso (e.g., height, width, transform)
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+ListComponent.displayName = 'VirtuosoGridList';
+
 interface CapeItemDisplayProps {
   cape: CosmeticCape;
   imageUrl: string;
@@ -268,6 +290,18 @@ export function CapeList({
     return allItems;
   }, [capes]);
 
+  const virtuosoComponents = useMemo(() => ({
+    Footer: () => {
+      if (!isFetchingMore) return null;
+      return (
+        <div className="flex justify-center items-center p-4">
+          <Icon icon="eos-icons:loading" className="w-8 h-8" style={{ color: accentColor }} />
+        </div>
+      );
+    },
+    List: ListComponent, // Use the stable ListComponent reference
+  }), [isFetchingMore, accentColor]); // Dependencies for the Footer part
+
   if (isDebouncedLoading) {
     return (
       <div 
@@ -309,33 +343,7 @@ export function CapeList({
         data={itemsToRender}
         endReached={handleEndReached}
         overscan={200}
-        components={{
-          Footer: () => {
-            if (!isFetchingMore) return null;
-            return (
-              <div className="flex justify-center items-center p-4">
-                <Icon icon="eos-icons:loading" className="w-8 h-8" style={{ color: accentColor }} />
-              </div>
-            );
-          },
-          List: React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ style, children, ...props }, ref) => {
-            return (
-              <div
-                ref={ref}
-                {...props}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
-                  gap: '16px',
-                  padding: '16px',
-                  ...style,
-                }}
-              >
-                {children}
-              </div>
-            );
-          }),
-        }}
+        components={virtuosoComponents} // Pass the memoized components object
         itemContent={(index, item) => {
           if (item._id === ADD_CAPE_PLACEHOLDER_ID) {
             if (!onTriggerUpload) return null;
