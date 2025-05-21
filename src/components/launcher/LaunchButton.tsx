@@ -355,7 +355,6 @@ export function LaunchButton({
 
       {versions && (
         <ProfileSelectionModal
-          versions={versions}
           onVersionChange={handleVersionChange}
           title="Select Version"
         />
