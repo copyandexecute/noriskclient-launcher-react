@@ -5,7 +5,6 @@ import { ProfilesTab } from "../components/tabs/ProfilesTab";
 import ModrinthTabV2 from "../components/tabs/ModrinthTabV2";
 import { SkinsTab } from "../components/tabs/SkinsTab";
 import { StoreTab } from "../components/tabs/StoreTab";
-import { NewsTab } from "../components/tabs/NewsTab";
 import { SettingsTab } from "../components/tabs/SettingsTab";
 import { BrowseTab } from "../components/profiles/detail/BrowseTab";
 
@@ -41,10 +40,6 @@ export const router = createHashRouter([
       {
         path: "store",
         element: <StoreTab />,
-      },
-      {
-        path: "news",
-        element: <NewsTab />,
       },
       {
         path: "settings",

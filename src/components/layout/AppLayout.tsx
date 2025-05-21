@@ -31,7 +31,6 @@ const navItems = [
   { id: "mods", icon: "solar:widget-bold", label: "Mods" },
   { id: "skins", icon: "solar:emoji-funny-circle-bold", label: "Skins" },
   { id: "store", icon: "solar:shop-bold", label: "Store" },
-  { id: "news", icon: "solar:bell-bold", label: "News" },
   { id: "settings", icon: "solar:settings-bold", label: "Settings" },
 ];
 

@@ -133,7 +133,7 @@ export function SettingsTab() {
   }, [loadConfig]);
 
   useEffect(() => {
-    if (tabRef.current) {
+    if (tabRef.current && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         tabRef.current,
         { opacity: 0 },
@@ -144,17 +144,17 @@ export function SettingsTab() {
         },
       );
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   useEffect(() => {
-    if (contentRef.current) {
+    if (contentRef.current && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         contentRef.current,
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
       );
     }
-  }, [activeTab]);
+  }, [activeTab, isBackgroundAnimationEnabled]);
 
   const saveConfig = useCallback(async () => {
     if (!tempConfig) return;
