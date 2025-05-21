@@ -10,8 +10,9 @@ import { Icon } from '@iconify/react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { Modal } from '../ui/Modal';
-import { Cape3DRenderer } from './Cape3DRenderer';
+import { SkinView3DWrapper } from '../common/SkinView3DWrapper';
 import { Button } from '../ui/buttons/Button';
+import { IconButton } from '../ui/buttons/IconButton';
 import { useMinecraftAuthStore } from '../../store/minecraft-auth-store';
 import { TabLayout } from '../ui/TabLayout';
 import { preloadIcons } from '../../lib/icon-utils';
@@ -31,6 +32,7 @@ export function CapeBrowser() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewImagePath, setPreviewImagePath] = useState<string | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [showElytraPreview, setShowElytraPreview] = useState(false);
   
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [capeToDelete, setCapeToDelete] = useState<CosmeticCape | null>(null);
@@ -226,6 +228,7 @@ export function CapeBrowser() {
     setPreviewImagePath(null);
     setPreviewImageUrl(null);
     setShowPreviewModal(false);
+    setShowElytraPreview(false);
   };
   
   const handleConfirmUpload = async (filePath?: string) => {
@@ -237,12 +240,13 @@ export function CapeBrowser() {
       toast.success('Cape uploaded successfully!');
       refreshCurrentView();
       setShowPreviewModal(false);
+      setPreviewImagePath(null);
+      setPreviewImageUrl(null);
+      setShowElytraPreview(false);
     } catch (err: any) {
       console.error('Error uploading cape:', err);
       toast.error(`Failed to upload cape: ${err.message || 'Unknown error'}`);
     } finally {
-      setPreviewImagePath(null);
-      setPreviewImageUrl(null);
       setIsUploading(false);
     }
   };
@@ -295,13 +299,26 @@ export function CapeBrowser() {
       />
 
       {previewImageUrl && previewImagePath && showPreviewModal && (
-        <Modal title="Preview & Upload Cape" onClose={handleCancelUpload} closeOnClickOutside={false} width="md">
+        <Modal title="Preview & Upload Cape" onClose={handleCancelUpload} closeOnClickOutside={true} width="md">
           <div className="p-4">
             <p className="text-white/80 mb-4 text-center font-minecraft-ten">
               Does this look correct? If so, hit upload!
             </p>
-            <div className="flex justify-center items-center mb-6 bg-black/20 p-2 rounded-md aspect-[10/16] max-w-[200px] mx-auto">
-              <Cape3DRenderer imageUrl={previewImageUrl} />
+            <div className="relative flex justify-center items-center mb-6 p-2 rounded-md aspect-[10/16] max-w-[200px] mx-auto">
+              <SkinView3DWrapper 
+                capeUrl={previewImageUrl} 
+                className="w-full h-full"
+                zoom={1.5}
+                displayAsElytra={showElytraPreview}
+              />
+              <IconButton 
+                onClick={() => setShowElytraPreview(!showElytraPreview)}
+                displayVariant="ghost"
+                size="sm" 
+                className="absolute top-2 right-2 z-10" 
+                icon={<Icon icon={showElytraPreview ? "ph:airplane-tilt-fill" : "ph:airplane-tilt-duotone"} className="w-5 h-5"/>}
+                title={showElytraPreview ? 'Show as Cape' : 'Show as Elytra'} 
+              />
             </div>
             <div className="flex justify-center gap-4">
               <Button onClick={() => handleConfirmUpload()} variant="default" disabled={isUploading} size="lg">
