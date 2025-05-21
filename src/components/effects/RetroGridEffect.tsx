@@ -13,17 +13,29 @@ interface RetroGridEffectProps {
   isAnimationEnabled?: boolean;
 }
 
+// Removed helper functions as per the new approach
+
 export function RetroGridEffect({
   className,
   style,
   renderMode = 'both',
   perspective = '150px',
-  gridBackgroundColor = '#121220',
+  gridBackgroundColor,
   customGridLineColor,
   isAnimationEnabled = true,
 }: RetroGridEffectProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const gridLineColor = customGridLineColor || `${accentColor.value}80`;
+
+  let effectiveGridBackgroundColor;
+  if (gridBackgroundColor !== undefined) {
+    effectiveGridBackgroundColor = gridBackgroundColor;
+  } else {
+    const r = parseInt(accentColor.value.slice(1, 3), 16);
+    const g = parseInt(accentColor.value.slice(3, 5), 16);
+    const b = parseInt(accentColor.value.slice(5, 7), 16);
+    effectiveGridBackgroundColor = `rgba(${r}, ${g}, ${b}, 0)`;
+  }
 
   const baseGridStyles: Omit<React.CSSProperties, 'transform' | 'top' | 'bottom' | 'animation'> = {
     width: "150%",
@@ -43,6 +55,8 @@ export function RetroGridEffect({
     transform: "rotateX(140deg)",
     bottom: "-10%",
     animation: isAnimationEnabled ? "moveGrid 10s linear infinite" : "none",
+    WebkitMaskImage: "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
+    maskImage: "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
   };
 
   const topGridStyle: React.CSSProperties = {
@@ -50,6 +64,8 @@ export function RetroGridEffect({
     transform: "rotateX(-140deg)",
     top: "-10%",
     animation: isAnimationEnabled ? "moveGridReverse 10s linear infinite" : "none",
+    WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
+    maskImage: "linear-gradient(to bottom, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
   };
 
   const keyframes = `
@@ -71,7 +87,7 @@ export function RetroGridEffect({
         inset: 0,
         overflow: 'hidden',
         pointerEvents: 'none',
-        backgroundColor: gridBackgroundColor,
+        backgroundColor: effectiveGridBackgroundColor,
         perspective: perspective,
         zIndex: 0, 
         ...style,

@@ -181,33 +181,28 @@ export function NewsSection({ className }: NewsSectionProps) {
   return (
     <div
       ref={newsRef}
-      className={cn("h-full flex flex-col", className)}
+      className={cn("h-full flex flex-col !p-3", className)}
       style={{
         borderLeft: `2px solid ${accentColor.value}60`,
         borderRight: `2px solid ${accentColor.value}60`,
         boxShadow: `0 0 15px ${accentColor.value}30 inset`,
       }}
     >
-      <ThemedSurface 
-        className="flex-1 flex flex-col overflow-hidden !p-3" 
-        alwaysActive={true} 
-      >
-        <div className="pb-1">
-          <div className="flex items-center gap-2">
-            <Icon icon="pixel:newspaper-solid" className="w-7 h-7 text-white" />
-            <h2 className="text-2xl font-minecraft lowercase text-white">
-              NEWS
-            </h2>
-          </div>
-          <hr 
-            className="mt-2 border-t-2"
-            style={{ borderColor: `${accentColor.value}40` }} 
-          />
+      <div className="pb-1">
+        <div className="flex items-center gap-2">
+          <Icon icon="pixel:newspaper-solid" className="w-7 h-7 text-white" />
+          <h2 className="text-2xl font-minecraft lowercase text-white">
+            NEWS
+          </h2>
         </div>
-        <div className="flex-1 overflow-y-auto pr-1">
-          {renderContent()}
-        </div>
-      </ThemedSurface>
+        <hr 
+          className="mt-2 border-t-2"
+          style={{ borderColor: `${accentColor.value}40` }} 
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto no-scrollbar">
+        {renderContent()}
+      </div>
     </div>
   );
 }
