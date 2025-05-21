@@ -14,6 +14,7 @@ import { Cape3DRenderer } from './Cape3DRenderer';
 import { Button } from '../ui/buttons/Button';
 import { useMinecraftAuthStore } from '../../store/minecraft-auth-store';
 import { TabLayout } from '../ui/TabLayout';
+import { preloadIcons } from '../../lib/icon-utils';
 
 export function CapeBrowser() {
   const [capesData, setCapesData] = useState<CosmeticCape[]>([]);
@@ -38,6 +39,10 @@ export function CapeBrowser() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { activeAccount } = useMinecraftAuthStore();
+
+  useEffect(() => {
+    preloadIcons(['solar:add-square-bold-duotone']);
+  }, []);
 
   const hasMoreItems = paginationInfo ? paginationInfo.currentPage < paginationInfo.totalPages - 1 : false;
 

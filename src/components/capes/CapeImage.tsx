@@ -28,7 +28,7 @@ const BACK_X = 12 * SVELTE_SCALE_FACTOR; // 96 (1 + 10 + 1 offset in Svelte exam
 const BACK_Y = 1 * SVELTE_SCALE_FACTOR;  // 8
 
 
-export function CapeImage({
+export const CapeImage = React.memo(function CapeImage({
   imageUrl,
   part = 'front',
   width = 60, // Default width
@@ -139,16 +139,16 @@ export function CapeImage({
           width={width}
           height={height}
           className={cn(
-            "cape-canvas block w-full h-full image-pixelated",
-            // isLoading ? "opacity-50" : "" // Removed opacity change during loading
+            "cape-canvas block w-full h-full image-pixelated transition-opacity duration-300 ease-in-out",
+            isLoading && !errorMessage ? "opacity-0" : "opacity-100"
           )}
           title={`Cape ${part} view`}
-          style={{ backgroundColor: isLoading ? 'transparent' : 'transparent' }} // Always transparent, loading state managed by drawing
+          style={{ backgroundColor: 'transparent' }}
         />
       )}
     </div>
   );
-}
+});
 
 // CSS for image-pixelated could be in a global stylesheet or defined via a style tag / CSS-in-JS if preferred
 // For Tailwind, it's often handled by browser defaults or specific image rendering utilities if available.

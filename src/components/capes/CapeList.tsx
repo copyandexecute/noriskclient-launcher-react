@@ -131,6 +131,15 @@ interface AddCapeCardProps {
 }
 
 function AddCapeCard({ onClick, onDownloadTemplate }: AddCapeCardProps) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 50); // Short delay to trigger transition
+    return () => clearTimeout(timer);
+  }, []);
+
   const capeImageWidth = 140;
   const capeImageHeight = Math.round(capeImageWidth * (16 / 10));
   const nameTextHeight = 24;
@@ -146,10 +155,15 @@ function AddCapeCard({ onClick, onDownloadTemplate }: AddCapeCardProps) {
 
   return (
     <ThemedSurface
-      className="flex flex-col items-center justify-between p-3 group cursor-pointer h-full border-dashed relative"
+      className="flex flex-col items-center justify-between group cursor-pointer h-full border-dashed relative min-h-[300px]"
       onClick={handleCardClick}
     >
-      <div className="flex flex-col items-center justify-center flex-grow">
+      <div 
+        className={cn(
+          "flex flex-col items-center justify-center flex-grow transition-opacity duration-300 ease-in-out p-3",
+          isVisible ? "opacity-100" : "opacity-0"
+        )}
+      >
         <Icon icon="solar:add-square-bold-duotone" className="w-16 h-16 text-[var(--accent)] opacity-70 group-hover:opacity-100 transition-opacity" />
         <p className="font-minecraft lowercase text-2xl text-white/70 mt-2">
           Add Cape
