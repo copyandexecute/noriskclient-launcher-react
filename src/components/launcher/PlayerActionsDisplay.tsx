@@ -84,6 +84,8 @@ export function PlayerActionsDisplay({
     maxWidth: `${skinViewerMaxDisplayWidth}px`,
   };
 
+  const selectedVersionLabel = launchButtonVersions.find(v => v.id === launchButtonDefaultVersion)?.label;
+
   return (
     <div className={cn("flex flex-col items-center", className)}>
       {displayMode === 'logo' ? (
@@ -121,6 +123,10 @@ export function PlayerActionsDisplay({
               defaultVersion={launchButtonDefaultVersion}
               onVersionChange={onLaunchVersionChange}
               versions={launchButtonVersions}
+              selectedVersionLabel={selectedVersionLabel}
+              mainButtonWidth="w-80"
+              maxWidth="400px"
+              mainButtonHeight="h-20"
             />
           </div>
         </div>

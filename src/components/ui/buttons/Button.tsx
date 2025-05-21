@@ -19,6 +19,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
   shadowDepth?: "default" | "short";
+  widthClassName?: string;
+  heightClassName?: string;
 }
 
 interface RippleType {
@@ -40,6 +42,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       iconPosition = "left",
       shadowDepth = "short",
       onClick,
+      widthClassName,
+      heightClassName,
       ...props
     },
     ref,
@@ -297,6 +301,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             "disabled:hover:shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
           sizeStyles[size],
           className,
+          widthClassName,
+          heightClassName,
         )}
         style={{
           backgroundColor: getBackgroundColor(),

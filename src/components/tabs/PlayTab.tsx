@@ -40,7 +40,7 @@ export function PlayTab() {
 
   const versions = profiles.map((profile) => ({
     id: profile.id,
-    label: `${profile.name} (${profile.game_version})`,
+    label: `${profile.name}`,
     icon: profile.loader === "vanilla" ? undefined : profile.loader,
     isCustom: profile.loader !== "vanilla",
     profileId: profile.id,
@@ -57,10 +57,10 @@ export function PlayTab() {
           />
         )}
 
-        <VersionInfo
+        {/* <VersionInfo
           profileId={currentDisplayProfile?.id || ""}
           className="absolute top-6 left-6 z-10"
-        />
+        /> */}
 
         <div className="relative z-10">
           {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
