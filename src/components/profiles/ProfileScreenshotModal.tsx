@@ -145,7 +145,7 @@ export function ProfileScreenshotModal({
               onClick={handleCopyImage}
               disabled={isCopyingImage}
               displayVariant="themed-surface"
-              colorScheme="ghost"
+              variant="ghost"
               size="sm"
               className="rounded-md"
             />
@@ -154,7 +154,7 @@ export function ProfileScreenshotModal({
               title="Open Screenshot Location"
               onClick={handleOpenFolder}
               displayVariant="themed-surface"
-              colorScheme="ghost"
+              variant="ghost"
               size="sm"
               className="rounded-md"
             />
@@ -163,7 +163,7 @@ export function ProfileScreenshotModal({
               title="Delete Screenshot"
               onClick={handleDeleteScreenshot}
               disabled={isDeleting}
-              colorScheme="destructive"
+              variant="destructive"
               size="sm"
             />
           </div>
