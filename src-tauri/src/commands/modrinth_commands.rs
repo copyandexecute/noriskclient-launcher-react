@@ -5,6 +5,7 @@ use crate::integrations::modrinth::{
     ModrinthSearchResponse, ModrinthSortType, ModrinthVersion,
 };
 use crate::integrations::mrpack;
+use crate::commands::path_commands::UploadProfileIconPayload;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -153,36 +154,67 @@ pub async fn download_and_install_modrinth_modpack(
     version_id: String,
     file_name: String,
     download_url: String,
+    icon_url: Option<String>,
 ) -> Result<Uuid, CommandError> {
     log::info!(
-        "Executing download_and_install_modrinth_modpack for project '{}', version '{}'",
+        "Executing download_and_install_modrinth_modpack for project \"{}\", version \"{}\", icon_url: {:?}",
         project_id,
-        version_id
+        version_id,
+        icon_url
     );
 
     // Ensure the file name has .mrpack extension
-    let file_name = if !file_name.ends_with(".mrpack") {
+    let file_name_mrpack = if !file_name.ends_with(".mrpack") {
         format!("{}.mrpack", file_name)
     } else {
-        file_name
+        file_name.clone() // Clone if already correct to ensure ownership for logging later if needed
     };
 
-    let profile_id = mrpack::download_and_process_mrpack(&download_url, &file_name)
+    let profile_id_uuid = mrpack::download_and_process_mrpack(&download_url, &file_name_mrpack)
         .await
         .map_err(|e| {
             log::error!("Failed to download and process modpack: {}", e);
             CommandError::from(e)
         })?;
 
-    // Log success
     log::info!(
-        "Successfully downloaded and installed modpack '{}' as profile with ID: {}",
-        file_name,
-        profile_id
+        "Successfully downloaded and installed modpack \"{}\" as profile with ID: {}",
+        file_name_mrpack, // Use the potentially suffixed name
+        profile_id_uuid
     );
 
+    // If an icon URL was provided, attempt to download and set it for the new profile
+    if let Some(url_str) = icon_url {
+        log::info!("Attempting to set profile icon from URL: {} for profile {}", url_str, profile_id_uuid);
+        
+        let icon_payload = UploadProfileIconPayload {
+            path: None,
+            profile_id: profile_id_uuid, // This is already a Uuid
+            icon_url: Some(url_str.clone()),
+        };
+
+        match crate::commands::path_commands::upload_profile_icon(icon_payload).await {
+            Ok(relative_icon_path) => {
+                log::info!(
+                    "Successfully set profile icon from URL for profile {}. Icon at: {}",
+                    profile_id_uuid,
+                    relative_icon_path
+                );
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to set profile icon from URL {} for profile {}: {:?}",
+                    url_str,
+                    profile_id_uuid,
+                    e
+                );
+                // Do not fail the whole modpack installation for an icon error, just log it.
+            }
+        }
+    }
+
     // Return the new profile ID
-    Ok(profile_id)
+    Ok(profile_id_uuid)
 }
 
 /// Fetches details for multiple Modrinth projects based on their IDs or slugs.

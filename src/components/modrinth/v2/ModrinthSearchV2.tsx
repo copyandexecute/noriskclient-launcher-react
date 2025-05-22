@@ -1661,7 +1661,8 @@ export function ModrinthSearchV2({
         project.project_id,
         latestVersion.id,
         primaryFile.filename, 
-        primaryFile.url
+        primaryFile.url,
+        project.icon_url || undefined // Pass icon_url here
       );
       toast.success(
         (t) => (
@@ -1724,7 +1725,8 @@ export function ModrinthSearchV2({
         project.project_id,
         version.id,
         primaryFile.filename, 
-        primaryFile.url
+        primaryFile.url,
+        project.icon_url || undefined // Pass icon_url here
       );
       toast.success(
         (t) => (

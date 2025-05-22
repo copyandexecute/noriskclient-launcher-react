@@ -97,12 +97,14 @@ export class ModrinthService {
     versionId: string,
     fileName: string,
     downloadUrl: string,
+    iconUrl?: string,
   ): Promise<string> {
     return invoke<string>("download_and_install_modrinth_modpack", {
       projectId,
       versionId,
       fileName,
       downloadUrl,
+      iconUrl,
     });
   }
 

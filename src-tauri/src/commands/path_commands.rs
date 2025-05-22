@@ -1,8 +1,8 @@
-use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY, HTTP_CLIENT};
 use crate::error::{AppError, CommandError};
 use crate::state::profile_state::{ImageSource, ProfileBanner};
 use crate::state::state_manager::State;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::path::PathBuf;
 use serde::Deserialize;
 use tauri::command;
@@ -14,8 +14,9 @@ type Result<T> = std::result::Result<T, CommandError>;
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadProfileIconPayload {
-    path: Option<String>, // Source path of the image file
-    profile_id: Uuid,   // UUID of the profile, changed to Uuid type
+    pub path: Option<String>, // Source path of the image file
+    pub profile_id: Uuid,   // UUID of the profile
+    pub icon_url: Option<String>, // Optional URL to download the icon from
 }
 
 /// Returns the root launcher directory path
@@ -152,17 +153,56 @@ pub async fn upload_profile_icon(
     let target_icon_filename = "icon.png";
 
     let target_dir = profile_instance_path.join(target_sub_dir_name);
+    let target_file_path = target_dir.join(target_icon_filename);
 
     if !target_dir.exists() {
         info!("Target directory {:?} does not exist, creating.", target_dir);
-        tokio::fs::create_dir_all(&target_dir).await.map_err(|e| {
-            error!("Failed to create target directory {:?}: {}", target_dir, e);
-            AppError::Io(e)
-        })?;
+        tokio::fs::create_dir_all(&target_dir).await.map_err(|e| AppError::Io(e))?;
     }
 
-    if let Some(src_path_str) = payload.path {
-        let src_path = PathBuf::from(src_path_str);
+    // Determine the source path: either from local path, downloaded URL, or None
+    let mut temp_file_to_delete: Option<PathBuf> = None;
+    let effective_src_path: Option<PathBuf> =
+        if let Some(local_path_str) = payload.path {
+            Some(PathBuf::from(local_path_str))
+        } else if let Some(url_str) = payload.icon_url {
+            info!("Downloading icon from URL: {}", url_str);
+            let response = HTTP_CLIENT.get(&url_str).send().await.map_err(|e| {
+                error!("Failed to download icon from URL {}: {}", url_str, e);
+                AppError::RequestError(e.to_string())
+            })?;
+
+            if !response.status().is_success() {
+                error!("Failed to download icon: URL {} returned status {}", url_str, response.status());
+                return Err(AppError::Other(format!("Download failed: HTTP {}", response.status())).into());
+            }
+
+            let temp_dir = LAUNCHER_DIRECTORY.cache_dir();
+            if !temp_dir.exists() {
+                tokio::fs::create_dir_all(&temp_dir).await.map_err(|e| AppError::Io(e))?;
+            }
+            // Create a unique temporary filename
+            let temp_filename = format!("{}.tmp_icon", Uuid::new_v4());
+            let temp_path = temp_dir.join(temp_filename);
+            
+            let file_bytes = response.bytes().await.map_err(|e| {
+                error!("Failed to read bytes from downloaded icon {}: {}", url_str, e);
+                AppError::RequestError(e.to_string())
+            })?;
+            
+            tokio::fs::write(&temp_path, file_bytes).await.map_err(|e| {
+                error!("Failed to write downloaded icon to temporary file {:?}: {}", temp_path, e);
+                AppError::Io(e)
+            })?;
+            
+            info!("Successfully downloaded icon to temporary file: {:?}", temp_path);
+            temp_file_to_delete = Some(temp_path.clone()); // Mark for deletion
+            Some(temp_path)
+        } else {
+            None // Neither local path nor URL provided
+        };
+
+    if let Some(src_path) = effective_src_path {
         if !src_path.exists() {
             error!("Source image path does not exist: {:?}", src_path);
             return Err(AppError::FileNotFound(src_path).into());
@@ -172,17 +212,29 @@ pub async fn upload_profile_icon(
             return Err(AppError::InvalidInput(format!("Source path is not a file: {:?}", src_path)).into());
         }
 
-        let target_file_path = target_dir.join(target_icon_filename);
         info!("Copying profile icon from {:?} to {:?}", src_path, target_file_path);
+        let copy_result = tokio::fs::copy(&src_path, &target_file_path).await;
 
-        tokio::fs::copy(&src_path, &target_file_path).await.map_err(|e| {
+        // Always attempt to clean up the temporary file if one was created,
+        // regardless of copy success or failure.
+        if let Some(temp_path_to_clean) = &temp_file_to_delete { // Use & to borrow
+            if let Err(e) = tokio::fs::remove_file(temp_path_to_clean).await { // Borrow here again
+                warn!("Failed to delete temporary icon file {:?}: {}", temp_path_to_clean, e);
+            } else {
+                info!("Successfully deleted temporary icon file {:?}", temp_path_to_clean);
+            }
+        }
+
+        // Now handle the copy result
+        copy_result.map_err(|e| {
             error!("Failed to copy profile icon from {:?} to {:?}: {}", src_path, target_file_path, e);
             AppError::Io(e)
         })?;
-
+        
         info!("Successfully copied profile icon to {:?}", target_file_path);
+
     } else {
-        info!("No source path provided for profile icon upload for profile {}. Ensuring directory exists and profile will point to standard icon path.", payload.profile_id);
+        info!("No source path or URL provided for profile icon upload for profile {}. Ensuring directory exists and profile will point to standard icon path.", payload.profile_id);
     }
 
     let relative_icon_path_str = PathBuf::from(target_sub_dir_name)
