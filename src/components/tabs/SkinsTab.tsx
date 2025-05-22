@@ -876,11 +876,15 @@ export function SkinsTab() {
                 </p>
               ) : (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                  <AddSkinCard
+                    index={0}
+                    onClick={() => startEditSkin(null, undefined)}
+                  />
                   {filteredSkins.map((skin, index) => (
                     <SkinPreview
                       key={skin.id}
                       skin={skin}
-                      index={index}
+                      index={index + 1}
                       loading={loading}
                       localSkinsLoading={localSkinsLoading}
                       selectedLocalSkin={selectedLocalSkin}
@@ -890,10 +894,6 @@ export function SkinsTab() {
                       onDeleteSkin={handleDeleteSkin}
                     />
                   ))}
-                  <AddSkinCard
-                    index={filteredSkins.length + 1}
-                    onClick={() => startEditSkin(null, undefined)}
-                  />
                 </div>
               )}
             </div>
