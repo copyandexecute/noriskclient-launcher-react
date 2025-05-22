@@ -159,6 +159,7 @@ export interface Profile {
   is_standard_version: boolean;
   description: string | null;
   banner: ProfileBanner | null;
+  background: ProfileBanner | null;
   norisk_information: NoriskInformation | null;
 }
 
@@ -189,6 +190,7 @@ export interface UpdateProfileParams {
   description?: string | null;
   clear_selected_norisk_pack?: boolean;
   banner?: ProfileBanner | null;
+  background?: ProfileBanner | null;
 }
 
 export interface CopyProfileParams {
@@ -208,6 +210,7 @@ export interface ExportProfileParams {
 export interface UploadProfileIconPayload {
   path?: string;      // Source path of the image file (optional)
   profileId: string; // UUID of the profile (as string)
+  imageType: string; // "icon" or "background"
 }
 
 // --- Types for Commands ---

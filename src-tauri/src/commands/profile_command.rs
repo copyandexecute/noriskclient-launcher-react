@@ -136,6 +136,7 @@ pub async fn create_profile(params: CreateProfileParams) -> Result<Uuid, Command
         group: None,
         description: None,
         banner: None,
+        background: None,
         is_standard_version: false,
         norisk_information: None,
     };
@@ -1240,8 +1241,9 @@ pub async fn copy_profile(params: CopyProfileParams) -> Result<Uuid, CommandErro
         group: source_profile.group.clone(),
         is_standard_version: false,
         description: source_profile.description.clone(),
-        norisk_information: None,
-        banner: None,
+        norisk_information: source_profile.norisk_information.clone(),
+        banner: source_profile.banner.clone(),
+        background: source_profile.background.clone(),
     };
 
     // 6. Erstelle das neue Profilverzeichnis

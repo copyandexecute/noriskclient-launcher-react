@@ -110,9 +110,10 @@ export function ProfileIcon({
       if (typeof selectedPath === "string" && selectedPath) {
         setIsUpdating(true);
         try {
-          await ProfileService.uploadProfileIcon({
+          await ProfileService.uploadProfileImages({
             profileId: profileId,
             path: selectedPath,
+            imageType: "icon",
           });
           toast.success("Profile icon updated!");
           onSuccessfulUpdate();

@@ -114,7 +114,7 @@ async fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        /*.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             info!("SingleInstance plugin: Second instance triggered with args: {:?}", argv);
             // Focus the main window on second instance
             if let Some(window) = app.get_webview_window("main") {
@@ -126,7 +126,7 @@ async fn main() {
             tauri::async_runtime::spawn(async move {
                 norisk_packs::handle_noriskpack_file_paths(&app_handle_clone, argv).await;
             });
-        }))
+        }))*/
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -136,7 +136,7 @@ async fn main() {
             // --- Handle .noriskpack file opening on initial startup (all platforms) ---
             // The single-instance plugin does not handle the *very first* launch with arguments.
             // We still need to check std::env::args() here for that first launch.
-            info!("Checking for startup file arguments...");
+            /*info!("Checking for startup file arguments...");
             let startup_args: Vec<String> = std::env::args().collect();
             if startup_args.len() > 1 { // args[0] is exe path, check if there are more
                 let handle_clone = app_handle.clone();
@@ -144,7 +144,7 @@ async fn main() {
                     // Pass all startup_args; handle_noriskpack_file_paths will skip the exe path if needed
                     norisk_packs::handle_noriskpack_file_paths(&handle_clone, startup_args).await;
                 });
-            }
+            }*/
             // --- End .noriskpack handling on startup ---
 
             // Task for State Init and Updater Window
@@ -303,7 +303,7 @@ async fn main() {
             set_launcher_config,
             get_launcher_directory,
             resolve_image_path,
-            commands::path_commands::upload_profile_icon,
+            commands::path_commands::upload_profile_images,
             update_resourcepack_from_modrinth,
             update_shaderpack_from_modrinth,
             update_datapack_from_modrinth,

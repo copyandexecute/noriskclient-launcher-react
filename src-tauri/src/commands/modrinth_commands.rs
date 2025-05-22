@@ -5,7 +5,7 @@ use crate::integrations::modrinth::{
     ModrinthSearchResponse, ModrinthSortType, ModrinthVersion,
 };
 use crate::integrations::mrpack;
-use crate::commands::path_commands::UploadProfileIconPayload;
+use crate::commands::path_commands::UploadProfileImagesPayload;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -187,13 +187,14 @@ pub async fn download_and_install_modrinth_modpack(
     if let Some(url_str) = icon_url {
         log::info!("Attempting to set profile icon from URL: {} for profile {}", url_str, profile_id_uuid);
         
-        let icon_payload = UploadProfileIconPayload {
+        let icon_payload = UploadProfileImagesPayload {
             path: None,
             profile_id: profile_id_uuid, // This is already a Uuid
             icon_url: Some(url_str.clone()),
+            image_type: "icon".to_string(),
         };
 
-        match crate::commands::path_commands::upload_profile_icon(icon_payload).await {
+        match crate::commands::path_commands::upload_profile_images(icon_payload).await {
             Ok(relative_icon_path) => {
                 log::info!(
                     "Successfully set profile icon from URL for profile {}. Icon at: {}",

@@ -18,6 +18,7 @@ interface ThemedSurfaceProps {
     left?: boolean;
     right?: boolean;
   };
+  style?: React.CSSProperties;
 }
 
 export function ThemedSurface({
@@ -29,6 +30,7 @@ export function ThemedSurface({
   alwaysActive = false,
   baseColorHex,
   borderVisibility,
+  style: incomingStyle,
 }: ThemedSurfaceProps) {
   const accentColorValue = useThemeStore((state) => state.accentColor.value);
   const [isSurfaceHovered, setIsSurfaceHovered] = useState(false);
@@ -69,7 +71,7 @@ export function ThemedSurface({
     right: showRightBorder = true 
   } = borderVisibility || {};
 
-  const styles = {
+  const internalStyles = {
     '--surface-bg-default': parseHexToRgba(effectiveBaseColor, 0.03),
     '--surface-bg-hover': parseHexToRgba(effectiveBaseColor, 0.1),
     borderTopColor: ((isSurfaceHovered && !alwaysActive) || showTopBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
@@ -77,6 +79,8 @@ export function ThemedSurface({
     borderBottomColor: ((isSurfaceHovered && !alwaysActive) || showBottomBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
     borderLeftColor: ((isSurfaceHovered && !alwaysActive) || showLeftBorder) ? parseHexToRgba(effectiveBaseColor, currentBorderOpacity) : 'transparent',
   } as React.CSSProperties;
+
+  const combinedStyles = { ...internalStyles, ...incomingStyle };
 
   return (
     <div
@@ -89,7 +93,7 @@ export function ThemedSurface({
           : "bg-[var(--surface-bg-default)] hover:bg-[var(--surface-bg-hover)]",
         className
       )}
-      style={styles}
+      style={combinedStyles}
       onClick={onClick}
       onContextMenu={onContextMenu}
       onMouseEnter={() => setIsSurfaceHovered(true)}

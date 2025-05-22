@@ -15,6 +15,7 @@ import { LaunchButton } from "../ui/buttons/LaunchButton";
 import { ThemedSurface } from '../ui/ThemedSurface';
 import { useNavigate } from 'react-router-dom';
 import { ProfileIcon } from "./ProfileIcon";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -44,12 +45,25 @@ export function ProfileCard({
   const [isCardHovered, setIsCardHovered] = useState(false);
   const [shouldShowSpinnerForThisProfile, setShouldShowSpinnerForThisProfile] = useState(false);
   const [detailedLaunchMessage, setDetailedLaunchMessage] = useState<string | null>(null);
+  const [resolvedBackgroundImageUrl, setResolvedBackgroundImageUrl] = useState<string | null>(null);
+  const [isBgLoading, setIsBgLoading] = useState(false);
 
   const { confirm, confirmDialog } = useConfirmDialog();
   const cardRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  const hexToRgbString = (hex: string): string | null => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(
+          result[3],
+          16,
+        )}`
+      : null;
+  };
+  const accentColorRgbString = hexToRgbString(accentColorValue);
 
   const handleLaunchButtonStateChange = (isLaunchingFromButton: boolean) => {
     setShouldShowSpinnerForThisProfile(isLaunchingFromButton);
@@ -74,6 +88,51 @@ export function ProfileCard({
       setDetailedLaunchMessage(null);
     }
   }, [shouldShowSpinnerForThisProfile]);
+
+  useEffect(() => {
+    const resolveBackgroundImage = async () => {
+      if (profile.background?.source) {
+        setIsBgLoading(true);
+        setResolvedBackgroundImageUrl(null); // Reset while loading new one
+        try {
+          const resolvedPathOrUrl = await ProfileService.resolveImagePath(
+            profile.background.source,
+            profile.id,
+          );
+
+          if (
+            profile.background.source.type === "absolutePath" ||
+            profile.background.source.type === "relativePath" ||
+            profile.background.source.type === "relativeProfile"
+          ) {
+            if (resolvedPathOrUrl) {
+              const assetUrl = await convertFileSrc(resolvedPathOrUrl);
+              setResolvedBackgroundImageUrl(assetUrl + '?v=' + Date.now()); // Cache busting
+            } else {
+              setResolvedBackgroundImageUrl(null);
+            }
+          } else {
+            // For URL or Base64, the resolvedPathOrUrl is already the final URL
+            setResolvedBackgroundImageUrl(resolvedPathOrUrl);
+          }
+        } catch (error) {
+          console.error(
+            "Error resolving profile background image source:",
+            profile.background.source,
+            error,
+          );
+          setResolvedBackgroundImageUrl(null);
+        } finally {
+          setIsBgLoading(false);
+        }
+      } else {
+        setResolvedBackgroundImageUrl(null);
+        setIsBgLoading(false);
+      }
+    };
+
+    resolveBackgroundImage();
+  }, [profile.background, profile.id]);
 
   const getModLoaderIcon = () => {
     switch (profile.loader) {
@@ -251,9 +310,25 @@ export function ProfileCard({
         surfaceRef={cardRef}
         onClick={handleDivClick}
         onContextMenu={handleContextMenu}
-        className="p-4 rounded-lg flex flex-col gap-3 transition-all duration-150 ease-in-out hover:shadow-xl relative"
+        className="p-4 rounded-lg flex flex-col gap-3 transition-shadow duration-150 ease-in-out hover:shadow-xl relative"
+        style={resolvedBackgroundImageUrl ? {
+          backgroundImage: `url("${resolvedBackgroundImageUrl}")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        } : {}}
       >
-        <div className="flex items-center gap-4">
+        {resolvedBackgroundImageUrl && !isBgLoading && accentColorRgbString && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              borderRadius: 'inherit',
+              zIndex: 0,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        <div className="flex items-center gap-4 relative z-10">
           <div
             className="relative w-20 h-20 flex-shrink-0 rounded-md border flex items-center justify-center group overflow-hidden"
             style={{

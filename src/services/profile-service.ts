@@ -337,8 +337,8 @@ export async function resolveImagePath(
   return invoke<string>("resolve_image_path", { imageSource, profileId });
 }
 
-export async function uploadProfileIcon(
+export async function uploadProfileImages(
   payload: UploadProfileIconPayload,
 ): Promise<string> {
-  return invoke<string>("upload_profile_icon", { payload });
+  return invoke<string>("upload_profile_images", { payload });
 }

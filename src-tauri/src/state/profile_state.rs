@@ -126,6 +126,8 @@ pub struct Profile {
     pub description: Option<String>,
     #[serde(default)]
     pub banner: Option<ProfileBanner>, // Banner/background image for the profile
+    #[serde(default)]
+    pub background: Option<ProfileBanner>,
     pub norisk_information: Option<NoriskInformation>,
 }
 

@@ -107,7 +107,7 @@ export function ProfilesTab() {
         gsap.fromTo(tabRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" });
       }
       if (contentRef.current && !showDetailView) {
-        gsap.fromTo(contentRef.current, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, delay: 0.2, ease: "power2.out" });
+        gsap.fromTo(contentRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4, delay: 0.2, ease: "power2.out" });
       }
     }
   }, [isBackgroundAnimationEnabled, showDetailView]);

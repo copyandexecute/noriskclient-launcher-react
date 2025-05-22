@@ -190,6 +190,7 @@ pub async fn process_mrpack(pack_path: PathBuf) -> Result<(Profile, ModrinthInde
         description: None,
         norisk_information: None,
         banner: None,
+        background: None,
     };
 
     info!("Prepared potential profile object for '{}'", profile.name);
