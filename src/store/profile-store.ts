@@ -37,6 +37,7 @@ interface ProfileState {
     openFolder?: boolean,
   ) => Promise<string>;
   setSelectedProfile: (profile: Profile | null) => void;
+  refreshSingleProfileInStore: (profileData: Profile) => void;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -235,5 +236,21 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   setSelectedProfile: (profile: Profile | null) => {
     set({ selectedProfile: profile });
+  },
+
+  refreshSingleProfileInStore: (profileData: Profile) => {
+    set((state) => {
+      const updatedProfiles = state.profiles.map((p) =>
+        p.id === profileData.id ? profileData : p,
+      );
+      let updatedSelectedProfile = state.selectedProfile;
+      if (state.selectedProfile && state.selectedProfile.id === profileData.id) {
+        updatedSelectedProfile = profileData;
+      }
+      return {
+        profiles: updatedProfiles,
+        selectedProfile: updatedSelectedProfile,
+      };
+    });
   },
 }));

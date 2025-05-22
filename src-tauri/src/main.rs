@@ -303,6 +303,7 @@ async fn main() {
             set_launcher_config,
             get_launcher_directory,
             resolve_image_path,
+            commands::path_commands::upload_profile_icon,
             update_resourcepack_from_modrinth,
             update_shaderpack_from_modrinth,
             update_datapack_from_modrinth,

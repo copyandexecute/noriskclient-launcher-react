@@ -13,6 +13,8 @@ import type {
   BatchContentInstallStatus,
   LoadItemsParams,
   LocalContentItem,
+  ImageSource,
+  UploadProfileIconPayload,
 } from "../types/profile";
 import type {
   DataPackInfo,
@@ -326,4 +328,17 @@ export async function getLocalContent(
 
 export async function importProfileByPath(filePathStr: string): Promise<string> {
   return invoke<string>("import_profile", { filePathStr });
+}
+
+export async function resolveImagePath(
+  imageSource: ImageSource,
+  profileId?: string,
+): Promise<string> {
+  return invoke<string>("resolve_image_path", { imageSource, profileId });
+}
+
+export async function uploadProfileIcon(
+  payload: UploadProfileIconPayload,
+): Promise<string> {
+  return invoke<string>("upload_profile_icon", { payload });
 }

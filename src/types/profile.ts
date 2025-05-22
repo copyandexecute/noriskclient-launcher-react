@@ -188,6 +188,7 @@ export interface UpdateProfileParams {
   group?: string | null;
   description?: string | null;
   clear_selected_norisk_pack?: boolean;
+  banner?: ProfileBanner | null;
 }
 
 export interface CopyProfileParams {
@@ -201,6 +202,12 @@ export interface ExportProfileParams {
   file_name: string;
   include_files?: string[];
   open_folder: boolean;
+}
+
+// --- Payload for upload_profile_icon command ---
+export interface UploadProfileIconPayload {
+  path?: string;      // Source path of the image file (optional)
+  profileId: string; // UUID of the profile (as string)
 }
 
 // --- Types for Commands ---

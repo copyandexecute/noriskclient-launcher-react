@@ -16,6 +16,8 @@ import { cn } from "../../lib/utils";
 import { ModsTabV2 } from "./detail/v2/ModsTabV2";
 import { LocalContentTabV2 } from "./detail/v2/LocalContentTabV2";
 import type { LocalContentItem } from "../../hooks/useLocalContentManager";
+import { ProfileIcon } from "./ProfileIcon";
+import { useProfileStore } from "../../store/profile-store";
 
 interface ProfileDetailViewProps {
   profile: Profile;
@@ -118,6 +120,7 @@ export function ProfileDetailView({
     try {
       setIsRefreshing(true);
       const updatedProfile = await ProfileService.getProfile(profile.id);
+      useProfileStore.getState().refreshSingleProfileInStore(updatedProfile);
       setCurrentProfile(updatedProfile);
     } catch (error) {
       console.error("Failed to refresh profile:", error);
@@ -225,15 +228,14 @@ export function ProfileDetailView({
           style={{ borderColor: `${accentColor.value}30` }}
         >
           <div className="flex items-center gap-3 mb-3">
-            <div
-              className="w-10 h-10 rounded flex items-center justify-center border-2 flex-shrink-0"
-              style={{
-                backgroundColor: `${accentColor.value}30`,
-                borderColor: `${accentColor.value}50`,
-              }}
-            >
-              <Icon icon="solar:cube-bold" className="w-6 h-6 text-white" />
-            </div>
+            <ProfileIcon
+              profileId={currentProfile.id}
+              banner={currentProfile.banner}
+              profileName={currentProfile.name}
+              accentColor={accentColor.value}
+              onSuccessfulUpdate={handleRefresh}
+              className="w-10 h-10"
+            />
             <div className="flex-1 min-w-0">
               <div className="font-minecraft-ten text-base text-white truncate">
                 {profile.name || profile.id}

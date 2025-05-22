@@ -14,6 +14,7 @@ import * as ProfileService from "../../services/profile-service";
 import { LaunchButton } from "../ui/buttons/LaunchButton";
 import { ThemedSurface } from '../ui/ThemedSurface';
 import { useNavigate } from 'react-router-dom';
+import { ProfileIcon } from "./ProfileIcon";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -224,11 +225,6 @@ export function ProfileCard({
     }
   };
 
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onEdit();
-  };
-
   const handleDivClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const isInteractiveElementClick =
@@ -259,33 +255,24 @@ export function ProfileCard({
       >
         <div className="flex items-center gap-4">
           <div
-            className="relative w-20 h-20 flex-shrink-0 rounded-md overflow-hidden border flex items-center justify-center group"
+            className="relative w-20 h-20 flex-shrink-0 rounded-md border flex items-center justify-center group overflow-hidden"
             style={{
               backgroundColor: `${accentColorValue}1A`,
               borderColor: `${accentColorValue}4D`,
             }}
           >
-            {profileIconSrc ? (
-              <img
-                src={profileIconSrc}
-                alt={profile.name}
-                className={`w-full h-full object-cover transition-all duration-300 group-hover:scale-105 ${
-                  isCardHovered && !isCloning && !shouldShowSpinnerForThisProfile ? "brightness-75" : ""
-                }`}
-                style={{ imageRendering: "pixelated" }}
-                onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = "/icons/minecraft.png";
-                    target.style.width = '70%';
-                    target.style.height = '70%';
-                    target.style.objectFit = 'contain';
-                }}
-              />
-            ) : (
-              <Icon icon="ph:package-duotone" className="w-10 h-10" style={{color: accentColorValue}} />
-            )}
-
-            {/* Overlay: Conditional rendering based on interactionMode */}
+            <ProfileIcon 
+              profileId={profile.id}
+              banner={profile.banner}
+              profileName={profile.name}
+              accentColor={accentColorValue}
+              onSuccessfulUpdate={() => {}}
+              isEditable={false}
+              variant="bare"
+              className="w-full h-full"
+              placeholderIcon="ph:package-duotone"
+              iconClassName="w-10 h-10"
+            />
             {!isCloning && (shouldShowSpinnerForThisProfile || isCardHovered) && (
               <div 
                 className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-150 cursor-pointer"
@@ -323,7 +310,6 @@ export function ProfileCard({
             >
               {profile.name}
             </h3>
-            {/* Combined version info / status message line */}
             <div 
               className="flex items-center text-xs text-white/60 mt-1 font-minecraft-ten whitespace-nowrap overflow-hidden text-ellipsis h-4"
               title={
@@ -342,14 +328,6 @@ export function ProfileCard({
                 )
               ) : (
                 <>
-                  {/* <img
-                    src={getModLoaderIcon()}
-                    alt={profile.loader || "vanilla"}
-                    className="w-4 h-4 mr-1.5 flex-shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/icons/minecraft.png";
-                    }}
-                  /> */}
                   <span>
                     {profile.loader || "Vanilla"} {profile.game_version}
                   </span>
@@ -358,18 +336,6 @@ export function ProfileCard({
             </div>
           </div>
         </div>
-
-        {/* Bottom section: Actions - Removed as per user request */}
-        {/* <div className=\"flex items-center justify-start mt-3 pt-3\"> */}
-        {/*  <LaunchButton */}
-        {/*    id={profile.id} */}
-        {/*    name={profile.name} */}
-        {/*    size=\"sm\" */}
-        {/*    disabled={isCloning || launchState === LaunchState.LAUNCHING} */}
-        {/*    className=\"!py-1 !px-2.5\" */}
-        {/*  /> */}
-        {/* </div> */}
-
       </ThemedSurface>
     </div>
 
