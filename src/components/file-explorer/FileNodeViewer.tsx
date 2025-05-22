@@ -224,21 +224,23 @@ export const FileNodeViewer: React.FC<FileNodeViewerProps> = ({
   useEffect(() => {
     if (rootNode && !initialSetupDone) {
       const newExpanded = new Set<string>();
-      const newSelected = new Set(selectedFiles);
+      const newSelected = new Set(selectedFiles); // Start with current selectedFiles from props
       let fireSelectionChange = false;
 
       const applyPreSelectionRecursive = (node: FileNode) => {
-        let nodeMatched = false;
+        let nodeMatchedByPreselect = false;
         if (preSelectPaths.length > 0) {
           for (const pattern of preSelectPaths) {
             if (node.path.includes(pattern)) {
-              nodeMatched = true;
+              nodeMatchedByPreselect = true;
               if (selectChildrenWithParent && node.is_dir) {
                 addNodeAndChildren(node, newSelected);
               } else {
                 newSelected.add(node.path);
               }
-              if (node.is_dir) newExpanded.add(node.path);
+              if (node.is_dir) {
+                newExpanded.add(node.path);
+              }
               break; 
             }
           }
@@ -252,11 +254,13 @@ export const FileNodeViewer: React.FC<FileNodeViewerProps> = ({
         newExpanded.add(rootNode.path);
       }
       
-      if (preSelectPaths.length > 0) {
-          applyPreSelectionRecursive(rootNode);
-          if (newSelected.size !== selectedFiles.size || ![...newSelected].every(path => selectedFiles.has(path))) {
-            fireSelectionChange = true;
-          }
+      // Apply pre-selection to the visible part of the tree
+      const nodesForPreselection = hideRootNode ? (rootNode.children || []) : [rootNode];
+      nodesForPreselection.forEach(applyPreSelectionRecursive);
+      
+      // Check if newSelected actually changed from the prop selectedFiles
+      if (newSelected.size !== selectedFiles.size || ![...newSelected].every(path => selectedFiles.has(path))) {
+        fireSelectionChange = true;
       }
       
       setExpandedNodes(newExpanded);
@@ -284,24 +288,28 @@ export const FileNodeViewer: React.FC<FileNodeViewerProps> = ({
   const handleNodeSelected = useCallback((node: FileNode, event: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => {
     event.stopPropagation();
     const newSelectedFiles = new Set(selectedFiles);
-    let isCurrentlySelected = selectedFiles.has(node.path);
+    
+    let targetNodeIsNowSelected: boolean;
 
-    if (event.target && 'checked' in event.target) {
-        isCurrentlySelected = !(event.target as HTMLInputElement).checked;
+    if (event.target instanceof HTMLInputElement && 'checked' in event.target) {
+        targetNodeIsNowSelected = event.target.checked;
+    } else {
+        const isCurrentlySelected = selectedFiles.has(node.path);
+        targetNodeIsNowSelected = !isCurrentlySelected;
     }
 
-    if (isCurrentlySelected) {
-      if (node.is_dir && selectChildrenWithParent) {
-        removeNodeAndChildren(node, newSelectedFiles);
-      } else {
-        newSelectedFiles.delete(node.path);
-      }
+    if (targetNodeIsNowSelected) {
+        if (node.is_dir && selectChildrenWithParent) {
+            addNodeAndChildren(node, newSelectedFiles);
+        } else {
+            newSelectedFiles.add(node.path);
+        }
     } else {
-      if (node.is_dir && selectChildrenWithParent) {
-        addNodeAndChildren(node, newSelectedFiles);
-      } else {
-        newSelectedFiles.add(node.path);
-      }
+        if (node.is_dir && selectChildrenWithParent) {
+            removeNodeAndChildren(node, newSelectedFiles);
+        } else {
+            newSelectedFiles.delete(node.path);
+        }
     }
     onSelectionChange(newSelectedFiles);
   }, [selectedFiles, onSelectionChange, selectChildrenWithParent, addNodeAndChildren, removeNodeAndChildren]);

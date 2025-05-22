@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import type { Profile } from "../../../types/profile"; // Adjust path as needed
 import { Input } from "../../ui/Input";
 import { Checkbox } from "../../ui/Checkbox";
@@ -39,6 +39,9 @@ export function ExportSettingsTab({
   const [selectedExportPaths, setSelectedExportPaths] = useState<Set<string>>(
     new Set(),
   );
+  // Ref to hold the latest selection, initialized with the initial state
+  const selectedExportPathsRef = useRef<Set<string>>(selectedExportPaths);
+
   const [exportOpenFolder, setExportOpenFolder] = useState(true);
 
   const [directoryStructure, setDirectoryStructure] = useState<FileNode | null>(
@@ -53,6 +56,12 @@ export function ExportSettingsTab({
     (state) => state.isBackgroundAnimationEnabled,
   );
   const accentColor = useThemeStore((state) => state.accentColor);
+
+  // This is the callback passed to FileNodeViewer
+  const handleFileSelectionChange = (newSelectedPaths: Set<string>) => {
+    setSelectedExportPaths(newSelectedPaths);
+    selectedExportPathsRef.current = newSelectedPaths;
+  };
 
   useEffect(() => {
     const fetchStructure = async () => {
@@ -114,12 +123,14 @@ export function ExportSettingsTab({
       return;
     }
 
+    const currentPathsForExport = selectedExportPathsRef.current;
+
     const exportPromise = ProfileService.exportProfile({
       profile_id: profile.id,
       file_name: exportFilename,
       include_files:
-        selectedExportPaths.size > 0
-          ? Array.from(selectedExportPaths)
+        currentPathsForExport.size > 0 // Use the value from the ref
+          ? Array.from(currentPathsForExport) // Use the value from the ref
           : undefined,
       open_folder: exportOpenFolder,
     });
@@ -162,7 +173,7 @@ export function ExportSettingsTab({
   useEffect(() => {
     if (isInModalContext && onExportActionAvailable) {
       onExportActionAvailable({
-        handleExport,
+        handleExport, 
         isDisabled: () =>
           isExporting || !exportFilename.trim() || isLoadingDirectory,
         exportOpenFolder,
@@ -172,6 +183,7 @@ export function ExportSettingsTab({
   }, [
     isInModalContext,
     onExportActionAvailable,
+    handleExport, // handleExport's identity is stable, but good to list if its behavior (via ref) changes what the parent might expect
     isExporting,
     exportFilename,
     isLoadingDirectory,
@@ -270,10 +282,10 @@ export function ExportSettingsTab({
               loading={isLoadingDirectory}
               error={directoryError}
               selectedFiles={selectedExportPaths}
-              onSelectionChange={setSelectedExportPaths}
+              onSelectionChange={handleFileSelectionChange}
               checkboxesEnabled={true}
               hideRootNode={true}
-              preSelectPaths={["resourcepacks", "shaderpacks", "options.txt"]}
+              preSelectPaths={["resourcepacks", "shaderpacks", "options.txt", "NoRiskClientLauncher"]}
               selectChildrenWithParent={true}
               defaultRootCollapsed={false}
               className="text-sm"
