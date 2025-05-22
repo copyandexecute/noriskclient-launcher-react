@@ -14,7 +14,7 @@ export interface InputProps
   onClear?: () => void;
   error?: string;
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "flat";
+  variant?: "default" | "flat" | "3d";
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -55,7 +55,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsFocused(true);
 
-      if (containerRef.current && variant !== "flat") {
+      if (containerRef.current && variant === "3d") {
         gsap.to(containerRef.current, {
           y: -5,
           boxShadow: error
@@ -71,7 +71,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsFocused(false);
 
-      if (containerRef.current && variant !== "flat") {
+      if (containerRef.current && variant === "3d") {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -87,7 +87,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsHovered(true);
 
-      if (!isFocused && containerRef.current && variant !== "flat") {
+      if (!isFocused && containerRef.current && variant === "3d") {
         gsap.to(containerRef.current, {
           y: -3,
           boxShadow: error
@@ -103,7 +103,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsHovered(false);
 
-      if (!isFocused && containerRef.current && variant !== "flat") {
+      if (!isFocused && containerRef.current && variant === "3d") {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -138,11 +138,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       lg: "text-3xl",
     };
 
+    // Get border classes based on variant
     const getBorderClasses = () => {
-      if (variant === "flat") {
-        return "border border-b-2";
+      if (variant === "3d") {
+        return "border-2 border-b-4";
       }
-      return "border-2 border-b-4";
+      return "border border-b-2";
     };
 
     return (
@@ -169,17 +170,17 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                 ? accentColor.hoverValue
                 : accentColor.value,
             boxShadow:
-              variant === "flat"
-                ? "none"
-                : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
+              variant === "3d"
+                ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`
+                : "none",
             transform:
-              variant === "flat"
-                ? "none"
-                : isFocused
+              variant === "3d"
+                ? isFocused
                   ? "translateY(-5px)"
                   : isHovered
                     ? "translateY(-3px)"
-                    : "translateY(0)",
+                    : "translateY(0)"
+                : "none",
             filter:
               (isFocused || isHovered) && !props.disabled
                 ? "brightness(1.1)"
@@ -188,7 +189,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          {variant !== "flat" && (
+          {variant === "3d" && (
             <span
               className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
               style={{

@@ -9,7 +9,7 @@ import { useThemeStore } from "../../store/useThemeStore";
 export interface TextAreaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string;
-  variant?: "default" | "flat";
+  variant?: "default" | "flat" | "3d";
 }
 
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
@@ -42,7 +42,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           y: -5,
@@ -69,7 +69,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           y: 0,
@@ -99,7 +99,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         !isFocused &&
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           y: -3,
@@ -120,7 +120,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         !isFocused &&
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           y: 0,
@@ -134,17 +134,17 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
     };
 
     const getBorderClasses = () => {
-      if (variant === "flat") {
-        return "border border-b-2";
+      if (variant === "3d") {
+        return "border-2 border-b-4";
       }
-      return "border-2 border-b-4";
+      return "border border-b-2";
     };
 
     let currentBoxShadow =
-      variant === "flat"
-        ? "none"
-        : "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)";
-    if (isBackgroundAnimationEnabled && variant !== "flat") {
+      variant === "3d"
+        ? "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)"
+        : "none";
+    if (isBackgroundAnimationEnabled && variant === "3d") {
       if (isFocused) {
         currentBoxShadow =
           "0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)";
@@ -155,7 +155,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
     }
 
     let currentTransform = "translateY(0)";
-    if (isBackgroundAnimationEnabled && variant !== "flat") {
+    if (isBackgroundAnimationEnabled && variant === "3d") {
       if (isFocused) {
         currentTransform = "translateY(-5px)";
       } else if (isHovered) {
@@ -187,6 +187,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
                 : accentColor.value,
             boxShadow: currentBoxShadow,
             transform: currentTransform,
+            // Update the filter brightness to match Button
             filter:
               (isHovered || isFocused) && !props.disabled
                 ? "brightness(1.1)"
@@ -195,7 +196,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          {variant !== "flat" && (
+          {variant === "3d" && (
             <span
               className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
               style={{

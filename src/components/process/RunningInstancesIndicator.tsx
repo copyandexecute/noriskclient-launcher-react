@@ -165,7 +165,7 @@ export function RunningInstancesIndicator({
     <div className={cn("relative", className)}>
       <div ref={buttonRef} className="relative">
         <Button
-          variant={hasInstances ? "success" : "default"}
+          variant={hasInstances ? "success" : "flat"}
           size="sm"
           onClick={handleToggleDropdown}
           icon={<Icon icon="solar:monitor-bold" className="w-4 h-4" />}

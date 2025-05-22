@@ -18,6 +18,7 @@ interface ModalProps {
   width?: "sm" | "md" | "lg" | "xl" | "full";
   closeOnClickOutside?: boolean;
   headerActions?: React.ReactNode;
+  variant?: "default" | "flat" | "3d";
 }
 
 export function Modal({
@@ -30,6 +31,7 @@ export function Modal({
   width = "md",
   closeOnClickOutside = true,
   headerActions,
+  variant = "default",
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,20 @@ export function Modal({
     full: "max-w-[95vw] w-full",
   };
 
+  const getBorderClasses = () => {
+    if (variant === "3d") {
+      return "border-2 border-b-4";
+    }
+    return "border border-b-2";
+  };
+
+  const getBoxShadow = () => {
+    if (variant === "3d") {
+      return `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
+    }
+    return "none";
+  };
+
   return (
     <div
       ref={modalRef}
@@ -170,7 +186,8 @@ export function Modal({
         ref={contentRef}
         className={cn(
           "relative flex flex-col w-full rounded-lg overflow-hidden",
-          "border-2 border-b-4 shadow-2xl",
+          getBorderClasses(),
+          variant === "3d" ? "shadow-2xl" : "",
           widthClasses[width],
           "max-h-[85vh]",
         )}
@@ -178,13 +195,15 @@ export function Modal({
           backgroundColor: `${accentColor.value}20`,
           borderColor: `${accentColor.value}80`,
           borderBottomColor: accentColor.value,
-          boxShadow: `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+          boxShadow: getBoxShadow(),
         }}
       >
-        <span
-          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-          style={{ backgroundColor: `${accentColor.value}80` }}
-        />
+        {variant === "3d" && (
+          <span
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+            style={{ backgroundColor: `${accentColor.value}80` }}
+          />
+        )}
 
         <div
           ref={headerRef}

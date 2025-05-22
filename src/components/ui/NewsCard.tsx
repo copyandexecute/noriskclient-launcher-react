@@ -21,7 +21,7 @@ export const NewsCard = forwardRef<HTMLDivElement, NewsCardProps>(
       imageUrl,
       postUrl,
       onClick,
-      variant = "default",
+      variant = "flat",
       withAnimation = true,
       ...props
     },
@@ -37,9 +37,7 @@ export const NewsCard = forwardRef<HTMLDivElement, NewsCardProps>(
         {...props}
       >
         <div
-          className={cn(
-            "relative w-full h-full overflow-hidden rounded-lg",
-          )}
+          className={cn("relative w-full h-full overflow-hidden rounded-lg")}
         >
           <img
             src={imageUrl || "/placeholder.svg"}

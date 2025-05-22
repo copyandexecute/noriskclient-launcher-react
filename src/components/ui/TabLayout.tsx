@@ -70,6 +70,7 @@ export function TabLayout({
               onChange={search.onChange}
               placeholder={search.placeholder || "Search..."}
               className="w-full md:w-auto flex-grow md:flex-grow-0 h-[42px]"
+              variant="flat"
             />
           )}
           {actions}

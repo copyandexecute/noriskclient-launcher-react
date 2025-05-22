@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
@@ -17,7 +17,8 @@ export interface TagBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
     | "info"
     | "inactive"
     | "destructive"
-    | "warning";
+    | "warning"
+    | "flat";
   size?: "sm" | "md" | "lg" | "xl";
   onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
   disabled?: boolean;
@@ -36,7 +37,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       children,
       className,
       iconElement,
-      variant = "default",
+      variant = "flat",
       size = "md",
       onClick,
       disabled = false,
@@ -139,15 +140,47 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     const getVariantStyles = () => {
       switch (variant) {
         case "destructive":
-          return { main: "#ef4444", light: "#f87171", dark: "#dc2626", text: "#fee2e2" };
+          return {
+            main: "#ef4444",
+            light: "#f87171",
+            dark: "#dc2626",
+            text: "#fee2e2",
+          };
         case "success":
-          return { main: "#10b981", light: "#34d399", dark: "#059669", text: "#d1fae5" };
+          return {
+            main: "#10b981",
+            light: "#34d399",
+            dark: "#059669",
+            text: "#d1fae5",
+          };
         case "info":
-          return { main: "#3b82f6", light: "#60a5fa", dark: "#2563eb", text: "#dbeafe" };
+          return {
+            main: "#3b82f6",
+            light: "#60a5fa",
+            dark: "#2563eb",
+            text: "#dbeafe",
+          };
         case "warning":
-          return { main: "#f59e0b", light: "#fbbf24", dark: "#d97706", text: "#fef3c7" };
+          return {
+            main: "#f59e0b",
+            light: "#fbbf24",
+            dark: "#d97706",
+            text: "#fef3c7",
+          };
         case "inactive":
-          return { main: "#6b7280", light: "#9ca3af", dark: "#4b5563", text: "#f3f4f6" };
+          return {
+            main: "#6b7280",
+            light: "#9ca3af",
+            dark: "#4b5563",
+            text: "#f3f4f6",
+          };
+        case "flat":
+          return {
+            main: accentColor.value,
+            light: accentColor.hoverValue || accentColor.value,
+            dark: accentColor.value,
+            text: "#ffffff",
+          };
         default:
           return {
             main: accentColor.value,
@@ -176,12 +209,30 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
 
     const getTextSizeClass = () => {
       switch (size) {
-        case "sm": return "text-[0.9em]";
-        case "lg": return "text-base";
-        case "xl": return "text-lg";
-        default: return "text-[0.7em]";
+        case "sm":
+          return "text-[0.9em]";
+        case "lg":
+          return "text-base";
+        case "xl":
+          return "text-lg";
+        default:
+          return "text-[0.7em]";
       }
     };
+
+    const customStyling =
+      variant === "flat"
+        ? {
+            borderWidth: "1px",
+            borderBottomWidth: "2px",
+            backgroundColor: `${variantStyles.main}30`,
+            borderColor: `${variantStyles.main}80`,
+            borderBottomColor: isHovered
+              ? variantStyles.light
+              : variantStyles.dark,
+            boxShadow: "none",
+          }
+        : {};
 
     return (
       <ThemedSurface
@@ -191,7 +242,9 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
           "w-fit",
           sizeClasses,
           isClickable ? "cursor-pointer" : "",
-          disabled ? "opacity-50 cursor-not-allowed" : "transition-all duration-150",
+          disabled
+            ? "opacity-50 cursor-not-allowed"
+            : "transition-all duration-150",
           className,
         )}
         baseColorHex={variantStyles.main}
@@ -201,15 +254,9 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
         onMouseUp={isClickable ? handleMouseUp : undefined}
         onMouseEnter={isClickable ? handleMouseEnter : undefined}
         onMouseLeave={isClickable ? handleMouseLeave : undefined}
+        style={customStyling}
         {...props}
       >
-        {isClickable && (
-          <span
-            className="absolute inset-0 bg-gradient-radial from-white/20 via-transparent to-transparent transition-opacity duration-300 pointer-events-none"
-            style={{ opacity: isHovered ? 0.4 : 0 }}
-          />
-        )}
-
         {ripples.map((ripple) => (
           <span
             key={ripple.id}
@@ -222,12 +269,12 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
             }}
           />
         ))}
-        
-        <span 
+
+        <span
           className={cn(
             "relative z-10 flex items-center font-minecraft-ten",
             iconElement ? "gap-x-1.5" : "",
-            getTextSizeClass()
+            getTextSizeClass(),
           )}
           style={{
             color: variantStyles.text,
