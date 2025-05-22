@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
 import { useThemeStore } from "../../store/useThemeStore";
@@ -14,7 +14,9 @@ interface LabelProps extends React.HTMLAttributes<HTMLDivElement> {
     | "warning"
     | "destructive"
     | "info"
-    | "success";
+    | "success"
+    | "flat"
+    | "3d";
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
@@ -37,7 +39,6 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
   ) => {
     const labelRef = useRef<HTMLDivElement>(null);
     const accentColor = useThemeStore((state) => state.accentColor);
-    const [isHovered, setIsHovered] = useState(false);
 
     const mergedRef = (node: HTMLDivElement) => {
       if (ref) {
@@ -64,14 +65,6 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
         );
       }
     }, [withAnimation]);
-
-    const handleMouseEnter = () => {
-      setIsHovered(true);
-    };
-
-    const handleMouseLeave = () => {
-      setIsHovered(false);
-    };
 
     const getVariantColors = () => {
       switch (variant) {
@@ -117,10 +110,17 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
             dark: "transparent",
             text: "#ffffff",
           };
+        case "flat":
+          return {
+            main: accentColor.value,
+            light: accentColor.hoverValue || accentColor.value,
+            dark: accentColor.value,
+            text: "#ffffff",
+          };
         default:
           return {
             main: accentColor.value,
-            light: accentColor.hoverValue,
+            light: accentColor.hoverValue || accentColor.value,
             dark: accentColor.value,
             text: "#ffffff",
           };
@@ -145,6 +145,37 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
       xl: "w-7 h-7",
     };
 
+    const getBorderClasses = () => {
+      if (variant === "ghost") {
+        return "";
+      }
+      if (variant === "3d") {
+        return "border-2 border-b-4";
+      }
+      return "border border-b-2";
+    };
+
+    const getBackgroundColor = () => {
+      if (variant === "ghost") {
+        return "transparent";
+      }
+      return `${colors.main}30`;
+    };
+
+    const getBorderColor = () => {
+      if (variant === "ghost") {
+        return "transparent";
+      }
+      return `${colors.main}80`;
+    };
+
+    const getBorderBottomColor = () => {
+      if (variant === "ghost") {
+        return "transparent";
+      }
+      return colors.dark;
+    };
+
     return (
       <div
         ref={mergedRef}
@@ -153,45 +184,30 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
           "rounded-md text-white tracking-wider",
           "inline-flex items-center justify-center",
           "text-shadow-sm",
-          variant !== "ghost" && "border-2 border-b-4",
+          getBorderClasses(),
           sizeStyles[size],
           className,
         )}
         style={{
-          backgroundColor:
-            variant === "ghost"
-              ? "transparent"
-              : `${colors.main}${isHovered ? "50" : "30"}`,
-          borderColor:
-            variant === "ghost"
-              ? "transparent"
-              : `${colors.main}${isHovered ? "90" : "80"}`,
-          borderBottomColor:
-            variant === "ghost"
-              ? "transparent"
-              : isHovered
-                ? colors.light
-                : colors.dark,
+          backgroundColor: getBackgroundColor(),
+          borderColor: getBorderColor(),
+          borderBottomColor: getBorderBottomColor(),
           color: colors.text,
-          filter: isHovered ? "brightness(1.1)" : "brightness(1)",
+          boxShadow: variant === "3d" ? undefined : "none",
         }}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         {...props}
       >
-        {variant !== "ghost" && (
+        {variant === "3d" && (
           <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
             style={{
-              backgroundColor: isHovered
-                ? `${colors.light}`
-                : `${colors.light}80`,
-              opacity: isHovered ? 1 : 0.8,
+              backgroundColor: `${colors.light}80`,
+              opacity: 0.8,
             }}
           />
         )}
 
-        {variant !== "ghost" && (
+        {variant === "3d" && (
           <>
             <span
               className="absolute inset-y-0 left-0 w-[1px]"

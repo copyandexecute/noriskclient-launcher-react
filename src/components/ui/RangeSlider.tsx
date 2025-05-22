@@ -18,7 +18,7 @@ interface RangeSliderProps {
   showValue?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
-  variant?: "default" | "flat";
+  variant?: "default" | "flat" | "3d";
 }
 
 export function RangeSlider({
@@ -111,19 +111,16 @@ export function RangeSlider({
         gsap.to(thumbRef.current, {
           scale: 1.1,
           boxShadow:
-            variant === "flat"
-              ? `0 0 10px ${accentColor.value}60`
-              : "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)",
+            variant === "3d"
+              ? "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)"
+              : `0 0 10px ${accentColor.value}60`,
           duration: 0.2,
           ease: "power2.out",
         });
       }
-      if (trackRef.current) {
+      if (trackRef.current && variant === "3d") {
         gsap.to(trackRef.current, {
-          boxShadow:
-            variant === "flat"
-              ? `0 0 0 1px ${accentColor.value}30`
-              : `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+          boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -140,19 +137,16 @@ export function RangeSlider({
         gsap.to(thumbRef.current, {
           scale: 1,
           boxShadow:
-            variant === "flat"
-              ? `0 0 0 1px ${accentColor.value}60`
-              : "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)",
+            variant === "3d"
+              ? "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)"
+              : `0 0 0 1px ${accentColor.value}60`,
           duration: 0.2,
           ease: "power2.out",
         });
       }
-      if (trackRef.current) {
+      if (trackRef.current && variant === "3d") {
         gsap.to(trackRef.current, {
-          boxShadow:
-            variant === "flat"
-              ? `0 0 0 1px ${accentColor.value}20`
-              : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -197,6 +191,20 @@ export function RangeSlider({
       document.removeEventListener("mouseup", handleGlobalMouseUp);
     };
   }, [isDragging, isBackgroundAnimationEnabled]);
+
+  const getBorderClasses = () => {
+    if (variant === "3d") {
+      return "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]";
+    }
+    return "border border-white/10";
+  };
+
+  const getThumbBorderClasses = () => {
+    if (variant === "3d") {
+      return "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]";
+    }
+    return "border border-white/20";
+  };
 
   return (
     <div
@@ -244,36 +252,36 @@ export function RangeSlider({
         <div
           className={cn(
             "relative rounded-md overflow-hidden backdrop-blur-md transition-colors duration-200",
-            variant === "flat"
-              ? "border border-white/10"
-              : "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+            getBorderClasses(),
             "focus-within:ring-2 focus-within:ring-white/30 focus-within:ring-offset-1 focus-within:ring-offset-black/20",
             sizeConfig[size].track,
           )}
           style={{
             backgroundColor: `${accentColor.value}15`,
             borderColor:
-              variant === "flat"
-                ? `${accentColor.value}30`
-                : `${accentColor.value}40`,
+              variant === "3d"
+                ? `${accentColor.value}40`
+                : `${accentColor.value}30`,
             borderBottomColor:
-              variant === "flat" ? `${accentColor.value}30` : accentColor.value,
+              variant === "3d" ? accentColor.value : `${accentColor.value}30`,
             boxShadow:
-              variant === "flat"
-                ? `0 0 0 1px ${accentColor.value}20`
-                : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+              variant === "3d"
+                ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
+                : `0 0 0 1px ${accentColor.value}20`,
           }}
           ref={trackRef}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{
-              backgroundColor: `${accentColor.value}80`,
-              opacity: isHovered ? 1 : 0.8,
-            }}
-          />
+          {variant === "3d" && (
+            <span
+              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+              style={{
+                backgroundColor: `${accentColor.value}80`,
+                opacity: isHovered ? 1 : 0.8,
+              }}
+            />
+          )}
 
           <div
             ref={progressRef}
@@ -288,26 +296,22 @@ export function RangeSlider({
             ref={thumbRef}
             className={cn(
               "absolute top-1/2 -translate-y-1/2 rounded-full",
-              variant === "flat"
-                ? "border border-white/20"
-                : "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+              getThumbBorderClasses(),
               "flex items-center justify-center",
               sizeConfig[size].thumb,
             )}
             style={{
               backgroundColor: `${accentColor.value}50`,
               borderColor:
-                variant === "flat"
-                  ? `${accentColor.value}60`
-                  : `${accentColor.value}80`,
+                variant === "3d"
+                  ? `${accentColor.value}80`
+                  : `${accentColor.value}60`,
               borderBottomColor:
-                variant === "flat"
-                  ? `${accentColor.value}60`
-                  : accentColor.value,
+                variant === "3d" ? accentColor.value : `${accentColor.value}60`,
               boxShadow:
-                variant === "flat"
-                  ? `0 0 0 1px ${accentColor.value}60`
-                  : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+                variant === "3d"
+                  ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
+                  : `0 0 0 1px ${accentColor.value}60`,
             }}
           >
             <div

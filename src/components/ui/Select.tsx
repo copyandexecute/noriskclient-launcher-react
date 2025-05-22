@@ -24,7 +24,7 @@ interface SelectProps {
   className?: string;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "themed-surface" | "flat";
+  variant?: "default" | "themed-surface" | "flat" | "3d";
 }
 
 export function Select({
@@ -149,7 +149,7 @@ export function Select({
     if (disabled) return;
     setIsHovered(true);
 
-    if (triggerRef.current && shouldAnimate && variant !== "flat") {
+    if (triggerRef.current && shouldAnimate && variant === "3d") {
       gsap.to(triggerRef.current, {
         boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)`,
         duration: 0.2,
@@ -163,7 +163,7 @@ export function Select({
     setIsHovered(false);
     if (isPressed) handleMouseUp();
 
-    if (triggerRef.current && shouldAnimate && variant !== "flat") {
+    if (triggerRef.current && shouldAnimate && variant === "3d") {
       gsap.to(triggerRef.current, {
         boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
         duration: 0.2,
@@ -222,26 +222,21 @@ export function Select({
   const colors = getVariantColors();
 
   const getBackgroundColor = () => {
-    if (variant === "flat") {
-      return `${colors.main}30`;
-    }
-
     const baseOpacity = isHovered || isOpen ? "50" : "30";
     return `${colors.main}${baseOpacity}`;
   };
 
   const getBorderColor = () => {
-    if (variant === "flat") return `${colors.main}80`;
     return isHovered || isOpen ? `${colors.light}` : `${colors.main}80`;
   };
 
   const getBorderClasses = () => {
-    if (variant === "flat") return "border border-b-2 rounded-md";
-    return "border-2 border-b-4 rounded-md";
+    if (variant === "3d") return "border-2 border-b-4 rounded-md";
+    return "border border-b-2 rounded-md";
   };
 
   const getBoxShadow = () => {
-    if (variant === "flat") return "none";
+    if (variant !== "3d") return "none";
 
     return isHovered || isOpen
       ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
@@ -358,7 +353,7 @@ export function Select({
         }}
         disabled={disabled}
       >
-        {variant !== "flat" && (
+        {variant === "3d" && (
           <span
             className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
             style={{

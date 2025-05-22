@@ -17,7 +17,9 @@ interface IconButtonProps
     | "destructive"
     | "info"
     | "success"
-    | "flat";
+    | "flat"
+    | "flat-secondary"
+    | "3d";
   displayVariant?: "button" | "ghost" | "themed-surface";
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   icon: React.ReactNode;
@@ -182,8 +184,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
     const shouldShowShadow = () => {
       return (
         displayVariant === "button" &&
-        variant !== "ghost" &&
-        variant !== "flat" &&
+        variant === "3d" &&
         shadowDepth !== "none"
       );
     };
@@ -225,9 +226,16 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
             dark: "#4b5563",
             text: "#f3f4f6",
           };
+        case "flat-secondary":
+          return {
+            main: "#6b7280",
+            light: "#9ca3af",
+            dark: "#4b5563",
+            text: "#f3f4f6",
+          };
         case "ghost":
           return {
-            main: accentColor.value,
+            main: "transparent",
             light: accentColor.hoverValue || accentColor.value,
             dark: accentColor.value,
             text: "#ffffff",
@@ -272,11 +280,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         return "transparent";
 
       if (variant === "ghost") {
-        return isHovered ? `${colors.main}50` : `${colors.main}30`;
+        return isHovered ? `rgba(255, 255, 255, 0.1)` : "transparent";
       }
 
-      if (variant === "flat")
-        return isHovered ? `${colors.main}25` : `${colors.main}15`;
+      if (variant === "flat" || variant === "flat-secondary") {
+        return `${colors.main}30`;
+      }
 
       const baseOpacity = isHovered ? "50" : "30";
       return `${colors.main}${baseOpacity}`;
@@ -287,11 +296,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         return "transparent";
 
       if (variant === "ghost") {
-        return isHovered ? `${colors.light}` : `${colors.main}80`;
+        return "transparent";
       }
 
-      if (variant === "flat")
-        return isHovered ? `${colors.main}50` : `${colors.main}40`;
+      if (variant === "flat" || variant === "flat-secondary") {
+        return `${colors.main}80`;
+      }
 
       return isHovered ? `${colors.light}` : `${colors.main}80`;
     };
@@ -301,10 +311,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         return "transparent";
 
       if (variant === "ghost") {
-        return isHovered ? colors.light : colors.dark;
+        return "transparent";
       }
 
-      if (variant === "flat") return colors.main;
+      if (variant === "flat" || variant === "flat-secondary") {
+        return isHovered ? colors.light : colors.dark;
+      }
 
       return isHovered ? colors.light : colors.dark;
     };
@@ -313,8 +325,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
       if (
         displayVariant === "ghost" ||
         displayVariant === "themed-surface" ||
-        variant === "flat" ||
-        variant === "ghost" ||
+        variant !== "3d" ||
         shadowDepth === "none"
       ) {
         return "none";
@@ -332,23 +343,22 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         return "";
       }
 
-      if (variant === "ghost" || variant === "flat") {
-        return "border border-b-2";
+      if (variant === "ghost") {
+        return "";
       }
 
-      if (shadowDepth === "none") {
-        return "border-2";
+      if (variant === "3d") {
+        return shadowDepth === "none" ? "border-2" : "border-2 border-b-4";
       }
 
-      return "border-2 border-b-4";
+      return "border border-b-2";
     };
 
     const getShadowClasses = () => {
       if (
         displayVariant === "ghost" ||
         displayVariant === "themed-surface" ||
-        variant === "flat" ||
-        variant === "ghost" ||
+        variant !== "3d" ||
         shadowDepth === "none"
       ) {
         return "";
@@ -391,6 +401,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         {...props}
       >
         {variant !== "ghost" &&
+          variant === "3d" &&
           displayVariant !== "ghost" &&
           displayVariant !== "themed-surface" && (
             <span

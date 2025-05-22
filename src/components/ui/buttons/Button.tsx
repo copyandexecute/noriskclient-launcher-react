@@ -15,7 +15,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     | "destructive"
     | "info"
     | "success"
-    | "flat";
+    | "flat"
+    | "flat-secondary"
+    | "3d";
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
@@ -183,9 +185,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const shouldShowShadow = () => {
-      return (
-        variant !== "ghost" && variant !== "flat" && shadowDepth !== "none"
-      );
+      return variant === "3d" && shadowDepth !== "none";
     };
 
     const getVariantColors = () => {
@@ -225,9 +225,16 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             dark: "#4b5563",
             text: "#f3f4f6",
           };
+        case "flat-secondary":
+          return {
+            main: "#6b7280",
+            light: "#9ca3af",
+            dark: "#4b5563",
+            text: "#f3f4f6",
+          };
         case "ghost":
           return {
-            main: accentColor.value,
+            main: "transparent",
             light: accentColor.hoverValue || accentColor.value,
             dark: accentColor.value,
             text: "#ffffff",
@@ -262,11 +269,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const getBackgroundColor = () => {
       if (variant === "ghost") {
-        return isHovered ? `${colors.main}50` : `${colors.main}30`;
+        return isHovered ? `rgba(255, 255, 255, 0.1)` : "transparent";
       }
 
-      if (variant === "flat")
-        return isHovered ? `${colors.main}25` : `${colors.main}15`;
+      if (variant === "flat" || variant === "flat-secondary") {
+        return `${colors.main}30`;
+      }
 
       const baseOpacity = isHovered ? "50" : "30";
       return `${colors.main}${baseOpacity}`;
@@ -274,39 +282,42 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const getBorderColor = () => {
       if (variant === "ghost") {
-        return isHovered ? `${colors.light}` : `${colors.main}80`;
+        return "transparent";
       }
 
-      if (variant === "flat")
-        return isHovered ? `${colors.main}50` : `${colors.main}40`;
+      if (variant === "flat" || variant === "flat-secondary") {
+        return `${colors.main}80`;
+      }
 
       return isHovered ? `${colors.light}` : `${colors.main}80`;
     };
 
     const getBorderBottomColor = () => {
       if (variant === "ghost") {
-        return isHovered ? colors.light : colors.dark;
+        return "transparent";
       }
 
-      if (variant === "flat") return colors.main;
+      if (variant === "flat" || variant === "flat-secondary") {
+        return isHovered ? colors.light : colors.dark;
+      }
 
       return isHovered ? colors.light : colors.dark;
     };
 
     const getBorderClasses = () => {
-      if (variant === "ghost" || variant === "flat") {
-        return "border border-b-2";
+      if (variant === "ghost") {
+        return "";
       }
 
-      if (shadowDepth === "none") {
-        return "border-2";
+      if (variant === "3d") {
+        return shadowDepth === "none" ? "border-2" : "border-2 border-b-4";
       }
 
-      return "border-2 border-b-4";
+      return "border border-b-2";
     };
 
     const getShadowClasses = () => {
-      if (variant === "ghost" || variant === "flat" || shadowDepth === "none") {
+      if (variant !== "3d" || shadowDepth === "none") {
         return "";
       }
 
@@ -356,7 +367,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         }}
         {...props}
       >
-        {variant !== "ghost" && (
+        {variant !== "ghost" && variant === "3d" && (
           <span
             className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
             style={{

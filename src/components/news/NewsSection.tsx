@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import { Icon } from "@iconify/react";
@@ -11,7 +10,7 @@ import { cn } from "../../lib/utils";
 import { NewsCard } from "../ui/NewsCard";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Skeleton } from "../ui/Skeleton";
-import { ThemedSurface } from "../ui/ThemedSurface";
+import { Card } from "../ui/Card";
 
 interface NewsSectionProps {
   className?: string;
@@ -23,7 +22,9 @@ export function NewsSection({ className }: NewsSectionProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
-  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   const loadNews = useCallback(async () => {
     setIsLoading(true);
@@ -83,16 +84,21 @@ export function NewsSection({ className }: NewsSectionProps) {
           {[1, 2, 3].map((i) => (
             <div key={i} className="w-full">
               <div className="px-2">
-                <Skeleton variant="text" height={12} width="70%" className="mb-1" />
+                <Skeleton
+                  variant="text"
+                  height={12}
+                  width="70%"
+                  className="mb-1"
+                />
               </div>
-              <ThemedSurface className="w-full opacity-50 !p-0">
+              <Card variant="flat" className="w-full opacity-50 p-0">
                 <div className="relative w-full pt-[56.25%]">
                   <Skeleton
                     variant="image"
                     className="absolute top-0 left-0 w-full h-full"
                   />
                 </div>
-              </ThemedSurface>
+              </Card>
             </div>
           ))}
         </div>
@@ -130,7 +136,10 @@ export function NewsSection({ className }: NewsSectionProps) {
           const suffixToRemove = " - NoRisk Client Blog";
           let displayTitle = rawTitle;
           if (rawTitle.endsWith(suffixToRemove)) {
-            displayTitle = rawTitle.substring(0, rawTitle.length - suffixToRemove.length);
+            displayTitle = rawTitle.substring(
+              0,
+              rawTitle.length - suffixToRemove.length,
+            );
           }
 
           const imageUrl =
@@ -139,38 +148,35 @@ export function NewsSection({ className }: NewsSectionProps) {
 
           return (
             <div key={post.id} className="news-item w-full flex flex-col">
-              <p 
+              <p
                 className="font-minecraft text-base text-white/70 truncate"
-                title={displayTitle} 
+                title={displayTitle}
               >
                 {displayTitle.toLowerCase()}
               </p>
-              <ThemedSurface 
-                className="w-full flex flex-col !p-0" 
-              >
-                <div className="relative w-full pt-[56.25%]"> 
-                  <NewsCard
-                    id={`news-item-card-${post.id}`}
-                    className="absolute top-0 left-0 w-full h-full news-item-card"
-                    title={displayTitle}
-                    imageUrl={imageUrl}
-                    postUrl={postUrl}
-                    onClick={() => {
-                      if (postUrl !== "#") {
-                        openExternalUrl(postUrl).catch((err) =>
-                          console.error("Failed to open URL:", err),
-                        );
-                      }
-                      gsap.to(`#news-item-card-${post.id}`, {
-                        scale: 0.98,
-                        duration: 0.1,
-                        yoyo: true,
-                        repeat: 1,
-                      });
-                    }}
-                  />
-                </div>
-              </ThemedSurface>
+              <div className="relative w-full pt-[56.25%]">
+                <NewsCard
+                  id={`news-item-card-${post.id}`}
+                  className="absolute top-0 left-0 w-full h-full news-item-card"
+                  title={displayTitle}
+                  imageUrl={imageUrl}
+                  postUrl={postUrl}
+                  variant="flat"
+                  onClick={() => {
+                    if (postUrl !== "#") {
+                      openExternalUrl(postUrl).catch((err) =>
+                        console.error("Failed to open URL:", err),
+                      );
+                    }
+                    gsap.to(`#news-item-card-${post.id}`, {
+                      scale: 0.98,
+                      duration: 0.1,
+                      yoyo: true,
+                      repeat: 1,
+                    });
+                  }}
+                />
+              </div>
             </div>
           );
         })}
@@ -191,13 +197,11 @@ export function NewsSection({ className }: NewsSectionProps) {
       <div className="pb-1">
         <div className="flex items-center gap-2">
           <Icon icon="pixel:newspaper-solid" className="w-7 h-7 text-white" />
-          <h2 className="text-2xl font-minecraft lowercase text-white">
-            NEWS
-          </h2>
+          <h2 className="text-2xl font-minecraft lowercase text-white">NEWS</h2>
         </div>
-        <hr 
+        <hr
           className="mt-2 border-t-2"
-          style={{ borderColor: `${accentColor.value}40` }} 
+          style={{ borderColor: `${accentColor.value}40` }}
         />
       </div>
       <div className="flex-1 overflow-y-auto no-scrollbar">

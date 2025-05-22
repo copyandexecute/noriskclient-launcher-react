@@ -396,7 +396,7 @@ export function LaunchButton({
     }
     // Removed the condition that kept the button red on profileState.error
     // Now, if not isLaunching, it will always be default color.
-    return "default";
+    return "3d";
   };
 
   return (
@@ -427,7 +427,7 @@ export function LaunchButton({
               <Icon icon="solar:alt-arrow-down-bold" width="24" height="24" />
             }
             variant={
-              getButtonVariant() === "destructive" ? "destructive" : "default"
+              getButtonVariant() === "destructive" ? "destructive" : "3d"
             }
             aria-label="Select version"
           />

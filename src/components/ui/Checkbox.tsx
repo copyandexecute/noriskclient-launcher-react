@@ -12,7 +12,7 @@ export interface CheckboxProps
   label?: string;
   description?: string;
   customSize?: "sm" | "md" | "lg";
-  variant?: "default" | "flat";
+  variant?: "default" | "flat" | "3d";
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
@@ -54,42 +54,16 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           },
         );
       }
-    }, []);
+    }, [isBackgroundAnimationEnabled]);
 
     const handleMouseEnter = () => {
       if (props.disabled) return;
       setIsHovered(true);
-
-      if (
-        checkboxRef.current &&
-        isBackgroundAnimationEnabled &&
-        variant !== "flat"
-      ) {
-        gsap.to(checkboxRef.current, {
-          y: -2,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.25), 0 6px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseLeave = () => {
       if (props.disabled) return;
       setIsHovered(false);
-
-      if (
-        checkboxRef.current &&
-        isBackgroundAnimationEnabled &&
-        variant !== "flat"
-      ) {
-        gsap.to(checkboxRef.current, {
-          y: 0,
-          boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,12 +89,42 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       }
     };
 
-    // Get border classes based on variant
     const getBorderClasses = () => {
-      if (variant === "flat") {
-        return "border border-b-2";
+      if (variant === "3d") {
+        return "border-2 border-b-3";
       }
-      return "border-2 border-b-3";
+      return "border border-b-2";
+    };
+
+    const getBackgroundColor = () => {
+      if (props.checked) {
+        return `${accentColor.value}${isHovered ? "90" : "80"}`;
+      }
+
+      return isHovered ? `${accentColor.value}25` : `${accentColor.value}15`;
+    };
+
+    const getBorderColor = () => {
+      if (props.checked) {
+        return accentColor.value;
+      }
+
+      return isHovered ? `${accentColor.value}50` : `${accentColor.value}40`;
+    };
+
+    const getBorderBottomColor = () => {
+      if (props.checked) {
+        return accentColor.dark;
+      }
+
+      return accentColor.value;
+    };
+
+    const getBoxShadow = () => {
+      if (variant === "3d") {
+        return `0 2px 0 rgba(0,0,0,0.2)`;
+      }
+      return "none";
     };
 
     return (
@@ -151,20 +155,14 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
               "overflow-hidden",
             )}
             style={{
-              backgroundColor: props.checked
-                ? `${accentColor.value}${isHovered ? "90" : "80"}`
-                : `${accentColor.value}${isHovered ? (variant === "flat" ? "20" : "30") : variant === "flat" ? "10" : "20"}`,
-              borderColor: props.checked
-                ? `${accentColor.value}`
-                : `${accentColor.value}${isHovered ? (variant === "flat" ? "50" : "70") : variant === "flat" ? "40" : "60"}`,
-              borderBottomColor: props.checked
-                ? accentColor.dark
-                : `${accentColor.value}${isHovered ? (variant === "flat" ? "70" : "90") : variant === "flat" ? "60" : "80"}`,
-              boxShadow:
-                variant === "flat"
-                  ? "none"
-                  : `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-              transform: variant === "flat" ? "none" : "translateY(0)",
+              backgroundColor: getBackgroundColor(),
+              borderColor: getBorderColor(),
+              borderBottomColor: getBorderBottomColor(),
+              boxShadow: getBoxShadow(),
+              filter:
+                isHovered && !props.disabled
+                  ? "brightness(1.1)"
+                  : "brightness(1)",
             }}
           >
             {props.checked && (
@@ -173,11 +171,6 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
                 className="w-4 h-4 text-white"
               />
             )}
-
-            <span
-              className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
-              style={{ opacity: isHovered ? 0.5 : 0 }}
-            />
           </div>
         </div>
 

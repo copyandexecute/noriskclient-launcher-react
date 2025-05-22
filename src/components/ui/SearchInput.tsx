@@ -17,7 +17,7 @@ interface SearchInputProps {
   loading?: boolean;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "minimal" | "filled" | "themed-surface" | "flat";
+  variant?: "default" | "minimal" | "filled" | "themed-surface" | "flat" | "3d";
 }
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
@@ -49,7 +49,6 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       (state) => state.isBackgroundAnimationEnabled,
     );
 
-    // Merge refs
     const mergedRef = (node: HTMLInputElement) => {
       if (ref) {
         if (typeof ref === "function") {
@@ -114,7 +113,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           scale: 0.95,
@@ -146,7 +145,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
@@ -163,7 +162,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           scale: 0.95,
@@ -180,7 +179,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           scale: 1,
@@ -197,7 +196,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)`,
@@ -214,7 +213,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       if (
         containerRef.current &&
         isBackgroundAnimationEnabled &&
-        variant !== "flat"
+        variant === "3d"
       ) {
         gsap.to(containerRef.current, {
           boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
@@ -278,8 +277,8 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
     const colors = getVariantColors();
 
     const getBackgroundColor = () => {
-      if (variant === "flat" || variant === "minimal") {
-        return variant === "minimal" ? "transparent" : `${colors.main}30`;
+      if (variant === "minimal") {
+        return "transparent";
       }
 
       const baseOpacity = isHovered || isFocused ? "50" : "30";
@@ -288,7 +287,6 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
 
     const getBorderColor = () => {
       if (variant === "minimal") return "transparent";
-      if (variant === "flat") return `${colors.main}80`;
 
       return isHovered || isFocused ? `${colors.light}` : `${colors.main}80`;
     };
@@ -296,13 +294,13 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
     const getBorderClasses = () => {
       if (variant === "minimal")
         return "border-b-2 border-white/30 rounded-none";
-      if (variant === "flat") return "border border-b-2 rounded-md";
       if (variant === "filled") return "border-none rounded-md";
-      return "border-2 border-b-4 rounded-md";
+      if (variant === "3d") return "border-2 border-b-4 rounded-md";
+      return "border border-b-2 rounded-md";
     };
 
     const getBoxShadow = () => {
-      if (variant === "minimal" || variant === "flat" || variant === "filled")
+      if (variant === "minimal" || variant === "filled" || variant !== "3d")
         return "none";
 
       return isHovered || isFocused
@@ -312,20 +310,18 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
 
     const standardInputContent = (
       <>
-        {variant !== "minimal" &&
-          variant !== "flat" &&
-          variant !== "filled" && (
-            <span
-              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
-              style={{
-                backgroundColor:
-                  isHovered || isFocused
-                    ? `${colors.light}`
-                    : `${colors.light}80`,
-                opacity: isHovered || isFocused ? 1 : 0.8,
-              }}
-            />
-          )}
+        {variant === "3d" && (
+          <span
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
+            style={{
+              backgroundColor:
+                isHovered || isFocused
+                  ? `${colors.light}`
+                  : `${colors.light}80`,
+              opacity: isHovered || isFocused ? 1 : 0.8,
+            }}
+          />
+        )}
 
         {ripples.map((ripple) => (
           <span
@@ -461,6 +457,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       );
     }
 
+    // Standard variants
     return (
       <div
         ref={containerRef}

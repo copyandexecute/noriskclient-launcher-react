@@ -4,23 +4,26 @@ import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 
 interface CurrentAccountDisplayProps {
   onClick?: () => void;
   className?: string;
   compact?: boolean;
+  variant?: "default" | "flat";
 }
 
 export function CurrentAccountDisplay({
   onClick,
   className,
   compact = false,
+  variant = "flat",
 }: CurrentAccountDisplayProps) {
   const { activeAccount } = useMinecraftAuthStore();
   const accentColor = useThemeStore((state) => state.accentColor);
   const buttonRef = useRef<HTMLDivElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     if (buttonRef.current) {
@@ -37,6 +40,62 @@ export function CurrentAccountDisplay({
     }
   }, []);
 
+  // Get border classes based on variant
+  const getBorderClasses = () => {
+    if (variant === "flat") {
+      return "border border-b-2";
+    }
+    return "border-2 border-b-4";
+  };
+
+  // Get box shadow based on variant
+  const getBoxShadow = () => {
+    if (variant === "flat") {
+      return "none";
+    }
+    return `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
+  };
+
+  // Get hover box shadow based on variant
+  const getHoverBoxShadow = () => {
+    if (variant === "flat") {
+      return "none";
+    }
+    return "0 10px 0 rgba(0,0,0,0.25), 0 12px 20px rgba(0,0,0,0.4)";
+  };
+
+  // Get active box shadow based on variant
+  const getActiveBoxShadow = () => {
+    if (variant === "flat") {
+      return "none";
+    }
+    return "0 2px 0 rgba(0,0,0,0.2), 0 3px 5px rgba(0,0,0,0.3)";
+  };
+
+  // Get hover transform based on variant
+  const getHoverTransform = () => {
+    if (variant === "flat") {
+      return "";
+    }
+    return "hover:translate-y-[-2px]";
+  };
+
+  // Get active transform based on variant
+  const getActiveTransform = () => {
+    if (variant === "flat") {
+      return "";
+    }
+    return "active:translate-y-[2px] active:border-b-2";
+  };
+
+  // Get border bottom color based on variant and hover state
+  const getBorderBottomColor = () => {
+    if (variant === "flat") {
+      return isHovered ? accentColor.hoverValue : accentColor.value;
+    }
+    return accentColor.value;
+  };
+
   if (!activeAccount) {
     return (
       <div
@@ -46,31 +105,39 @@ export function CurrentAccountDisplay({
           "rounded-md text-white tracking-wider",
           "flex items-center gap-3 px-4 py-1",
           "text-shadow-sm",
-
-          "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-
-          "hover:translate-y-[-2px] cursor-pointer",
-          "hover:shadow-[0_10px_0_rgba(0,0,0,0.25),0_12px_20px_rgba(0,0,0,0.4)]",
+          getBorderClasses(),
+          variant !== "flat" &&
+            "shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+          "cursor-pointer",
+          getHoverTransform(),
+          variant !== "flat" && `hover:shadow-[${getHoverBoxShadow()}]`,
           "hover:brightness-110",
-
-          "active:translate-y-[2px]",
-          "active:border-b-2 active:shadow-[0_2px_0_rgba(0,0,0,0.2),0_3px_5px_rgba(0,0,0,0.3)]",
+          getActiveTransform(),
+          variant !== "flat" && `active:shadow-[${getActiveBoxShadow()}]`,
           "active:brightness-90",
-
           className,
         )}
         onClick={onClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         style={{
           backgroundColor: `${accentColor.value}30`,
           borderColor: `${accentColor.value}80`,
-          borderBottomColor: `${accentColor.value}`,
-          boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+          borderBottomColor: getBorderBottomColor(),
+          boxShadow: getBoxShadow(),
+          filter: isHovered ? "brightness(1.1)" : "brightness(1)",
         }}
       >
-        <span
-          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-          style={{ backgroundColor: `${accentColor.value}80` }}
-        />
+        {variant !== "flat" && (
+          <span
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+            style={{
+              backgroundColor: isHovered
+                ? accentColor.hoverValue
+                : `${accentColor.value}80`,
+            }}
+          />
+        )}
 
         <span className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity duration-300 bg-gradient-radial from-white/30 via-transparent to-transparent" />
 
@@ -113,31 +180,39 @@ export function CurrentAccountDisplay({
         "rounded-md text-white tracking-wider",
         "flex items-center gap-3 px-4 py-1",
         "text-shadow-sm",
-
-        "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-
-        "hover:translate-y-[-2px] cursor-pointer",
-        "hover:shadow-[0_10px_0_rgba(0,0,0,0.25),0_12px_20px_rgba(0,0,0,0.4)]",
+        getBorderClasses(),
+        variant !== "flat" &&
+          "shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
+        "cursor-pointer",
+        getHoverTransform(),
+        variant !== "flat" && `hover:shadow-[${getHoverBoxShadow()}]`,
         "hover:brightness-110",
-
-        "active:translate-y-[2px]",
-        "active:border-b-2 active:shadow-[0_2px_0_rgba(0,0,0,0.2),0_3px_5px_rgba(0,0,0,0.3)]",
+        getActiveTransform(),
+        variant !== "flat" && `active:shadow-[${getActiveBoxShadow()}]`,
         "active:brightness-90",
-
         className,
       )}
       onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         backgroundColor: `${accentColor.value}30`,
         borderColor: `${accentColor.value}80`,
-        borderBottomColor: `${accentColor.value}`,
-        boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+        borderBottomColor: getBorderBottomColor(),
+        boxShadow: getBoxShadow(),
+        filter: isHovered ? "brightness(1.1)" : "brightness(1)",
       }}
     >
-      <span
-        className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-        style={{ backgroundColor: `${accentColor.value}80` }}
-      />
+      {variant !== "flat" && (
+        <span
+          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+          style={{
+            backgroundColor: isHovered
+              ? accentColor.hoverValue
+              : `${accentColor.value}80`,
+          }}
+        />
+      )}
 
       <span className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity duration-300 bg-gradient-radial from-white/30 via-transparent to-transparent" />
 
