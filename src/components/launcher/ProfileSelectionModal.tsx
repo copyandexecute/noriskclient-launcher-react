@@ -5,6 +5,8 @@ import { useVersionSelectionStore } from "../../store/version-selection-store";
 import { useProfileStore } from "../../store/profile-store";
 import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
+import { VirtuosoGrid } from "react-virtuoso";
+import React from "react";
 
 interface ProfileSelectionModalProps {
   onVersionChange: (versionId: string) => void;
@@ -27,6 +29,29 @@ export function ProfileSelectionModal({
 
   if (!isModalOpen) return null;
 
+  // eslint-disable-next-line react/display-name
+  const GridList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ children, ...props }, ref) => (
+    <div
+      ref={ref}
+      {...props}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: "1rem", // Adjust gap as needed
+        paddingRight: "0.5rem", // For scrollbar spacing if needed by custom-scrollbar
+      }}
+    >
+      {children}
+    </div>
+  ));
+
+  // eslint-disable-next-line react/display-name
+  const GridItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ children, ...props }, ref) => (
+    <div ref={ref} {...props}>
+      {children}
+    </div>
+  ));
+
   return (
     <Modal
       title={title}
@@ -47,21 +72,31 @@ export function ProfileSelectionModal({
             no profiles available
           </div>
         ) : (
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-            {profiles.map((profile) => (
-              <ProfileCard
-                key={profile.id}
-                profile={profile}
-                onClick={() => handleVersionSelect(profile.id)}
-                onEdit={() => { console.log("Edit clicked in modal for", profile.name); }}
-                onProfileCloned={() => { console.log("Cloned in modal for", profile.name); }}
-                onDelete={() => { console.log("Delete in modal for", profile.name); }}
-                onShouldExport={() => { console.log("Export in modal for", profile.name); }}
-                interactionMode="settings"
-                onSettingsNavigation={closeModal}
-              />
-            ))}
-          </div>
+          <VirtuosoGrid
+            totalCount={profiles.length}
+            style={{ height: "60vh" }} // Max height is controlled by Virtuoso
+            className="custom-scrollbar" // Apply custom scrollbar style
+            components={{
+              List: GridList,
+              Item: GridItem,
+            }}
+            itemContent={(index) => {
+              const profile = profiles[index];
+              return (
+                <ProfileCard
+                  key={profile.id}
+                  profile={profile}
+                  onClick={() => handleVersionSelect(profile.id)}
+                  onEdit={() => { console.log("Edit clicked in modal for", profile.name); }}
+                  onProfileCloned={() => { console.log("Cloned in modal for", profile.name); }}
+                  onDelete={() => { console.log("Delete in modal for", profile.name); }}
+                  onShouldExport={() => { console.log("Export in modal for", profile.name); }}
+                  interactionMode="settings"
+                  onSettingsNavigation={closeModal}
+                />
+              );
+            }}
+          />
         )}
       </div>
     </Modal>
