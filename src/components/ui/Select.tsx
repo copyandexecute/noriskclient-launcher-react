@@ -24,7 +24,7 @@ interface SelectProps {
   className?: string;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "themed-surface";
+  variant?: "default" | "themed-surface" | "flat";
 }
 
 export function Select({
@@ -45,7 +45,8 @@ export function Select({
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
   );
-  const shouldAnimate = isBackgroundAnimationEnabled && variant !== "themed-surface";
+  const shouldAnimate =
+    isBackgroundAnimationEnabled && variant !== "themed-surface";
 
   const selectedOption = options.find((option) => option.value === value);
 
@@ -67,7 +68,7 @@ export function Select({
   const handleClick = () => {
     if (disabled) return;
 
-    if (triggerRef.current && shouldAnimate) {
+    if (triggerRef.current && shouldAnimate && variant !== "flat") {
       gsap.to(triggerRef.current, {
         scale: 0.95,
         duration: 0.1,
@@ -89,7 +90,7 @@ export function Select({
     if (disabled || !shouldAnimate) return;
     setIsHovered(true);
 
-    if (triggerRef.current) {
+    if (triggerRef.current && variant !== "flat") {
       gsap.to(triggerRef.current, {
         y: -3,
         boxShadow: `0 7px 0 rgba(0,0,0,0.25), 0 9px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
@@ -103,7 +104,7 @@ export function Select({
     if (disabled || !shouldAnimate) return;
     setIsHovered(false);
 
-    if (triggerRef.current) {
+    if (triggerRef.current && variant !== "flat") {
       gsap.to(triggerRef.current, {
         y: 0,
         boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
@@ -117,7 +118,7 @@ export function Select({
     onChange(optionValue);
     setIsOpen(false);
 
-    if (triggerRef.current && shouldAnimate) {
+    if (triggerRef.current && shouldAnimate && variant !== "flat") {
       gsap.fromTo(
         triggerRef.current,
         { scale: 0.95 },
@@ -134,6 +135,14 @@ export function Select({
     sm: "h-8 text-sm",
     md: "h-[42px] text-lg",
     lg: "h-14 text-lg",
+  };
+
+  // Get border classes based on variant
+  const getBorderClasses = () => {
+    if (variant === "flat") {
+      return "border border-b-2";
+    }
+    return "border-2 border-b-4";
   };
 
   const buttonContent = (
@@ -163,17 +172,17 @@ export function Select({
           "relative",
           sizeClasses[size],
           className,
-          disabled && "opacity-60"
+          disabled && "opacity-60",
         )}
         aria-disabled={disabled}
       >
-        <div 
+        <div
           ref={triggerRef}
           onClick={disabled ? undefined : handleClick}
           className={cn(
-            "w-full h-full flex items-center justify-between px-4", 
+            "w-full h-full flex items-center justify-between px-4",
             disabled ? "cursor-not-allowed" : "cursor-pointer",
-            "font-minecraft lowercase text-white"
+            "font-minecraft lowercase text-white",
           )}
           onMouseEnter={() => !disabled && setIsHovered(true)}
           onMouseLeave={() => !disabled && setIsHovered(false)}
@@ -218,16 +227,20 @@ export function Select({
         onMouseLeave={handleMouseLeave}
         className={cn(
           "w-full flex items-center justify-between px-4 py-2 text-white font-minecraft lowercase rounded-md transition-all duration-200",
-          "border-2 border-b-4 overflow-hidden",
+          getBorderClasses(),
+          "overflow-hidden",
           disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
           sizeClasses[size],
         )}
         style={{
-          backgroundColor: `${accentColor.value}${isHovered || isOpen ? "40" : "30"}`,
-          borderColor: `${accentColor.value}${isHovered || isOpen ? "70" : "60"}`,
+          backgroundColor: `${accentColor.value}${isHovered || isOpen ? (variant === "flat" ? "25" : "40") : variant === "flat" ? "15" : "30"}`,
+          borderColor: `${accentColor.value}${isHovered || isOpen ? (variant === "flat" ? "50" : "70") : variant === "flat" ? "40" : "60"}`,
           borderBottomColor: accentColor.value,
-          boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          transform: "translateY(0)",
+          boxShadow:
+            variant === "flat"
+              ? "none"
+              : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          transform: variant === "flat" ? "none" : "translateY(0)",
           filter:
             (isHovered || isOpen) && !disabled
               ? "brightness(1.1)"
@@ -235,11 +248,13 @@ export function Select({
         }}
         disabled={disabled}
       >
-        <span
-          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-          style={{ backgroundColor: `${accentColor.value}80` }}
-        />
-        
+        {variant !== "flat" && (
+          <span
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+            style={{ backgroundColor: `${accentColor.value}80` }}
+          />
+        )}
+
         {buttonContent}
 
         <span

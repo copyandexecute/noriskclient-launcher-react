@@ -9,10 +9,11 @@ import { useThemeStore } from "../../store/useThemeStore";
 export interface TextAreaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string;
+  variant?: "default" | "flat";
 }
 
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
-  ({ className, error, ...props }, ref) => {
+  ({ className, error, variant = "default", ...props }, ref) => {
     const [isFocused, setIsFocused] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -38,7 +39,11 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
 
     const handleFocus = () => {
       setIsFocused(true);
-      if (containerRef.current && isBackgroundAnimationEnabled) {
+      if (
+        containerRef.current &&
+        isBackgroundAnimationEnabled &&
+        variant !== "flat"
+      ) {
         gsap.to(containerRef.current, {
           y: -5,
           boxShadow: error
@@ -52,7 +57,11 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
 
     const handleBlur = () => {
       setIsFocused(false);
-      if (containerRef.current && isBackgroundAnimationEnabled) {
+      if (
+        containerRef.current &&
+        isBackgroundAnimationEnabled &&
+        variant !== "flat"
+      ) {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -68,7 +77,12 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       if (props.disabled) return;
       setIsHovered(true);
 
-      if (!isFocused && containerRef.current && isBackgroundAnimationEnabled) {
+      if (
+        !isFocused &&
+        containerRef.current &&
+        isBackgroundAnimationEnabled &&
+        variant !== "flat"
+      ) {
         gsap.to(containerRef.current, {
           y: -3,
           boxShadow: error
@@ -84,7 +98,12 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       if (props.disabled) return;
       setIsHovered(false);
 
-      if (!isFocused && containerRef.current && isBackgroundAnimationEnabled) {
+      if (
+        !isFocused &&
+        containerRef.current &&
+        isBackgroundAnimationEnabled &&
+        variant !== "flat"
+      ) {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -96,25 +115,33 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       }
     };
 
+    // Get border classes based on variant
+    const getBorderClasses = () => {
+      if (variant === "flat") {
+        return "border border-b-2";
+      }
+      return "border-2 border-b-4";
+    };
+
     const staticBoxShadow = error
       ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
       : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`;
 
-    let currentBoxShadow = staticBoxShadow;
-    if (isBackgroundAnimationEnabled) {
+    let currentBoxShadow = variant === "flat" ? "none" : staticBoxShadow;
+    if (isBackgroundAnimationEnabled && variant !== "flat") {
       if (isFocused) {
-        currentBoxShadow = error 
+        currentBoxShadow = error
           ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
           : `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
       } else if (isHovered) {
-        currentBoxShadow = error 
+        currentBoxShadow = error
           ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
           : `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`;
       }
     }
 
     let currentTransform = "translateY(0)";
-    if (isBackgroundAnimationEnabled) {
+    if (isBackgroundAnimationEnabled && variant !== "flat") {
       if (isFocused) {
         currentTransform = "translateY(-5px)";
       } else if (isHovered) {
@@ -128,16 +155,17 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
           ref={containerRef}
           className={cn(
             "relative rounded-md transition-all duration-200",
-            "border-2 border-b-4 shadow-md",
+            getBorderClasses(),
+            variant !== "flat" && "shadow-md",
             error ? "border-red-500" : "",
             props.disabled ? "opacity-50 cursor-not-allowed" : "",
             className,
           )}
           style={{
-            backgroundColor: `${accentColor.value}30`,
+            backgroundColor: `${accentColor.value}${variant === "flat" ? "15" : "30"}`,
             borderColor: error
               ? "rgba(239, 68, 68, 0.6)"
-              : `${accentColor.value}60`,
+              : `${accentColor.value}${variant === "flat" ? "40" : "60"}`,
             borderBottomColor: error ? "rgb(185, 28, 28)" : accentColor.value,
             boxShadow: currentBoxShadow,
             transform: currentTransform,
@@ -145,14 +173,16 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{
-              backgroundColor: error
-                ? "rgba(239, 68, 68, 0.8)"
-                : `${accentColor.value}80`,
-            }}
-          />
+          {variant !== "flat" && (
+            <span
+              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+              style={{
+                backgroundColor: error
+                  ? "rgba(239, 68, 68, 0.8)"
+                  : `${accentColor.value}80`,
+              }}
+            />
+          )}
 
           <textarea
             ref={ref}

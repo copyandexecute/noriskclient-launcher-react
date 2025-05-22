@@ -12,10 +12,21 @@ export interface CheckboxProps
   label?: string;
   description?: string;
   customSize?: "sm" | "md" | "lg";
+  variant?: "default" | "flat";
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
-  ({ className, label, description, customSize = "md", ...props }, ref) => {
+  (
+    {
+      className,
+      label,
+      description,
+      customSize = "md",
+      variant = "default",
+      ...props
+    },
+    ref,
+  ) => {
     const accentColor = useThemeStore((state) => state.accentColor);
     const isBackgroundAnimationEnabled = useThemeStore(
       (state) => state.isBackgroundAnimationEnabled,
@@ -49,7 +60,11 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       if (props.disabled) return;
       setIsHovered(true);
 
-      if (checkboxRef.current && isBackgroundAnimationEnabled) {
+      if (
+        checkboxRef.current &&
+        isBackgroundAnimationEnabled &&
+        variant !== "flat"
+      ) {
         gsap.to(checkboxRef.current, {
           y: -2,
           boxShadow: `0 4px 0 rgba(0,0,0,0.25), 0 6px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
@@ -63,7 +78,11 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       if (props.disabled) return;
       setIsHovered(false);
 
-      if (checkboxRef.current && isBackgroundAnimationEnabled) {
+      if (
+        checkboxRef.current &&
+        isBackgroundAnimationEnabled &&
+        variant !== "flat"
+      ) {
         gsap.to(checkboxRef.current, {
           y: 0,
           boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
@@ -96,6 +115,14 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       }
     };
 
+    // Get border classes based on variant
+    const getBorderClasses = () => {
+      if (variant === "flat") {
+        return "border border-b-2";
+      }
+      return "border-2 border-b-3";
+    };
+
     return (
       <label
         ref={labelRef}
@@ -119,21 +146,25 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             ref={checkboxRef}
             className={cn(
               "w-6 h-6 rounded-sm transition-all duration-200",
-              "border-2 border-b-3 flex items-center justify-center",
+              getBorderClasses(),
+              "flex items-center justify-center",
               "overflow-hidden",
             )}
             style={{
               backgroundColor: props.checked
                 ? `${accentColor.value}${isHovered ? "90" : "80"}`
-                : `${accentColor.value}${isHovered ? "30" : "20"}`,
+                : `${accentColor.value}${isHovered ? (variant === "flat" ? "20" : "30") : variant === "flat" ? "10" : "20"}`,
               borderColor: props.checked
                 ? `${accentColor.value}`
-                : `${accentColor.value}${isHovered ? "70" : "60"}`,
+                : `${accentColor.value}${isHovered ? (variant === "flat" ? "50" : "70") : variant === "flat" ? "40" : "60"}`,
               borderBottomColor: props.checked
                 ? accentColor.dark
-                : `${accentColor.value}${isHovered ? "90" : "80"}`,
-              boxShadow: `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-              transform: "translateY(0)",
+                : `${accentColor.value}${isHovered ? (variant === "flat" ? "70" : "90") : variant === "flat" ? "60" : "80"}`,
+              boxShadow:
+                variant === "flat"
+                  ? "none"
+                  : `0 2px 0 rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+              transform: variant === "flat" ? "none" : "translateY(0)",
             }}
           >
             {props.checked && (

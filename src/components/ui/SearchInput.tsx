@@ -17,7 +17,7 @@ interface SearchInputProps {
   loading?: boolean;
   disabled?: boolean;
   size?: "sm" | "md" | "lg";
-  variant?: "default" | "minimal" | "filled" | "themed-surface";
+  variant?: "default" | "minimal" | "filled" | "themed-surface" | "flat";
 }
 
 export function SearchInput({
@@ -80,7 +80,7 @@ export function SearchInput({
   const handleFocus = () => {
     if (disabled || variant === "themed-surface") return;
     setIsFocused(true);
-    if (containerRef.current) {
+    if (containerRef.current && variant !== "flat") {
       gsap.to(containerRef.current, {
         y: -5,
         boxShadow: variantStyles.focusShadow,
@@ -93,7 +93,7 @@ export function SearchInput({
   const handleBlur = () => {
     if (disabled || variant === "themed-surface") return;
     setIsFocused(false);
-    if (containerRef.current) {
+    if (containerRef.current && variant !== "flat") {
       gsap.to(containerRef.current, {
         y: 0,
         boxShadow: variantStyles.shadow,
@@ -106,7 +106,7 @@ export function SearchInput({
   const handleMouseEnter = () => {
     if (disabled || variant === "themed-surface") return;
     setIsHovered(true);
-    if (!isFocused && containerRef.current) {
+    if (!isFocused && containerRef.current && variant !== "flat") {
       gsap.to(containerRef.current, {
         y: -3,
         boxShadow: variantStyles.hoverShadow,
@@ -119,7 +119,7 @@ export function SearchInput({
   const handleMouseLeave = () => {
     if (disabled || variant === "themed-surface") return;
     setIsHovered(false);
-    if (!isFocused && containerRef.current) {
+    if (!isFocused && containerRef.current && variant !== "flat") {
       gsap.to(containerRef.current, {
         y: 0,
         boxShadow: variantStyles.shadow,
@@ -172,6 +172,18 @@ export function SearchInput({
           containerTransform: "translateY(0)",
           applyTopSpan: false,
         };
+      case "flat":
+        return {
+          bg: `${accentColor.value}15`,
+          borderClass: "border border-b-2 rounded-md",
+          borderColorStyle: `${accentColor.value}40`,
+          borderBottomColorStyle: `${accentColor.value}60`,
+          shadow: "shadow-none",
+          hoverShadow: "shadow-none",
+          focusShadow: "shadow-none",
+          containerTransform: "translateY(0)",
+          applyTopSpan: false,
+        };
       case "themed-surface":
         return {
           bg: "transparent",
@@ -198,7 +210,11 @@ export function SearchInput({
           shadow: currentShadow,
           hoverShadow: `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
           focusShadow: `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
-          containerTransform: isFocused ? "translateY(-5px)" : isHovered ? "translateY(-3px)" : "translateY(0)",
+          containerTransform: isFocused
+            ? "translateY(-5px)"
+            : isHovered
+              ? "translateY(-3px)"
+              : "translateY(0)",
           applyTopSpan: true,
         };
     }
@@ -218,7 +234,7 @@ export function SearchInput({
         className={cn(
           "flex items-center justify-center h-full text-white",
           sizeConfig[size].padding,
-          variant === "themed-surface" ? "" : "w-10"
+          variant === "themed-surface" ? "" : "w-10",
         )}
       >
         {loading ? (
@@ -243,7 +259,9 @@ export function SearchInput({
           "flex-1 h-full bg-transparent border-none outline-none text-white font-minecraft-ten placeholder:text-white/50",
           sizeConfig[size].text,
           sizeConfig[size].padding.replace("px-", "pr-"),
-          variant === "themed-surface" ? "pl-0" : sizeConfig[size].padding.replace("px-", "pl-"),
+          variant === "themed-surface"
+            ? "pl-0"
+            : sizeConfig[size].padding.replace("px-", "pl-"),
         )}
         onFocus={handleFocus}
         onBlur={handleBlur}
@@ -277,7 +295,10 @@ export function SearchInput({
           aria-label="Search"
         >
           {loading ? (
-            <Icon icon="lucide:loader" className={cn("animate-spin", sizeConfig[size].icon)} />
+            <Icon
+              icon="lucide:loader"
+              className={cn("animate-spin", sizeConfig[size].icon)}
+            />
           ) : (
             <Icon icon="lucide:search" className={sizeConfig[size].icon} />
           )}
@@ -288,11 +309,11 @@ export function SearchInput({
 
   if (variant === "themed-surface") {
     return (
-      <ThemedSurface 
-        className={cn(sizeConfig[size].surfacePadding, className)}
-      >
-        <div className={cn("flex items-center w-full", sizeConfig[size].container)}>
-         {inputContent}
+      <ThemedSurface className={cn(sizeConfig[size].surfacePadding, className)}>
+        <div
+          className={cn("flex items-center w-full", sizeConfig[size].container)}
+        >
+          {inputContent}
         </div>
       </ThemedSurface>
     );
@@ -306,7 +327,7 @@ export function SearchInput({
         variantStyles.borderClass,
         sizeConfig[size].container,
         disabled && "opacity-50 cursor-not-allowed",
-        className
+        className,
       )}
       style={{
         backgroundColor: variantStyles.bg,
