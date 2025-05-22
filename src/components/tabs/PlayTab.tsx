@@ -22,7 +22,13 @@ export function PlayTab() {
   } = useProfileStore();
 
   const { activeAccount } = useMinecraftAuthStore();
-  const { isBackgroundAnimationEnabled, toggleBackgroundAnimation, accentColor } = useThemeStore();
+  const { 
+    isBackgroundAnimationEnabled,
+    toggleBackgroundAnimation,
+    staticBackground,
+    toggleStaticBackground,
+    accentColor 
+  } = useThemeStore();
   const { currentEffect } = useBackgroundEffectStore();
 
   useEffect(() => {
@@ -52,7 +58,7 @@ export function PlayTab() {
         {currentEffect === BACKGROUND_EFFECTS.RETRO_GRID && (
           <RetroGridEffect
             renderMode="both"
-            isAnimationEnabled={isBackgroundAnimationEnabled}
+            isAnimationEnabled={!staticBackground}
             customGridLineColor={`${accentColor.value}80`}
           />
         )}
@@ -81,8 +87,11 @@ export function PlayTab() {
       <div className="absolute bottom-4 left-4 z-20">
         <Checkbox
           label="Animation"
-          checked={isBackgroundAnimationEnabled}
-          onChange={toggleBackgroundAnimation}
+          checked={!staticBackground}
+          onChange={() => {
+            toggleStaticBackground();
+            toggleBackgroundAnimation();
+          }}
           customSize="sm"
         />
       </div>
