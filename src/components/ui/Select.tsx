@@ -39,7 +39,12 @@ export function Select({
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const triggerRef = useRef<any>(null);
+  const [isPressed, setIsPressed] = useState(false);
+  const [ripples, setRipples] = useState<
+    { x: number; y: number; size: number; id: number }[]
+  >([]);
+  const rippleCounter = useRef(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
@@ -65,35 +70,88 @@ export function Select({
     }
   }, [shouldAnimate]);
 
-  const handleClick = () => {
+  const handleRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled) return;
 
-    if (triggerRef.current && shouldAnimate && variant !== "flat") {
+    const button = triggerRef.current;
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const size = Math.max(rect.width, rect.height) * 2.5;
+
+    const newRipple = {
+      x,
+      y,
+      size,
+      id: rippleCounter.current++,
+    };
+
+    setRipples((prev) => [...prev, newRipple]);
+
+    setTimeout(() => {
+      setRipples((prev) => prev.filter((ripple) => ripple.id !== newRipple.id));
+    }, 850);
+
+    handleClick();
+  };
+
+  const handleClick = () => {
+    if (disabled) return;
+    setIsOpen(!isOpen);
+
+    if (triggerRef.current && shouldAnimate) {
       gsap.to(triggerRef.current, {
         scale: 0.95,
         duration: 0.1,
         ease: "power2.out",
         onComplete: () => {
-          gsap.to(triggerRef.current, {
-            scale: 1,
-            duration: 0.2,
-            ease: "elastic.out(1.2, 0.4)",
-          });
+          if (triggerRef.current) {
+            gsap.to(triggerRef.current, {
+              scale: 1,
+              duration: 0.2,
+              ease: "elastic.out(1.2, 0.4)",
+            });
+          }
         },
       });
     }
+  };
 
-    setIsOpen(!isOpen);
+  const handleMouseDown = () => {
+    if (disabled) return;
+    setIsPressed(true);
+
+    if (triggerRef.current && shouldAnimate) {
+      gsap.to(triggerRef.current, {
+        scale: 0.95,
+        duration: 0.1,
+        ease: "power2.out",
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (disabled) return;
+    setIsPressed(false);
+
+    if (triggerRef.current && shouldAnimate) {
+      gsap.to(triggerRef.current, {
+        scale: 1,
+        duration: 0.2,
+        ease: "elastic.out(1.2, 0.4)",
+      });
+    }
   };
 
   const handleMouseEnter = () => {
-    if (disabled || !shouldAnimate) return;
+    if (disabled) return;
     setIsHovered(true);
 
-    if (triggerRef.current && variant !== "flat") {
+    if (triggerRef.current && shouldAnimate && variant !== "flat") {
       gsap.to(triggerRef.current, {
-        y: -3,
-        boxShadow: `0 7px 0 rgba(0,0,0,0.25), 0 9px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+        boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)`,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -101,13 +159,13 @@ export function Select({
   };
 
   const handleMouseLeave = () => {
-    if (disabled || !shouldAnimate) return;
+    if (disabled) return;
     setIsHovered(false);
+    if (isPressed) handleMouseUp();
 
-    if (triggerRef.current && variant !== "flat") {
+    if (triggerRef.current && shouldAnimate && variant !== "flat") {
       gsap.to(triggerRef.current, {
-        y: 0,
-        boxShadow: `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+        boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
         duration: 0.2,
         ease: "power2.out",
       });
@@ -118,7 +176,7 @@ export function Select({
     onChange(optionValue);
     setIsOpen(false);
 
-    if (triggerRef.current && shouldAnimate && variant !== "flat") {
+    if (triggerRef.current && shouldAnimate) {
       gsap.fromTo(
         triggerRef.current,
         { scale: 0.95 },
@@ -131,23 +189,73 @@ export function Select({
     }
   };
 
-  const sizeClasses = {
-    sm: "h-8 text-sm",
-    md: "h-[42px] text-lg",
-    lg: "h-14 text-lg",
+  const sizeStyles = {
+    sm: {
+      container: "h-[42px]",
+      padding: "py-2 px-6",
+      text: "text-xl",
+      icon: "w-5 h-5",
+    },
+    md: {
+      container: "h-[50px]",
+      padding: "py-2.5 px-8",
+      text: "text-2xl",
+      icon: "w-6 h-6",
+    },
+    lg: {
+      container: "h-[58px]",
+      padding: "py-3 px-10",
+      text: "text-3xl",
+      icon: "w-7 h-7",
+    },
   };
 
-  // Get border classes based on variant
-  const getBorderClasses = () => {
+  const getVariantColors = () => {
+    return {
+      main: accentColor.value,
+      light: accentColor.hoverValue,
+      dark: accentColor.value,
+      text: "#ffffff",
+    };
+  };
+
+  const colors = getVariantColors();
+
+  const getBackgroundColor = () => {
     if (variant === "flat") {
-      return "border border-b-2";
+      return `${colors.main}30`;
     }
-    return "border-2 border-b-4";
+
+    const baseOpacity = isHovered || isOpen ? "50" : "30";
+    return `${colors.main}${baseOpacity}`;
+  };
+
+  const getBorderColor = () => {
+    if (variant === "flat") return `${colors.main}80`;
+    return isHovered || isOpen ? `${colors.light}` : `${colors.main}80`;
+  };
+
+  const getBorderClasses = () => {
+    if (variant === "flat") return "border border-b-2 rounded-md";
+    return "border-2 border-b-4 rounded-md";
+  };
+
+  const getBoxShadow = () => {
+    if (variant === "flat") return "none";
+
+    return isHovered || isOpen
+      ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
+      : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`;
   };
 
   const buttonContent = (
     <>
-      <div className="flex items-center gap-2 truncate">
+      <div
+        className="flex items-center gap-2 truncate transition-transform duration-200"
+        style={{
+          transform: isHovered && !disabled ? "scale(1.05)" : "scale(1)",
+        }}
+      >
         {selectedOption?.icon && (
           <span className="flex-shrink-0">{selectedOption.icon}</span>
         )}
@@ -168,21 +276,19 @@ export function Select({
   if (variant === "themed-surface") {
     return (
       <ThemedSurface
-        className={cn(
-          "relative",
-          sizeClasses[size],
-          className,
-          disabled && "opacity-60",
-        )}
+        className={cn("relative w-full", className)}
         aria-disabled={disabled}
       >
         <div
-          ref={triggerRef}
+          ref={containerRef}
           onClick={disabled ? undefined : handleClick}
           className={cn(
-            "w-full h-full flex items-center justify-between px-4",
+            "w-full h-full flex items-center justify-between",
             disabled ? "cursor-not-allowed" : "cursor-pointer",
             "font-minecraft lowercase text-white",
+            sizeStyles[size].container,
+            sizeStyles[size].padding,
+            sizeStyles[size].text,
           )}
           onMouseEnter={() => !disabled && setIsHovered(true)}
           onMouseLeave={() => !disabled && setIsHovered(false)}
@@ -222,25 +328,29 @@ export function Select({
       <button
         ref={triggerRef}
         type="button"
-        onClick={handleClick}
+        onClick={handleRipple}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={cn(
-          "w-full flex items-center justify-between px-4 py-2 text-white font-minecraft lowercase rounded-md transition-all duration-200",
+          "font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-200",
+          "text-white tracking-wider lowercase rounded-md",
+          "flex items-center justify-between w-full",
+          "text-shadow-sm",
           getBorderClasses(),
-          "overflow-hidden",
+          "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
           disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-          sizeClasses[size],
+          sizeStyles[size].container,
+          sizeStyles[size].padding,
+          sizeStyles[size].text,
+          className,
         )}
         style={{
-          backgroundColor: `${accentColor.value}${isHovered || isOpen ? (variant === "flat" ? "25" : "40") : variant === "flat" ? "15" : "30"}`,
-          borderColor: `${accentColor.value}${isHovered || isOpen ? (variant === "flat" ? "50" : "70") : variant === "flat" ? "40" : "60"}`,
-          borderBottomColor: accentColor.value,
-          boxShadow:
-            variant === "flat"
-              ? "none"
-              : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          transform: variant === "flat" ? "none" : "translateY(0)",
+          backgroundColor: getBackgroundColor(),
+          borderColor: getBorderColor(),
+          borderBottomColor: isHovered || isOpen ? colors.light : colors.dark,
+          boxShadow: getBoxShadow(),
           filter:
             (isHovered || isOpen) && !disabled
               ? "brightness(1.1)"
@@ -250,17 +360,29 @@ export function Select({
       >
         {variant !== "flat" && (
           <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{ backgroundColor: `${accentColor.value}80` }}
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
+            style={{
+              backgroundColor:
+                isHovered || isOpen ? `${colors.light}` : `${colors.light}80`,
+              opacity: isHovered || isOpen ? 1 : 0.8,
+            }}
           />
         )}
 
-        {buttonContent}
+        {ripples.map((ripple) => (
+          <span
+            key={ripple.id}
+            className="absolute rounded-full pointer-events-none bg-white/30 animate-ripple"
+            style={{
+              left: ripple.x - ripple.size / 2,
+              top: ripple.y - ripple.size / 2,
+              width: ripple.size,
+              height: ripple.size,
+            }}
+          />
+        ))}
 
-        <span
-          className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
-          style={{ opacity: isHovered || isOpen ? 0.5 : 0 }}
-        />
+        {buttonContent}
       </button>
 
       <Dropdown

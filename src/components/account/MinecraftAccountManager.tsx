@@ -9,7 +9,6 @@ import type { MinecraftAccount } from "../../types/minecraft";
 import { DropdownHeader } from "../ui/dropdown/DropdownHeader";
 import { DropdownFooter } from "../ui/dropdown/DropdownFooter";
 import { DropdownDivider } from "../ui/dropdown/DropdownDivider";
-import { Label } from "../ui/Label";
 import { StatusMessage } from "../ui/StatusMessage";
 import { useRef, useState } from "react";
 import { gsap } from "gsap";
@@ -240,7 +239,14 @@ function AccountItem({
     : null;
 
   const handleAccountClick = () => {
-    if (account.active || isLoading || isActivating || isRemoving || !itemRef.current) return;
+    if (
+      account.active ||
+      isLoading ||
+      isActivating ||
+      isRemoving ||
+      !itemRef.current
+    )
+      return;
 
     setIsActivating(true);
     gsap.to(itemRef.current, {
@@ -285,7 +291,9 @@ function AccountItem({
       className={`flex items-center justify-between rounded-md ${
         account.active ? "bg-white/10" : "bg-black/40 hover:bg-white/5"
       } border border-white/10 hover:border-white/20 transition-colors overflow-hidden ${
-        !account.active && !effectiveIsLoading ? "cursor-pointer" : "cursor-default"
+        !account.active && !effectiveIsLoading
+          ? "cursor-pointer"
+          : "cursor-default"
       } ${isActivating ? "opacity-75" : ""}`}
       onClick={!account.active ? handleAccountClick : undefined}
     >
@@ -331,13 +339,16 @@ function AccountItem({
       <div className="flex items-center gap-1 flex-shrink-0 p-1">
         {isDropdownItem ? (
           <IconButton
-            colorScheme="ghost"
+            variant="ghost"
             onClick={handleRemoveClick}
             disabled={effectiveIsLoading}
             shadowDepth="short"
             icon={
               isRemoving ? (
-                <Icon icon="solar:spinner-bold" className="w-3 h-3 animate-spin" />
+                <Icon
+                  icon="solar:spinner-bold"
+                  className="w-3 h-3 animate-spin"
+                />
               ) : (
                 <Icon icon="solar:trash-bin-trash-bold" className="w-3 h-3" />
               )

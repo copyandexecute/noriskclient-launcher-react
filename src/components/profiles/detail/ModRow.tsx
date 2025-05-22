@@ -11,7 +11,6 @@ import { useThemeStore } from "../../../store/useThemeStore";
 import { IconButton } from "../../ui/buttons/IconButton";
 import { Checkbox } from "../../ui/Checkbox";
 import { Button } from "../../ui/buttons/Button";
-import { gsap } from "gsap";
 
 interface ModRowProps {
   mod: Mod;
@@ -45,8 +44,6 @@ export function ModRow({
   const [isUpdating, setIsUpdating] = useState(false);
   const accentColor = useThemeStore((state) => state.accentColor);
   const rowRef = useRef<HTMLDivElement>(null);
-
-
 
   useEffect(() => {
     const fetchModIcon = async () => {
@@ -212,7 +209,7 @@ export function ModRow({
       <div className="w-24 flex items-center justify-center">
         <IconButton
           onClick={handleDelete}
-          colorScheme={isConfirmingDelete ? "destructive" : "secondary"}
+          variant={isConfirmingDelete ? "destructive" : "secondary"}
           size="sm"
           icon={
             <Icon

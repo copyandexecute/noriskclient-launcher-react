@@ -3,7 +3,11 @@
 import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MinecraftProfile, TexturesData } from "../../types/minecraft";
-import type { MinecraftSkin, SkinVariant, GetStarlightSkinRenderPayload } from "../../types/localSkin";
+import type {
+  GetStarlightSkinRenderPayload,
+  MinecraftSkin,
+  SkinVariant,
+} from "../../types/localSkin";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { MinecraftSkinService } from "../../services/minecraft-skin-service";
 import { Button } from "../ui/buttons/Button";
@@ -54,11 +58,15 @@ const SkinPreview = memo(
     ) => void;
   }) => {
     const accentColor = useThemeStore((state) => state.accentColor);
-    const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
+    );
     const isSelected = selectedLocalSkin?.id === skin.id;
     const isDisabled = loading && isSelected;
 
-    const [starlightRenderUrl, setStarlightRenderUrl] = useState<string | null>(null);
+    const [starlightRenderUrl, setStarlightRenderUrl] = useState<string | null>(
+      null,
+    );
     const [isRenderLoading, setIsRenderLoading] = useState<boolean>(true);
     const [canShowSpinner, setCanShowSpinner] = useState<boolean>(false);
     const spinnerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -88,34 +96,45 @@ const SkinPreview = memo(
               render_view: "full",
               base64_skin_data: skin.base64_data,
             };
-            const localPath = await MinecraftSkinService.getStarlightSkinRender(payload);
+            const localPath =
+              await MinecraftSkinService.getStarlightSkinRender(payload);
             if (isMounted) {
               if (localPath) {
                 setStarlightRenderUrl(convertFileSrc(localPath));
               } else {
-                console.warn(`[SkinPreview] Starlight render returned empty path for ${skin.name}.`);
+                console.warn(
+                  `[SkinPreview] Starlight render returned empty path for ${skin.name}.`,
+                );
                 setStarlightRenderUrl("");
               }
               setIsRenderLoading(false);
               setCanShowSpinner(false);
-              if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
+              if (spinnerTimeoutRef.current)
+                clearTimeout(spinnerTimeoutRef.current);
             }
           } catch (error) {
-            console.error(`[SkinPreview] Failed to fetch Starlight skin render for ${skin.name}:`, error);
+            console.error(
+              `[SkinPreview] Failed to fetch Starlight skin render for ${skin.name}:`,
+              error,
+            );
             if (isMounted) {
               setStarlightRenderUrl("");
               setIsRenderLoading(false);
               setCanShowSpinner(false);
-              if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
+              if (spinnerTimeoutRef.current)
+                clearTimeout(spinnerTimeoutRef.current);
             }
           }
         } else {
           if (isMounted) {
-            console.warn(`[SkinPreview] No skin.name provided, cannot fetch Starlight render.`);
+            console.warn(
+              `[SkinPreview] No skin.name provided, cannot fetch Starlight render.`,
+            );
             setStarlightRenderUrl("");
             setIsRenderLoading(false);
             setCanShowSpinner(false);
-            if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
+            if (spinnerTimeoutRef.current)
+              clearTimeout(spinnerTimeoutRef.current);
           }
         }
       };
@@ -130,23 +149,19 @@ const SkinPreview = memo(
       };
     }, [skin.name]);
 
-    const animationStyle = isBackgroundAnimationEnabled 
-      ? { animationDelay: `${index * 0.075}s` } 
+    const animationStyle = isBackgroundAnimationEnabled
+      ? { animationDelay: `${index * 0.075}s` }
       : {};
-    const animationClasses = isBackgroundAnimationEnabled 
-      ? "animate-in fade-in duration-500 fill-mode-both" 
+    const animationClasses = isBackgroundAnimationEnabled
+      ? "animate-in fade-in duration-500 fill-mode-both"
       : "";
 
     return (
-      <div
-        key={skin.id}
-        style={animationStyle}
-        className={animationClasses}
-      >
+      <div key={skin.id} style={animationStyle} className={animationClasses}>
         <ThemedSurface
           className={cn(
             "relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group",
-            isDisabled ? "opacity-60 pointer-events-none" : ""
+            isDisabled ? "opacity-60 pointer-events-none" : "",
           )}
           alwaysActive={isSelected}
           onClick={() =>
@@ -205,7 +220,7 @@ const SkinPreview = memo(
                 title="Edit skin properties"
                 disabled={isDisabled}
                 size="xs"
-                colorScheme="secondary"
+                variant="secondary"
                 icon={<Icon icon="solar:pen-bold" className="w-4 h-4" />}
               />
             )}
@@ -219,7 +234,7 @@ const SkinPreview = memo(
                 title="Delete skin"
                 disabled={isDisabled}
                 size="xs"
-                colorScheme="destructive"
+                variant="destructive"
                 icon={
                   <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
                 }
@@ -234,13 +249,15 @@ const SkinPreview = memo(
 
 const AddSkinCard = memo(
   ({ index, onClick }: { index: number; onClick: () => void }) => {
-    const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+    const isBackgroundAnimationEnabled = useThemeStore(
+      (state) => state.isBackgroundAnimationEnabled,
+    );
 
-    const animationStyle = isBackgroundAnimationEnabled 
-      ? { animationDelay: `${index * 0.075}s` } 
+    const animationStyle = isBackgroundAnimationEnabled
+      ? { animationDelay: `${index * 0.075}s` }
       : {};
-    const animationClasses = isBackgroundAnimationEnabled 
-      ? "animate-in fade-in duration-500 fill-mode-both" 
+    const animationClasses = isBackgroundAnimationEnabled
+      ? "animate-in fade-in duration-500 fill-mode-both"
       : "";
 
     return (
@@ -463,7 +480,7 @@ const EditSkinModal = memo(
                   title="Upload Skin from file"
                   disabled={localSkinsLoading}
                   size="md"
-                  colorScheme="secondary"
+                  variant="secondary"
                   icon={<Icon icon="solar:folder-bold" className="w-5 h-5" />}
                 />
               </div>
@@ -589,15 +606,12 @@ export function SkinsTab() {
       console.log(`Loaded ${skins.length} local skins`);
 
       if (selectedSkinId) {
-        const selectedSkin = skins.find(
-          (skin) => skin.id === selectedSkinId,
-        );
+        const selectedSkin = skins.find((skin) => skin.id === selectedSkinId);
         if (selectedSkin) {
           setSelectedLocalSkin(selectedSkin);
         }
       }
       setLocalSkinsLoading(false);
-
     } catch (err) {
       console.error("Error loading local skins:", err);
       setLocalSkinsError(err instanceof Error ? err.message : String(err));
@@ -819,24 +833,19 @@ export function SkinsTab() {
       actions={addSkinButton}
     >
       <div className="space-y-8">
-        {accountLoading ? (
-          // Skeletons for accountLoading removed
-          // <div className="space-y-4">
-          //   <Skeleton
-          //     variant="text"
-          //     height={28}
-          //     width="50%"
-          //     className="mx-auto"
-          //   />
-          //   <Skeleton
-          //     variant="text"
-          //     height={20}
-          //     width="70%"
-          //     className="mx-auto"
-          //   />
-          // </div>
-          null // Or a minimal loading indicator like <p>Loading account...</p>
-        ) : accountError ? (
+        {accountLoading ? //     variant="text" //   <Skeleton // <div className="space-y-4"> // Skeletons for accountLoading removed
+        //     height={28}
+        //     width="50%"
+        //     className="mx-auto"
+        //   />
+        //   <Skeleton
+        //     variant="text"
+        //     height={20}
+        //     width="70%"
+        //     className="mx-auto"
+        //   />
+        // </div>
+        null : accountError ? ( // Or a minimal loading indicator like <p>Loading account...</p>
           <StatusMessage
             type="error"
             className="font-minecraft text-lg"
@@ -849,10 +858,8 @@ export function SkinsTab() {
         ) : (
           <>
             <div className="space-y-5 text-center">
-              {localSkinsLoading && !editingSkin ? (
-                // renderSkeletonGrid() call removed
-                null // Or a minimal loading indicator like <p>Loading skins...</p>
-              ) : localSkinsError && !editingSkin ? (
+              {localSkinsLoading && !editingSkin ? null : localSkinsError && // renderSkeletonGrid() call removed
+                !editingSkin ? ( // Or a minimal loading indicator like <p>Loading skins...</p>
                 <StatusMessage
                   type="error"
                   className="font-minecraft text-lg"

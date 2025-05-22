@@ -16,6 +16,7 @@ export interface InputProps
   size?: "sm" | "md" | "lg";
   variant?: "default" | "flat";
 }
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
@@ -58,8 +59,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         gsap.to(containerRef.current, {
           y: -5,
           boxShadow: error
-            ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
-            : `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
+            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -74,8 +75,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
+            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -90,8 +91,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         gsap.to(containerRef.current, {
           y: -3,
           boxShadow: error
-            ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
-            : `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
+            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -106,8 +107,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
+            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -126,9 +127,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     };
 
     const sizeClasses = {
-      sm: "h-10",
-      md: "h-12",
-      lg: "h-14",
+      sm: "h-[42px]",
+      md: "h-[50px]",
+      lg: "h-[58px]",
     };
 
     const inputSizeClasses = {
@@ -137,7 +138,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       lg: "text-3xl",
     };
 
-    // Get border classes based on variant
     const getBorderClasses = () => {
       if (variant === "flat") {
         return "border border-b-2";
@@ -159,19 +159,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             className,
           )}
           style={{
-            backgroundColor: `${accentColor.value}${variant === "flat" ? "15" : "30"}`,
+            backgroundColor: `${accentColor.value}${isHovered || isFocused ? "50" : "30"}`,
             borderColor: error
               ? "rgba(239, 68, 68, 0.6)"
-              : `${accentColor.value}${variant === "flat" ? "40" : "60"}`,
-            borderBottomColor: error ? "rgb(185, 28, 28)" : accentColor.value,
+              : `${accentColor.value}${isHovered || isFocused ? "90" : "80"}`,
+            borderBottomColor: error
+              ? "rgb(185, 28, 28)"
+              : isHovered || isFocused
+                ? accentColor.hoverValue
+                : accentColor.value,
             boxShadow:
               variant === "flat"
                 ? "none"
-                : isFocused
-                  ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.4)" : `${accentColor.value}40`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}`
-                  : isHovered
-                    ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.3)" : `${accentColor.value}30`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.15)" : `${accentColor.value}15`}`
-                    : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.1)" : `${accentColor.value}10`}`,
+                : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
             transform:
               variant === "flat"
                 ? "none"
@@ -180,17 +180,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                   : isHovered
                     ? "translateY(-3px)"
                     : "translateY(0)",
+            filter:
+              (isFocused || isHovered) && !props.disabled
+                ? "brightness(1.1)"
+                : "brightness(1)",
           }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           {variant !== "flat" && (
             <span
-              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
               style={{
                 backgroundColor: error
                   ? "rgba(239, 68, 68, 0.8)"
-                  : `${accentColor.value}80`,
+                  : isHovered || isFocused
+                    ? accentColor.hoverValue
+                    : `${accentColor.value}80`,
+                opacity: isHovered || isFocused ? 1 : 0.8,
               }}
             />
           )}

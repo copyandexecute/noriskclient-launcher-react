@@ -61,7 +61,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   const handleMouseEnter = () => {
     if (onClick && isBackgroundAnimationEnabled && cardRef.current) {
       gsap.to(cardRef.current, {
-        y: -5,
+        y: 0,
         boxShadow:
           variant === "flat"
             ? "none"
