@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile, ScreenshotInfo as ActualScreenshotInfo } from "../../../types/profile"; // Renamed ScreenshotInfo to ActualScreenshotInfo
 import { useThemeStore } from "../../../store/useThemeStore";
@@ -11,8 +11,10 @@ import { EmptyState } from "../../ui/EmptyState"; // Import EmptyState
 import { invoke } from "@tauri-apps/api/core"; // Import invoke
 import { convertFileSrc } from "@tauri-apps/api/core"; // Import convertFileSrc
 import { ScreenshotGridItem } from "./ScreenshotGridItem"; // Import ScreenshotGridItem
-import { Button } from "../../ui/buttons/Button"; // Import Button for pagination
-import { IconButton } from "../../ui/buttons/IconButton"; // Import IconButton
+import { VirtuosoGrid } from 'react-virtuoso'; // Added import
+import { ThemedSurface } from '../../ui/ThemedSurface'; // Added import
+import { getImagePreview as getImgPreviewServiceCall } from "../../../services/tauri-service"; // Import service
+import type { ImagePreviewPayload, ImagePreviewResponse } from "../../../types/fileSystem"; // Import types
 
 interface ScreenshotItem {
   id: string;
@@ -41,6 +43,33 @@ const sortOptions: SelectOption[] = [
 
 const ITEMS_PER_PAGE = 16; // 4 columns * 4 rows, changed from 8
 
+// Define stable components for VirtuosoGrid outside the main component
+const VirtuosoGridList = React.forwardRef<
+  HTMLDivElement,
+  { style?: React.CSSProperties; children?: React.ReactNode }
+>(({ style, children, ...props }, ref) => (
+  <div
+    ref={ref}
+    {...props}
+    style={{ ...style }}
+    className="grid grid-cols-4 gap-4 p-3"
+  >
+    {children}
+  </div>
+));
+VirtuosoGridList.displayName = 'VirtuosoGridList';
+
+const VirtuosoGridItemWrapper = ({
+  children,
+  ...props
+}: {
+  children?: React.ReactNode;
+}) => (
+  <div {...props} style={{ display: 'flex', alignItems: 'stretch' }}>
+    {children}
+  </div>
+);
+
 export function ScreenshotsTab({
   profile,
   isActive = true, // Assuming it\'s active when rendered by ProfileDetailView logic
@@ -57,7 +86,6 @@ export function ScreenshotsTab({
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [selectedScreenshot, setSelectedScreenshot] = useState<ActualScreenshotInfo | null>(null);
   const [sortOrder, setSortOrder] = useState<string>("newest");
-  const [currentPage, setCurrentPage] = useState(1);
 
   // Simulate fetching and initial data state
   const [rawScreenshots, setRawScreenshots] = useState<ActualScreenshotInfo[]>([]);
@@ -109,30 +137,6 @@ export function ScreenshotsTab({
     }
     return sorted;
   }, [rawScreenshots, sortOrder]);
-
-  const totalPages = useMemo(() => {
-    return Math.max(1, Math.ceil(sortedScreenshots.length / ITEMS_PER_PAGE));
-  }, [sortedScreenshots.length]);
-
-  const paginatedScreenshots = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return sortedScreenshots.slice(startIndex, endIndex);
-  }, [sortedScreenshots, currentPage]);
-
-  useEffect(() => {
-    setCurrentPage(1); // Reset to first page when profile or sort order changes
-  }, [profile.id, sortOrder]);
-
-  useEffect(() => {
-    // Adjust current page if it becomes invalid after data changes
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
-    } else if (totalPages === 1 && currentPage !== 1) {
-      setCurrentPage(1);
-    }
-  }, [currentPage, totalPages]);
-
 
   useEffect(() => {
     if (containerRef.current && isActive && isBackgroundAnimationEnabled && !isLoading) {
@@ -191,6 +195,70 @@ export function ScreenshotsTab({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isLightboxOpen]);
+
+  // --- Start Caching Logic ---
+  const [previewCache, setPreviewCache] = useState<Map<string, string>>(new Map());
+  const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set());
+  const [errorPreviews, setErrorPreviews] = useState<Set<string>>(new Set());
+  // --- End Caching Logic ---
+
+  // --- Memoized itemContent for VirtuosoGrid ---
+  const memoizedItemContent = useCallback((index: number) => {
+    const screenshot = sortedScreenshots[index];
+    const path = screenshot.path;
+
+    if (path && !previewCache.has(path) && !loadingPreviews.has(path) && !errorPreviews.has(path)) {
+      setLoadingPreviews(prev => new Set(prev).add(path));
+      const payload: ImagePreviewPayload = {
+        path: path,
+        width: 256,
+        height: 144, // User updated value
+        quality: 75,
+      };
+      getImgPreviewServiceCall(payload)
+        .then(response => {
+          const imageType = screenshot.filename.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+          const src = `data:image/${imageType};base64,${response.base64_image}`;
+          setPreviewCache(prev => {
+            if (prev.get(path) === src) return prev;
+            const next = new Map(prev);
+            next.set(path, src);
+            return next;
+          });
+        })
+        .catch(err => {
+          console.error(`Failed to load preview for ${path} in ScreenshotsTab:`, err);
+          setErrorPreviews(prev => new Set(prev).add(path));
+        })
+        .finally(() => {
+          setLoadingPreviews(prev => {
+            const next = new Set(prev);
+            next.delete(path);
+            return next;
+          });
+        });
+    }
+
+    return (
+      <ThemedSurface
+        key={path} 
+        className={cn(
+          "flex p-0 transition-transform duration-300 ease-out hover:scale-105 active:scale-95",
+        )}
+      >
+        <ScreenshotGridItem
+          screenshot={screenshot}
+          isBackgroundAnimationEnabled={isBackgroundAnimationEnabled}
+          itemIndex={index}
+          onItemClick={openLightbox}
+          previewSrc={previewCache.get(path) || null}
+          isLoading={loadingPreviews.has(path)}
+          hasError={errorPreviews.has(path)}
+        />
+      </ThemedSurface>
+    );
+  }, [sortedScreenshots, previewCache, loadingPreviews, errorPreviews, isBackgroundAnimationEnabled, openLightbox]);
+  // --- End Memoized itemContent ---
 
   return (
     <div
@@ -269,50 +337,15 @@ export function ScreenshotsTab({
 
         {!isLoading && !error && sortedScreenshots.length > 0 && (
           <>
-            <div className="grid grid-cols-4 gap-4 p-3 flex-grow overflow-hidden">
-              {paginatedScreenshots.map((screenshot, index) => (
-                <ScreenshotGridItem
-                  key={screenshot.path}
-                  screenshot={screenshot}
-                  accentColorValue={accentColor.value}
-                  isBackgroundAnimationEnabled={isBackgroundAnimationEnabled}
-                  animationDelay={isBackgroundAnimationEnabled ? `${index * 0.035}s` : undefined}
-                  onClick={() => openLightbox(screenshot)}
-                />
-              ))}
-            </div>
-            {totalPages > 1 && (
-              <div 
-                className="flex items-center justify-center gap-4 p-4"
-                style={{ flexShrink: 0 }}
-              >
-                <IconButton
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  colorScheme="secondary"
-                  displayVariant="ghost"
-                  size="sm"
-                  icon={<Icon icon="solar:arrow-left-bold" />}
-                  title="Previous Page"
-                >
-                  {/* Previous */}
-                </IconButton>
-                <span className="font-minecraft text-sm text-white/80">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <IconButton
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  colorScheme="secondary"
-                  displayVariant="ghost"
-                  size="sm"
-                  icon={<Icon icon="solar:arrow-right-bold" />}
-                  title="Next Page"
-                >
-                  {/* Next */}
-                </IconButton>
-              </div>
-            )}
+            <VirtuosoGrid
+              style={{ height: '100%' }} // Ensure VirtuosoGrid takes available space
+              totalCount={sortedScreenshots.length}
+              components={{
+                List: VirtuosoGridList,
+                Item: VirtuosoGridItemWrapper,
+              }}
+              itemContent={memoizedItemContent}
+            />
           </>
         )}
       </div>

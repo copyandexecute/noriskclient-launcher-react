@@ -6,6 +6,7 @@ import type { Profile } from "../../types/profile";
 import { WorldsTab } from "./detail/WorldsTab";
 import { LogsTab } from "./detail/LogsTab";
 import { BrowseTab } from "./detail/BrowseTab";
+import { ScreenshotsTab } from "./detail/ScreenshotsTab";
 import * as ProfileService from "../../services/profile-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Button } from "../ui/buttons/Button";
@@ -25,7 +26,7 @@ interface ProfileDetailViewProps {
   onEdit: () => void;
 }
 
-type MainTabType = "content" | "browse" | "worlds" | "logs" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
+type MainTabType = "content" | "browse" | "worlds" | "logs" | "screenshots" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
 type ContentSubType =
   | "modsv2"
   | "resourcepacksv2"
@@ -176,6 +177,7 @@ export function ProfileDetailView({
     // Browse tab is only for non-standard profiles
     ...(profile.is_standard_version ? [] : [{ id: "browse" as MainTabType, label: "Browse", icon: "solar:magnifer-bold" }]),
     { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+    { id: "screenshots", label: "Screenshots", icon: "solar:camera-bold" },
     { id: "logs", label: "Logs", icon: "solar:code-bold" }, // solar:file-text-bold was for standard logs, solar:code-bold for non-standard. Let's unify to solar:code-bold or pick one. Using solar:code-bold for now.
   ];
 
@@ -497,6 +499,7 @@ export function ProfileDetailView({
               />
             )}
             {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
+            {activeMainTab === "screenshots" && <ScreenshotsTab profile={currentProfile} isActive={activeMainTab === "screenshots"} />}
             {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
           </>
         </div>
