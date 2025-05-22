@@ -12,7 +12,6 @@ import { IconButton } from "../ui/./buttons/IconButton";
 import { Label } from "../ui/./Label";
 import { Dropdown } from "../ui/./dropdown/Dropdown";
 import { DropdownHeader } from "../ui/./dropdown/DropdownHeader";
-import { DropdownDivider } from "../ui/./dropdown/DropdownDivider";
 import { DropdownFooter } from "../ui/./dropdown/DropdownFooter";
 import { useThemeStore } from "../../store/useThemeStore";
 import { gsap } from "gsap";
@@ -30,7 +29,9 @@ export function RunningInstancesIndicator({
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [stoppingId, setStoppingId] = useState<string | null>(null);
   const [viewingLogsId, setViewingLogsId] = useState<string | null>(null);
-  const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
+  const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(
+    new Set(),
+  );
   const buttonRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -104,10 +105,17 @@ export function RunningInstancesIndicator({
     setStoppingId(processId);
     try {
       await ProcessService.stopProcess(processId);
-      console.log("[RunningInstancesIndicator] Process stop initiated successfully via service.");
-      setProcesses(prevProcesses => prevProcesses.filter(p => p.id !== processId));
+      console.log(
+        "[RunningInstancesIndicator] Process stop initiated successfully via service.",
+      );
+      setProcesses((prevProcesses) =>
+        prevProcesses.filter((p) => p.id !== processId),
+      );
     } catch (err) {
-      console.error(`[RunningInstancesIndicator] Failed to stop process ${processId}:`, err);
+      console.error(
+        `[RunningInstancesIndicator] Failed to stop process ${processId}:`,
+        err,
+      );
       await fetchProcesses();
     } finally {
       setStoppingId(null);
@@ -132,15 +140,20 @@ export function RunningInstancesIndicator({
 
   const handleStopAll = async () => {
     try {
-      const idsToStop = processes.map(p => p.id);
+      const idsToStop = processes.map((p) => p.id);
       for (const process of processes) {
         await ProcessService.stopProcess(process.id);
       }
       console.log("[RunningInstancesIndicator] Stop all processes initiated.");
-      setProcesses(prevProcesses => prevProcesses.filter(p => !idsToStop.includes(p.id)));
+      setProcesses((prevProcesses) =>
+        prevProcesses.filter((p) => !idsToStop.includes(p.id)),
+      );
       handleCloseDropdown();
     } catch (err) {
-      console.error(`[RunningInstancesIndicator] Failed to stop all processes:`, err);
+      console.error(
+        `[RunningInstancesIndicator] Failed to stop all processes:`,
+        err,
+      );
       await fetchProcesses();
     }
   };
@@ -245,20 +258,25 @@ export function RunningInstancesIndicator({
                       <div className="flex items-center gap-2">
                         <div
                           className="w-12 h-12 rounded-md flex items-center justify-center flex-shrink-0 overflow-hidden"
-                          style={{
-                            // backgroundColor: `${accentColor.value}30`, // Removed background
-                            // borderWidth: "2px", // Removed border
-                            // borderStyle: "solid", // Removed border
-                            // borderColor: `${accentColor.value}60`, // Removed border
-                          }}
+                          style={
+                            {
+                              // backgroundColor: `${accentColor.value}30`, // Removed background
+                              // borderWidth: "2px", // Removed border
+                              // borderStyle: "solid", // Removed border
+                              // borderColor: `${accentColor.value}60`, // Removed border
+                            }
+                          }
                         >
-                          {(process.profile_image_url && !imageLoadErrors.has(process.id)) ? (
+                          {process.profile_image_url &&
+                          !imageLoadErrors.has(process.id) ? (
                             <img
                               src={process.profile_image_url}
                               alt={process.profile_name || "Profile Icon"}
                               className="w-full h-full object-cover"
                               onError={() => {
-                                setImageLoadErrors(prev => new Set(prev).add(process.id));
+                                setImageLoadErrors((prev) =>
+                                  new Set(prev).add(process.id),
+                                );
                               }}
                             />
                           ) : (
@@ -274,14 +292,22 @@ export function RunningInstancesIndicator({
                             className="text-xl font-minecraft text-white truncate mb-0 leading-none"
                             title={process.profile_name || process.profile_id}
                           >
-                            {(process.profile_name || `Profile ${process.profile_id.substring(0, 6)}...`).toLowerCase()}
+                            {(
+                              process.profile_name ||
+                              `Profile ${process.profile_id.substring(0, 6)}...`
+                            ).toLowerCase()}
                           </p>
                           <div className="flex items-center text-lg text-white/60 font-minecraft leading-none">
                             <Icon
                               icon="solar:clock-circle-bold"
                               className="w-3.5 h-3.5 mr-1.5"
                             />
-                            <span className="font-minecraft-ten" style={{ fontSize: '8px' }}>{timeAgo(new Date(process.start_time).getTime())}</span>
+                            <span
+                              className="font-minecraft-ten"
+                              style={{ fontSize: "8px" }}
+                            >
+                              {timeAgo(new Date(process.start_time).getTime())}
+                            </span>
                             {typeof process.state === "object" &&
                               "Crashed" in process.state && (
                                 <Label
@@ -331,7 +357,7 @@ export function RunningInstancesIndicator({
                       <IconButton
                         onClick={(e) => handleStopProcess(process.id, e)}
                         disabled={stoppingId === process.id}
-                        colorScheme="destructive"
+                        variant="destructive"
                         size="xs"
                         className="h-8 w-8 p-1.5 bg-white/10 hover:bg-white/20 hover:text-red-400 ring-1 ring-red-500 focus:ring-2 focus:ring-red-500/50"
                         icon={
@@ -341,10 +367,7 @@ export function RunningInstancesIndicator({
                               className="w-4 h-4 animate-spin"
                             />
                           ) : (
-                            <Icon
-                              icon="solar:stop-bold"
-                              className="w-4 h-4"
-                            />
+                            <Icon icon="solar:stop-bold" className="w-4 h-4" />
                           )
                         }
                         aria-label="Stop Process"
@@ -368,7 +391,8 @@ export function RunningInstancesIndicator({
                     <Icon icon="solar:play-circle-bold" className="w-4 h-4" />
                   }
                 >
-                  {processes.length} instance{processes.length !== 1 ? "s" : ""} running
+                  {processes.length} instance{processes.length !== 1 ? "s" : ""}{" "}
+                  running
                 </Label>
                 <Button
                   variant="destructive"

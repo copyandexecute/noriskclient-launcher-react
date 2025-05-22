@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { LogLevel, ParsedLogLine } from "../../services/log-service";
-import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { SearchInput } from "../ui/SearchInput";
 import { Select } from "../ui/Select";
@@ -14,7 +13,7 @@ import { Checkbox } from "../ui/Checkbox";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
 import { TagBadge, type TagBadgeProps } from "../ui/TagBadge";
-import { Virtuoso } from 'react-virtuoso';
+import { Virtuoso } from "react-virtuoso";
 
 interface LogViewerDisplayProps {
   isLoading: boolean;
@@ -100,9 +99,13 @@ export function LogViewerDisplay({
   scrollToBottom,
 }: LogViewerDisplayProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
-  const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+  const isAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
-  const [frozenLogLines, setFrozenLogLines] = useState<ParsedLogLine[] | null>(null);
+  const [frozenLogLines, setFrozenLogLines] = useState<ParsedLogLine[] | null>(
+    null,
+  );
   const controlsRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
 
@@ -116,16 +119,24 @@ export function LogViewerDisplay({
     }
   }, [isAutoscrollEnabled, displayLines, frozenLogLines]);
 
-  const headerBgColor = isInsideLogWindow ? `${accentColor.value}1A` : `${accentColor.value}10`;
-  const headerBorderColor = isInsideLogWindow ? `${accentColor.value}3A` : `${accentColor.value}30`;
-  const contentBgColor = isInsideLogWindow ? `${accentColor.value}12` : `${accentColor.value}08`;
-  const contentBorderColor = isInsideLogWindow ? `${accentColor.value}2A` : `${accentColor.value}20`;
+  const headerBgColor = isInsideLogWindow
+    ? `${accentColor.value}1A`
+    : `${accentColor.value}10`;
+  const headerBorderColor = isInsideLogWindow
+    ? `${accentColor.value}3A`
+    : `${accentColor.value}30`;
+  const contentBgColor = isInsideLogWindow
+    ? `${accentColor.value}12`
+    : `${accentColor.value}08`;
+  const contentBorderColor = isInsideLogWindow
+    ? `${accentColor.value}2A`
+    : `${accentColor.value}20`;
   const footerBgColor = headerBgColor;
   const footerBorderColor = headerBorderColor;
 
   useEffect(() => {
     if (!isAnimationEnabled) return;
-    
+
     if (controlsRef.current) {
       gsap.fromTo(
         controlsRef.current,
@@ -143,7 +154,9 @@ export function LogViewerDisplay({
     }
   }, [isAnimationEnabled]);
 
-  const getLogLevelTagBadgeVariant = (level: LogLevel): TagBadgeProps['variant'] => {
+  const getLogLevelTagBadgeVariant = (
+    level: LogLevel,
+  ): TagBadgeProps["variant"] => {
     if (!levelFilters[level]) {
       return "inactive";
     }
@@ -156,14 +169,15 @@ export function LogViewerDisplay({
         return "info";
       case "DEBUG":
         return "success";
-      case "TRACE": 
+      case "TRACE":
         return "default";
       default:
         return "inactive";
     }
   };
 
-  const linesForVirtuoso = frozenLogLines !== null ? frozenLogLines : displayLines;
+  const linesForVirtuoso =
+    frozenLogLines !== null ? frozenLogLines : displayLines;
 
   if (isLoading) {
     return (
@@ -200,7 +214,12 @@ export function LogViewerDisplay({
     );
   }
 
-  if (!(isLiveLogs && parsedLogLinesCount === 0) && linesForVirtuoso.length === 0 && searchTerm === "" && Object.values(levelFilters).every(v => v)) {
+  if (
+    !(isLiveLogs && parsedLogLinesCount === 0) &&
+    linesForVirtuoso.length === 0 &&
+    searchTerm === "" &&
+    Object.values(levelFilters).every((v) => v)
+  ) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -221,7 +240,7 @@ export function LogViewerDisplay({
 
   return (
     <>
-      <div 
+      <div
         ref={controlsRef}
         className="p-3 rounded-lg border backdrop-blur-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-3"
         style={{
@@ -231,18 +250,18 @@ export function LogViewerDisplay({
       >
         <div className="flex items-center py-1 gap-1 overflow-x-auto scrollbar-hide">
           {logLevelsDefinition
-            .filter(level => level !== "TRACE")
+            .filter((level) => level !== "TRACE")
             .map((level) => (
-            <TagBadge
-              key={level}
-              onClick={() => onLevelFilterChange(level, !levelFilters[level])}
-              disabled={isLoading}
-              variant={getLogLevelTagBadgeVariant(level)}
-              size="sm"
-            >
-              {level.toLowerCase()}
-            </TagBadge>
-          ))}
+              <TagBadge
+                key={level}
+                onClick={() => onLevelFilterChange(level, !levelFilters[level])}
+                disabled={isLoading}
+                variant={getLogLevelTagBadgeVariant(level)}
+                size="sm"
+              >
+                {level.toLowerCase()}
+              </TagBadge>
+            ))}
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -257,13 +276,11 @@ export function LogViewerDisplay({
             <IconButton
               onClick={onCopyLog}
               disabled={displayLines.length === 0 || isLoading || copied}
-              colorScheme={copied ? "success" : "secondary"}
+              variant={copied ? "success" : "secondary"}
               size="sm"
               icon={
                 <Icon
-                  icon={
-                    copied ? "solar:check-circle-bold" : "solar:copy-bold"
-                  }
+                  icon={copied ? "solar:check-circle-bold" : "solar:copy-bold"}
                 />
               }
             />
@@ -295,8 +312,7 @@ export function LogViewerDisplay({
                         (t) => (
                           <span
                             onClick={() => {
-                              if (url && onOpenUploadUrl)
-                                onOpenUploadUrl(url);
+                              if (url && onOpenUploadUrl) onOpenUploadUrl(url);
                               toast.dismiss(t.id);
                             }}
                             className="cursor-pointer hover:underline"
@@ -316,7 +332,7 @@ export function LogViewerDisplay({
                 disabled={
                   isLoading || parsedLogLinesCount === 0 || isSubmittingUpload
                 }
-                colorScheme="secondary"
+                variant="secondary"
                 size="sm"
                 icon={
                   <Icon
@@ -335,7 +351,7 @@ export function LogViewerDisplay({
               <IconButton
                 onClick={onOpenFolder}
                 disabled={isLoading}
-                colorScheme="secondary"
+                variant="secondary"
                 size="sm"
                 icon={<Icon icon="solar:folder-bold" />}
               />
@@ -370,14 +386,14 @@ export function LogViewerDisplay({
               </div>
             ) : (
               <Virtuoso
-                style={{ height: '100%' }}
+                style={{ height: "100%" }}
                 data={linesForVirtuoso}
-                followOutput={isAutoscrollEnabled ? 'smooth' : false}
+                followOutput={isAutoscrollEnabled ? "smooth" : false}
                 className={cn(
                   "custom-scrollbar",
                   "min-h-full bg-black/60 font-mono text-sm whitespace-pre-wrap",
                   "p-2",
-                  "overflow-x-hidden"
+                  "overflow-x-hidden",
                 )}
                 itemContent={(index, line) => (
                   <div
@@ -395,20 +411,22 @@ export function LogViewerDisplay({
                           </span>
                         </span>
                         <span
-                          className={`flex-1 min-w-0 break-words ${line.level === "ERROR" || line.level === "WARN"
-                            ? getLevelColorClass(line.level)
-                            : "text-white/90"
-                            }`}
+                          className={`flex-1 min-w-0 break-words ${
+                            line.level === "ERROR" || line.level === "WARN"
+                              ? getLevelColorClass(line.level)
+                              : "text-white/90"
+                          }`}
                         >
                           {line.text}
                         </span>
                       </>
                     ) : (
                       <span
-                        className={`flex-1 min-w-0 pl-1 break-words ${line.level === "ERROR" || line.level === "WARN"
-                          ? getLevelColorClass(line.level)
-                          : "text-white/90"
-                          }`}
+                        className={`flex-1 min-w-0 pl-1 break-words ${
+                          line.level === "ERROR" || line.level === "WARN"
+                            ? getLevelColorClass(line.level)
+                            : "text-white/90"
+                        }`}
                       >
                         {line.text}
                       </span>
@@ -455,7 +473,7 @@ export function LogViewerDisplay({
                     value: "",
                     label: "-- Select Log --",
                     // @ts-ignore
-                    disabled: !!selectedLogPath, 
+                    disabled: !!selectedLogPath,
                   },
                   ...logFiles.map((path) => ({
                     value: path,
@@ -472,19 +490,13 @@ export function LogViewerDisplay({
             <IconButton
               onClick={() => onWordWrapChange(!isWordWrapEnabled)}
               disabled={isLoading}
-              colorScheme={isWordWrapEnabled ? "default" : "secondary"}
+              variant={isWordWrapEnabled ? "default" : "secondary"}
               size="sm"
               icon={
                 isWordWrapEnabled ? (
-                  <Icon
-                    icon="solar:text-bold"
-                    className="w-4 h-4"
-                  />
+                  <Icon icon="solar:text-bold" className="w-4 h-4" />
                 ) : (
-                  <Icon
-                    icon="solar:text-bold"
-                    className="w-4 h-4"
-                  />
+                  <Icon icon="solar:text-bold" className="w-4 h-4" />
                 )
               }
             />
@@ -494,9 +506,14 @@ export function LogViewerDisplay({
             <IconButton
               onClick={scrollToTop}
               disabled={isLoading}
-              colorScheme="secondary"
+              variant="secondary"
               size="sm"
-              icon={<Icon icon="solar:double-alt-arrow-up-bold-duotone" className="w-4 h-4" />}
+              icon={
+                <Icon
+                  icon="solar:double-alt-arrow-up-bold-duotone"
+                  className="w-4 h-4"
+                />
+              }
             />
           )}
 
@@ -504,9 +521,14 @@ export function LogViewerDisplay({
             <IconButton
               onClick={scrollToBottom}
               disabled={isLoading}
-              colorScheme="secondary"
+              variant="secondary"
               size="sm"
-              icon={<Icon icon="solar:double-alt-arrow-down-bold-duotone" className="w-4 h-4" />}
+              icon={
+                <Icon
+                  icon="solar:double-alt-arrow-down-bold-duotone"
+                  className="w-4 h-4"
+                />
+              }
             />
           )}
         </div>

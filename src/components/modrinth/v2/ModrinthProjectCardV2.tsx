@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import type {
   ModrinthGameVersion,
   ModrinthSearchHit,
@@ -420,9 +420,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                   iconPosition="left"
                   disabled={isInstallingModpackAsProfile || isQuickInstalling}
                 >
-                  {isInstallingModpackAsProfile
-                    ? "Installing..."
-                    : "Install"}
+                  {isInstallingModpackAsProfile ? "Installing..." : "Install"}
                 </Button>
               ) : (
                 <Button
@@ -476,7 +474,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                 }}
                 size="sm"
                 shadowDepth="short"
-                colorScheme="default"
+                variant="default"
                 displayVariant="button"
                 icon={
                   isLoadingVersions ? (

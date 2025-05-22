@@ -297,7 +297,7 @@ export function ContentPackRow({
         {onOpenDirectory && (
           <IconButton
             onClick={onOpenDirectory}
-            colorScheme="secondary"
+            variant="secondary"
             size="sm"
             icon={<Icon icon="solar:folder-open-bold" />}
             title="Open containing folder"
@@ -306,7 +306,7 @@ export function ContentPackRow({
 
         <IconButton
           onClick={handleDelete}
-          colorScheme={deleteConfirm ? "destructive" : "ghost"}
+          variant={deleteConfirm ? "destructive" : "ghost"}
           size="sm"
           icon={
             <Icon

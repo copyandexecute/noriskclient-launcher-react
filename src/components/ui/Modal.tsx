@@ -172,7 +172,7 @@ export function Modal({
           "relative flex flex-col w-full rounded-lg overflow-hidden",
           "border-2 border-b-4 shadow-2xl",
           widthClasses[width],
-          "max-h-[85vh]"
+          "max-h-[85vh]",
         )}
         style={{
           backgroundColor: `${accentColor.value}20`,
@@ -212,8 +212,11 @@ export function Modal({
             <IconButton
               ref={closeButtonRef}
               icon={<Icon icon="solar:close-circle-bold" />}
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-              colorScheme="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              variant="ghost"
               size="sm"
               aria-label="Close modal"
             />
