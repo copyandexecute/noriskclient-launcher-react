@@ -47,11 +47,20 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         gsap.to(containerRef.current, {
           y: -5,
           boxShadow: error
-            ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
-            : `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
+            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
           duration: 0.2,
           ease: "power2.out",
         });
+
+        const content = containerRef.current.querySelector("textarea");
+        if (content) {
+          gsap.to(content, {
+            scale: 1.05,
+            duration: 0.2,
+            ease: "power2.out",
+          });
+        }
       }
     };
 
@@ -65,11 +74,20 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
+            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           duration: 0.2,
           ease: "power2.out",
         });
+
+        const content = containerRef.current.querySelector("textarea");
+        if (content) {
+          gsap.to(content, {
+            scale: 1,
+            duration: 0.2,
+            ease: "power2.out",
+          });
+        }
       }
     };
 
@@ -86,8 +104,8 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         gsap.to(containerRef.current, {
           y: -3,
           boxShadow: error
-            ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
-            : `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
+            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -107,15 +125,14 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
+            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           duration: 0.2,
           ease: "power2.out",
         });
       }
     };
 
-    // Get border classes based on variant
     const getBorderClasses = () => {
       if (variant === "flat") {
         return "border border-b-2";
@@ -123,20 +140,17 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       return "border-2 border-b-4";
     };
 
-    const staticBoxShadow = error
-      ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-      : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`;
-
-    let currentBoxShadow = variant === "flat" ? "none" : staticBoxShadow;
+    let currentBoxShadow =
+      variant === "flat"
+        ? "none"
+        : "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)";
     if (isBackgroundAnimationEnabled && variant !== "flat") {
       if (isFocused) {
-        currentBoxShadow = error
-          ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
-          : `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
+        currentBoxShadow =
+          "0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)";
       } else if (isHovered) {
-        currentBoxShadow = error
-          ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
-          : `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`;
+        currentBoxShadow =
+          "0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)";
       }
     }
 
@@ -156,37 +170,48 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
           className={cn(
             "relative rounded-md transition-all duration-200",
             getBorderClasses(),
-            variant !== "flat" && "shadow-md",
+            "overflow-hidden",
             error ? "border-red-500" : "",
             props.disabled ? "opacity-50 cursor-not-allowed" : "",
             className,
           )}
           style={{
-            backgroundColor: `${accentColor.value}${variant === "flat" ? "15" : "30"}`,
+            backgroundColor: `${accentColor.value}${isHovered || isFocused ? "50" : "30"}`,
             borderColor: error
               ? "rgba(239, 68, 68, 0.6)"
-              : `${accentColor.value}${variant === "flat" ? "40" : "60"}`,
-            borderBottomColor: error ? "rgb(185, 28, 28)" : accentColor.value,
+              : `${accentColor.value}${isHovered || isFocused ? "90" : "80"}`,
+            borderBottomColor: error
+              ? "rgb(185, 28, 28)"
+              : isHovered || isFocused
+                ? accentColor.hoverValue
+                : accentColor.value,
             boxShadow: currentBoxShadow,
             transform: currentTransform,
+            filter:
+              (isHovered || isFocused) && !props.disabled
+                ? "brightness(1.1)"
+                : "brightness(1)",
           }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           {variant !== "flat" && (
             <span
-              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
               style={{
                 backgroundColor: error
                   ? "rgba(239, 68, 68, 0.8)"
-                  : `${accentColor.value}80`,
+                  : isHovered || isFocused
+                    ? accentColor.hoverValue
+                    : `${accentColor.value}80`,
+                opacity: isHovered || isFocused ? 1 : 0.8,
               }}
             />
           )}
 
           <textarea
             ref={ref}
-            className="w-full min-h-[100px] bg-transparent border-none outline-none p-3 text-white font-minecraft-ten text-xs placeholder:text-white/50 resize-y custom-scrollbar"
+            className="w-full min-h-[100px] bg-transparent border-none outline-none p-3 text-white font-minecraft-ten text-xs placeholder:text-white/50 resize-y custom-scrollbar transition-transform duration-200"
             onFocus={handleFocus}
             onBlur={handleBlur}
             {...props}

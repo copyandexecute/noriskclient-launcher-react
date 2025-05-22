@@ -14,11 +14,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     | "warning"
     | "destructive"
     | "info"
-    | "success";
+    | "success"
+    | "flat";
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
-  shadowDepth?: "default" | "short";
+  shadowDepth?: "default" | "short" | "none";
   widthClassName?: string;
   heightClassName?: string;
 }
@@ -147,17 +148,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (disabled) return;
       setIsHovered(true);
 
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
-        const part1Y = shadowDepth === 'short' ? '7px' : '13px';
-        const part2Y = shadowDepth === 'short' ? '10px' : '16px';
-        const part2Blur = shadowDepth === 'short' ? '15px' : '20px'; 
-
+      if (
+        buttonRef.current &&
+        isBackgroundAnimationEnabled &&
+        shouldShowShadow()
+      ) {
         gsap.to(buttonRef.current, {
-          y: -5,
-          boxShadow:
-            variant === "ghost"
-              ? "none"
-              : `0 ${part1Y} 0 rgba(0,0,0,0.25), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.4)`,
+          boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -168,17 +165,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (disabled) return;
       setIsHovered(false);
 
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
-        const part1Y = shadowDepth === 'short' ? '4px' : '8px';
-        const part2Y = shadowDepth === 'short' ? '6px' : '10px';
-        const part2Blur = shadowDepth === 'short' ? '10px' : '15px';
-
+      if (
+        buttonRef.current &&
+        isBackgroundAnimationEnabled &&
+        shouldShowShadow()
+      ) {
         gsap.to(buttonRef.current, {
-          y: 0,
-          boxShadow:
-            variant === "ghost"
-              ? "none"
-              : `0 ${part1Y} 0 rgba(0,0,0,0.3), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.35)`,
+          boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -187,6 +180,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       if (isPressed) {
         handleMouseUp();
       }
+    };
+
+    const shouldShowShadow = () => {
+      return (
+        variant !== "ghost" && variant !== "flat" && shadowDepth !== "none"
+      );
     };
 
     const getVariantColors = () => {
@@ -228,15 +227,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           };
         case "ghost":
           return {
-            main: "transparent",
-            light: "transparent",
-            dark: "transparent",
+            main: accentColor.value,
+            light: accentColor.hoverValue || accentColor.value,
+            dark: accentColor.value,
+            text: "#ffffff",
+          };
+        case "flat":
+          return {
+            main: accentColor.value,
+            light: accentColor.hoverValue || accentColor.value,
+            dark: accentColor.value,
             text: "#ffffff",
           };
         default:
           return {
             main: accentColor.value,
-            light: accentColor.hoverValue,
+            light: accentColor.hoverValue || accentColor.value,
             dark: accentColor.value,
             text: "#ffffff",
           };
@@ -255,25 +261,67 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const getBackgroundColor = () => {
-      if (variant === "ghost") return "transparent";
+      if (variant === "ghost") {
+        return isHovered ? `${colors.main}50` : `${colors.main}30`;
+      }
+
+      if (variant === "flat")
+        return isHovered ? `${colors.main}25` : `${colors.main}15`;
 
       const baseOpacity = isHovered ? "50" : "30";
       return `${colors.main}${baseOpacity}`;
     };
 
     const getBorderColor = () => {
-      if (variant === "ghost") return "transparent";
+      if (variant === "ghost") {
+        return isHovered ? `${colors.light}` : `${colors.main}80`;
+      }
+
+      if (variant === "flat")
+        return isHovered ? `${colors.main}50` : `${colors.main}40`;
 
       return isHovered ? `${colors.light}` : `${colors.main}80`;
     };
 
-    const initialPart1Y = shadowDepth === 'short' ? '4px' : '8px';
-    const initialPart2Y = shadowDepth === 'short' ? '6px' : '10px';
-    const initialPart2Blur = shadowDepth === 'short' ? '10px' : '15px';
+    const getBorderBottomColor = () => {
+      if (variant === "ghost") {
+        return isHovered ? colors.light : colors.dark;
+      }
 
-    const initialBoxShadow = variant === "ghost"
-        ? "none"
-        : `0 ${initialPart1Y} 0 rgba(0,0,0,0.3), 0 ${initialPart2Y} ${initialPart2Blur} rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`;
+      if (variant === "flat") return colors.main;
+
+      return isHovered ? colors.light : colors.dark;
+    };
+
+    const getBorderClasses = () => {
+      if (variant === "ghost" || variant === "flat") {
+        return "border border-b-2";
+      }
+
+      if (shadowDepth === "none") {
+        return "border-2";
+      }
+
+      return "border-2 border-b-4";
+    };
+
+    const getShadowClasses = () => {
+      if (variant === "ghost" || variant === "flat" || shadowDepth === "none") {
+        return "";
+      }
+
+      return shadowDepth === "default"
+        ? "shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]"
+        : "shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]";
+    };
+
+    const getBoxShadow = () => {
+      if (shadowDepth === "default") {
+        return "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35)";
+      } else {
+        return "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)";
+      }
+    };
 
     return (
       <button
@@ -289,16 +337,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           "rounded-md text-white tracking-wider lowercase",
           "flex items-center justify-center gap-2",
           "text-shadow-sm whitespace-nowrap",
-          variant !== "ghost" && shadowDepth === 'default' &&
-            "border-2 border-b-4 shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-          variant !== "ghost" && shadowDepth === 'short' &&
-            "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+          getBorderClasses(),
+          getShadowClasses(),
           "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
-          "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0",
-          variant !== "ghost" && shadowDepth === 'default' &&
-            "disabled:hover:shadow-[0_8px_0_rgba(0,0,0,0.3),0_10px_15px_rgba(0,0,0,0.35)]",
-          variant !== "ghost" && shadowDepth === 'short' &&
-            "disabled:hover:shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
           sizeStyles[size],
           className,
           widthClassName,
@@ -307,19 +349,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         style={{
           backgroundColor: getBackgroundColor(),
           borderColor: getBorderColor(),
-          borderBottomColor:
-            variant === "ghost"
-              ? "transparent"
-              : isHovered
-                ? colors.light
-                : colors.dark,
-          boxShadow: initialBoxShadow,
+          borderBottomColor: getBorderBottomColor(),
+          boxShadow: shouldShowShadow() ? getBoxShadow() : "none",
           color: colors.text,
-          transform:
-            isHovered && !disabled && isBackgroundAnimationEnabled 
-              ? "translateY(-5px)" 
-              : "translateY(0)",
-          filter: isHovered && !disabled ? "brightness(1.2)" : "brightness(1)",
+          filter: isHovered && !disabled ? "brightness(1.1)" : "brightness(1)",
         }}
         {...props}
       >
@@ -335,11 +368,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           />
         )}
 
-        <span
-          className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
-          style={{ opacity: isHovered ? 0.5 : 0 }}
-        />
-
         {ripples.map((ripple) => (
           <span
             key={ripple.id}
@@ -353,13 +381,20 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           />
         ))}
 
-        {icon && iconPosition === "left" && (
-          <span className="flex items-center justify-center">{icon}</span>
-        )}
-        <span className="relative z-10">{children}</span>
-        {icon && iconPosition === "right" && (
-          <span className="flex items-center justify-center">{icon}</span>
-        )}
+        <div
+          className="flex items-center justify-center gap-2 transition-transform duration-200"
+          style={{
+            transform: isHovered && !disabled ? "scale(1.05)" : "scale(1)",
+          }}
+        >
+          {icon && iconPosition === "left" && (
+            <span className="flex items-center justify-center">{icon}</span>
+          )}
+          <span className="relative z-10">{children}</span>
+          {icon && iconPosition === "right" && (
+            <span className="flex items-center justify-center">{icon}</span>
+          )}
+        </div>
       </button>
     );
   },

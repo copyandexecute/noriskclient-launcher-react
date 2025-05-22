@@ -157,16 +157,11 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
       setIsHovered(true);
 
       if (containerRef.current && isBackgroundAnimationEnabled) {
-        const part1Y = shadowDepth === "short" ? "7px" : "13px";
-        const part2Y = shadowDepth === "short" ? "10px" : "16px";
-        const part2Blur = shadowDepth === "short" ? "15px" : "20px";
-
         gsap.to(containerRef.current, {
-          y: -5,
           boxShadow:
             variant === "ghost" || shadowDepth === "none"
               ? "none"
-              : `0 ${part1Y} 0 rgba(0,0,0,0.25), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.4)`,
+              : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -178,16 +173,11 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
       setIsHovered(false);
 
       if (containerRef.current && isBackgroundAnimationEnabled) {
-        const part1Y = shadowDepth === "short" ? "4px" : "8px";
-        const part2Y = shadowDepth === "short" ? "6px" : "10px";
-        const part2Blur = shadowDepth === "short" ? "10px" : "15px";
-
         gsap.to(containerRef.current, {
-          y: 0,
           boxShadow:
             variant === "ghost" || shadowDepth === "none"
               ? "none"
-              : `0 ${part1Y} 0 rgba(0,0,0,0.3), 0 ${part2Y} ${part2Blur} rgba(0,0,0,0.35)`,
+              : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -256,10 +246,10 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
 
     const sizeStyles = {
       xs: "h-[32px] py-1 px-3 text-sm",
-      sm: "h-[42px] py-2 px-4 text-base",
-      md: "h-[50px] py-2.5 px-5 text-xl",
-      lg: "h-[58px] py-3 px-6 text-2xl",
-      xl: "h-[66px] py-4 px-7 text-3xl",
+      sm: "h-[42px] py-2 px-4 text-xl",
+      md: "h-[50px] py-2.5 px-5 text-2xl",
+      lg: "h-[58px] py-3 px-6 text-3xl",
+      xl: "h-[66px] py-4 px-7 text-4xl",
     };
 
     const radioSizes = {
@@ -280,7 +270,7 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
     const getBorderColor = () => {
       if (variant === "ghost") return "transparent";
 
-      return isHovered ? `${colors.light}` : `${colors.main}80`;
+      return isHovered ? `${colors.main}90` : `${colors.main}80`;
     };
 
     const initialPart1Y = shadowDepth === "short" ? "4px" : "8px";
@@ -321,9 +311,9 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
           color: colors.text,
           transform:
             isHovered && !disabled && isBackgroundAnimationEnabled
-              ? "translateY(-5px)"
+              ? "translateY(-3px)"
               : "translateY(0)",
-          filter: isHovered && !disabled ? "brightness(1.2)" : "brightness(1)",
+          filter: isHovered && !disabled ? "brightness(1.1)" : "brightness(1)",
         }}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
@@ -331,7 +321,7 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
         onMouseLeave={handleMouseLeave}
         onClick={handleRipple}
       >
-        {variant !== "ghost" && shadowDepth !== "none" && (
+        {variant !== "ghost" && (
           <span
             className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
             style={{
@@ -342,11 +332,6 @@ export const RadioButton = forwardRef<HTMLInputElement, RadioButtonProps>(
             }}
           />
         )}
-
-        <span
-          className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
-          style={{ opacity: isHovered ? 0.5 : 0 }}
-        />
 
         {ripples.map((ripple) => (
           <span

@@ -67,28 +67,10 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
 
     const handleMouseEnter = () => {
       setIsHovered(true);
-
-      if (labelRef.current && variant !== "ghost") {
-        gsap.to(labelRef.current, {
-          y: -2,
-          boxShadow: `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${getVariantColors().light}40, inset 0 0 0 1px ${getVariantColors().main}20`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseLeave = () => {
       setIsHovered(false);
-
-      if (labelRef.current && variant !== "ghost") {
-        gsap.to(labelRef.current, {
-          y: 0,
-          boxShadow: `0 6px 0 rgba(0,0,0,0.3), 0 8px 12px rgba(0,0,0,0.35), inset 0 1px 0 ${getVariantColors().light}40, inset 0 0 0 1px ${getVariantColors().main}20`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const getVariantColors = () => {
@@ -148,11 +130,11 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
     const colors = getVariantColors();
 
     const sizeStyles = {
-      xs: "py-0.5 px-1.5 text-sm",
-      sm: "py-1 px-2 text-xl",
-      md: "py-1.5 px-3 text-2xl",
-      lg: "py-2 px-4 text-3xl",
-      xl: "py-2.5 px-5 text-4xl",
+      xs: "h-[32px] py-1 px-3 text-sm",
+      sm: "h-[42px] py-1 px-3 text-xl",
+      md: "h-[50px] py-1.5 px-4 text-2xl",
+      lg: "h-[58px] py-2 px-5 text-3xl",
+      xl: "h-[66px] py-2.5 px-6 text-4xl",
     };
 
     const iconSizes = {
@@ -167,12 +149,11 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
       <div
         ref={mergedRef}
         className={cn(
-          "font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-200",
+          "font-minecraft relative overflow-hidden backdrop-blur-md",
           "rounded-md text-white tracking-wider",
           "inline-flex items-center justify-center",
           "text-shadow-sm",
-          variant !== "ghost" &&
-            "border-2 border-b-4 shadow-[0_6px_0_rgba(0,0,0,0.3),0_8px_12px_rgba(0,0,0,0.35)]",
+          variant !== "ghost" && "border-2 border-b-4",
           sizeStyles[size],
           className,
         )}
@@ -180,23 +161,18 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
           backgroundColor:
             variant === "ghost"
               ? "transparent"
-              : `${colors.main}${isHovered ? "40" : "30"}`,
+              : `${colors.main}${isHovered ? "50" : "30"}`,
           borderColor:
             variant === "ghost"
               ? "transparent"
               : `${colors.main}${isHovered ? "90" : "80"}`,
-          borderBottomColor: variant === "ghost" ? "transparent" : colors.dark,
-          boxShadow:
+          borderBottomColor:
             variant === "ghost"
-              ? "none"
+              ? "transparent"
               : isHovered
-                ? `0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`
-                : `0 6px 0 rgba(0,0,0,0.3), 0 8px 12px rgba(0,0,0,0.35), inset 0 1px 0 ${colors.light}40, inset 0 0 0 1px ${colors.main}20`,
+                ? colors.light
+                : colors.dark,
           color: colors.text,
-          transform:
-            isHovered && variant !== "ghost"
-              ? "translateY(-2px)"
-              : "translateY(0)",
           filter: isHovered ? "brightness(1.1)" : "brightness(1)",
         }}
         onMouseEnter={handleMouseEnter}
@@ -205,8 +181,13 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
       >
         {variant !== "ghost" && (
           <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{ backgroundColor: `${colors.light}80` }}
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm transition-colors duration-200"
+            style={{
+              backgroundColor: isHovered
+                ? `${colors.light}`
+                : `${colors.light}80`,
+              opacity: isHovered ? 1 : 0.8,
+            }}
           />
         )}
 
@@ -223,20 +204,12 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
           </>
         )}
 
-        <span
-          className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300"
-          style={{ opacity: isHovered ? 0.5 : 0.2 }}
-        />
-
         {icon && iconPosition === "left" && (
           <span
             className={cn(
-              "flex items-center justify-center mr-1.5 transition-transform duration-200",
+              "flex items-center justify-center mr-1.5",
               iconSizes[size],
             )}
-            style={{
-              transform: isHovered ? "scale(1.1)" : "scale(1)",
-            }}
           >
             {icon}
           </span>
@@ -245,12 +218,9 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
         {icon && iconPosition === "right" && (
           <span
             className={cn(
-              "flex items-center justify-center ml-1.5 transition-transform duration-200",
+              "flex items-center justify-center ml-1.5",
               iconSizes[size],
             )}
-            style={{
-              transform: isHovered ? "scale(1.1)" : "scale(1)",
-            }}
           >
             {icon}
           </span>

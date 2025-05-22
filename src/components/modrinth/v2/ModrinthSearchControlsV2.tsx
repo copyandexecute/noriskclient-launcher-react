@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from 'react';
-import type { ModrinthProjectType, ModrinthSortType } from '../../../types/modrinth';
+import React, { useRef } from "react";
+import type {
+  ModrinthProjectType,
+  ModrinthSortType,
+} from "../../../types/modrinth";
 // Profile type will be defined locally
-import { Button } from '../../ui/buttons/Button';
-import { SearchInput } from '../../ui/SearchInput';
-import { Select, type SelectOption } from '../../ui/Select';
-import { IconButton } from '../../ui/buttons/IconButton';
-import { TagBadge } from '../../ui/TagBadge';
-import { Icon } from '@iconify/react';
+import { Button } from "../../ui/buttons/Button";
+import { SearchInput } from "../../ui/SearchInput";
+import { Select, type SelectOption } from "../../ui/Select";
+import { IconButton } from "../../ui/buttons/IconButton";
+import { TagBadge } from "../../ui/TagBadge";
+import { Icon } from "@iconify/react";
 import { useDisplayContextStore } from "../../../store/useDisplayContextStore";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { cn } from "../../../lib/utils";
@@ -44,7 +47,9 @@ export interface ModrinthSearchControlsV2Props {
   overrideDisplayContext?: "detail" | "standalone";
 }
 
-export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> = ({
+export const ModrinthSearchControlsV2: React.FC<
+  ModrinthSearchControlsV2Props
+> = ({
   searchTerm,
   onSearchTermChange,
   projectType,
@@ -72,7 +77,8 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
   overrideDisplayContext,
 }) => {
   const globalDisplayContext = useDisplayContextStore((state) => state.context);
-  const effectiveDisplayContext = overrideDisplayContext || globalDisplayContext;
+  const effectiveDisplayContext =
+    overrideDisplayContext || globalDisplayContext;
   const accentColor = useThemeStore((state) => state.accentColor);
   const filtersContainerRef = useRef<HTMLDivElement>(null);
 
@@ -94,7 +100,7 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
     (filterServerRequired ? 1 : 0);
 
   return (
-    <div 
+    <div
       className="p-3 rounded-lg border backdrop-blur-sm mb-3"
       style={{
         backgroundColor: `${accentColor.value}10`,
@@ -115,46 +121,52 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
             </Button>
           ))}
         </div>
-      
+
         <div className="flex items-center space-x-2 mb-2">
           <SearchInput
             value={searchTerm}
             onChange={onSearchTermChange}
             placeholder={`Search for ${projectType}s...`}
             className={`flex-grow h-[48px]`}
-            variant="themed-surface"
+            variant="flat"
             size="lg"
           />
-          
+
           <Select
             value={sortOrder}
             onChange={(value) => onSortOrderChange(value as ModrinthSortType)}
             options={sortOptions}
             className={`max-w-[180px] h-[48px]`}
-            variant="themed-surface"
-            size="md"
+            variant="flat"
+            size="sm"
           />
 
           <IconButton
             onClick={onToggleSidebar}
             icon={
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                />
               </svg>
             }
             size={isDetailView ? "md" : "md"}
-            colorScheme="secondary"
-            displayVariant="themed-surface"
+            variant={"ghost"}
             title={isSidebarVisible ? "Hide filters" : "Show filters"}
           />
         </div>
 
         {totalFilters > 0 && (
-          <div
-            className={cn(
-              "flex items-center mt-2 gap-2"
-            )}
-          >
+          <div className={cn("flex items-center mt-2 gap-2")}>
             <div
               className={cn(
                 "flex-1 border rounded-md h-[48px] overflow-x-auto overflow-y-hidden whitespace-nowrap",
@@ -174,7 +186,10 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
                   onClick={onClearAllFilters}
                   size="md"
                 >
-                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4 mr-1" />
+                  <Icon
+                    icon="solar:trash-bin-trash-bold"
+                    className="w-4 h-4 mr-1"
+                  />
                   <span>Clear All</span>
                 </TagBadge>
 
@@ -186,7 +201,10 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
                     onClick={() => onRemoveGameVersionTag(version)}
                   >
                     <span>{version}</span>
-                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 ml-1" />
+                    <Icon
+                      icon="solar:close-circle-bold"
+                      className="w-4 h-4 ml-1"
+                    />
                   </TagBadge>
                 ))}
 
@@ -198,7 +216,10 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
                     onClick={() => onRemoveLoaderTag(loader)}
                   >
                     <span>{loader}</span>
-                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 ml-1" />
+                    <Icon
+                      icon="solar:close-circle-bold"
+                      className="w-4 h-4 ml-1"
+                    />
                   </TagBadge>
                 ))}
 
@@ -210,7 +231,10 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
                     onClick={() => onRemoveCategoryTag(category)}
                   >
                     <span>{category}</span>
-                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 ml-1" />
+                    <Icon
+                      icon="solar:close-circle-bold"
+                      className="w-4 h-4 ml-1"
+                    />
                   </TagBadge>
                 ))}
 
@@ -222,7 +246,10 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
                     onClick={onRemoveClientRequiredTag}
                   >
                     <span>Client</span>
-                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 ml-1" />
+                    <Icon
+                      icon="solar:close-circle-bold"
+                      className="w-4 h-4 ml-1"
+                    />
                   </TagBadge>
                 )}
 
@@ -234,7 +261,10 @@ export const ModrinthSearchControlsV2: React.FC<ModrinthSearchControlsV2Props> =
                     onClick={onRemoveServerRequiredTag}
                   >
                     <span>Server</span>
-                    <Icon icon="solar:close-circle-bold" className="w-4 h-4 ml-1" />
+                    <Icon
+                      icon="solar:close-circle-bold"
+                      className="w-4 h-4 ml-1"
+                    />
                   </TagBadge>
                 )}
               </div>
