@@ -58,7 +58,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         newlySelectedProfile =
           all_profiles.find((p) => p.id === last_played_profile_id) || null;
       }
-      
+
       set({
         profiles: all_profiles,
         lastPlayedProfileId: last_played_profile_id,
@@ -206,6 +206,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         include_files: filesToInclude,
       };
       const newProfileId = await ProfileService.copyProfile(params);
+      let sourceProfile = await get().getProfile(sourceId);
+      if (sourceProfile.is_standard_version) {
+        await ProfileService.updateProfile(newProfileId, {
+          group: "CUSTOM",
+        });
+      }
       await get().fetchProfiles();
       return newProfileId;
     } catch (error) {
