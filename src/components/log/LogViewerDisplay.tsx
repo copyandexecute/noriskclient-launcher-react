@@ -84,7 +84,7 @@ export function LogViewerDisplay({
   onCopyLog,
   logLevelsDefinition,
   isLiveLogs,
-  isAutoscrollEnabled,
+  isAutoscrollEnabled = true,
   onAutoscrollChange,
   scrollableContainerRef,
   onOpenFolder,
