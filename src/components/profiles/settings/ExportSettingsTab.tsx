@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import type { Profile } from '../../../types/profile'; // Adjust path as needed
-import { Input } from '../../ui/Input';
-import { Checkbox } from '../../ui/Checkbox';
-import { Button } from '../../ui/buttons/Button';
-import { Card } from '../../ui/Card';
-import { Icon } from '@iconify/react';
-import { FileNodeViewer } from '../../file-explorer/FileNodeViewer'; // Adjust path as needed
-import type { FileNode } from '../../../types/fileSystem'; // Adjust path as needed
-import * as ProfileService from '../../../services/profile-service'; // Adjust path as needed
-import { toast } from 'react-hot-toast';
-import { useThemeStore } from '../../../store/useThemeStore';
+import React, { useEffect, useState } from "react";
+import type { Profile } from "../../../types/profile"; // Adjust path as needed
+import { Input } from "../../ui/Input";
+import { Checkbox } from "../../ui/Checkbox";
+import { Button } from "../../ui/buttons/Button";
+import { Card } from "../../ui/Card";
+import { Icon } from "@iconify/react";
+import { FileNodeViewer } from "../../file-explorer/FileNodeViewer"; // Adjust path as needed
+import type { FileNode } from "../../../types/fileSystem"; // Adjust path as needed
+import * as ProfileService from "../../../services/profile-service"; // Adjust path as needed
+import { toast } from "react-hot-toast";
+import { useThemeStore } from "../../../store/useThemeStore";
+import gsap from "gsap";
 
 interface ExportSettingsTabProps {
   profile: Profile;
@@ -35,16 +36,22 @@ export function ExportSettingsTab({
   isInModalContext = false, // Default to false
 }: ExportSettingsTabProps) {
   const [exportFilename, setExportFilename] = useState(profile.name);
-  const [selectedExportPaths, setSelectedExportPaths] = useState<Set<string>>(new Set());
+  const [selectedExportPaths, setSelectedExportPaths] = useState<Set<string>>(
+    new Set(),
+  );
   const [exportOpenFolder, setExportOpenFolder] = useState(true);
-  
-  const [directoryStructure, setDirectoryStructure] = useState<FileNode | null>(null);
+
+  const [directoryStructure, setDirectoryStructure] = useState<FileNode | null>(
+    null,
+  );
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(true);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
 
   const [isExporting, setIsExporting] = useState(false);
-  
-  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const accentColor = useThemeStore((state) => state.accentColor);
 
   useEffect(() => {
@@ -57,7 +64,9 @@ export function ExportSettingsTab({
       setIsLoadingDirectory(true);
       setDirectoryError(null);
       try {
-        const structure = await ProfileService.getProfileDirectoryStructure(profile.id);
+        const structure = await ProfileService.getProfileDirectoryStructure(
+          profile.id,
+        );
         console.log(structure);
         setDirectoryStructure(structure);
       } catch (err) {
@@ -86,7 +95,9 @@ export function ExportSettingsTab({
     const newSelectedPaths = new Set<string>();
     // Assuming hideRootNode = true, so we iterate over children of rootNode
     if (directoryStructure.children) {
-        directoryStructure.children.forEach(childNode => getAllPathsRecursive(childNode, newSelectedPaths));
+      directoryStructure.children.forEach((childNode) =>
+        getAllPathsRecursive(childNode, newSelectedPaths),
+      );
     }
     // If hideRootNode was false, and you wanted to include the root node itself:
     // getAllPathsRecursive(directoryStructure, newSelectedPaths);
@@ -102,11 +113,14 @@ export function ExportSettingsTab({
       toast.error("Please enter a filename for the export.");
       return;
     }
-    
+
     const exportPromise = ProfileService.exportProfile({
       profile_id: profile.id,
       file_name: exportFilename,
-      include_files: selectedExportPaths.size > 0 ? Array.from(selectedExportPaths) : undefined,
+      include_files:
+        selectedExportPaths.size > 0
+          ? Array.from(selectedExportPaths)
+          : undefined,
       open_folder: exportOpenFolder,
     });
 
@@ -122,13 +136,13 @@ export function ExportSettingsTab({
         // console.error is still good for detailed logs in developer console
         console.error("Failed to export profile:", err);
         return `Failed to export profile: ${message}`;
-      }
+      },
     });
 
-    // Set isExporting to true when the operation starts, 
+    // Set isExporting to true when the operation starts,
     // and let the promise toast handle resetting it or further actions.
     // It might be better to set it right before the toast.promise if ProfileService.exportProfile is truly async setup
-    setIsExporting(true); 
+    setIsExporting(true);
     // The setIsExporting(false) will be handled by the success/error callbacks of the toast
   };
 
@@ -149,7 +163,8 @@ export function ExportSettingsTab({
     if (isInModalContext && onExportActionAvailable) {
       onExportActionAvailable({
         handleExport,
-        isDisabled: () => isExporting || !exportFilename.trim() || isLoadingDirectory,
+        isDisabled: () =>
+          isExporting || !exportFilename.trim() || isLoadingDirectory,
         exportOpenFolder,
         setExportOpenFolder,
       });
@@ -157,7 +172,6 @@ export function ExportSettingsTab({
   }, [
     isInModalContext,
     onExportActionAvailable,
-    handleExport,
     isExporting,
     exportFilename,
     isLoadingDirectory,
@@ -167,19 +181,24 @@ export function ExportSettingsTab({
 
   return (
     <div ref={contentRef} className="space-y-6">
-      {!isInModalContext && ( 
+      {!isInModalContext && (
         <div>
           <h3 className="text-3xl font-minecraft text-white mb-1 lowercase">
             Export Profile
           </h3>
           <p className="text-xs text-white/70 mb-4 font-minecraft-ten tracking-wide">
-            Export your profile to share with others or as a backup. You can customize which files are included.
+            Export your profile to share with others or as a backup. You can
+            customize which files are included.
           </p>
         </div>
       )}
 
       {/* Card now always wraps the main form elements */}
-      <Card variant="default" className="p-5 space-y-4" withAnimation={isBackgroundAnimationEnabled}>
+      <Card
+        variant="flat"
+        className="p-5 space-y-4"
+        withAnimation={isBackgroundAnimationEnabled}
+      >
         {/* Filename input section */}
         <div className="space-y-1">
           <label
@@ -195,57 +214,71 @@ export function ExportSettingsTab({
             placeholder="Enter filename without extension"
             className="text-xl py-2.5"
             disabled={isExporting}
+            variant="flat"
           />
           <p className="mt-1 text-xs text-white/50 font-minecraft-ten tracking-wide">
             The .noriskpack extension will be added automatically.
           </p>
         </div>
-        
+
         {/* File selection section */}
-        <div> 
-            <h4 className="text-2xl font-minecraft text-white lowercase mb-1">
-                Select Files & Folders (Optional)
-            </h4>
-            <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide">
-                Choose items to include in the export. If none selected, only profile configuration is exported.
-            </p>
-            <div className="flex gap-2 mb-3">
-                <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleSelectAll} 
-                    disabled={isLoadingDirectory || !directoryStructure || !directoryStructure.children || directoryStructure.children.length === 0}
-                    icon={<Icon icon="solar:check-read-outline" className="w-4 h-4" />}
-                    className="text-xs px-3 py-1.5"
-                >
-                    Select All
-                </Button>
-                <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleDeselectAll} 
-                    disabled={isLoadingDirectory || selectedExportPaths.size === 0}
-                    icon={<Icon icon="solar:close-circle-outline" className="w-4 h-4" />}
-                    className="text-xs px-3 py-1.5"
-                >
-                    Deselect All
-                </Button>
-            </div>
-            <Card variant="flat" className="p-3 bg-black/20 border border-white/10 max-h-64 min-h-64 overflow-y-auto custom-scrollbar">
-                 <FileNodeViewer
-                    rootNode={directoryStructure}
-                    loading={isLoadingDirectory}
-                    error={directoryError}
-                    selectedFiles={selectedExportPaths}
-                    onSelectionChange={setSelectedExportPaths}
-                    checkboxesEnabled={true}
-                    hideRootNode={true} 
-                    preSelectPaths={["resourcepacks", "shaderpacks", "options.txt"]}
-                    selectChildrenWithParent={true} 
-                    defaultRootCollapsed={false} 
-                    className="text-sm"
-                />
-            </Card>
+        <div>
+          <h4 className="text-2xl font-minecraft text-white lowercase mb-1">
+            Select Files & Folders (Optional)
+          </h4>
+          <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide">
+            Choose items to include in the export. If none selected, only
+            profile configuration is exported.
+          </p>
+          <div className="flex gap-2 mb-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSelectAll}
+              disabled={
+                isLoadingDirectory ||
+                !directoryStructure ||
+                !directoryStructure.children ||
+                directoryStructure.children.length === 0
+              }
+              icon={
+                <Icon icon="solar:check-read-outline" className="w-4 h-4" />
+              }
+              className="text-xs px-3 py-1.5"
+            >
+              Select All
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDeselectAll}
+              disabled={isLoadingDirectory || selectedExportPaths.size === 0}
+              icon={
+                <Icon icon="solar:close-circle-outline" className="w-4 h-4" />
+              }
+              className="text-xs px-3 py-1.5"
+            >
+              Deselect All
+            </Button>
+          </div>
+          <Card
+            variant="flat"
+            className="p-3 bg-black/20 border border-white/10 max-h-64 min-h-64 overflow-y-auto custom-scrollbar"
+          >
+            <FileNodeViewer
+              rootNode={directoryStructure}
+              loading={isLoadingDirectory}
+              error={directoryError}
+              selectedFiles={selectedExportPaths}
+              onSelectionChange={setSelectedExportPaths}
+              checkboxesEnabled={true}
+              hideRootNode={true}
+              preSelectPaths={["resourcepacks", "shaderpacks", "options.txt"]}
+              selectChildrenWithParent={true}
+              defaultRootCollapsed={false}
+              className="text-sm"
+            />
+          </Card>
         </div>
 
         {!isInModalContext && ( // Internal controls only if NOT in modal context
@@ -258,24 +291,27 @@ export function ExportSettingsTab({
                 className="text-xl"
                 customSize="md"
                 disabled={isExporting}
+                variant="flat"
               />
             </div>
 
             <div className="mt-6 pt-4 border-t border-white/10">
-                <Button
-                  variant="default"
-                  onClick={handleExport}
-                  disabled={isExporting || !exportFilename.trim() || isLoadingDirectory}
-                  icon={<Icon icon="solar:export-bold" className="w-5 h-5" />}
-                  size="md"
-                  className="text-xl w-full md:w-auto"
-                >
-                  Export Profile
-                </Button>
+              <Button
+                variant="default"
+                onClick={handleExport}
+                disabled={
+                  isExporting || !exportFilename.trim() || isLoadingDirectory
+                }
+                icon={<Icon icon="solar:export-bold" className="w-5 h-5" />}
+                size="md"
+                className="text-xl w-full md:w-auto"
+              >
+                Export Profile
+              </Button>
             </div>
           </>
         )}
       </Card>
     </div>
   );
-} 
+}

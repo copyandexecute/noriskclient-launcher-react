@@ -18,6 +18,7 @@ interface RangeSliderProps {
   showValue?: boolean;
   size?: "sm" | "md" | "lg";
   className?: string;
+  variant?: "default" | "flat";
 }
 
 export function RangeSlider({
@@ -33,6 +34,7 @@ export function RangeSlider({
   showValue = true,
   size = "md",
   className,
+  variant = "default",
 }: RangeSliderProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
@@ -83,7 +85,8 @@ export function RangeSlider({
       progressRef.current.style.width = `${percentage}%`;
 
       const thumbSizePx = size === "sm" ? 24 : size === "lg" ? 40 : 32;
-      const thumbOffset = thumbSizePx / (size === "sm" ? 4 : size === "lg" ? 4 : 4);
+      const thumbOffset =
+        thumbSizePx / (size === "sm" ? 4 : size === "lg" ? 4 : 4);
 
       thumbRef.current.style.left = `calc(${percentage}% - ${thumbOffset}px)`;
 
@@ -107,14 +110,20 @@ export function RangeSlider({
       if (thumbRef.current) {
         gsap.to(thumbRef.current, {
           scale: 1.1,
-          boxShadow: "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)",
+          boxShadow:
+            variant === "flat"
+              ? `0 0 10px ${accentColor.value}60`
+              : "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)",
           duration: 0.2,
           ease: "power2.out",
         });
       }
       if (trackRef.current) {
         gsap.to(trackRef.current, {
-          boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
+          boxShadow:
+            variant === "flat"
+              ? `0 0 0 1px ${accentColor.value}30`
+              : `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -130,14 +139,20 @@ export function RangeSlider({
       if (thumbRef.current && !isDragging) {
         gsap.to(thumbRef.current, {
           scale: 1,
-          boxShadow: "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)",
+          boxShadow:
+            variant === "flat"
+              ? `0 0 0 1px ${accentColor.value}60`
+              : "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)",
           duration: 0.2,
           ease: "power2.out",
         });
       }
       if (trackRef.current) {
         gsap.to(trackRef.current, {
-          boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+          boxShadow:
+            variant === "flat"
+              ? `0 0 0 1px ${accentColor.value}20`
+              : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           duration: 0.2,
           ease: "power2.out",
         });
@@ -196,7 +211,7 @@ export function RangeSlider({
         <div className="text-center mb-3">
           <span
             className={cn(
-              "text-white font-minecraft-ten text-xs tracking-wide"
+              "text-white font-minecraft-ten text-xs tracking-wide",
             )}
           >
             {valueLabel}
@@ -208,28 +223,18 @@ export function RangeSlider({
         {showValue && (
           <div className="flex justify-between mb-2">
             {minLabel && (
-              <span
-                className={cn(
-                  "text-white/70 font-minecraft-ten text-xs"
-                )}
-              >
+              <span className={cn("text-white/70 font-minecraft-ten text-xs")}>
                 {minLabel}
               </span>
             )}
             <span
               ref={valueDisplayRef}
-              className={cn(
-                "text-white font-minecraft-ten text-xs"
-              )}
+              className={cn("text-white font-minecraft-ten text-xs")}
             >
               {value}
             </span>
             {maxLabel && (
-              <span
-                className={cn(
-                  "text-white/70 font-minecraft-ten text-xs"
-                )}
-              >
+              <span className={cn("text-white/70 font-minecraft-ten text-xs")}>
                 {maxLabel}
               </span>
             )}
@@ -239,15 +244,24 @@ export function RangeSlider({
         <div
           className={cn(
             "relative rounded-md overflow-hidden backdrop-blur-md transition-colors duration-200",
-            "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+            variant === "flat"
+              ? "border border-white/10"
+              : "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
             "focus-within:ring-2 focus-within:ring-white/30 focus-within:ring-offset-1 focus-within:ring-offset-black/20",
             sizeConfig[size].track,
           )}
           style={{
             backgroundColor: `${accentColor.value}15`,
-            borderColor: `${accentColor.value}40`,
-            borderBottomColor: accentColor.value,
-            boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
+            borderColor:
+              variant === "flat"
+                ? `${accentColor.value}30`
+                : `${accentColor.value}40`,
+            borderBottomColor:
+              variant === "flat" ? `${accentColor.value}30` : accentColor.value,
+            boxShadow:
+              variant === "flat"
+                ? `0 0 0 1px ${accentColor.value}20`
+                : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
           }}
           ref={trackRef}
           onMouseEnter={handleMouseEnter}
@@ -274,15 +288,26 @@ export function RangeSlider({
             ref={thumbRef}
             className={cn(
               "absolute top-1/2 -translate-y-1/2 rounded-full",
-              "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
+              variant === "flat"
+                ? "border border-white/20"
+                : "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]",
               "flex items-center justify-center",
               sizeConfig[size].thumb,
             )}
             style={{
               backgroundColor: `${accentColor.value}50`,
-              borderColor: `${accentColor.value}80`,
-              borderBottomColor: accentColor.value,
-              boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+              borderColor:
+                variant === "flat"
+                  ? `${accentColor.value}60`
+                  : `${accentColor.value}80`,
+              borderBottomColor:
+                variant === "flat"
+                  ? `${accentColor.value}60`
+                  : accentColor.value,
+              boxShadow:
+                variant === "flat"
+                  ? `0 0 0 1px ${accentColor.value}60`
+                  : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
             }}
           >
             <div

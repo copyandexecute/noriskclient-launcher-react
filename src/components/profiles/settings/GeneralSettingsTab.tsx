@@ -98,9 +98,7 @@ export function GeneralSettingsTab({
       } catch (err) {
         console.error("Failed to load NoRisk packs:", err);
         toast.error(
-          `Failed to load NoRisk packs: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `Failed to load NoRisk packs: ${err instanceof Error ? err.message : String(err)}`,
         );
       } finally {
         setLoading(false);
@@ -148,9 +146,7 @@ export function GeneralSettingsTab({
     } catch (err) {
       console.error("Failed to duplicate profile:", err);
       toast.error(
-        `Failed to duplicate profile: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
+        `Failed to duplicate profile: ${err instanceof Error ? err.message : String(err)}`,
       );
     } finally {
       setLoading(false);
@@ -176,6 +172,7 @@ export function GeneralSettingsTab({
             onChange={(e) => updateProfile({ name: e.target.value })}
             placeholder="Enter profile name"
             className="text-2xl py-3"
+            variant="flat"
           />
         </div>
 
@@ -204,6 +201,7 @@ export function GeneralSettingsTab({
                 }
                 options={[{ value: "", label: "none" }, ...noriskPackOptions]}
                 className="text-2xl py-3"
+                variant="flat"
               />
               {editedProfile.selected_norisk_pack_id &&
                 noriskPacks[editedProfile.selected_norisk_pack_id] && (
@@ -219,7 +217,11 @@ export function GeneralSettingsTab({
         </div>
       </div>
 
-      <Card ref={actionsRef} variant="default" className="mt-6 p-4">
+      <Card
+        ref={actionsRef}
+        variant="flat"
+        className="mt-6 p-4 border border-white/10 bg-black/20"
+      >
         <div className="flex flex-wrap gap-4">
           <div className="flex-1 min-w-[250px] flex flex-col justify-between">
             <div>
@@ -227,8 +229,8 @@ export function GeneralSettingsTab({
                 duplicate instance
               </h3>
               <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide select-none">
-                creates a copy of this instance, including worlds, configs, mods,
-                etc.
+                creates a copy of this instance, including worlds, configs,
+                mods, etc.
               </p>
             </div>
             <Button
@@ -261,8 +263,8 @@ export function GeneralSettingsTab({
                 delete instance
               </h3>
               <p className="text-xs text-white/70 mb-3 font-minecraft-ten tracking-wide select-none">
-                permanently deletes this instance from your device, including your
-                worlds, configs, and all installed content.
+                permanently deletes this instance from your device, including
+                your worlds, configs, and all installed content.
               </p>
             </div>
             <Button
