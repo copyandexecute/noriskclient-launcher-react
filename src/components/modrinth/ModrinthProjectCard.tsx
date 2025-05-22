@@ -185,7 +185,7 @@ export function ModrinthProjectCard({
                   />
                 }
                 onClick={handleExpandClick}
-                variant="ghost"
+                colorScheme="ghost"
                 size="sm"
                 className={isLoading ? "animate-pulse" : ""}
                 aria-label={isExpanded ? "Collapse" : "Expand"}

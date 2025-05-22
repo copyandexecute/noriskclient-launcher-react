@@ -126,6 +126,8 @@ pub struct Profile {
     pub description: Option<String>,
     #[serde(default)]
     pub banner: Option<ProfileBanner>, // Banner/background image for the profile
+    #[serde(default)]
+    pub background: Option<ProfileBanner>,
     pub norisk_information: Option<NoriskInformation>,
 }
 
@@ -298,16 +300,13 @@ impl ProfileManager {
             Ok(profile)
         } else {
             // Profile not found in local manager, try standard versions
-            info!(
-                "Profile with ID {} not found in ProfileManager, checking standard versions via global State.",
-                id
-            );
+            //info!( "Profile with ID {} not found in ProfileManager, checking standard versions via global State.", id);
             // Access global state to get NoriskVersionManager
             // This assumes State::get() is available and NoriskVersionManager has get_profile_by_id
             match crate::state::state_manager::State::get().await {
                 Ok(state) => {
                     if let Some(standard_profile) = state.norisk_version_manager.get_profile_by_id(id).await {
-                        info!("Found standard profile '{}' for ID {}", standard_profile.name, id);
+                        //info!("Found standard profile '{}' for ID {}", standard_profile.name, id);
                         Ok(standard_profile)
                     } else {
                         info!("Profile ID {} not found in standard versions either.", id);
@@ -911,7 +910,7 @@ impl ProfileManager {
 
     /// Updates the version of a specific Modrinth mod instance within a profile,
     /// after checking for the presence of required dependencies (by project ID).
-    /// Does NOT automatically add missing dependencies.
+    /// Automatically adds missing dependencies.
     pub async fn update_profile_modrinth_mod_version(
         &self,
         profile_id: Uuid,
@@ -946,19 +945,18 @@ impl ProfileManager {
             })
             .collect();
 
+        // Track missing dependencies to install them later
+        let mut missing_deps = Vec::new();
+
         for dependency in &new_version_details.dependencies {
             if dependency.dependency_type == ModrinthDependencyType::Required {
                 if let Some(dep_project_id) = &dependency.project_id {
                     if !existing_project_ids.contains(dep_project_id) {
-                        error!(
-                            "Update check failed for mod {}: Required dependency project '{}' is missing in profile {}.",
-                            mod_id, dep_project_id, profile_id
+                        info!(
+                            "Required dependency project '{}' is missing in profile {}. Will install it automatically.",
+                            dep_project_id, profile_id
                         );
-                        return Err(AppError::MissingModDependency {
-                            profile_id,
-                            mod_id,
-                            missing_project_id: dep_project_id.clone(),
-                        });
+                        missing_deps.push((dep_project_id.clone(), dependency.version_id.clone()));
                     } else {
                         info!(
                             "Required dependency project '{}' found in profile.",
@@ -973,8 +971,8 @@ impl ProfileManager {
                 }
             }
         }
-        info!("All required dependencies are present in the profile (by project ID).");
-
+        
+        // Now update the mod
         let mod_to_update_index = profile.mods.iter().position(|m| m.id == mod_id);
 
         if let Some(index) = mod_to_update_index {
@@ -1052,12 +1050,110 @@ impl ProfileManager {
             return Err(AppError::ModNotFoundInProfile { profile_id, mod_id });
         }
 
+        // Save changes to the profile first
         drop(profiles);
         self.save_profiles().await?;
         info!(
             "Profile {} saved after updating mod {}.",
             profile_id, mod_id
         );
+
+        // Now install any missing dependencies
+        let mut installed_deps = 0;
+        let mut failed_deps = 0;
+        
+        for (dep_project_id, dep_version_id_opt) in missing_deps {
+            info!("Installing missing dependency: {}", dep_project_id);
+            
+            // Get the profile's game version and loader for compatibility check
+            let profile = self.get_profile(profile_id).await?;
+            let profile_loader = profile.loader.as_str().to_string();
+            
+            // First, try to find the specific version if one was specified
+            if let Some(version_id) = dep_version_id_opt {
+                match modrinth::get_version_details(version_id.clone()).await {
+                    Ok(dep_version) => {
+                        if let Some(primary_file) = dep_version.files.iter().find(|f| f.primary) {
+                            match self.add_modrinth_mod(
+                                profile_id,
+                                dep_version.project_id.clone(),
+                                dep_version.id.clone(),
+                                primary_file.filename.clone(),
+                                primary_file.url.clone(),
+                                primary_file.hashes.sha1.clone(),
+                                Some(dep_version.name.clone()),
+                                Some(dep_version.version_number.clone()),
+                                Some(dep_version.loaders.clone()),
+                                Some(dep_version.game_versions.clone()),
+                                false, // don't recursively add dependencies here
+                            ).await {
+                                Ok(_) => {
+                                    info!("Successfully added dependency: {}", dep_project_id);
+                                    installed_deps += 1;
+                                },
+                                Err(e) => {
+                                    error!("Failed to add dependency {}: {}", dep_project_id, e);
+                                    failed_deps += 1;
+                                }
+                            }
+                            continue;
+                        }
+                    },
+                    Err(e) => {
+                        warn!("Failed to fetch version details for dependency {} ({}): {}. Trying to find compatible version.", 
+                            dep_project_id, version_id, e);
+                    }
+                }
+            }
+            
+            // If specific version not found or no version specified, find compatible version
+            match modrinth::get_mod_versions(
+                dep_project_id.clone(),
+                Some(vec![profile_loader.clone()]),
+                Some(vec![profile.game_version.clone()]),
+            ).await {
+                Ok(versions) => {
+                    if let Some(best_version) = versions.iter().max_by_key(|v| &v.date_published) {
+                        if let Some(primary_file) = best_version.files.iter().find(|f| f.primary) {
+                            match self.add_modrinth_mod(
+                                profile_id,
+                                best_version.project_id.clone(),
+                                best_version.id.clone(),
+                                primary_file.filename.clone(),
+                                primary_file.url.clone(),
+                                primary_file.hashes.sha1.clone(),
+                                Some(best_version.name.clone()),
+                                Some(best_version.version_number.clone()),
+                                Some(best_version.loaders.clone()),
+                                Some(best_version.game_versions.clone()),
+                                false, // don't recursively add dependencies here
+                            ).await {
+                                Ok(_) => {
+                                    info!("Successfully added dependency: {}", dep_project_id);
+                                    installed_deps += 1;
+                                },
+                                Err(e) => {
+                                    error!("Failed to add dependency {}: {}", dep_project_id, e);
+                                    failed_deps += 1;
+                                }
+                            }
+                        } else {
+                            error!("No primary file found for dependency version");
+                            failed_deps += 1;
+                        }
+                    } else {
+                        error!("No compatible version found for dependency {}", dep_project_id);
+                        failed_deps += 1;
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to fetch versions for dependency {}: {}", dep_project_id, e);
+                    failed_deps += 1;
+                }
+            }
+        }
+        
+        info!("Dependency installation complete: {} installed, {} failed", installed_deps, failed_deps);
 
         Ok(())
     }
@@ -1077,10 +1173,7 @@ impl ProfileManager {
                 self.calculate_instance_path_for_profile(profile)
             }
             None => {
-                log::info!(
-                    "Profile {} not found, checking standard versions",
-                    profile_id
-                );
+                //log::info!("Profile {} not found, checking standard versions",profile_id);
                 // Get state to access norisk_version_manager
                 let state = crate::state::state_manager::State::get().await?;
 
@@ -1090,10 +1183,7 @@ impl ProfileManager {
                     .get_profile_by_id(profile_id)
                     .await
                 {
-                    log::info!(
-                        "Found standard profile '{}', converting to temporary profile",
-                        standard_profile.name
-                    );
+                    //log::info!("Found standard profile '{}', converting to temporary profile",standard_profile.name);
                     // Convert to a temporary profile
                     return self.calculate_instance_path_for_profile(&standard_profile);
                 }
@@ -1444,7 +1534,7 @@ impl ProfileManager {
                                     Some(modrinth_version.version_number.clone()),
                                     Some(modrinth_version.loaders.clone()),
                                     Some(modrinth_version.game_versions.clone()),
-                                    true, // add_dependencies = true
+                                    false, // add_dependencies = true
                                 )
                                 .await
                             {

@@ -31,6 +31,9 @@ interface LaunchButtonProps {
   className?: string;
   onVersionChange?: (version: string) => void;
   maxWidth?: string;
+  selectedVersionLabel?: string;
+  mainButtonWidth?: string;
+  mainButtonHeight?: string;
 }
 
 export function LaunchButton({
@@ -39,6 +42,9 @@ export function LaunchButton({
   onVersionChange,
   versions,
   maxWidth = "300px",
+  selectedVersionLabel,
+  mainButtonWidth,
+  mainButtonHeight,
 }: LaunchButtonProps) {
   const [isLaunching, setIsLaunching] = useState(false);
   const { accentColor } = useThemeStore();
@@ -278,17 +284,49 @@ export function LaunchButton({
     return <Icon icon="solar:play-bold" width="24" height="24" />;
   };
 
-  const getMainButtonText = () => {
-    if (isLaunching) {
-      return "STOP";
+  const renderLaunchButtonContent = () => {
+    const actionText = isLaunching ? "STOP" : "LAUNCH";
+
+    let statusSubText: string | null | undefined = null;
+    let statusColorClass = "opacity-85"; // Default for selectedVersionLabel or progress
+
+    if (transientStatus) {
+      statusSubText = transientStatus.message;
+      statusColorClass = transientStatus.color || "text-green-400"; // Fallback for transient
+    } else if (isLaunching) {
+      statusSubText = detailedStatusMessage || currentStep || "Launching...";
+      // Potentially different color for active launching status vs. idle version label
+      // For now, keep opacity-85, but could be e.g., "text-blue-300 opacity-90"
+      statusColorClass = detailedStatusMessage || currentStep ? "opacity-90 text-white" : "opacity-75";
     }
-    return "LAUNCH";
+
+    return (
+      <div className="w-full flex flex-col items-center justify-center leading-none -mt-4">
+        <span className="text-5xl text-center lowercase">{actionText}</span> 
+        
+        {/* Conditional rendering for sub-text */}
+        {(statusSubText || selectedVersionLabel) && (
+          <span 
+            className={cn(
+              "text-xs font-minecraft-ten tracking-normal -mt-1 text-center",
+              statusSubText ? statusColorClass : "opacity-85" // Apply dynamic or default color/opacity
+            )}
+            // If statusSubText is very long, we might need to handle overflow or use title attribute
+            title={typeof statusSubText === 'string' ? statusSubText : selectedVersionLabel}
+          >
+            {statusSubText ? statusSubText : selectedVersionLabel}
+          </span>
+        )}
+      </div>
+    );
   };
   
   const getButtonVariant = () => {
     if (isLaunching) {
       return "destructive";
     }
+    // Removed the condition that kept the button red on profileState.error
+    // Now, if not isLaunching, it will always be default color.
     return "default";
   };
 
@@ -298,65 +336,33 @@ export function LaunchButton({
       style={{ maxWidth }}
     >
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 relative">
+        <div className="flex items-center relative">
           <Button
             onClick={handleLaunch}
             disabled={!selectedVersion}
+            size="xl"
+            icon={undefined}
             variant={getButtonVariant()}
-            size="lg"
-            icon={getMainButtonIcon()}
-            className="flex-1"
+            className={cn("flex-1 rounded-r-none", mainButtonWidth)}
+            heightClassName={mainButtonHeight}
           >
-            {getMainButtonText()}
+            {renderLaunchButtonContent()}
           </Button>
 
           <IconButton
             onClick={handleOpenModal}
             disabled={isLaunching || !versions || versions.length === 0}
-            variant="secondary"
-            size="lg"
-            className="relative overflow-hidden transition-all duration-300"
-            style={{
-              borderColor: `${accentColor.value}80`,
-              borderBottomColor: accentColor.value,
-              boxShadow:
-                "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
-              backgroundColor: `${accentColor.value}10`,
-            }}
-            icon={
-              <Icon icon="solar:alt-arrow-down-bold" width="24" height="24" />
-            }
-          ></IconButton>
+            size="xl"
+            className={cn("rounded-l-none border-l-0", mainButtonHeight)}
+            icon={<Icon icon="solar:alt-arrow-down-bold" width="24" height="24" />}
+            colorScheme={getButtonVariant() === 'destructive' ? 'destructive' : 'default'}
+            aria-label="Select version"
+          />
         </div>
-        
-        {(isLaunching || transientStatus) && (
-          <div 
-            className="absolute top-full left-0 right-0 mt-2 flex justify-center"
-          >
-            <p 
-              className={cn(
-                "text-2xl font-minecraft lowercase whitespace-nowrap",
-                transientStatus ? transientStatus.color : "text-gray-300" 
-              )}
-              title={
-                transientStatus?.message ||
-                detailedStatusMessage ||
-                currentStep ||
-                (isLaunching ? "Wird gestartet..." : "")
-              } 
-            >
-              {transientStatus?.message ||
-                detailedStatusMessage ||
-                currentStep ||
-                (isLaunching ? "Wird gestartet..." : "")}
-            </p>
-          </div>
-        )}
       </div>
 
       {versions && (
         <ProfileSelectionModal
-          versions={versions}
           onVersionChange={handleVersionChange}
           title="Select Version"
         />

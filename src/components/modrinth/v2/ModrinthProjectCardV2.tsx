@@ -214,7 +214,6 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
           installStatus?.is_installed &&
             installStatus?.is_included_in_norisk_pack &&
             "border-l-blue-500",
-          "backdrop-blur-sm"
         )}
         borderVisibility={{
           top: itemIndex === 0,
@@ -262,8 +261,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                   }}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-lg font-semibold text-[color:var(--accent)] truncate font-minecraft-ten normal-case flex-shrink-0 hover:underline cursor-pointer"
-                  style={{ color: accentColor.value }}
+                  className="text-lg text-white text-[color:var(--accent)] truncate font-minecraft-ten normal-case flex-shrink-0 hover:underline cursor-pointer"
                   title={`Open ${hit.title} on Modrinth`}
                 >
                   {hit.title}

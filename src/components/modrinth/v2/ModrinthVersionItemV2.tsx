@@ -276,9 +276,14 @@ export const ModrinthVersionItemV2 = React.memo<ModrinthVersionItemV2Props>(
         <div className="relative z-10 p-2.5">
           <div className="flex flex-col space-y-2">
             <div className="flex justify-between items-baseline gap-2">
-              <h5 className="font-semibold text-gray-100 text-sm font-minecraft-ten normal-case truncate flex-shrink min-w-0">
-                {version.name} ({version.version_number})
-              </h5>
+              <div className="flex-shrink min-w-0">
+                <h5 className="text-gray-100 text-sm font-minecraft-ten normal-case truncate">
+                  {version.name}
+                </h5>
+                <p className="text-gray-400 text-xs font-minecraft-ten normal-case truncate">
+                  {version.version_number}
+                </p>
+              </div>
               <div className="flex items-center space-x-2 text-[10px] text-gray-400 font-minecraft-ten flex-shrink-0">
                 {" "}
                 <span className="flex items-center">

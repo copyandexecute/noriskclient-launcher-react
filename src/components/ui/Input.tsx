@@ -14,6 +14,7 @@ export interface InputProps
   onClear?: () => void;
   error?: string;
   size?: "sm" | "md" | "lg";
+  variant?: "default" | "flat";
 }
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   (
@@ -24,6 +25,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       onClear,
       error,
       size = "md",
+      variant = "default",
       ...props
     },
     ref,
@@ -52,7 +54,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsFocused(true);
 
-      if (containerRef.current) {
+      if (containerRef.current && variant !== "flat") {
         gsap.to(containerRef.current, {
           y: -5,
           boxShadow: error
@@ -68,7 +70,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsFocused(false);
 
-      if (containerRef.current) {
+      if (containerRef.current && variant !== "flat") {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -84,7 +86,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsHovered(true);
 
-      if (!isFocused && containerRef.current) {
+      if (!isFocused && containerRef.current && variant !== "flat") {
         gsap.to(containerRef.current, {
           y: -3,
           boxShadow: error
@@ -100,7 +102,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       if (props.disabled) return;
       setIsHovered(false);
 
-      if (!isFocused && containerRef.current) {
+      if (!isFocused && containerRef.current && variant !== "flat") {
         gsap.to(containerRef.current, {
           y: 0,
           boxShadow: error
@@ -135,46 +137,63 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       lg: "text-3xl",
     };
 
+    // Get border classes based on variant
+    const getBorderClasses = () => {
+      if (variant === "flat") {
+        return "border border-b-2";
+      }
+      return "border-2 border-b-4";
+    };
+
     return (
       <div className="w-full">
         <div
           ref={containerRef}
           className={cn(
             "relative rounded-md transition-all duration-200",
-            "border-2 border-b-4 overflow-hidden",
+            getBorderClasses(),
+            "overflow-hidden",
             error ? "border-red-500" : "",
             props.disabled ? "opacity-50 cursor-not-allowed" : "",
             sizeClasses[size],
             className,
           )}
           style={{
-            backgroundColor: `${accentColor.value}30`,
+            backgroundColor: `${accentColor.value}${variant === "flat" ? "15" : "30"}`,
             borderColor: error
               ? "rgba(239, 68, 68, 0.6)"
-              : `${accentColor.value}60`,
+              : `${accentColor.value}${variant === "flat" ? "40" : "60"}`,
             borderBottomColor: error ? "rgb(185, 28, 28)" : accentColor.value,
-            boxShadow: isFocused
-              ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.4)" : `${accentColor.value}40`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}`
-              : isHovered
-                ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.3)" : `${accentColor.value}30`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.15)" : `${accentColor.value}15`}`
-                : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.1)" : `${accentColor.value}10`}`,
-            transform: isFocused
-              ? "translateY(-5px)"
-              : isHovered
-                ? "translateY(-3px)"
-                : "translateY(0)",
+            boxShadow:
+              variant === "flat"
+                ? "none"
+                : isFocused
+                  ? `0 9px 0 rgba(0,0,0,0.2), 0 12px 16px rgba(0,0,0,0.25), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.4)" : `${accentColor.value}40`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}`
+                  : isHovered
+                    ? `0 7px 0 rgba(0,0,0,0.2), 0 9px 13px rgba(0,0,0,0.2), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.3)" : `${accentColor.value}30`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.15)" : `${accentColor.value}15`}`
+                    : `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${error ? "rgba(239, 68, 68, 0.2)" : `${accentColor.value}20`}, inset 0 0 0 1px ${error ? "rgba(239, 68, 68, 0.1)" : `${accentColor.value}10`}`,
+            transform:
+              variant === "flat"
+                ? "none"
+                : isFocused
+                  ? "translateY(-5px)"
+                  : isHovered
+                    ? "translateY(-3px)"
+                    : "translateY(0)",
           }}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <span
-            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-            style={{
-              backgroundColor: error
-                ? "rgba(239, 68, 68, 0.8)"
-                : `${accentColor.value}80`,
-            }}
-          />
+          {variant !== "flat" && (
+            <span
+              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+              style={{
+                backgroundColor: error
+                  ? "rgba(239, 68, 68, 0.8)"
+                  : `${accentColor.value}80`,
+              }}
+            />
+          )}
 
           <div className="flex items-center h-full w-full">
             {icon && (

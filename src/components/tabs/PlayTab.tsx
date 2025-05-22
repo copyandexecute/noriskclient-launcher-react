@@ -3,13 +3,14 @@
 import { useEffect } from "react";
 import { VersionInfo } from "../launcher/VersionInfo";
 import { NewsSection } from "../news/NewsSection";
-import { LoadingState } from "../ui/LoadingState";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { useProfileStore } from "../../store/profile-store";
 import { Checkbox } from "../ui/Checkbox";
 import { useThemeStore } from "../../store/useThemeStore";
 import { PlayerActionsDisplay } from "../launcher/PlayerActionsDisplay";
+import { RetroGridEffect } from "../effects/RetroGridEffect";
+import { useBackgroundEffectStore, BACKGROUND_EFFECTS } from "../../store/background-effect-store";
 
 export function PlayTab() {
   const {
@@ -21,7 +22,14 @@ export function PlayTab() {
   } = useProfileStore();
 
   const { activeAccount } = useMinecraftAuthStore();
-  const { isBackgroundAnimationEnabled, toggleBackgroundAnimation } = useThemeStore();
+  const { 
+    isBackgroundAnimationEnabled,
+    toggleBackgroundAnimation,
+    staticBackground,
+    toggleStaticBackground,
+    accentColor 
+  } = useThemeStore();
+  const { currentEffect } = useBackgroundEffectStore();
 
   useEffect(() => {
     if (!storeSelectedProfile && profiles.length > 0) {
@@ -38,44 +46,52 @@ export function PlayTab() {
 
   const versions = profiles.map((profile) => ({
     id: profile.id,
-    label: `${profile.name} (${profile.game_version})`,
+    label: `${profile.name}`,
     icon: profile.loader === "vanilla" ? undefined : profile.loader,
     isCustom: profile.loader !== "vanilla",
     profileId: profile.id,
   }));
 
-  const skinUrl = activeAccount?.id
-    ? `https://crafatar.com/skins/${activeAccount.id}`
-    : `https://crafatar.com/skins/606e2ff0-ed77-4842-9d6c-e1d3321c7838`;
-
   return (
-    <div className="flex h-full">
-      <div className="flex-grow flex flex-col items-center justify-center p-8 relative">
-        {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
+    <div className="flex h-full relative">
+      <div className="flex-grow flex flex-col items-center justify-center p-8 relative z-20">
+        {currentEffect === BACKGROUND_EFFECTS.RETRO_GRID && (
+          <RetroGridEffect
+            renderMode="both"
+            isAnimationEnabled={!staticBackground}
+            customGridLineColor={`${accentColor.value}80`}
+          />
+        )}
 
-        <VersionInfo
+        {/* <VersionInfo
           profileId={currentDisplayProfile?.id || ""}
           className="absolute top-6 left-6 z-10"
-        />
+        /> */}
 
-        <PlayerActionsDisplay 
-              skinUrl={skinUrl}
-          playerName={activeAccount?.minecraft_username || activeAccount?.username}
-          launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
-          onLaunchVersionChange={handleVersionChange}
-          launchButtonVersions={versions}
-          className="z-10"
-        />
+        <div className="relative z-10">
+          {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
 
+          <PlayerActionsDisplay
+            displayMode="playerName"
+            playerName={activeAccount?.minecraft_username || activeAccount?.username}
+            launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
+            onLaunchVersionChange={handleVersionChange}
+            launchButtonVersions={versions}
+            className=""
+          />
+        </div>
       </div>
 
-      <NewsSection className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col" />
+      <NewsSection className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col relative z-10" />
 
       <div className="absolute bottom-4 left-4 z-20">
         <Checkbox
           label="Animation"
-          checked={isBackgroundAnimationEnabled}
-          onChange={toggleBackgroundAnimation}
+          checked={!staticBackground}
+          onChange={() => {
+            toggleStaticBackground();
+            toggleBackgroundAnimation();
+          }}
           customSize="sm"
         />
       </div>

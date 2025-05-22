@@ -22,7 +22,12 @@ interface ProfileSettingsProps {
   onClose: () => void;
 }
 
-type SettingsTab = "general" | "installation" | "java" | "window" | "export_options";
+type SettingsTab =
+  | "general"
+  | "installation"
+  | "java"
+  | "window"
+  | "export_options";
 
 export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const { updateProfile, deleteProfile } = useProfileStore();
@@ -86,7 +91,6 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       });
 
       toast.success("Profile saved successfully!");
-
     } catch (err) {
       console.error("Failed to save profile:", err);
       toast.error("Failed to save profile. Please try again.");
@@ -100,21 +104,22 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       setIsDeleting(true);
       const deletePromise = deleteProfile(profile.id);
 
-      toast.promise(deletePromise, {
-        loading: `Deleting profile '${profile.name}'...`,
-        success: () => {
-          onClose();
-          return `Profile '${profile.name}' deleted successfully!`;
-        },
-        error: (err) => {
-          const errorMessage =
-            err instanceof Error ? err.message : String(err);
-          return `Failed to delete profile: ${errorMessage}`;
-        },
-      })
-      .finally(() => {
-        setIsDeleting(false);
-      });
+      toast
+        .promise(deletePromise, {
+          loading: `Deleting profile '${profile.name}'...`,
+          success: () => {
+            onClose();
+            return `Profile '${profile.name}' deleted successfully!`;
+          },
+          error: (err) => {
+            const errorMessage =
+              err instanceof Error ? err.message : String(err);
+            return `Failed to delete profile: ${errorMessage}`;
+          },
+        })
+        .finally(() => {
+          setIsDeleting(false);
+        });
     } catch (err) {
       console.error("Error during delete initiation:", err);
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -223,7 +228,11 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           }}
         >
           <div className="p-4">
-            <Card variant="default" className="mb-6 p-3" withAnimation={isBackgroundAnimationEnabled}>
+            <Card
+              variant="flat"
+              className="mb-6 p-3"
+              withAnimation={isBackgroundAnimationEnabled}
+            >
               <div className="flex items-center gap-2">
                 <Icon
                   icon="solar:settings-bold"
@@ -260,7 +269,10 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
                     }}
                     onClick={() => {
                       if (activeTab !== tab.id) {
-                        if (isBackgroundAnimationEnabled && contentRef.current) {
+                        if (
+                          isBackgroundAnimationEnabled &&
+                          contentRef.current
+                        ) {
                           gsap.to(contentRef.current, {
                             opacity: 0,
                             y: 20,

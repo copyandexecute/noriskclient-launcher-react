@@ -159,6 +159,7 @@ export interface Profile {
   is_standard_version: boolean;
   description: string | null;
   banner: ProfileBanner | null;
+  background: ProfileBanner | null;
   norisk_information: NoriskInformation | null;
 }
 
@@ -187,6 +188,9 @@ export interface UpdateProfileParams {
   selected_norisk_pack_id?: string;
   group?: string | null;
   description?: string | null;
+  clear_selected_norisk_pack?: boolean;
+  banner?: ProfileBanner | null;
+  background?: ProfileBanner | null;
 }
 
 export interface CopyProfileParams {
@@ -200,6 +204,13 @@ export interface ExportProfileParams {
   file_name: string;
   include_files?: string[];
   open_folder: boolean;
+}
+
+// --- Payload for upload_profile_icon command ---
+export interface UploadProfileIconPayload {
+  path?: string;      // Source path of the image file (optional)
+  profileId: string; // UUID of the profile (as string)
+  imageType: string; // "icon" or "background"
 }
 
 // --- Types for Commands ---
@@ -258,6 +269,48 @@ export interface ContentInstallStatus {
   norisk_pack_item_details?: NoRiskPackItemDetails;
 }
 
+/**
+ * Request parameters for a single content item in a batch check
+ */
+export interface ContentCheckRequest {
+  project_id?: string | null;
+  version_id?: string | null;
+  file_hash_sha1?: string | null;
+  file_name?: string | null;
+  project_type?: string | null;
+  game_version?: string | null;
+  loader?: string | null;
+  pack_version_number?: string | null;
+  request_id?: string | null; // Optional client ID to match requests with responses
+}
+
+/**
+ * Parameters for the `batch_check_content_installed` Tauri command.
+ */
+export interface BatchCheckContentParams {
+  profile_id: string; // Uuid -> string
+  requests: ContentCheckRequest[];
+}
+
+/**
+ * Result for a single content check request in the batch response
+ */
+export interface ContentCheckResult {
+  request_id?: string | null; // Same ID that was provided in the request
+  status: ContentInstallStatus;
+  project_id?: string | null;
+  version_id?: string | null;
+  file_name?: string | null;
+  project_type?: string | null;
+}
+
+/**
+ * Return type for the `batch_check_content_installed` Tauri command.
+ */
+export interface BatchContentInstallStatus {
+  results: ContentCheckResult[];
+}
+
 // Added: Type for Screenshot Information
 export interface ScreenshotInfo {
   filename: string;
@@ -269,4 +322,44 @@ export interface ScreenshotInfo {
 export interface AllProfilesAndLastPlayed {
   all_profiles: Profile[];
   last_played_profile_id: string | null;
+}
+
+// --- Generic Content Types ---
+
+// Ensure ContentType enum/type is comprehensive if not already defined elsewhere
+// For this example, assuming it's similar to the Rust enum and defined in ./content.ts
+// export enum ContentType { ResourcePack, ShaderPack, DataPack, Mod }
+
+export interface GenericModrinthInfo {
+  project_id: string;
+  version_id: string;
+  name: string;
+  version_number: string;
+  download_url?: string | null; // Making it optional as in Rust struct
+}
+
+export interface LocalContentItem {
+  filename: string;
+  path_str: string; 
+  sha1_hash?: string | null;
+  file_size: number; // u64 in Rust maps to number in TS
+  is_disabled: boolean;
+  is_directory: boolean;
+  content_type: ContentType; 
+  modrinth_info?: GenericModrinthInfo | null;
+  source_type?: string | null; // For identifying "custom" mods
+  norisk_info?: NoriskModIdentifier | null; // Identifier for NoRiskMods
+  fallback_version?: string | null; // Fallback version from compatibility target
+  id?: string | null; // Added optional ID field from ModProfileEntry.id
+  associated_loader?: ModLoader | null; // Added associated_loader from ModProfileEntry
+  // Frontend specific fields can be added here if needed, e.g., for UI state
+  // local_icon_data_url?: string; // Example if we were to add this later
+}
+
+// --- Params for get_local_content command ---
+export interface LoadItemsParams {
+  profile_id: string; // UUID
+  content_type: ContentType; // Enum: ResourcePack, ShaderPack, DataPack
+  calculate_hashes: boolean;
+  fetch_modrinth_data: boolean;
 }

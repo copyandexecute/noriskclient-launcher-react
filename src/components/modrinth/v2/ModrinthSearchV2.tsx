@@ -45,7 +45,7 @@ import {
   type UninstallContentPayload,
   type ToggleContentPayload
 } from '../../../types/content';
-import type { ContentInstallStatus } from '../../../types/profile'; // For the extended status
+import type { ContentInstallStatus, ContentCheckRequest, BatchCheckContentParams } from '../../../types/profile'; // For the extended status
 
 import { useProfileStore } from '../../../store/profile-store'; // Hinzufügen des ProfileStore Imports
 import { Virtuoso } from 'react-virtuoso'; // Import Virtuoso
@@ -65,6 +65,7 @@ export interface ModrinthSearchV2Props {
   selectedProfileId?: string; // Optional ID of pre-selected profile
   initialSidebarVisible?: boolean; // New prop for initial sidebar visibility
   overrideDisplayContext?: "detail" | "standalone"; // New prop
+  initialProjectType?: ModrinthProjectType; // Added new prop
 }
 
 const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'];
@@ -85,10 +86,11 @@ export function ModrinthSearchV2({
   selectedProfileId,
   initialSidebarVisible = true, // Default to true if not provided
   overrideDisplayContext, // Destructure new prop
+  initialProjectType, // Added new prop
 }: ModrinthSearchV2Props) {
   const searchResultsAreaRef = useRef<HTMLDivElement>(null); // Ref for the scrollable area
   const [searchTerm, setSearchTerm] = useState('');
-  const [projectType, setProjectType] = useState<ModrinthProjectType>('mod');
+  const [projectType, setProjectType] = useState<ModrinthProjectType>(initialProjectType || 'mod');
   const [searchResults, setSearchResults] = useState<ModrinthSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,11 +160,13 @@ export function ModrinthSearchV2({
   // New state for tracking which projects are installed in the selected profile
   const [installedProjects, setInstalledProjects] = useState<Record<string, ContentInstallStatus | null>>({}); // Updated type
 
-  // Add a state for tracking installed versions
-  const [installedVersions, setInstalledVersions] = useState<Record<string, ContentInstallStatus | null>>({}); // Updated type
+  // Change installedVersions to be keyed by profileId+versionId
+  const [installedVersions, setInstalledVersions] = useState<Record<string, Record<string, ContentInstallStatus>>>({});
 
   // Internal state for profiles, synced with the prop
   const [internalProfiles, setInternalProfiles] = useState<Profile[]>(initialProfiles);
+  const justInstalledOrToggledRef = useRef(false); // New ref to prevent re-check loops
+
   useEffect(() => {
     setInternalProfiles(initialProfiles);
     // If a selectedProfileId is passed as a prop, find and set it.
@@ -539,82 +543,183 @@ export function ModrinthSearchV2({
     
     console.log(`Checking installation status for ${displayedVersions.length} displayed versions of project ${projectId}`);
     
-    const projectInNoRiskStatus = await ProfileService.isContentInstalled({
-      profile_id: selectedProfile.id,
-      project_id: projectId,
-      project_type: projectType
-    });
-
-    const newInstalledState: Record<string, ContentInstallStatus | null> = {}; // Ensure this uses the full type
-
-    for (const version of displayedVersions) {
-      try {
-        // Skip cache for versions in forceRefresh array (e.g. recently installed/toggled)
-        if (installedVersions[version.id] && !forceRefresh.includes(version.id)) {
-          // If we already have a full status, only update if necessary or skip
-          // For now, let's assume if it exists, it's up-to-date to avoid re-fetching constantly
-          // This could be refined later if partial updates are needed.
-          newInstalledState[version.id] = installedVersions[version.id];
-          continue; 
-        }
-        
-        const primaryFile = version.files.find(file => file.primary) || version.files[0];
-        if (!primaryFile) {
-          newInstalledState[version.id] = {
-            is_installed: false,
-            is_included_in_norisk_pack: false,
-            is_specific_version_in_pack: false,
-            is_enabled: null,
-            found_item_details: null,
-            norisk_pack_item_details: null,
-          };
+    try {
+      // Create batch requests for all versions to check
+      const requests: ContentCheckRequest[] = [];
+      
+      // First request for just the project to check NoRisk pack status
+      requests.push({
+        project_id: projectId,
+        project_type: projectType,
+        request_id: `project-${projectId}`
+      });
+      
+      // Then requests for individual versions
+      for (const version of displayedVersions) {
+        // Skip versions we don't need to refresh
+        if (installedVersions[selectedProfile.id]?.[version.id] && !forceRefresh.includes(version.id)) {
           continue;
         }
         
-        // This call should now return the full ContentInstallStatus
-        const statusFromService = await ProfileService.isContentInstalled({
-          profile_id: selectedProfile.id,
+        const primaryFile = version.files.find(file => file.primary) || version.files[0];
+        if (!primaryFile) continue;
+        
+        requests.push({
           project_id: projectId,
           version_id: version.id,
           file_hash_sha1: primaryFile.hashes?.sha1,
+          file_name: primaryFile.filename,
           project_type: projectType,
           game_version: version.game_versions[0],
-          loader: version.loaders[0], 
+          loader: version.loaders[0],
           pack_version_number: version.version_number,
-          file_name: primaryFile.filename
+          request_id: version.id // Use version.id as request_id for mapping
         });
-        
-        // Ensure all fields from statusFromService are assigned
-          newInstalledState[version.id] = {
-          is_installed: statusFromService.is_installed,
-          is_included_in_norisk_pack: projectInNoRiskStatus.is_included_in_norisk_pack && statusFromService.is_specific_version_in_pack,
-          is_specific_version_in_pack: statusFromService.is_specific_version_in_pack,
-          is_enabled: statusFromService.is_enabled !== undefined ? statusFromService.is_enabled : null, // Handle undefined
-          found_item_details: statusFromService.found_item_details || null, // Handle undefined
-          norisk_pack_item_details: statusFromService.norisk_pack_item_details || null,
-        };
+      }
+      
+      if (requests.length === 0) return;
+      
+      // Make the batch API call
+      const batchResults = await ProfileService.batchCheckContentInstalled({
+        profile_id: selectedProfile.id,
+        requests
+      });
+      
+      // Debug the entire response
+      console.log("Batch check results:", batchResults);
+      
+      // Process the results
+      const newInstalledState: Record<string, ContentInstallStatus | null> = 
+        installedVersions[selectedProfile.id] || {};
+      let projectInNoRiskStatus: ContentInstallStatus | null = null;
+      
+      batchResults.results.forEach(result => {
+        if (result.request_id === `project-${projectId}`) {
+          // This is the project-level check for NoRisk pack
+          projectInNoRiskStatus = result.status;
+        } else if (result.request_id) {
+          // This is a version check
+          newInstalledState[result.request_id] = {
+            ...result.status,
+            // If project is in NoRisk pack, set is_included_in_norisk_pack based on version match
+            is_included_in_norisk_pack: 
+              projectInNoRiskStatus?.is_included_in_norisk_pack && result.status.is_specific_version_in_pack
+          };
+        }
+      });
+      
+      // For versions we skipped (already in cache), keep them in the state
+      for (const version of displayedVersions) {
+        if (!newInstalledState[version.id] && installedVersions[selectedProfile.id]?.[version.id]) {
+          newInstalledState[version.id] = installedVersions[selectedProfile.id][version.id];
+        }
+      }
+      
+      if (Object.keys(newInstalledState).length > 0) {
+        setInstalledVersions(prev => {
+          const newState = { ...prev };
+          if (!newState[selectedProfile.id]) {
+            newState[selectedProfile.id] = {};
+          }
+          
+          // Merge the newInstalledState into the profile's versions
+          newState[selectedProfile.id] = { 
+            ...newState[selectedProfile.id],
+            ...newInstalledState 
+          };
+          
+          return newState;
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to batch check versions for project ${projectId}:`, error);
+      
+      // Fallback to original method if batch fails
+      try {
+        const projectInNoRiskStatus = await ProfileService.isContentInstalled({
+          profile_id: selectedProfile.id,
+          project_id: projectId,
+          project_type: projectType
+        });
 
-      } catch (error) {
-        console.error(`Failed to check status for version ${version.version_number}:`, error);
-        newInstalledState[version.id] = {
-          is_installed: false,
-          is_included_in_norisk_pack: false,
-          is_specific_version_in_pack: false,
-          is_enabled: null,
-          found_item_details: null,
-          norisk_pack_item_details: null,
-        };
+        const newInstalledState: Record<string, ContentInstallStatus | null> = {};
+
+        for (const version of displayedVersions) {
+          try {
+            // Skip versions we don't need to refresh
+            if (installedVersions[selectedProfile.id]?.[version.id] && !forceRefresh.includes(version.id)) {
+              newInstalledState[version.id] = installedVersions[selectedProfile.id][version.id];
+              continue; 
+            }
+            
+            const primaryFile = version.files.find(file => file.primary) || version.files[0];
+            if (!primaryFile) {
+              newInstalledState[version.id] = {
+                is_installed: false,
+                is_included_in_norisk_pack: false,
+                is_specific_version_in_pack: false,
+                is_enabled: null,
+                found_item_details: null,
+                norisk_pack_item_details: null,
+              };
+              continue;
+            }
+            
+            const statusFromService = await ProfileService.isContentInstalled({
+              profile_id: selectedProfile.id,
+              project_id: projectId,
+              version_id: version.id,
+              file_hash_sha1: primaryFile.hashes?.sha1,
+              project_type: projectType,
+              game_version: version.game_versions[0],
+              loader: version.loaders[0], 
+              pack_version_number: version.version_number,
+              file_name: primaryFile.filename
+            });
+            
+            newInstalledState[version.id] = {
+              is_installed: statusFromService.is_installed,
+              is_included_in_norisk_pack: projectInNoRiskStatus.is_included_in_norisk_pack && statusFromService.is_specific_version_in_pack,
+              is_specific_version_in_pack: statusFromService.is_specific_version_in_pack,
+              is_enabled: statusFromService.is_enabled !== undefined ? statusFromService.is_enabled : null,
+              found_item_details: statusFromService.found_item_details || null,
+              norisk_pack_item_details: statusFromService.norisk_pack_item_details || null,
+            };
+          } catch (error) {
+            console.error(`Failed to check status for version ${version.version_number}:`, error);
+            newInstalledState[version.id] = {
+              is_installed: false,
+              is_included_in_norisk_pack: false,
+              is_specific_version_in_pack: false,
+              is_enabled: null,
+              found_item_details: null,
+              norisk_pack_item_details: null,
+            };
+          }
+        }
+
+        if (Object.keys(newInstalledState).length > 0) {
+          setInstalledVersions(prev => {
+            const newState = { ...prev };
+            if (!newState[selectedProfile.id]) {
+              newState[selectedProfile.id] = {};
+            }
+            
+            // Merge the newInstalledState into the profile's versions
+            newState[selectedProfile.id] = { 
+              ...newState[selectedProfile.id],
+              ...newInstalledState 
+            };
+            
+            return newState;
+          });
+        }
+      } catch (e) {
+        console.error(`Failed to get project status for ${projectId}:`, e);
       }
     }
-
-    if (Object.keys(newInstalledState).length > 0) {
-      setInstalledVersions(prev => ({
-        ...prev,
-        ...newInstalledState // newInstalledState now contains full ContentInstallStatus objects
-      }));
-    }
   };
-  
+
   // Handler for version filter changes
   const handleVersionFilterChange = (projectId: string, filterType: 'gameVersions' | 'loaders' | 'versionType', value: string | string[]) => {
     setVersionFilters(prev => ({
@@ -698,34 +803,52 @@ export function ModrinthSearchV2({
     setSelectedProject(project);
     setInstallModalOpen(true);
     setLoadingStatus(true);
-    setInstallStatus({});
-    
-    try {
-      // Check installation status for each profile
-      const statuses: Record<string, boolean> = {};
+    setInstallStatus({}); // Reset install status
 
-      console.log(version);
-      
+    try {
+      const primaryFile = version.files.find(file => file.primary) || version.files[0];
+      if (!primaryFile) {
+        throw new Error("No primary file available for this version");
+      }
+
+      const statuses: Record<string, boolean> = {};
+      // Initialize all statuses to false
       for (const profile of internalProfiles) {
-        // Check if content is already installed in this profile
-        const status = await ProfileService.isContentInstalled({
-          profile_id: profile.id,
-          project_id: project.project_id,
-          version_id: version.id,
-          project_type: project.project_type,
-          game_version: version.game_versions[0],
-          loader: version.loaders[0],
-          file_hash_sha1: version.files[0].hashes?.sha1,
-          pack_version_number: version.version_number
-        });
-        
-        statuses[profile.id] = status.is_installed;
+        statuses[profile.id] = false;
+      }
+
+      // Perform individual checks for each profile
+      for (const profile of internalProfiles) {
+        try {
+          const status = await ProfileService.isContentInstalled({
+            profile_id: profile.id,
+            project_id: project.project_id,
+            version_id: version.id,
+            project_type: project.project_type as ModrinthProjectType, // Cast to ensure compatibility
+            game_version: version.game_versions[0], // Use first game version
+            loader: version.loaders[0], // Use first loader
+            file_hash_sha1: primaryFile.hashes?.sha1,
+            pack_version_number: version.version_number, // Use actual version number for pack checks
+            file_name: primaryFile.filename,
+          });
+          statuses[profile.id] = !!status.is_installed; // Ensure boolean
+          console.log(`[openInstallModal] Profile ${profile.id} ('${profile.name}') status for ${project.title} v${version.version_number}: ${status.is_installed}`);
+        } catch (e) {
+          console.error(`[openInstallModal] Failed to check status for profile ${profile.id} ('${profile.name}'):`, e);
+          statuses[profile.id] = false; // Default to false on error
+        }
       }
       
       setInstallStatus(statuses);
+
     } catch (error) {
-      console.error("Failed to check installation status:", error);
-      toast.error("Failed to check installation status");
+      console.error("[openInstallModal] Failed to check installation status for modal:", error);
+      // Fallback: Initialize all statuses to false if there's a general error (e.g., no primary file)
+      const fallbackStatuses: Record<string, boolean> = {};
+      internalProfiles.forEach(profile => {
+        fallbackStatuses[profile.id] = false;
+      });
+      setInstallStatus(fallbackStatuses);
     } finally {
       setLoadingStatus(false);
     }
@@ -795,11 +918,23 @@ export function ModrinthSearchV2({
         [selectedProject.project_id]: getStatusForNewInstall(prev[selectedProject.project_id])
       }));
       
-      setInstalledVersions(prev => ({
-        ...prev,
-        [selectedVersion.id]: getStatusForNewInstall(prev[selectedVersion.id])
-      }));
+      // Fix für den TypeScript-Fehler: Verwende die korrekte verschachtelte Struktur
+      setInstalledVersions(prev => {
+        const newState = { ...prev };
+        const currentProfileId = profileId;
+        
+        if (!newState[currentProfileId]) {
+          newState[currentProfileId] = {};
+        }
+        
+        newState[currentProfileId][selectedVersion.id] = getStatusForNewInstall(
+          newState[currentProfileId][selectedVersion.id]
+        );
+        
+        return newState;
+      });
 
+      justInstalledOrToggledRef.current = true; // Set flag
       if (onInstallSuccess) {
         onInstallSuccess();
       }
@@ -815,62 +950,81 @@ export function ModrinthSearchV2({
   // New function to install directly to the selected profile without opening a modal
   const handleDirectInstall = async (project: ModrinthSearchHit, version: ModrinthVersion) => {
     if (!selectedProfile) {
+      // Open the install modal instead of showing an error
       openInstallModal(project, version);
       return;
     }
-    setInstallingVersion(prev => ({ ...prev, [version.id]: true })); // Start loading for this version
+    
     const profileId = selectedProfile.id;
     const profileName = selectedProfile.name;
     
-      await toast.promise(
-        async () => {
-          const primaryFile = version.files.find(file => file.primary) || version.files[0];
-          if (!primaryFile) {
-          throw new Error("No download file available for the selected version.");
-        }
-
-        const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
-        if (!mappedContentType) {
-          // The helper function shows its own toast for invalid types, so just throw to be caught by toast.promise.
-          throw new Error(`Unsupported project type for installation: ${project.project_type}`);
+    setInstallingVersion(prev => ({ ...prev, [version.id]: true }));
+    
+    toast.promise(
+      async () => {
+        const primaryFile = version.files.find(file => file.primary) || version.files[0];
+        if (!primaryFile) {
+          throw new Error("No primary file found for this version");
         }
         
-        // Special handling for modpacks (should be caught by mapModrinthProjectTypeToNrContentType but as a safeguard)
-        if (project.project_type === 'modpack') {
-            throw new Error("Modpacks must be installed as new profiles.");
+        // Based on project type
+        if (project.project_type === 'mod' || project.project_type === 'modpack') {
+          // Use mod-specific API for mods and modpacks
+          await ProfileService.addModrinthModToProfile(
+            profileId,
+            project.project_id,
+            version.id,
+            primaryFile.filename,
+            primaryFile.url,
+            primaryFile.hashes?.sha1 || undefined,
+            project.title,
+            version.version_number,
+            version.loaders,
+            version.game_versions
+          );
+        } else {
+          // Use content API for resourcepacks, shaders, and datapacks
+          await ProfileService.addModrinthContentToProfile(
+            profileId,
+            project.project_id,
+            version.id,
+            primaryFile.filename,
+            primaryFile.url,
+            primaryFile.hashes?.sha1 || null,
+            project.title,
+            version.version_number,
+            project.project_type
+          );
         }
-
-        const payload: InstallContentPayload = {
-          profile_id: profileId,
-          project_id: project.project_id,
-          version_id: version.id,
-          file_name: primaryFile.filename,
-          download_url: primaryFile.url,
-          file_hash_sha1: primaryFile.hashes?.sha1 || undefined,
-          content_name: project.title,
-          version_number: version.version_number,
-          content_type: mappedContentType,
-          loaders: version.loaders,
-          game_versions: version.game_versions,
-        };
-
-        await installContentToProfile(payload);
         
-        // Update project status - always set to installed when a version is installed
-          setInstalledProjects(prev => ({
-            ...prev,
+        // Update project status for this profile - always set to installed when a version is installed
+        setInstalledProjects(prev => ({
+          ...prev,
           [project.project_id]: getStatusForNewInstall(prev[project.project_id])
-          }));
-          
-        // Update version status to installed and enabled
-          setInstalledVersions(prev => ({
-            ...prev,
-          [version.id]: getStatusForNewInstall(prev[version.id])
         }));
+        
+        // Update version status to installed and enabled for this profile
+        setInstalledVersions(prev => {
+          // Erstelle eine Kopie des vorherigen Zustands
+          const newState = { ...prev };
+          
+          // Stelle sicher, dass der Profil-Eintrag existiert
+          if (!newState[profileId]) {
+            newState[profileId] = {};
+          }
+          
+          // Aktualisiere den Versions-Status für dieses Profil
+          newState[profileId][version.id] = getStatusForNewInstall(
+            newState[profileId][version.id]
+          );
+          
+          return newState;
+        });
         
         // No need to call checkDisplayedVersionsStatus since we already know the state
         // This reduces server load and improves performance
 
+        justInstalledOrToggledRef.current = true; // Set flag
         if (onInstallSuccess) {
             onInstallSuccess();
         }
@@ -971,168 +1125,6 @@ export function ModrinthSearchV2({
     }
   }
 
-  // Function to handle quick install
-  const quickInstall = async (project: ModrinthSearchHit) => {
-    // Check if a profile is selected - if yes, install directly
-    if (selectedProfile) {
-      setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: true })); // Start loading for this project
-      try {
-        await toast.promise(
-          async () => {
-            // Fetch versions for this project
-            const versions = await ModrinthService.getModVersions(project.project_id);
-            
-            if (versions.length === 0) {
-              throw new Error('No versions found for this project');
-            }
-            
-            // Sort versions by date (newest first)
-            const sortedVersions = versions.sort((a, b) => 
-              new Date(b.date_published).getTime() - new Date(a.date_published).getTime()
-            );
-            
-            // Find the best version for this profile
-            const bestVersion = findBestVersionForProfile(selectedProfile, sortedVersions);
-            if (!bestVersion) {
-              throw new Error(`No compatible version found for ${selectedProfile.name}`);
-            }
-            
-            // Find primary file for the best version
-            const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
-            if (!primaryFile) {
-              throw new Error("No download file available");
-            }
-            
-            // Choose the right installation method based on project type
-            if (project.project_type === 'mod' || project.project_type === 'modpack') {
-              // Use mod-specific API for mods and modpacks
-              await ProfileService.addModrinthModToProfile(
-                selectedProfile.id,
-                project.project_id,
-                bestVersion.id,
-                primaryFile.filename,
-                primaryFile.url,
-                primaryFile.hashes?.sha1 || undefined,
-                project.title,
-                bestVersion.version_number,
-                bestVersion.loaders,
-                bestVersion.game_versions
-              );
-            } else {
-              // Use content API for resourcepacks, shaders, and datapacks
-              await ProfileService.addModrinthContentToProfile(
-                selectedProfile.id,
-                project.project_id,
-                bestVersion.id,
-                primaryFile.filename,
-                primaryFile.url,
-                primaryFile.hashes?.sha1 || null,
-                project.title,
-                bestVersion.version_number,
-                project.project_type
-              );
-            }
-            
-            // Update installedProjects state to show as installed in the UI
-            setInstalledProjects(prev => ({
-              ...prev,
-              [project.project_id]: getStatusForNewInstall(prev[project.project_id])
-            }));
-            
-            // Update installedVersions state to show this version as installed
-            setInstalledVersions(prev => ({
-              ...prev,
-              [bestVersion.id]: getStatusForNewInstall(prev[bestVersion.id])
-            }));
-            
-            return { version: bestVersion.version_number };
-          },
-          {
-            loading: `Finding best version and installing ${project.title} to ${selectedProfile.name}...`,
-            success: (data) => `Successfully installed ${project.title} v${data.version} to ${selectedProfile.name}`,
-            error: (err) => `Failed to install: ${err instanceof Error ? err.message : String(err.message)}`
-          }
-        );
-        return; // Skip opening modal after direct installation
-      } catch (error) {
-        console.error("Direct quick install error:", error);
-        // Continue to modal if direct installation fails
-      } finally {
-        setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false })); // Stop loading for this project
-      }
-    }
-    
-    // If no profile is selected or direct install failed, open the modal as before
-    setQuickInstallProject(project);
-    setQuickInstallModalOpen(true);
-    setQuickInstallLoading(true);
-    setQuickInstallVersions(null);
-    setQuickInstallError(null);
-    setInstallStatus({});
-    
-    try {
-      // Fetch versions for this project
-      const versions = await ModrinthService.getModVersions(project.project_id);
-      
-      if (versions.length === 0) {
-        setQuickInstallError('No versions found for this project');
-        setQuickInstallLoading(false);
-        return;
-      }
-      
-      // Sort versions by date (newest first)
-      const sortedVersions = versions.sort((a, b) => 
-        new Date(b.date_published).getTime() - new Date(a.date_published).getTime()
-      );
-      
-      setQuickInstallVersions(sortedVersions);
-      
-      // Check installation status for each profile
-      const statuses: Record<string, boolean> = {};
-      
-      for (const profile of internalProfiles) {
-        // Find the best version for this profile
-        const bestVersion = findBestVersionForProfile(profile, sortedVersions);
-        
-        // If no compatible version, skip installation check
-        if (!bestVersion) {
-          statuses[profile.id] = false;
-          continue;
-        }
-        
-        // Find primary file for the best version
-        const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
-        
-        if (!primaryFile) {
-          statuses[profile.id] = false;
-          continue;
-        }
-        
-        // Check if content is already installed with the specific details of the best version
-        const status = await ProfileService.isContentInstalled({
-          profile_id: profile.id,
-          project_id: project.project_id,
-          version_id: bestVersion.id,
-          project_type: project.project_type,
-          game_version: bestVersion.game_versions[0],
-          loader: bestVersion.loaders[0],
-          file_hash_sha1: primaryFile.hashes?.sha1,
-          pack_version_number: bestVersion.version_number,
-          file_name: primaryFile.filename
-        });
-        
-        statuses[profile.id] = status.is_installed;
-      }
-      
-      setInstallStatus(statuses);
-    } catch (error) {
-      console.error("Failed to fetch versions:", error);
-      setQuickInstallError(`Failed to fetch versions: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setQuickInstallLoading(false);
-    }
-  };
-
   // Find the best version for a profile
   const findBestVersionForProfile = (profile: Profile, versions: ModrinthVersion[]): ModrinthVersion | null => {
     if (!profile || !versions || versions.length === 0) return null;
@@ -1156,6 +1148,182 @@ export function ModrinthSearchV2({
     
     // Last resort: just return the latest version
     return versions[0];
+  };
+
+  // Function to handle quick install
+  const quickInstall = async (project: ModrinthSearchHit) => {
+    if (selectedProfile) {
+      setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: true }));
+      
+      try {
+        // Step 1: Fetch versions
+        const versions = await ModrinthService.getModVersions(project.project_id);
+        if (!versions || versions.length === 0) {
+          toast(`No versions found for ${project.title}. Opening selection modal.`);
+          setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+          // Fall through to modal opening logic below
+        } else {
+          // Step 2: Find best version
+          const sortedVersions = versions.sort((a, b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime());
+          const bestVersionForDirectInstall = findBestVersionForProfile(selectedProfile, sortedVersions);
+
+          if (!bestVersionForDirectInstall) {
+            toast(`No compatible version of ${project.title} for profile '${selectedProfile.name}'. Opening selection modal.`);
+            setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+            // Fall through to modal opening logic below
+          } else {
+            // Step 3: Get primary file
+            const primaryFileForDirectInstall = bestVersionForDirectInstall.files.find(f => f.primary) || bestVersionForDirectInstall.files[0];
+            if (!primaryFileForDirectInstall) {
+              toast(`No primary file for selected version of ${project.title}. Opening selection modal.`);
+              setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+              // Fall through to modal opening logic below
+            } else {
+              // Step 4: Check content type
+              const mappedContentType = mapModrinthProjectTypeToNrContentType(project.project_type as ModrinthProjectType);
+              if (!mappedContentType) {
+                // mapModrinthProjectTypeToNrContentType already shows a toast (e.g., for modpacks).
+                // This means the project type is not suitable for direct content installation.
+                // Do not open the modal in this case.
+                setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+                return; // EXIT: Not suitable for direct install or modal.
+              }
+
+              // Step 5: Attempt direct install
+              const payload: InstallContentPayload = {
+                profile_id: selectedProfile.id,
+                project_id: project.project_id,
+                version_id: bestVersionForDirectInstall.id,
+                file_name: primaryFileForDirectInstall.filename,
+                download_url: primaryFileForDirectInstall.url,
+                file_hash_sha1: primaryFileForDirectInstall.hashes?.sha1 || undefined,
+                content_name: project.title,
+                version_number: bestVersionForDirectInstall.version_number,
+                content_type: mappedContentType,
+                loaders: bestVersionForDirectInstall.loaders,
+                game_versions: bestVersionForDirectInstall.game_versions,
+              };
+
+              await toast.promise(
+                installContentToProfile(payload),
+                {
+                  loading: `Installing ${project.title} (${bestVersionForDirectInstall.version_number}) to ${selectedProfile.name}...`,
+                  success: `Successfully installed ${project.title} (${bestVersionForDirectInstall.version_number}) to ${selectedProfile.name}`,
+                  error: (err) => `Failed to install: ${err.message || String(err)}`,
+                }
+              );
+
+              // Success: update states & exit
+              setInstalledProjects(prev => ({
+                ...prev,
+                [project.project_id]: getStatusForNewInstall(prev[project.project_id])
+              }));
+              setInstalledVersions(prev => {
+                const newState = { ...prev };
+                if (!newState[selectedProfile.id]) newState[selectedProfile.id] = {};
+                newState[selectedProfile.id][bestVersionForDirectInstall.id] = getStatusForNewInstall(
+                  newState[selectedProfile.id][bestVersionForDirectInstall.id]
+                );
+                return newState;
+              });
+              justInstalledOrToggledRef.current = true;
+              if (onInstallSuccess) onInstallSuccess();
+              setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+              return; // EXIT: Direct install successful.
+            }
+          }
+        }
+      } catch (error) { // Catches errors from getModVersions or the installContentToProfile promise
+        console.error(`Direct install attempt for ${project.title} to profile ${selectedProfile.name} failed:`, error);
+        // Toast.promise would have shown an error for installContentToProfile.
+        // For other errors (e.g. getModVersions), a generic toast is good.
+        if (!(error instanceof Error && error.message?.includes('installContentToProfile'))) {
+            toast.error(`An error occurred with direct install for ${project.title}. Opening selection modal.`);
+        }
+        setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+        // Fall through to modal opening logic below
+      }
+      // If we reach here after selectedProfile was true, it means direct install failed (or was bypassed)
+      // and intends to fall through to open the modal. Ensure loading is off.
+      setQuickInstallingProjects(prev => ({ ...prev, [project.project_id]: false }));
+    }
+
+    // ---- Common Modal Opening Logic ----
+    // This part executes if:
+    // 1. selectedProfile was null from the start.
+    // 2. selectedProfile was set, but the direct install attempt failed and fell through.
+    
+    setQuickInstallProject(project);
+    setQuickInstallModalOpen(true);
+    setQuickInstallLoading(true);
+    setQuickInstallVersions(null);
+    setQuickInstallError(null);
+    setInstallStatus({});
+    
+    try {
+      // Fetch versions for this project (for the modal)
+      const versionsForModal = await ModrinthService.getModVersions(project.project_id);
+      
+      if (versionsForModal.length === 0) {
+        setQuickInstallError('No versions found for this project');
+        setQuickInstallLoading(false);
+        return;
+      }
+      
+      const sortedVersionsForModal = versionsForModal.sort((a, b) => 
+        new Date(b.date_published).getTime() - new Date(a.date_published).getTime()
+      );
+      
+      setQuickInstallVersions(sortedVersionsForModal);
+      
+      const newInstallStatuses: Record<string, boolean> = {};
+      for (const profile of internalProfiles) {
+        const bestVersion = findBestVersionForProfile(profile, sortedVersionsForModal);
+        if (bestVersion) {
+          const primaryFile = bestVersion.files.find(file => file.primary) || bestVersion.files[0];
+          if (primaryFile) {
+            const request: ContentCheckRequest = {
+              project_id: project.project_id,
+              version_id: bestVersion.id,
+              file_hash_sha1: primaryFile.hashes?.sha1,
+              file_name: primaryFile.filename,
+              project_type: project.project_type as ModrinthProjectType,
+              loader: bestVersion.loaders[0],
+              pack_version_number: bestVersion.version_number,
+              request_id: bestVersion.id
+            };
+            try {
+              const batchResults = await ProfileService.batchCheckContentInstalled({
+                profile_id: profile.id,
+                requests: [request]
+              });
+              if (batchResults && batchResults.results && batchResults.results.length > 0 && batchResults.results[0].status) {
+                newInstallStatuses[profile.id] = !!batchResults.results[0].status.is_installed;
+              } else {
+                newInstallStatuses[profile.id] = false;
+              }
+            } catch (err) {
+              console.error(`Batch check failed for profile ${profile.name} (ID: ${profile.id}) and project ${project.title} in modal:`, err);
+              newInstallStatuses[profile.id] = false;
+            }
+          } else {
+            newInstallStatuses[profile.id] = false;
+          }
+        } else {
+          newInstallStatuses[profile.id] = false;
+        }
+      }
+      setInstallStatus(newInstallStatuses);
+
+    } catch (error) {
+      console.error("Failed to fetch versions for quick install modal:", error);
+      setQuickInstallError(`Failed to fetch versions for modal: ${error instanceof Error ? error.message : String(error)}`);
+      const fallbackStatuses: Record<string, boolean> = {};
+      internalProfiles.forEach(profile => { fallbackStatuses[profile.id] = false; });
+      setInstallStatus(fallbackStatuses);
+    } finally {
+      setQuickInstallLoading(false);
+    }
   };
 
   // Close quick install modal
@@ -1198,21 +1366,18 @@ export function ModrinthSearchV2({
 
       const mappedContentType = mapModrinthProjectTypeToNrContentType(quickInstallProject.project_type as ModrinthProjectType);
       if (!mappedContentType) {
-        // mapModrinthProjectTypeToNrContentType will show a toast for invalid types
         setInstalling(prev => ({ ...prev, [profileId]: false }));
         return;
       }
       
-      // Special handling for modpacks: should not reach here if mapModrinthProjectTypeToNrContentType works correctly
       if (quickInstallProject.project_type === 'modpack') {
           toast.error("Modpacks must be installed as new profiles.");
           setInstalling(prev => ({ ...prev, [profileId]: false }));
           return;
       }
 
-
       const payload: InstallContentPayload = {
-        profile_id: profileId,
+        profile_id: profileId, // Use the passed profileId
         project_id: quickInstallProject.project_id,
         version_id: bestVersion.id,
         file_name: primaryFile.filename,
@@ -1231,16 +1396,29 @@ export function ModrinthSearchV2({
       
       setInstallStatus(prev => ({ ...prev, [profileId]: true }));
       
-      setInstalledProjects(prev => ({
-        ...prev,
-        [quickInstallProject.project_id]: getStatusForNewInstall(prev[quickInstallProject.project_id])
-      }));
+      // Update installedProjects state only if this profile is the currently selected one in the main view
+      if (selectedProfile && selectedProfile.id === profileId) {
+        setInstalledProjects(prev => ({
+          ...prev,
+          [quickInstallProject.project_id]: getStatusForNewInstall(prev[quickInstallProject.project_id])
+        }));
+      }
       
-      setInstalledVersions(prev => ({
-        ...prev,
-        [bestVersion.id]: getStatusForNewInstall(prev[bestVersion.id])
-      }));
-      
+      // Update installedVersions state for the specific profileId
+      setInstalledVersions(prev => {
+        const newState = { ...prev };
+        if (!newState[profileId]) { // Use profileId
+          newState[profileId] = {};   // Use profileId
+        }
+        
+        newState[profileId][bestVersion.id] = getStatusForNewInstall( // Use profileId
+          newState[profileId][bestVersion.id] // Use profileId
+        );
+        
+        return newState;
+      });
+
+      justInstalledOrToggledRef.current = true; 
       if (onInstallSuccess) {
         onInstallSuccess();
       }
@@ -1260,24 +1438,55 @@ export function ModrinthSearchV2({
         setInstalledProjects({});
         return;
       }
-
-      const newInstalledState: Record<string, ContentInstallStatus | null> = {};
-
-      for (const project of searchResults) {
-        try {
-          // ProfileService.isContentInstalled now returns the full ContentInstallStatus
-          const status = await ProfileService.isContentInstalled({
-            profile_id: selectedProfile.id,
-            project_id: project.project_id,
-            project_type: project.project_type
-          });
-          newInstalledState[project.project_id] = status; // Assign the full status object
-        } catch (error) {
-          console.error(`Failed to check status for ${project.title}:`, error);
-          newInstalledState[project.project_id] = { ...defaultErrorContentStatus };
-        }
+      if (justInstalledOrToggledRef.current) { // Check flag
+        justInstalledOrToggledRef.current = false; // Reset flag
+        return;
       }
-      setInstalledProjects(newInstalledState);
+
+      // Create batch request for all projects
+      const requests: ContentCheckRequest[] = searchResults.map(project => ({
+        project_id: project.project_id,
+        project_type: project.project_type,
+        request_id: project.project_id // Use project_id as request_id for mapping
+      }));
+
+      try {
+        // Use batch check instead of individual checks
+        const batchResults = await ProfileService.batchCheckContentInstalled({
+          profile_id: selectedProfile.id,
+          requests
+        });
+
+        // Process results into the same state format
+        const newInstalledState: Record<string, ContentInstallStatus | null> = {};
+        
+        batchResults.results.forEach(result => {
+          if (result.request_id) {
+            newInstalledState[result.request_id] = result.status;
+          }
+        });
+
+        setInstalledProjects(newInstalledState);
+      } catch (error) {
+        console.error('Failed to batch check installation status:', error);
+        
+        // Fallback to individual checks if batch fails
+        const newInstalledState: Record<string, ContentInstallStatus | null> = {};
+        for (const project of searchResults) {
+          try {
+            const status = await ProfileService.isContentInstalled({
+              profile_id: selectedProfile.id,
+              project_id: project.project_id,
+              project_type: project.project_type
+            });
+            newInstalledState[project.project_id] = status;
+          } catch (error) {
+            console.error(`Failed to check status for ${project.title}:`, error);
+            newInstalledState[project.project_id] = { ...defaultErrorContentStatus };
+          }
+        }
+        setInstalledProjects(newInstalledState);
+      }
     };
 
     checkInstallationStatus();
@@ -1288,51 +1497,86 @@ export function ModrinthSearchV2({
     const checkNewResultsInstallation = async () => {
       if (!selectedProfile || !searchResults.length) return;
 
-      const newInstalledState = {...installedProjects};
+      if (justInstalledOrToggledRef.current) { // Check flag
+        justInstalledOrToggledRef.current = false; // Reset flag
+        return;
+      }
+
+      // Find projects that haven't been checked yet
       const uncheckedProjects = searchResults.filter(project => 
         !installedProjects[project.project_id]
       );
 
-      for (const project of uncheckedProjects) {
-        try {
-          // ProfileService.isContentInstalled now returns the full ContentInstallStatus
-          const status = await ProfileService.isContentInstalled({
-            profile_id: selectedProfile.id,
-            project_id: project.project_id,
-            project_type: project.project_type
-          });
-          newInstalledState[project.project_id] = status; // Assign the full status object
-        } catch (error) {
-          console.error(`Failed to check status for ${project.title}:`, error);
-          newInstalledState[project.project_id] = { ...defaultErrorContentStatus };
-        }
-      }
+      if (uncheckedProjects.length === 0) return;
 
-      if (uncheckedProjects.length > 0) {
+      try {
+        // Create requests for unchecked projects
+        const requests: ContentCheckRequest[] = uncheckedProjects.map(project => ({
+          project_id: project.project_id,
+          project_type: project.project_type,
+          request_id: project.project_id
+        }));
+
+        // Use batch check for unchecked projects
+        const batchResults = await ProfileService.batchCheckContentInstalled({
+          profile_id: selectedProfile.id,
+          requests
+        });
+
+        // Add results to existing state
+        const newInstalledState = {...installedProjects};
+        batchResults.results.forEach(result => {
+          if (result.request_id) {
+            newInstalledState[result.request_id] = result.status;
+          }
+        });
+
         setInstalledProjects(newInstalledState);
+      } catch (error) {
+        console.error('Failed to batch check new results installation status:', error);
+        
+        // Fallback to individual checks
+        const newInstalledState = {...installedProjects};
+        for (const project of uncheckedProjects) {
+          try {
+            const status = await ProfileService.isContentInstalled({
+              profile_id: selectedProfile.id,
+              project_id: project.project_id,
+              project_type: project.project_type
+            });
+            newInstalledState[project.project_id] = status;
+          } catch (error) {
+            console.error(`Failed to check status for ${project.title}:`, error);
+            newInstalledState[project.project_id] = { ...defaultErrorContentStatus };
+          }
+        }
+        
+        if (uncheckedProjects.length > 0) {
+          setInstalledProjects(newInstalledState);
+        }
       }
     };
 
     checkNewResultsInstallation();
-  }, [searchResults.length, selectedProfile, installedProjects]); // Added installedProjects to dependency array for correctness
+  }, [searchResults.length, selectedProfile, installedProjects]);
 
-  // Reset installation status when no profile is selected
+  // Reset project-level installation status when no profile is selected.
+  // Version statuses in `installedVersions` are kept as a cache.
   useEffect(() => {
     if (!selectedProfile) {
-      // Reset installation status when no profile is selected
-      console.log("No profile selected - resetting installation status");
+      console.log("No profile selected - resetting project installation status");
       setInstalledProjects({});
-      setInstalledVersions({});
+      // NOTE: setInstalledVersions({}); is intentionally removed here to persist version status cache.
     }
   }, [selectedProfile]);
 
-  // Additional check when project type changes to update installation status
+  // Additional check when project type changes to update project-level installation status
   useEffect(() => {
     if (selectedProfile) {
-      // Reset installation status when project type changes
+      // Reset project-level installation status when project type changes, as it's view-specific
       setInstalledProjects({});
     }
-  }, [projectType]);
+  }, [projectType, selectedProfile]);
 
   const accentColor = useThemeStore((state) => state.accentColor); // Get accent color
   const [hoveredVersionId, setHoveredVersionId] = useState<string | null>(null); // New state for version hover
@@ -1417,7 +1661,8 @@ export function ModrinthSearchV2({
         project.project_id,
         latestVersion.id,
         primaryFile.filename, 
-        primaryFile.url
+        primaryFile.url,
+        project.icon_url || undefined // Pass icon_url here
       );
       toast.success(
         (t) => (
@@ -1480,7 +1725,8 @@ export function ModrinthSearchV2({
         project.project_id,
         version.id,
         primaryFile.filename, 
-        primaryFile.url
+        primaryFile.url,
+        project.icon_url || undefined // Pass icon_url here
       );
       toast.success(
         (t) => (
@@ -1533,8 +1779,9 @@ export function ModrinthSearchV2({
         // Verwende die Store-Methode copyProfile
         newProfileId = await store.copyProfile(
           sourceProfileIdToCopy, 
-          profileName
-          // Optional: includeFiles hier hinzufügen, falls benötigt
+          profileName,
+          undefined, // includeFiles is undefined, as we want to include all
+          true       // includeAll is true
         );
         successMessageDetail = `Successfully copied profile '${profileName}' from '${sourceProfileName}'`;
 
@@ -1613,6 +1860,7 @@ export function ModrinthSearchV2({
       // Call onInstallSuccess if it exists and the installed content was not a modpack
       // (Modpack specific installations as new profiles might have their own success handlers or flows)
       if (project.project_type !== 'modpack' && onInstallSuccess) {
+        justInstalledOrToggledRef.current = true; // Set flag (also here for consistency if onInstallSuccess runs)
         onInstallSuccess();
       }
 
@@ -1626,10 +1874,12 @@ export function ModrinthSearchV2({
 
   // Function to handle deleting a version from a profile
   const handleDeleteVersionFromProfile = async (
-    profileId: string,
+    profileId: string, // This is the definitive profile ID for this operation
     project: ModrinthSearchHit,
     version: ModrinthVersion
   ) => {
+    // REMOVED: if (!selectedProfile) { ... }
+
     const profileName = internalProfiles.find(p => p.id === profileId)?.name || profileId;
 
     const primaryFile = version.files.find(file => file.primary) || version.files[0];
@@ -1658,18 +1908,24 @@ export function ModrinthSearchV2({
       {
         loading: `Removing ${project.title} (${version.version_number}) from ${profileName}...`,
         success: (data: any) => {
-          // Update version status - set to not installed
-          setInstalledVersions(prev => ({
-            ...prev,
-            [version.id]: {
-              is_installed: false,
-              is_included_in_norisk_pack: prev[version.id]?.is_included_in_norisk_pack || false,
-              is_specific_version_in_pack: prev[version.id]?.is_specific_version_in_pack || false,
-              is_enabled: null, // Not applicable for uninstalled items
-              found_item_details: null, // Clear details for uninstalled items
-              norisk_pack_item_details: prev[version.id]?.norisk_pack_item_details || null, // Keep NoRisk Pack info
+          // Update version status - set to not installed FOR THE SPECIFIC profileId
+          setInstalledVersions(prev => {
+            const newState = { ...prev };
+            if (!newState[profileId]) { // Use profileId
+              newState[profileId] = {}; // Use profileId
             }
-          }));
+            
+            newState[profileId][version.id] = { // Use profileId
+              is_installed: false,
+              is_included_in_norisk_pack: newState[profileId]?.[version.id]?.is_included_in_norisk_pack || false, // Use profileId
+              is_specific_version_in_pack: newState[profileId]?.[version.id]?.is_specific_version_in_pack || false, // Use profileId
+              is_enabled: null,
+              found_item_details: null,
+              norisk_pack_item_details: newState[profileId]?.[version.id]?.norisk_pack_item_details || null, // Use profileId
+            };
+            
+            return newState;
+          });
           
           // Update modal states if they are open and showing this item
           if (installModalOpen && selectedProject?.project_id === project.project_id && selectedVersion?.id === version.id) {
@@ -1679,24 +1935,18 @@ export function ModrinthSearchV2({
             setInstallStatus(prev => ({ ...prev, [profileId]: false }));
           }
 
-          // Check if any other versions of this project remain installed
-          // If not, mark the project as not installed
-          const anyVersionsStillInstalled = Object.entries(installedVersions)
-            .some(([versionId, status]) => {
-              // Skip the version we just deleted
-              if (versionId === version.id) return false;
-              
-              // Get the corresponding project for this version
+          // Check if any other versions of this project remain installed IN THE SPECIFIC profileId
+          const anyVersionsStillInstalled = Object.entries(installedVersions[profileId] || {})
+            .some(([vId, status]) => {
+              if (vId === version.id) return false;
               const versionProject = expandedVersions[project.project_id];
               if (!Array.isArray(versionProject)) return false;
-              
-              // Check if this version belongs to our project and is installed
-              const belongsToProject = versionProject.some(v => v.id === versionId);
+              const belongsToProject = versionProject.some(v => v.id === vId);
               return belongsToProject && status?.is_installed === true;
             });
 
-          // If no versions are still installed, update project status
-          if (!anyVersionsStillInstalled) {
+          // If no versions are still installed, update project status ONLY IF profileId is the selectedProfile
+          if (!anyVersionsStillInstalled && selectedProfile && selectedProfile.id === profileId) {
             setInstalledProjects(prev => ({
               ...prev,
               [project.project_id]: {
@@ -1705,11 +1955,12 @@ export function ModrinthSearchV2({
                 is_specific_version_in_pack: prev[project.project_id]?.is_specific_version_in_pack || false,
                 is_enabled: null,
                 found_item_details: null,
-                norisk_pack_item_details: prev[project.project_id]?.norisk_pack_item_details || null, // Keep NoRisk Pack info
+                norisk_pack_item_details: prev[project.project_id]?.norisk_pack_item_details || null,
               }
             }));
           }
 
+          justInstalledOrToggledRef.current = true;
           if (onInstallSuccess) {
             onInstallSuccess();
           }
@@ -1729,7 +1980,27 @@ export function ModrinthSearchV2({
     sha1Hash: string
   ) => {
     // Get current installation status for the version
-    const currentVersionStatus = installedVersions[version.id];
+    const currentVersionStatus = installedVersions[selectedProfile.id]?.[version.id];
+
+    // Determine NrContentType from project.project_type
+    let nrContentType: NrContentType | undefined = undefined;
+    switch (project.project_type as ModrinthProjectType) {
+      case 'mod':
+        nrContentType = NrContentType.Mod;
+        break;
+      case 'resourcepack':
+        nrContentType = NrContentType.ResourcePack;
+        break;
+      case 'shader':
+        nrContentType = NrContentType.ShaderPack;
+        break;
+      case 'datapack':
+        nrContentType = NrContentType.DataPack;
+        break;
+      default:
+        // Optionally log a warning for unhandled project types if needed
+        console.warn("[ModrinthSearchV2] Unhandled project_type for NrContentType mapping in toggle:", project.project_type);
+    }
 
     // Check if this is a NoRisk Pack item
     if (currentVersionStatus?.norisk_pack_item_details?.norisk_mod_identifier) {
@@ -1743,23 +2014,35 @@ export function ModrinthSearchV2({
           const payload: ToggleContentPayload = {
             profile_id: profileId,
             enabled: newEnabledState,
-            norisk_mod_identifier: noriskIdentifier
+            norisk_mod_identifier: noriskIdentifier,
+            content_type: nrContentType, // Pass content_type here as well
+            // sha1_hash is not strictly needed for norisk_mod_identifier-based toggling by current backend logic,
+            // but can be included for consistency if desired or if backend logic changes.
+            sha1_hash: sha1Hash, 
           };
           
           await toggleContentFromProfile(payload);
           
           // Update version's installation status
-          setInstalledVersions(prev => ({
-            ...prev,
-            [version.id]: prev[version.id] ? {
-              ...prev[version.id]!,
-              is_enabled: newEnabledState,
-              norisk_pack_item_details: {
-                ...prev[version.id]!.norisk_pack_item_details!,
-                is_enabled: newEnabledState
-              }
-            } : null
-          }));
+          setInstalledVersions(prev => {
+            const newState = { ...prev };
+            if (!newState[selectedProfile.id]) {
+              newState[selectedProfile.id] = {};
+            }
+            
+            if (newState[selectedProfile.id][version.id]) {
+              newState[selectedProfile.id][version.id] = {
+                ...newState[selectedProfile.id][version.id]!,
+                is_enabled: newEnabledState,
+                norisk_pack_item_details: {
+                  ...newState[selectedProfile.id][version.id]!.norisk_pack_item_details!,
+                  is_enabled: newEnabledState
+                }
+              };
+            }
+            
+            return newState;
+          });
 
           // Also update the project's installation status to reflect the change
           // This is important if the project card's display depends on this specific item's state.
@@ -1812,20 +2095,29 @@ export function ModrinthSearchV2({
         const payload: ToggleContentPayload = {
           profile_id: profileId,
           sha1_hash: sha1Hash,
-          enabled: newEnabledState
+          enabled: newEnabledState,
+          content_type: nrContentType, // Add mapped content_type
+          norisk_mod_identifier: undefined, // Explicitly undefined for non-NoRisk items
         };
         
         await toggleContentFromProfile(payload);
         
         // Update version's installation status
-        setInstalledVersions(prev => ({
-          ...prev,
-          [version.id]: prev[version.id] ? {
-            ...prev[version.id]!,
-            is_enabled: newEnabledState
-            // No norisk_pack_item_details to update here for regular items
-          } : null
-        }));
+        setInstalledVersions(prev => {
+          const newState = { ...prev };
+          if (!newState[selectedProfile.id]) {
+            newState[selectedProfile.id] = {};
+          }
+          
+          if (newState[selectedProfile.id][version.id]) {
+            newState[selectedProfile.id][version.id] = {
+              ...newState[selectedProfile.id][version.id]!,
+              is_enabled: newEnabledState
+            };
+          }
+          
+          return newState;
+        });
 
         // Update project's installation status (only its is_enabled field)
         setInstalledProjects(prev => {
@@ -1966,7 +2258,7 @@ export function ModrinthSearchV2({
                     versionFilters={currentVersionFilters}
                     versionDropdownUIState={currentVersionDropdownUIState}
                     openVersionDropdowns={currentOpenVersionDropdowns}
-                    installedVersions={installedVersions}
+                    installedVersions={selectedProfile ? (installedVersions[selectedProfile.id] || {}) : {}}
                     selectedProfile={selectedProfile}
                     selectedProfileId={selectedProfile?.id}
                     hoveredVersionId={hoveredVersionId}

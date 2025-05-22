@@ -19,6 +19,10 @@ interface LaunchButtonProps {
   onStatusChange?: (isLaunching: boolean) => void;
   quickPlaySingleplayer?: string;
   quickPlayMultiplayer?: string;
+  isIconOnly?: boolean;
+  forceDisplaySpinner?: boolean;
+  onInternalLaunchStateChange?: (isLaunching: boolean) => void;
+  onEventMessage?: (message: string | null) => void;
 }
 
 export function LaunchButton({
@@ -33,16 +37,47 @@ export function LaunchButton({
   onStatusChange,
   quickPlaySingleplayer,
   quickPlayMultiplayer,
+  isIconOnly = false,
+  forceDisplaySpinner = false,
+  onInternalLaunchStateChange,
+  onEventMessage,
 }: LaunchButtonProps) {
   const [isLaunching, setIsLaunching] = useState(false);
   const [isButtonDisabledBriefly, setIsButtonDisabledBriefly] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    let isActive = true;
+    if (id) {
+      ProfileService.isProfileLaunching(id)
+        .then((currentlyLaunching) => {
+          if (isActive) {
+            setIsLaunching(currentlyLaunching);
+          }
+        })
+        .catch((err) => {
+          if (isActive) {
+            console.error(
+              `[LaunchButton ${id}] Error checking initial launch state:`, 
+              err
+            );
+            setIsLaunching(false); 
+          }
+        });
+    }
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
+
+  useEffect(() => {
     if (onStatusChange) {
       onStatusChange(isLaunching);
     }
-  }, [isLaunching, onStatusChange]);
+    if (onInternalLaunchStateChange) {
+      onInternalLaunchStateChange(isLaunching);
+    }
+  }, [isLaunching, onStatusChange, onInternalLaunchStateChange]);
 
   useEffect(() => {
     console.log(`[LaunchButton ${id}] Setting up state_event listener.`);
@@ -53,11 +88,16 @@ export function LaunchButton({
       const payload = event.payload as EventPayload;
 
       if (payload.target_id === id) {
+        if (payload.message && onEventMessage) {
+          onEventMessage(payload.message);
+        }
+
         if (payload.event_type === EventType.LaunchSuccessful) {
           console.log(`[LaunchButton ${id}] Event: LaunchSuccessful`);
           toast.success(`Profile '${name}' launched successfully!`);
           stopPolling();
           resetButtonState();
+          if (onEventMessage) onEventMessage(null);
         } else if (payload.event_type === EventType.Error) {
           const errorMessage =
             payload.message || "An unknown error occurred during launch.";
@@ -67,6 +107,7 @@ export function LaunchButton({
           toast.error(errorMessage);
           stopPolling();
           resetButtonState();
+          if (!payload.message && onEventMessage) onEventMessage(null);
         }
       }
     };
@@ -95,7 +136,7 @@ export function LaunchButton({
     return () => {
       cleanup();
     };
-  }, [id, name]);
+  }, [id, name, onEventMessage]);
 
   useEffect(() => {
     if (!id) return;
@@ -194,6 +235,35 @@ export function LaunchButton({
     }
   };
 
+  if (isIconOnly) {
+    const iconToShow = forceDisplaySpinner || isLaunching ? (
+      <Icon icon="eos-icons:loading" width="60%" height="60%" />
+    ) : (
+      <Icon icon="solar:play-bold" width="60%" height="60%" />
+    );
+
+    return (
+      <div
+        onClick={!disabled && !isButtonDisabledBriefly ? handlePlay : undefined}
+        className={`flex w-full h-full items-center justify-center ${
+          (disabled || isButtonDisabledBriefly) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+        } ${className || ""}`}
+        role="button"
+        aria-label={forceDisplaySpinner || isLaunching ? `Cancel launch for ${name}` : `Launch ${name}`}
+        aria-disabled={disabled || isButtonDisabledBriefly}
+        tabIndex={disabled || isButtonDisabledBriefly ? -1 : 0}
+        onKeyDown={(e) => {
+          if (!disabled && !isButtonDisabledBriefly && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            handlePlay(e as any); 
+          }
+        }}
+      >
+        {iconToShow}
+      </div>
+    );
+  }
+
   return (
     <Button
       onClick={handlePlay}
@@ -202,7 +272,7 @@ export function LaunchButton({
       className={className}
       disabled={disabled || isButtonDisabledBriefly}
       icon={
-        isLaunching ? (
+        forceDisplaySpinner || isLaunching ? (
           <Icon
             icon="eos-icons:loading"
             className="w-5 h-5 text-white"

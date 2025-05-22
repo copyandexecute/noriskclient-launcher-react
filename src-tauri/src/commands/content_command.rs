@@ -1,14 +1,21 @@
 use serde::{Deserialize, Serialize};
+use tauri_plugin_fs::FilePath;
 use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 use tokio::fs;
-
+use tokio::sync::Semaphore;
 use crate::error::{AppError, CommandError};
 use crate::state::profile_state::ModSource;
 use crate::state::state_manager::State as AppStateManager;
 use crate::utils::hash_utils; // For calculate_sha1
 use crate::utils::{shaderpack_utils, resourcepack_utils, datapack_utils, profile_utils};
+use crate::commands::file_command; // Added import for file_command
+use crate::integrations::modrinth::ModrinthVersion; // Added for new payload
+use crate::utils::profile_utils::{GenericModrinthInfo}; // Already there or similar
+use crate::utils::resourcepack_utils::ResourcePackInfo;
+use crate::utils::shaderpack_utils::ShaderPackInfo;
+use crate::utils::datapack_utils::DataPackInfo;
 
 // Updated InstallContentPayload struct
 #[derive(Serialize, Deserialize, Debug)]
@@ -26,10 +33,12 @@ pub struct InstallContentPayload {
     game_versions: Option<Vec<String>>,       // Added game_versions
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UninstallContentPayload {
     profile_id: Uuid,
     sha1_hash: Option<String>,
+    file_path: Option<String>,
+    content_type: Option<profile_utils::ContentType>, // Added content_type
     // Add other parameters here later if needed, e.g., content_type (mod, resourcepack, etc.)
 }
 
@@ -37,6 +46,7 @@ async fn uninstall_content_by_sha1_internal(
     profile_id: Uuid,
     sha1_to_delete: &str,
     state_manager: &Arc<AppStateManager>,
+    content_type: Option<profile_utils::ContentType>, // Added content_type parameter
 ) -> crate::error::Result<(usize, usize, bool, bool)> {
     let profile = state_manager
         .profile_manager
@@ -80,41 +90,53 @@ async fn uninstall_content_by_sha1_internal(
     // Part 2: Delete physical files from asset directories
     let mut asset_files_deleted_count = 0;
     let mut asset_file_deletion_errors_occurred = false;
-    match state_manager.profile_manager.get_profile_instance_path(profile_id).await {
-        Ok(profile_instance_path) => {
-            let asset_dirs_to_scan = vec!["shaderpacks", "resourcepacks", "datapacks"];
-            for dir_name in asset_dirs_to_scan {
-                let asset_dir_path = profile_instance_path.join(dir_name);
-                if asset_dir_path.is_dir() {
-                    match fs::read_dir(&asset_dir_path).await {
-                        Ok(mut entries) => {
-                            while let Some(entry_result) = entries.next_entry().await.map_err(AppError::Io)? {
-                                let file_path = entry_result.path();
-                                if file_path.is_file() {
-                                    match hash_utils::calculate_sha1(&file_path).await {
-                                        Ok(file_sha1) => {
-                                            if file_sha1 == sha1_to_delete {
-                                                if let Err(e) = fs::remove_file(&file_path).await {
-                                                    log::error!("Internal: Failed to delete asset file {:?}: {}", file_path, e);
-                                                    asset_file_deletion_errors_occurred = true;
-                                                } else {
-                                                    asset_files_deleted_count += 1;
+
+    // Only scan asset directories if content_type is None or not ContentType::Mod
+    let should_scan_assets = match content_type {
+        Some(profile_utils::ContentType::Mod) => {
+            log::info!("Content type is Mod, skipping asset directory scan for SHA1 uninstallation.");
+            false
+        }
+        _ => true, // Includes None or other asset types
+    };
+
+    if should_scan_assets {
+        match state_manager.profile_manager.get_profile_instance_path(profile_id).await {
+            Ok(profile_instance_path) => {
+                let asset_dirs_to_scan = vec!["shaderpacks", "resourcepacks", "datapacks"];
+                for dir_name in asset_dirs_to_scan {
+                    let asset_dir_path = profile_instance_path.join(dir_name);
+                    if asset_dir_path.is_dir() {
+                        match fs::read_dir(&asset_dir_path).await {
+                            Ok(mut entries) => {
+                                while let Some(entry_result) = entries.next_entry().await.map_err(AppError::Io)? {
+                                    let file_path = entry_result.path();
+                                    if file_path.is_file() {
+                                        match hash_utils::calculate_sha1(&file_path).await {
+                                            Ok(file_sha1) => {
+                                                if file_sha1 == sha1_to_delete {
+                                                    if let Err(e) = fs::remove_file(&file_path).await {
+                                                        log::error!("Internal: Failed to delete asset file {:?}: {}", file_path, e);
+                                                        asset_file_deletion_errors_occurred = true;
+                                                    } else {
+                                                        asset_files_deleted_count += 1;
+                                                    }
                                                 }
                                             }
+                                            Err(e) => log::warn!("Internal: Could not calculate SHA1 for asset file {:?}: {}. Skipping deletion.", file_path, e),
                                         }
-                                        Err(e) => log::warn!("Internal: Could not calculate SHA1 for asset file {:?}: {}. Skipping deletion.", file_path, e),
                                     }
                                 }
                             }
+                            Err(e) => log::warn!("Internal: Could not read asset directory {:?}: {}. Skipping.", asset_dir_path, e),
                         }
-                        Err(e) => log::warn!("Internal: Could not read asset directory {:?}: {}. Skipping.", asset_dir_path, e),
                     }
                 }
             }
-        }
-        Err(e) => {
-            log::error!("Internal: Failed to get profile instance path for {} to scan asset dirs: {}. Asset file deletion will be skipped.", profile_id, e);
-            asset_file_deletion_errors_occurred = true; 
+            Err(e) => {
+                log::error!("Internal: Failed to get profile instance path for {} to scan asset dirs: {}. Asset file deletion will be skipped.", profile_id, e);
+                asset_file_deletion_errors_occurred = true; 
+            }
         }
     }
     Ok((
@@ -129,8 +151,10 @@ async fn uninstall_content_by_sha1_internal(
 pub struct ToggleContentPayload {
     profile_id: Uuid,
     sha1_hash: Option<String>,
+    file_path: Option<String>,
     enabled: bool,
     norisk_mod_identifier: Option<crate::state::profile_state::NoriskModIdentifier>,
+    content_type: Option<profile_utils::ContentType>, // Added for targeted toggling
 }
 
 /// Helper function to toggle a single asset file (shader, resourcepack, datapack)
@@ -195,12 +219,20 @@ pub async fn toggle_content_from_profile(
     payload: ToggleContentPayload,
 ) -> Result<(), CommandError> {
     log::info!(
-        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, enabled={}, norisk_mod_identifier={:?}",
+        "Attempting to toggle content state: profile_id={}, sha1_hash={:?}, file_path={:?}, enabled={}, norisk_mod_identifier={:?}, content_type={:?}",
         payload.profile_id,
         payload.sha1_hash,
+        payload.file_path,
         payload.enabled,
-        payload.norisk_mod_identifier
+        payload.norisk_mod_identifier,
+        payload.content_type
     );
+
+    // New: Prioritize file_path based toggling for non-Mod content types
+    if let Some(ref path_str) = payload.file_path {
+        log::info!("Toggling content via direct file path: {} to enabled={}", path_str, payload.enabled);
+        return file_command::set_file_enabled(path_str.clone(), payload.enabled).await;
+    }
 
     let state_manager = AppStateManager::get().await.map_err(|e| {
         log::error!("Failed to get AppStateManager: {}", e);
@@ -272,14 +304,19 @@ pub async fn toggle_content_from_profile(
 
     let mut mod_entries_toggled_count = 0;
     let mut mod_entry_toggle_errors = false;
+    let mut asset_files_toggled_count = 0;
+    let mut asset_file_toggle_errors = false;
 
     // --- Phase 1: Toggle Modrinth Mod Entries (in profile.mods list) ---
-    for mod_entry in profile.mods.iter() { // Iterate over a clone or ensure no modification invalidates iter
+    // Always check mods if SHA1 is provided, as it's a primary place for managed content.
+    // If content_type is explicitly Mod, we'd primarily expect a hit here.
+    // If content_type is an asset, a mod might still share a SHA1 if manually placed or due to other reasons.
+    for mod_entry in profile.mods.iter() { 
         if let ModSource::Modrinth { file_hash_sha1: Some(mod_hash), .. } = &mod_entry.source {
             if mod_hash == &current_sha1_hash {
                 if mod_entry.enabled == payload.enabled {
                     log::info!("Mod entry {} in profile {} is already state enabled={}. Skipping DB update.", mod_entry.id, payload.profile_id, payload.enabled);
-                    mod_entries_toggled_count += 1;
+                    mod_entries_toggled_count += 1; // Count as processed even if no change needed
                     continue;
                 }
                 match state_manager
@@ -300,78 +337,133 @@ pub async fn toggle_content_from_profile(
         }
     }
     
-    let mut asset_files_toggled_count = 0;
-    let mut asset_file_toggle_errors = false;
-
-    // --- Phase 2a: Toggle Shader Packs ---
-    match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
-        Ok(shader_packs) => {
-            for pack_info in shader_packs {
-                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
-                    match toggle_single_asset_file(
-                        &pack_info.path,
-                        &pack_info.filename,
-                        pack_info.is_disabled,
-                        payload.enabled,
-                        "shader pack"
-                    ).await {
-                        Ok(_) => asset_files_toggled_count += 1,
-                        Err(_) => asset_file_toggle_errors = true,
+    // --- Phase 2: Toggle Asset Files (ShaderPacks, ResourcePacks, DataPacks) ---
+    // Only proceed with asset file toggling if a specific asset content_type is given,
+    // or if content_type is None (in which case, for safety, we might scan all - though for optimization, we avoid this if possible).
+    // For this optimization: if content_type is Some(AssetType), only scan that type.
+    // If content_type is Some(Mod) or None, and a mod was already toggled above, we might stop to avoid asset scans.
+    // However, if a mod was NOT found by SHA1, and type is None, we might fall back to scanning assets.
+    //
+    // Revised logic for Phase 2:
+    // Only enter this phase if payload.content_type targets an asset type.
+    match payload.content_type {
+        Some(profile_utils::ContentType::ShaderPack) => {
+            log::debug!("Targeted toggle for ShaderPacks with SHA1: {}", current_sha1_hash);
+            match shaderpack_utils::get_shaderpacks_for_profile(&profile).await {
+                Ok(shader_packs) => {
+                    for pack_info in shader_packs {
+                        if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                            match toggle_single_asset_file(
+                                &pack_info.path,
+                                &pack_info.filename,
+                                pack_info.is_disabled,
+                                payload.enabled,
+                                "shader pack"
+                            ).await {
+                                Ok(_) => asset_files_toggled_count += 1,
+                                Err(_) => asset_file_toggle_errors = true,
+                            }
+                        }
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to list shader packs for profile {}: {}. Skipping shader toggle.", payload.profile_id, e);
+                    asset_file_toggle_errors = true;
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to list shader packs for profile {}: {}. Skipping shader toggle.", payload.profile_id, e);
-            asset_file_toggle_errors = true; // Consider this an error for asset toggling phase
-        }
-    }
-
-    // --- Phase 2b: Toggle Resource Packs ---
-    match resourcepack_utils::get_resourcepacks_for_profile(&profile).await {
-        Ok(resource_packs) => {
-            for pack_info in resource_packs {
-                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
-                    match toggle_single_asset_file(
-                        &pack_info.path,
-                        &pack_info.filename,
-                        pack_info.is_disabled,
-                        payload.enabled,
-                        "resource pack"
-                    ).await {
-                        Ok(_) => asset_files_toggled_count += 1,
-                        Err(_) => asset_file_toggle_errors = true,
+        Some(profile_utils::ContentType::ResourcePack) => {
+            log::debug!("Targeted toggle for ResourcePacks with SHA1: {}", current_sha1_hash);
+            match resourcepack_utils::get_resourcepacks_for_profile(&profile, true, false).await {
+                Ok(resource_packs) => {
+                    for pack_info in resource_packs {
+                        if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                            match toggle_single_asset_file(
+                                &pack_info.path,
+                                &pack_info.filename,
+                                pack_info.is_disabled,
+                                payload.enabled,
+                                "resource pack"
+                            ).await {
+                                Ok(_) => asset_files_toggled_count += 1,
+                                Err(_) => asset_file_toggle_errors = true,
+                            }
+                        }
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to list resource packs for profile {}: {}. Skipping resource pack toggle.", payload.profile_id, e);
+                    asset_file_toggle_errors = true;
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to list resource packs for profile {}: {}. Skipping resource pack toggle.", payload.profile_id, e);
-            asset_file_toggle_errors = true;
-        }
-    }
-    
-    // --- Phase 2c: Toggle Datapacks ---
-    match datapack_utils::get_datapacks_for_profile(&profile).await {
-        Ok(data_packs) => {
-            for pack_info in data_packs {
-                if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
-                    match toggle_single_asset_file(
-                        &pack_info.path,
-                        &pack_info.filename,
-                        pack_info.is_disabled,
-                        payload.enabled,
-                        "datapack"
-                    ).await {
-                        Ok(_) => asset_files_toggled_count += 1,
-                        Err(_) => asset_file_toggle_errors = true,
+        Some(profile_utils::ContentType::DataPack) => {
+            log::debug!("Targeted toggle for DataPacks with SHA1: {}", current_sha1_hash);
+            match datapack_utils::get_datapacks_for_profile(&profile).await {
+                Ok(data_packs) => {
+                    for pack_info in data_packs {
+                        if pack_info.sha1_hash.as_deref() == Some(&current_sha1_hash) {
+                            match toggle_single_asset_file(
+                                &pack_info.path,
+                                &pack_info.filename,
+                                pack_info.is_disabled,
+                                payload.enabled,
+                                "datapack"
+                            ).await {
+                                Ok(_) => asset_files_toggled_count += 1,
+                                Err(_) => asset_file_toggle_errors = true,
+                            }
+                        }
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to list datapacks for profile {}: {}. Skipping datapack toggle.", payload.profile_id, e);
+                    asset_file_toggle_errors = true;
                 }
             }
         }
-        Err(e) => {
-            log::error!("Failed to list datapacks for profile {}: {}. Skipping datapack toggle.", payload.profile_id, e);
-            asset_file_toggle_errors = true; // Consider this an error for asset toggling phase
+        Some(profile_utils::ContentType::Mod) => {
+            // Mod type was handled in Phase 1. If mod_entries_toggled_count is 0 here, it means no mod matched.
+            // No further asset scanning is done if ContentType::Mod was specified.
+            log::debug!("ContentType::Mod specified, mod processing already done in Phase 1.");
+            if mod_entries_toggled_count == 0 {
+                 log::warn!(
+                    "ContentType::Mod specified, but no Modrinth entry found with SHA1 '{}' in profile {} to toggle.",
+                    current_sha1_hash, payload.profile_id
+                );
+                // We don't return an error here yet, as the final check below will handle it if nothing at all was toggled.
+            }
+        }
+        Some(profile_utils::ContentType::NoRiskMod) => {
+            log::debug!("Targeted toggle for NoRiskMod with SHA1: {}", current_sha1_hash);
+            // NoRiskMods are handled differently, not by scanning directories
+            // We don't need to scan any asset types for NoRiskMods
+            // We'll handle this in the future if needed
+        }
+        None => {
+            // ContentType is None. This case is tricky for optimization.
+            // Current "safe" behavior without content_type was to scan all.
+            // For this optimization, if mods were checked (Phase 1) and nothing was found,
+            // and no specific asset type was given, we might log a warning or error.
+            // If a mod WAS found and toggled in Phase 1, we likely don't need to scan assets.
+            // However, if a mod was NOT found and no content type was given, we might log a warning or error.
+            if mod_entries_toggled_count > 0 {
+                 log::debug!("ContentType is None, but a mod was found and toggled by SHA1. Skipping asset scans.");
+            } else {
+                // No mod found by SHA1, and no content type specified.
+                // This implies the SHA1 might belong to an unmanaged asset or an asset whose type isn't known by the frontend.
+                // To maintain previous exhaustive behavior (at the cost of performance for this specific call),
+                // one *could* scan all asset types here as a fallback.
+                // However, for the purpose of this specific optimization task, if type is None and no mod matched,
+                // we'll assume the frontend should have provided a type if it was an asset.
+                // For now, we'll log and the final check will determine if an error is returned.
+                log::warn!(
+                    "ContentType is None and no Modrinth entry found with SHA1 '{}'. \
+                    For targeted asset toggling, provide content_type. \
+                    No asset folders will be scanned in this specific optimized path if a mod wasn't found.",
+                    current_sha1_hash
+                );
+            }
         }
     }
     
@@ -415,9 +507,10 @@ pub async fn uninstall_content_from_profile(
     payload: UninstallContentPayload,
 ) -> Result<(), CommandError> {
     log::info!(
-        "Uninstall command received: profile_id={}, sha1_hash={:?}",
+        "Uninstall command received: profile_id={}, sha1_hash={:?}, file_path={:?}",
         payload.profile_id,
-        payload.sha1_hash
+        payload.sha1_hash,
+        payload.file_path
     );
 
     let state_manager = AppStateManager::get().await.map_err(|e| {
@@ -425,7 +518,35 @@ pub async fn uninstall_content_from_profile(
         CommandError::from(AppError::Other(format!("Failed to get internal state: {}", e)))
     })?;
 
-    if let Some(sha1_hash_to_delete) = payload.sha1_hash {
+    if let Some(path_to_delete) = payload.file_path {
+        log::info!(
+            "Proceeding with uninstallation by file_path: {}",
+            path_to_delete
+        );
+        match file_command::delete_file(path_to_delete.clone()).await {
+            Ok(_) => {
+                log::info!(
+                    "Successfully deleted file {} for profile {}",
+                    path_to_delete, payload.profile_id
+                );
+                // Optional: If custom mods deleted by path are also tracked in profile.mods
+                // (e.g., as ModSource::Local with a matching path), you might want to
+                // remove that entry here. This example assumes direct file deletion is sufficient
+                // for items uninstalled via path.
+                // Example: state_manager.profile_manager.remove_mod_by_path(payload.profile_id, &path_to_delete).await?;
+                return Ok(()); // Successfully deleted by path
+            }
+            Err(e) => {
+                log::error!(
+                    "Failed to delete file {} for profile {}: {:?}",
+                    path_to_delete, payload.profile_id, e
+                );
+                // Decide on error handling: return error directly or fall back to SHA1 if available?
+                // For now, return error directly if path deletion fails.
+                return Err(CommandError::from(e));
+            }
+        }
+    } else if let Some(sha1_hash_to_delete) = payload.sha1_hash {
         log::info!(
             "Proceeding with uninstallation by SHA1: {}",
             sha1_hash_to_delete
@@ -434,7 +555,8 @@ pub async fn uninstall_content_from_profile(
         match uninstall_content_by_sha1_internal(
             payload.profile_id, 
             &sha1_hash_to_delete, 
-            &state_manager
+            &state_manager,
+            payload.content_type
         ).await {
             Ok((mod_count, asset_count, mod_errors, asset_errors)) => {
                 if mod_count == 0 && asset_count == 0 {
@@ -470,7 +592,7 @@ pub async fn uninstall_content_from_profile(
         }
     } else {
         // Handle other uninstall criteria in the future or return error
-        log::warn!("No SHA1 hash provided and no other uninstall criteria met for profile {}.", payload.profile_id);
+        log::warn!("No SHA1 hash or file_path provided and no other uninstall criteria met for profile {}.", payload.profile_id);
         Err(CommandError::from(AppError::Other(
             "No valid uninstallation criteria provided.".to_string(),
         )))
@@ -547,6 +669,357 @@ pub async fn install_content_to_profile(payload: InstallContentPayload) -> Resul
             .await
             .map_err(CommandError::from)
         }
+        _ => {
+            log::error!("Unsupported content type: {:?}", payload.content_type);
+            Err(CommandError::from(AppError::Other(
+                "Unsupported content type".to_string(),
+            )))
+        }
         // No default needed as ContentType from profile_utils is an enum and all variants are handled
+    }
+}
+
+// --- New Struct and Command for Installing Local Content (e.g., JARs) ---
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InstallLocalContentPayload {
+    profile_id: Uuid,
+    file_paths: Vec<String>,
+    content_type: profile_utils::ContentType, // Added content_type field
+}
+
+#[tauri::command]
+pub async fn install_local_content_to_profile(
+    payload: InstallLocalContentPayload,
+) -> Result<(), CommandError> {
+    log::info!(
+        "Executing install_local_content_to_profile for profile {} with {} file paths and content type {:?}.",
+        payload.profile_id,
+        payload.file_paths.len(),
+        payload.content_type
+    );
+
+    let state_manager = AppStateManager::get().await?;
+
+    match payload.content_type {
+        profile_utils::ContentType::Mod => {
+            log::info!("Processing local file installation as Mod for profile {}.", payload.profile_id);
+            let jar_file_paths_str: Vec<String> = payload.file_paths
+                .into_iter()
+                .filter(|path_str| {
+                    let lower_path = path_str.to_lowercase();
+                    lower_path.ends_with(".jar") || lower_path.ends_with(".jar.disabled")
+                })
+                .collect();
+
+            if jar_file_paths_str.is_empty() {
+                log::info!("No .jar or .jar.disabled files found in the provided paths for profile {} to import as Mod.", payload.profile_id);
+                return Ok(()); // No compatible files to process for Mod type
+            }
+
+            log::info!(
+                "Found {} .jar or .jar.disabled files from input to import as Mod for profile {}.",
+                jar_file_paths_str.len(),
+                payload.profile_id
+            );
+
+            let tauri_file_paths: Vec<tauri_plugin_fs::FilePath> = jar_file_paths_str
+                .iter()
+                .map(|path_str| tauri_plugin_fs::FilePath::Path(PathBuf::from(path_str)))
+                .collect();
+
+            state_manager
+                .profile_manager
+                .import_local_mods_to_profile(payload.profile_id, tauri_file_paths)
+                .await?;
+            log::info!("Successfully processed local Mod(s) import for profile {}.", payload.profile_id);
+        }
+        profile_utils::ContentType::ResourcePack |
+        profile_utils::ContentType::ShaderPack |
+        profile_utils::ContentType::DataPack => {
+            log::info!("Processing local file installation as {:?} for profile {}.", payload.content_type, payload.profile_id);
+            let profile_instance_path = state_manager
+                .profile_manager
+                .get_profile_instance_path(payload.profile_id)
+                .await?;
+
+            let target_subdir_name = match payload.content_type {
+                profile_utils::ContentType::ResourcePack => "resourcepacks",
+                profile_utils::ContentType::ShaderPack => "shaderpacks",
+                profile_utils::ContentType::DataPack => "datapacks",
+                _ => unreachable!(), // Already matched by outer arm
+            };
+
+            let target_dir = profile_instance_path.join(target_subdir_name);
+            if !target_dir.exists() {
+                fs::create_dir_all(&target_dir).await.map_err(AppError::Io)?;
+                log::info!("Created directory: {:?}", target_dir);
+            }
+
+            let mut files_skipped_pre_copy = 0;
+            let mut copy_tasks = Vec::new();
+            let io_semaphore = state_manager.io_semaphore.clone(); // Clone Arc<Semaphore>
+
+            for path_str in payload.file_paths {
+                let source_path = PathBuf::from(&path_str);
+                
+                if !source_path.is_file() {
+                    log::warn!("Provided path '{:?}' is not a file or does not exist. Skipping.", source_path);
+                    files_skipped_pre_copy += 1;
+                    continue;
+                }
+
+                let file_name = match source_path.file_name() {
+                    Some(name) => name.to_os_string(), // Keep as OsString for PathBuf::join
+                    None => {
+                        log::error!("Could not get file name for path: '{}'. Skipping.", path_str);
+                        files_skipped_pre_copy += 1;
+                        continue;
+                    }
+                };
+                let dest_path = target_dir.join(&file_name);
+
+                if dest_path.exists() {
+                    log::warn!(
+                        "File {:?} already exists in target directory {:?}. Skipping copy.",
+                        dest_path,
+                        target_dir
+                    );
+                    files_skipped_pre_copy += 1;
+                    continue;
+                }
+
+                // Acquire permit before spawning the task
+                let permit = match io_semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => { // Semaphore closed error
+                        log::error!("Failed to acquire semaphore permit as it might be closed. Halting further copy tasks.");
+                        return Err(CommandError::from(AppError::Other("IO Semaphore closed, cannot proceed with file copies.".to_string())));
+                    }
+                };
+                
+                let current_source_path = source_path.clone();
+                let current_dest_path = dest_path.clone();
+
+                copy_tasks.push(tokio::spawn(async move {
+                    let _permit_guard = permit; // Permit is moved into the task and dropped when the task finishes.
+                    
+                    match fs::copy(&current_source_path, &current_dest_path).await {
+                        Ok(_) => {
+                            log::info!("Copied local content file {:?} to {:?}", current_source_path, current_dest_path);
+                            Ok(current_dest_path) // Return Ok(dest_path) for logging or tracking
+                        }
+                        Err(e) => {
+                            log::error!("Failed to copy file {:?} to {:?}: {}", current_source_path, current_dest_path, e);
+                            Err(AppError::Io(e)) // Propagate the specific error
+                        }
+                    }
+                }));
+            }
+
+            let mut successful_copies = 0;
+            let mut failed_copies = 0;
+            let mut task_results = Vec::new();
+
+            for task_handle in copy_tasks {
+                match task_handle.await { // This handles JoinError (task panicked)
+                    Ok(Ok(copied_path)) => { // Task completed, fs::copy was Ok
+                        task_results.push(Ok(copied_path));
+                        successful_copies += 1;
+                    }
+                    Ok(Err(app_err)) => { // Task completed, fs::copy returned an AppError
+                        task_results.push(Err(app_err));
+                        failed_copies += 1;
+                    }
+                    Err(join_err) => { // Task panicked or was cancelled
+                        log::error!("A copy task panicked or was cancelled: {}", join_err);
+                        task_results.push(Err(AppError::Other(format!("Copy task failed: {}", join_err))));
+                        failed_copies += 1;
+                    }
+                }
+            }
+            
+            log::info!(
+                "Finished copy operations for {:?}. Successful copies: {}. Failed copies: {}. Skipped pre-copy: {}. Profile: {}.",
+                payload.content_type, successful_copies, failed_copies, files_skipped_pre_copy, payload.profile_id
+            );
+
+            if failed_copies > 0 {
+                let error_messages: Vec<String> = task_results.iter().filter_map(|r| r.as_ref().err().map(|e| e.to_string())).collect();
+                return Err(CommandError::from(AppError::Other(format!(
+                    "{} file(s) failed to copy for profile {}. Errors: [{}]",
+                    failed_copies, payload.profile_id, error_messages.join("; ")
+                ))));
+            }
+        }
+        profile_utils::ContentType::NoRiskMod => {
+            log::error!(
+                "ContentType::NoRiskMod is not supported for local installation via this command. Profile: {}",
+                payload.profile_id
+            );
+            return Err(CommandError::from(AppError::Other(
+                "Local installation of NoRiskMod content type is not supported.".to_string(),
+            )));
+        }
+        // Handle any other ContentType variants not explicitly covered, if any exist or are added later.
+        _ => {
+            log::warn!(
+                "Local installation for content type {:?} is not yet implemented for profile {}.",
+                payload.content_type,
+                payload.profile_id
+            );
+            return Err(CommandError::from(AppError::Other(format!(
+                "Local installation for content type {:?} is not yet implemented.",
+                payload.content_type
+            ))));
+        }
+    }
+
+    // Emit event to trigger UI update for this profile, so the frontend can refresh.
+    if let Err(e) = state_manager.event_state.trigger_profile_update(payload.profile_id).await {
+        log::error!(
+            "Failed to emit TriggerProfileUpdate event for profile {} after local content install: {}",
+            payload.profile_id,
+            e
+        );
+        // Do not fail the entire command if event emission fails, log and continue.
+    }
+
+    log::info!(
+        "Successfully processed request to install local content (JARs) for profile {}.",
+        payload.profile_id
+    );
+    Ok(())
+}
+
+// --- New Struct and Command for Switching Content Version ---
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SwitchContentVersionPayload {
+    profile_id: Uuid,
+    content_type: profile_utils::ContentType,
+    current_item_details: Option<profile_utils::LocalContentItem>, // Pass the whole item
+    new_modrinth_version_details: Option<ModrinthVersion>, // Full details of the new version
+}
+
+#[tauri::command]
+pub async fn switch_content_version(
+    payload: SwitchContentVersionPayload,
+) -> Result<(), CommandError> {
+    let new_version_details = payload.new_modrinth_version_details.ok_or_else(|| {
+        AppError::InvalidInput("Missing new_modrinth_version_details in payload.".to_string())
+    })?;
+
+    let current_item = payload.current_item_details.ok_or_else(|| {
+        AppError::InvalidInput("Missing current_item_details in payload.".to_string())
+    })?;
+
+    log::info!(
+        "Attempting to switch content version for item '{}' (ContentType: {:?}, ID: {:?}) in profile {}",
+        current_item.filename,
+        payload.content_type, // Use content_type from top-level payload for clarity
+        current_item.id,
+        payload.profile_id
+    );
+    log::info!("Switching to Modrinth version: Project_ID: {}, Version_ID: {}, Name: {}", 
+        new_version_details.project_id, new_version_details.id, new_version_details.name
+    );
+
+
+    let state_manager = AppStateManager::get().await?;
+
+    match payload.content_type { // Use payload.content_type here
+        profile_utils::ContentType::Mod => {
+            let mod_id_str = current_item.id.ok_or_else(|| {
+                AppError::InvalidInput("Missing 'id' (String Uuid) in current_item_details for Mod type.".to_string())
+            })?;
+
+            let mod_id_to_update = Uuid::parse_str(&mod_id_str).map_err(|_| {
+                AppError::InvalidInput(format!("Invalid Uuid format for mod id: {}", mod_id_str))
+            })?;
+            
+            // Verify this mod_id exists in the profile before proceeding (optional, update_profile_modrinth_mod_version should handle it)
+            // let profile_check = state_manager.profile_manager.get_profile(payload.profile_id).await?;
+            // if !profile_check.mods.iter().any(|m| m.id == mod_id_to_update) {
+            //     return Err(CommandError::from(AppError::NotFound(format!("Mod with ID {} not found in profile.", mod_id_to_update))));
+            // }
+
+            log::info!("Proceeding with version switch for mod ID: {}. New version: {}", mod_id_to_update, new_version_details.id);
+            state_manager
+                .profile_manager
+                .update_profile_modrinth_mod_version(
+                    payload.profile_id,
+                    mod_id_to_update,
+                    &new_version_details,
+                )
+                .await
+                .map_err(CommandError::from)
+        }
+        profile_utils::ContentType::ResourcePack => {
+            let profile = state_manager.profile_manager.get_profile(payload.profile_id).await?;
+            let rp_info = ResourcePackInfo {
+                filename: current_item.filename,
+                path: current_item.path_str, // path_str from LocalContentItem
+                sha1_hash: current_item.sha1_hash,
+                file_size: current_item.file_size,
+                is_disabled: current_item.is_disabled,
+                modrinth_info: None, // The update util focuses on new_version_details
+            };
+
+            log::info!("Switching ResourcePack version for file: {}", rp_info.filename);
+            resourcepack_utils::update_resourcepack_from_modrinth(
+                &profile,
+                &rp_info,
+                &new_version_details,
+            )
+            .await
+            .map_err(CommandError::from)
+        }
+        profile_utils::ContentType::ShaderPack => {
+            let profile = state_manager.profile_manager.get_profile(payload.profile_id).await?;
+            let sp_info = ShaderPackInfo {
+                filename: current_item.filename,
+                path: current_item.path_str,
+                sha1_hash: current_item.sha1_hash,
+                file_size: current_item.file_size,
+                is_disabled: current_item.is_disabled,
+                modrinth_info: None, 
+            };
+            
+            log::info!("Switching ShaderPack version for file: {}", sp_info.filename);
+            shaderpack_utils::update_shaderpack_from_modrinth(
+                &profile,
+                &sp_info,
+                &new_version_details,
+            )
+            .await
+            .map_err(CommandError::from)
+        }
+        profile_utils::ContentType::DataPack => {
+            let profile = state_manager.profile_manager.get_profile(payload.profile_id).await?;
+            let dp_info = DataPackInfo {
+                filename: current_item.filename,
+                path: current_item.path_str,
+                sha1_hash: current_item.sha1_hash,
+                file_size: current_item.file_size,
+                is_disabled: current_item.is_disabled,
+                modrinth_info: None,
+            };
+
+            log::info!("Switching DataPack version for file: {}", dp_info.filename);
+            datapack_utils::update_datapack_from_modrinth(
+                &profile,
+                &dp_info,
+                &new_version_details,
+            )
+            .await
+            .map_err(CommandError::from)
+        }
+        profile_utils::ContentType::NoRiskMod => {
+            log::error!("Switching version for NoRiskMod is not supported via this command.");
+            Err(CommandError::from(AppError::InvalidOperation(
+                "NoRiskMod versions are managed by pack configuration.".to_string(),
+            )))
+        }
     }
 } 

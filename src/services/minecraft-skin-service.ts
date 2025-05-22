@@ -6,6 +6,7 @@ import type {
     MinecraftSkin, 
     SkinVariant, 
     AddLocalSkinCommandPayload, 
+    GetStarlightSkinRenderPayload, // Added new payload type
     SkinSourceDetails // Keep this for internal construction
 } from "../types/localSkin"; // Relative path
 
@@ -108,15 +109,17 @@ export class MinecraftSkinService {
     
             try {
                 const parsedUrl = new URL(skinInput); 
-                if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+                if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:" ) {
                     isHttpUrl = true;
                 } else if (parsedUrl.protocol === "file:") {
                     isFileProtocolUrl = true;
-                    pathFromUrlIfFileProtocol = decodeURIComponent(parsedUrl.pathname);
-                    // Remove leading slash on Windows if it looks like /C:/path - Rust will handle it better.
-                    // However, consistent path format from JS to Rust is good.
-                    // For file:///C:/foo.png, pathname is /C:/foo.png. std::path::Path on Windows handles this.
-                    // For file:///foo.png (mac/linux), pathname is /foo.png.
+                    let rawPath = decodeURIComponent(parsedUrl.pathname);
+                    // Normalize path: remove leading slash on Windows if it looks like /C:/path
+                    // This pattern /X:/ is typical for Windows paths coming from file URLs.
+                    if (rawPath.length > 2 && rawPath.startsWith('/') && rawPath[2] === ':') {
+                        rawPath = rawPath.substring(1);
+                    }
+                    pathFromUrlIfFileProtocol = rawPath;
                 }
             } catch (e) {
                 // Not a parsable URL (e.g. "/path/to/file.png" or "C:\path\to\file.png")
@@ -151,5 +154,16 @@ export class MinecraftSkinService {
      */
     static async removeSkin(skinId: string): Promise<boolean> {
         return await invoke<boolean>("remove_skin", { id: skinId });
+    }
+
+    /**
+     * Fetches a cached skin render from the Starlight API via the backend.
+     * The backend handles caching and potential background updates.
+     * @param payload - The parameters for the skin render.
+     * @returns A promise resolving to the local file path (string) of the cached rendered skin image.
+     */
+    static async getStarlightSkinRender(payload: GetStarlightSkinRenderPayload): Promise<string> {
+        // The Rust command returns a PathBuf, which will be serialized as a string (the path).
+        return await invoke<string>("get_starlight_skin_render", { payload });
     }
 } 

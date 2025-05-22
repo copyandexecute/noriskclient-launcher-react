@@ -48,7 +48,7 @@ export const NavButton = forwardRef<HTMLButtonElement, NavButtonProps>(
     const colors = getVariantColors();
 
     const baseClasses = cn(
-      "font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-300",
+      "font-minecraft relative overflow-hidden transition-all duration-300",
       "w-16 h-16 rounded-md text-white flex items-center justify-center",
       "text-shadow-sm",
       "focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-1 focus:ring-offset-black/20",
@@ -81,12 +81,12 @@ export const NavButton = forwardRef<HTMLButtonElement, NavButtonProps>(
       "hover:brightness-110 active:brightness-90",
     );
 
-    const nonActiveStateStyles: React.CSSProperties = {
-      backgroundColor: variant === "ghost" || !isActive ? "transparent" : `${colors.main}20`,
-      borderColor: "transparent",
-      boxShadow: "none",
-      color: `${colors.text}90`,
-    };
+    const nonActiveStateStyles: React.CSSProperties = {};
+    if (isActive) {
+      Object.assign(nonActiveStateStyles, activeStateStyles);
+    } else {
+      nonActiveStateStyles.color = `${colors.text}90`;
+    }
 
     return (
       <button
@@ -104,7 +104,7 @@ export const NavButton = forwardRef<HTMLButtonElement, NavButtonProps>(
             "absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent",
             isActive
               ? "opacity-30"
-              : variant !== "ghost" ? "opacity-0 hover:opacity-10 transition-opacity duration-300" : "opacity-0",
+              : "opacity-0 transition-opacity duration-300",
           )}
         />
         <span className="relative z-10 flex items-center justify-center w-8 h-8">

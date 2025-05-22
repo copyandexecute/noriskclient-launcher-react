@@ -158,7 +158,7 @@ export function Modal({
   return (
     <div
       ref={modalRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
       onClick={handleBackdropClick}
       onMouseDown={(e) => {
         if (e.target === modalRef.current) {
@@ -210,20 +210,12 @@ export function Modal({
           <div className="flex items-center space-x-2">
             {headerActions}
             <IconButton
-              ref={closeButtonRef as any}
-              icon={
-                <Icon
-                  icon="solar:close-square-bold"
-                  className="w-4 h-4 text-white"
-                />
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                handleClose();
-              }}
-              variant="secondary"
+              ref={closeButtonRef}
+              icon={<Icon icon="solar:close-circle-bold" />}
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              colorScheme="ghost"
               size="sm"
-              aria-label="Close"
+              aria-label="Close modal"
             />
           </div>
         </div>

@@ -148,20 +148,23 @@ interface ThemeState {
   setCustomAccentColor: (hexColor: string) => void;
   applyAccentColorToDOM: () => void;
   isBackgroundAnimationEnabled: boolean;
-  toggleBackgroundAnimation: () => void;
   isDetailViewSidebarOnLeft: boolean;
   toggleDetailViewSidebarPosition: () => void;
   profileGroupingCriterion: string;
   setProfileGroupingCriterion: (criterion: string) => Promise<void>;
+  staticBackground: boolean;
+  toggleStaticBackground: () => void;
+  toggleBackgroundAnimation: () => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       accentColor: ACCENT_COLORS.blue,
-      isBackgroundAnimationEnabled: true,
+      isBackgroundAnimationEnabled: false,
       isDetailViewSidebarOnLeft: true,
       profileGroupingCriterion: "none",
+      staticBackground: true,
 
       setAccentColor: (color: AccentColor) => {
         set({ accentColor: color });
@@ -198,6 +201,10 @@ export const useThemeStore = create<ThemeState>()(
           set({ profileGroupingCriterion: criterion });
           throw error;
         }
+      },
+
+      toggleStaticBackground: () => {
+        set((state) => ({ staticBackground: !state.staticBackground }));
       },
 
       applyAccentColorToDOM: () => {

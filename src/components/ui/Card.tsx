@@ -120,7 +120,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         backgroundColor:
           variant === "secondary"
             ? "rgba(107, 114, 128, 0.2)"
-            : `${accentColor.value}20`,
+            : `${accentColor.value}${variant === "flat" ? "15" : "20"}`,
         borderColor:
           variant === "flat"
             ? "transparent"

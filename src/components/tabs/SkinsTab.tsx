@@ -3,7 +3,7 @@
 import type React from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MinecraftProfile, TexturesData } from "../../types/minecraft";
-import type { MinecraftSkin, SkinVariant } from "../../types/localSkin";
+import type { MinecraftSkin, SkinVariant, GetStarlightSkinRenderPayload } from "../../types/localSkin";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { MinecraftSkinService } from "../../services/minecraft-skin-service";
 import { Button } from "../ui/buttons/Button";
@@ -17,17 +17,16 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { useSkinStore } from "../../store/useSkinStore";
 import { toast } from "react-hot-toast";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Card } from "../ui/Card";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { ThemedSurface } from "../ui/ThemedSurface";
 import { Input } from "../ui/Input";
 import { RadioButton } from "../ui/RadioButton";
-import { Skeleton } from "../ui/Skeleton";
-import { SkeletonSkinCard } from "../ui/SkeletonSkinCard";
 import { TabLayout } from "../ui/TabLayout";
+import { cn } from "../../lib/utils";
 
 const SkinPreview = memo(
   ({
     skin,
-    skinUrl,
     index,
     loading,
     localSkinsLoading,
@@ -38,7 +37,6 @@ const SkinPreview = memo(
     onDeleteSkin,
   }: {
     skin: MinecraftSkin;
-    skinUrl?: string;
     index: number;
     loading: boolean;
     localSkinsLoading: boolean;
@@ -56,134 +54,223 @@ const SkinPreview = memo(
     ) => void;
   }) => {
     const accentColor = useThemeStore((state) => state.accentColor);
+    const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
     const isSelected = selectedLocalSkin?.id === skin.id;
     const isDisabled = loading && isSelected;
 
-    return (
-      <Card
-        key={skin.id}
-        className={`relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group
-        ${isDisabled ? "opacity-60 pointer-events-none" : ""}`}
-        variant={isSelected ? "default" : "secondary"}
-        onClick={() =>
-          !isDisabled && !isApplied && !isSelected && onClick(skin)
+    const [starlightRenderUrl, setStarlightRenderUrl] = useState<string | null>(null);
+    const [isRenderLoading, setIsRenderLoading] = useState<boolean>(true);
+    const [canShowSpinner, setCanShowSpinner] = useState<boolean>(false);
+    const spinnerTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+      let isMounted = true;
+      setIsRenderLoading(true);
+      setStarlightRenderUrl(null);
+      setCanShowSpinner(false);
+
+      if (spinnerTimeoutRef.current) {
+        clearTimeout(spinnerTimeoutRef.current);
+      }
+
+      spinnerTimeoutRef.current = setTimeout(() => {
+        if (isMounted && isRenderLoading) {
+          setCanShowSpinner(true);
         }
-        withAnimation={true}
-        // @ts-ignore
-        style={{
-          animationDelay: `${index * 0.075}s`,
-        }}
-      >
-        <p
-          className="font-minecraft text-white lowercase truncate text-3xl"
-          title={skin.name}
-        >
-          {skin.name}
-        </p>
+      }, 500);
 
-        <div className="h-64 flex relative pt-2 pb-2 flex-grow">
-          <SkinViewer
-            skinUrl={
-              skinUrl ? skinUrl : `data:image/png;base64,${skin.base64_data}`
+      const fetchRender = async () => {
+        if (skin && skin.name) {
+          try {
+            const payload: GetStarlightSkinRenderPayload = {
+              player_name: "skin",
+              render_type: "default",
+              render_view: "full",
+              base64_skin_data: skin.base64_data,
+            };
+            const localPath = await MinecraftSkinService.getStarlightSkinRender(payload);
+            if (isMounted) {
+              if (localPath) {
+                setStarlightRenderUrl(convertFileSrc(localPath));
+              } else {
+                console.warn(`[SkinPreview] Starlight render returned empty path for ${skin.name}.`);
+                setStarlightRenderUrl("");
+              }
+              setIsRenderLoading(false);
+              setCanShowSpinner(false);
+              if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
             }
-            width={130}
-            height={260}
-            className="mx-auto"
-            enableZoom={false}
-          />
-        </div>
+          } catch (error) {
+            console.error(`[SkinPreview] Failed to fetch Starlight skin render for ${skin.name}:`, error);
+            if (isMounted) {
+              setStarlightRenderUrl("");
+              setIsRenderLoading(false);
+              setCanShowSpinner(false);
+              if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
+            }
+          }
+        } else {
+          if (isMounted) {
+            console.warn(`[SkinPreview] No skin.name provided, cannot fetch Starlight render.`);
+            setStarlightRenderUrl("");
+            setIsRenderLoading(false);
+            setCanShowSpinner(false);
+            if (spinnerTimeoutRef.current) clearTimeout(spinnerTimeoutRef.current);
+          }
+        }
+      };
 
-        <div className="flex items-center justify-between mt-auto">
-          <p className="text-white/60 font-minecraft lowercase text-2xl">
-            {skin.variant === "slim" ? "Slim" : "Classic"}
+      fetchRender();
+
+      return () => {
+        isMounted = false;
+        if (spinnerTimeoutRef.current) {
+          clearTimeout(spinnerTimeoutRef.current);
+        }
+      };
+    }, [skin.name]);
+
+    const animationStyle = isBackgroundAnimationEnabled 
+      ? { animationDelay: `${index * 0.075}s` } 
+      : {};
+    const animationClasses = isBackgroundAnimationEnabled 
+      ? "animate-in fade-in duration-500 fill-mode-both" 
+      : "";
+
+    return (
+      <div
+        key={skin.id}
+        style={animationStyle}
+        className={animationClasses}
+      >
+        <ThemedSurface
+          className={cn(
+            "relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group",
+            isDisabled ? "opacity-60 pointer-events-none" : ""
+          )}
+          alwaysActive={isSelected}
+          onClick={() =>
+            !isDisabled && !isApplied && !isSelected && onClick(skin)
+          }
+        >
+          <p
+            className="font-minecraft text-white lowercase truncate text-3xl"
+            title={skin.name}
+          >
+            {skin.name}
           </p>
 
-          {isApplied && (
-            <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-minecraft flex items-center">
-              <Icon icon="solar:check-circle-bold" className="w-4 h-4 mr-1" />
-              Applied
-            </span>
-          )}
-        </div>
-
-        {isDisabled && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-20 transition-opacity duration-300 ease-in-out">
-            <div className="w-20 h-20 border-4 border-t-transparent border-white rounded-full animate-spin mb-4 transition-all duration-300"></div>
-            <span className="font-minecraft text-2xl text-white lowercase animate-pulse transition-all duration-300">
-              Applying...
-            </span>
+          <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center">
+            {isRenderLoading && canShowSpinner ? (
+              <div className="w-12 h-12 border-4 border-t-transparent border-[var(--accent)] rounded-full animate-spin"></div>
+            ) : !isRenderLoading ? (
+              <SkinViewer
+                skinUrl={starlightRenderUrl || ""}
+                width={130}
+                height={260}
+                className="mx-auto"
+              />
+            ) : null}
           </div>
-        )}
 
-        <div className="absolute bottom-1.5 right-1.5 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          {onEditSkin && (
-            <IconButton
-              onClick={(event) => {
-                event.stopPropagation();
-                onEditSkin(skin, event);
-              }}
-              title="Edit skin properties"
-              disabled={isDisabled}
-              size="xs"
-              variant="secondary"
-              icon={<Icon icon="solar:pen-bold" className="w-4 h-4" />}
-            />
+          <div className="flex items-center justify-between mt-auto">
+            <p className="text-white/60 font-minecraft lowercase text-2xl">
+              {skin.variant === "slim" ? "Slim" : "Classic"}
+            </p>
+
+            {isApplied && (
+              <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-minecraft flex items-center">
+                <Icon icon="solar:check-circle-bold" className="w-4 h-4 mr-1" />
+                Applied
+              </span>
+            )}
+          </div>
+
+          {isDisabled && (
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-20 transition-opacity duration-300 ease-in-out">
+              <div className="w-20 h-20 border-4 border-t-transparent border-white rounded-full animate-spin mb-4 transition-all duration-300"></div>
+              <span className="font-minecraft text-2xl text-white lowercase animate-pulse transition-all duration-300">
+                Applying...
+              </span>
+            </div>
           )}
 
-          {onDeleteSkin && (
-            <IconButton
-              onClick={(event) => {
-                event.stopPropagation();
-                onDeleteSkin(skin.id, skin.name, event);
-              }}
-              title="Delete skin"
-              disabled={isDisabled}
-              size="xs"
-              variant="destructive"
-              icon={
-                <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-              }
-            />
-          )}
-        </div>
-      </Card>
+          <div className="absolute bottom-1.5 right-1.5 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onEditSkin && (
+              <IconButton
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEditSkin(skin, event);
+                }}
+                title="Edit skin properties"
+                disabled={isDisabled}
+                size="xs"
+                colorScheme="secondary"
+                icon={<Icon icon="solar:pen-bold" className="w-4 h-4" />}
+              />
+            )}
+
+            {onDeleteSkin && (
+              <IconButton
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDeleteSkin(skin.id, skin.name, event);
+                }}
+                title="Delete skin"
+                disabled={isDisabled}
+                size="xs"
+                colorScheme="destructive"
+                icon={
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                }
+              />
+            )}
+          </div>
+        </ThemedSurface>
+      </div>
     );
   },
 );
 
 const AddSkinCard = memo(
   ({ index, onClick }: { index: number; onClick: () => void }) => {
+    const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+
+    const animationStyle = isBackgroundAnimationEnabled 
+      ? { animationDelay: `${index * 0.075}s` } 
+      : {};
+    const animationClasses = isBackgroundAnimationEnabled 
+      ? "animate-in fade-in duration-500 fill-mode-both" 
+      : "";
+
     return (
-      <Card
+      <div
         key={`add-skin-${index}`}
-        className="relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group cursor-pointer border-dashed"
-        variant="secondary"
-        onClick={onClick}
-        withAnimation={true}
-        // @ts-ignore
-        style={{
-          animationDelay: `${index * 0.075}s`,
-          borderStyle: "dashed",
-        }}
+        style={animationStyle}
+        className={animationClasses}
       >
-        <p className="font-minecraft text-white lowercase truncate text-3xl">
-          Add New Skin
-        </p>
+        <ThemedSurface
+          className="relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group cursor-pointer border-dashed"
+          onClick={onClick}
+        >
+          <p className="font-minecraft text-white lowercase truncate text-3xl">
+            Add New Skin
+          </p>
 
-        <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center">
-          <SkinViewer
-            skinUrl="/skins/add_skin.png"
-            width={130}
-            height={260}
-            className="mx-auto opacity-70 group-hover:opacity-100 transition-opacity"
-            enableZoom={false}
-          />
-        </div>
+          <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center">
+            <SkinViewer
+              skinUrl="/skins/default_skin_full.png"
+              width={130}
+              height={260}
+              className="mx-auto opacity-70 group-hover:opacity-100 transition-opacity"
+            />
+          </div>
 
-        <p className="text-white/60 font-minecraft lowercase text-2xl mt-auto">
-          Upload or import a skin
-        </p>
-      </Card>
+          <p className="text-white/60 font-minecraft lowercase text-2xl mt-auto">
+            Upload or import a skin
+          </p>
+        </ThemedSurface>
+      </div>
     );
   },
 );
@@ -376,7 +463,7 @@ const EditSkinModal = memo(
                   title="Upload Skin from file"
                   disabled={localSkinsLoading}
                   size="md"
-                  variant="secondary"
+                  colorScheme="secondary"
                   icon={<Icon icon="solar:folder-bold" className="w-5 h-5" />}
                 />
               </div>
@@ -438,7 +525,6 @@ export function SkinsTab() {
   const [editingSkin, setEditingSkin] = useState<MinecraftSkin | null>(null);
   const [search, setSearch] = useState<string>("");
   const [currentSkinId, setCurrentSkinId] = useState<string | null>(null);
-  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const debouncedSearch = useDebounce(search, 250);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -494,49 +580,24 @@ export function SkinsTab() {
 
   const loadLocalSkins = useCallback(async () => {
     setLocalSkinsLoading(true);
-
-    if (loadingTimerRef.current) {
-      clearTimeout(loadingTimerRef.current);
-    }
-
-    const startTime = Date.now();
+    setLocalSkinsError(null);
 
     try {
       const skins = await MinecraftSkinService.getAllSkins();
 
-      const elapsedTime = Date.now() - startTime;
-      const minimumLoadingTime = 1200;
+      setLocalSkins(skins);
+      console.log(`Loaded ${skins.length} local skins`);
 
-      if (elapsedTime < minimumLoadingTime) {
-        loadingTimerRef.current = setTimeout(() => {
-          setLocalSkins(skins);
-          console.log(`Loaded ${skins.length} local skins`);
-
-          if (selectedSkinId) {
-            const selectedSkin = skins.find(
-              (skin) => skin.id === selectedSkinId,
-            );
-            if (selectedSkin) {
-              setSelectedLocalSkin(selectedSkin);
-            }
-          }
-
-          setLocalSkinsLoading(false);
-          loadingTimerRef.current = null;
-        }, minimumLoadingTime - elapsedTime);
-      } else {
-        setLocalSkins(skins);
-        console.log(`Loaded ${skins.length} local skins`);
-
-        if (selectedSkinId) {
-          const selectedSkin = skins.find((skin) => skin.id === selectedSkinId);
-          if (selectedSkin) {
-            setSelectedLocalSkin(selectedSkin);
-          }
+      if (selectedSkinId) {
+        const selectedSkin = skins.find(
+          (skin) => skin.id === selectedSkinId,
+        );
+        if (selectedSkin) {
+          setSelectedLocalSkin(selectedSkin);
         }
-
-        setLocalSkinsLoading(false);
       }
+      setLocalSkinsLoading(false);
+
     } catch (err) {
       console.error("Error loading local skins:", err);
       setLocalSkinsError(err instanceof Error ? err.message : String(err));
@@ -554,12 +615,6 @@ export function SkinsTab() {
     if (!activeAccount && !accountLoading) {
       initializeAccounts();
     }
-
-    return () => {
-      if (loadingTimerRef.current) {
-        clearTimeout(loadingTimerRef.current);
-      }
-    };
   }, [
     activeAccount,
     loadSkinData,
@@ -722,19 +777,20 @@ export function SkinsTab() {
     return skin.id === currentSkinId;
   };
 
-  const renderSkeletonGrid = () => {
-    return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <SkeletonSkinCard
-            key={`skeleton-${index}`}
-            index={index}
-            skinVariant={index % 2 === 0 ? "classic" : "slim"}
-          />
-        ))}
-      </div>
-    );
-  };
+  // Removed renderSkeletonGrid function
+  // const renderSkeletonGrid = () => {
+  //   return (
+  //     <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+  //       {Array.from({ length: 6 }).map((_, index) => (
+  //         <SkeletonSkinCard
+  //           key={`skeleton-${index}`}
+  //           index={index}
+  //           skinVariant={index % 2 === 0 ? "classic" : "slim"}
+  //         />
+  //       ))}
+  //     </div>
+  //   );
+  // };
 
   // Add skin button for the TabLayout
   const addSkinButton = (
@@ -764,20 +820,22 @@ export function SkinsTab() {
     >
       <div className="space-y-8">
         {accountLoading ? (
-          <div className="space-y-4">
-            <Skeleton
-              variant="text"
-              height={28}
-              width="50%"
-              className="mx-auto"
-            />
-            <Skeleton
-              variant="text"
-              height={20}
-              width="70%"
-              className="mx-auto"
-            />
-          </div>
+          // Skeletons for accountLoading removed
+          // <div className="space-y-4">
+          //   <Skeleton
+          //     variant="text"
+          //     height={28}
+          //     width="50%"
+          //     className="mx-auto"
+          //   />
+          //   <Skeleton
+          //     variant="text"
+          //     height={20}
+          //     width="70%"
+          //     className="mx-auto"
+          //   />
+          // </div>
+          null // Or a minimal loading indicator like <p>Loading account...</p>
         ) : accountError ? (
           <StatusMessage
             type="error"
@@ -792,7 +850,8 @@ export function SkinsTab() {
           <>
             <div className="space-y-5 text-center">
               {localSkinsLoading && !editingSkin ? (
-                renderSkeletonGrid()
+                // renderSkeletonGrid() call removed
+                null // Or a minimal loading indicator like <p>Loading skins...</p>
               ) : localSkinsError && !editingSkin ? (
                 <StatusMessage
                   type="error"
@@ -817,11 +876,15 @@ export function SkinsTab() {
                 </p>
               ) : (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+                  <AddSkinCard
+                    index={0}
+                    onClick={() => startEditSkin(null, undefined)}
+                  />
                   {filteredSkins.map((skin, index) => (
                     <SkinPreview
                       key={skin.id}
                       skin={skin}
-                      index={index}
+                      index={index + 1}
                       loading={loading}
                       localSkinsLoading={localSkinsLoading}
                       selectedLocalSkin={selectedLocalSkin}
@@ -831,10 +894,6 @@ export function SkinsTab() {
                       onDeleteSkin={handleDeleteSkin}
                     />
                   ))}
-                  <AddSkinCard
-                    index={filteredSkins.length + 1}
-                    onClick={() => startEditSkin(null, undefined)}
-                  />
                 </div>
               )}
             </div>

@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import type { Profile } from "../../../types/profile";
+import type { ModLoader, Profile } from "../../../types/profile";
 import type { MinecraftVersion } from "../../../types/minecraft";
-import type { ModLoader } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
 import { StatusMessage } from "../../ui/StatusMessage";
 import { useThemeStore } from "../../../store/useThemeStore";
@@ -76,7 +75,11 @@ export function InstallationSettingsTab({
     const currentLoader = editedProfile.loader || "vanilla";
 
     if (previousLoader !== currentLoader) {
-      if (currentLoader !== "vanilla" && loaderVersionRef.current && isBackgroundAnimationEnabled) {
+      if (
+        currentLoader !== "vanilla" &&
+        loaderVersionRef.current &&
+        isBackgroundAnimationEnabled
+      ) {
         scrollToLoaderVersion();
       }
 
@@ -257,7 +260,9 @@ export function InstallationSettingsTab({
         const activeLabel = versionTypesRef.current.querySelector(
           `.version-type-${type}`,
         );
-        const allLabels = versionTypesRef.current.querySelectorAll("span[role='button']");
+        const allLabels = versionTypesRef.current.querySelectorAll(
+          "span[role='button']",
+        );
 
         if (activeLabel) {
           gsap.to(activeLabel, {
@@ -292,7 +297,9 @@ export function InstallationSettingsTab({
   };
 
   const handleLoaderClick = (loaderName: string) => {
-    const newLoader = (editedProfile.loader === loaderName ? "vanilla" : loaderName) as ModLoader;
+    const newLoader = (
+      editedProfile.loader === loaderName ? "vanilla" : loaderName
+    ) as ModLoader;
     updateProfile({ loader: newLoader, loader_version: null });
 
     if (newLoader !== "vanilla" && isBackgroundAnimationEnabled) {
@@ -306,7 +313,10 @@ export function InstallationSettingsTab({
       gsap.to(scrollContainerRef.current, {
         duration: 0.5,
         scrollTo: {
-          y: platformsRef.current.offsetTop - scrollContainerRef.current.offsetTop - 20,
+          y:
+            platformsRef.current.offsetTop -
+            scrollContainerRef.current.offsetTop -
+            20,
           autoKill: true,
         },
         ease: "power2.out",
@@ -325,7 +335,10 @@ export function InstallationSettingsTab({
       gsap.to(scrollContainerRef.current, {
         duration: 0.5,
         scrollTo: {
-          y: loaderVersionRef.current.offsetTop - scrollContainerRef.current.offsetTop - 20,
+          y:
+            loaderVersionRef.current.offsetTop -
+            scrollContainerRef.current.offsetTop -
+            20,
           autoKill: true,
         },
         ease: "power2.out",
@@ -348,16 +361,14 @@ export function InstallationSettingsTab({
             currently installed
           </h3>
           <Card
-            variant="default"
-            className="p-4 flex items-center justify-between"
+            variant="flat"
+            className="p-4 flex items-center justify-between border border-white/10 bg-black/20"
           >
             <div className="flex items-center gap-4">
               <div
-                className="w-12 h-12 flex items-center justify-center rounded-md"
+                className="w-12 h-12 flex items-center justify-center rounded-md border"
                 style={{
                   backgroundColor: `${accentColor.value}30`,
-                  borderWidth: "2px",
-                  borderStyle: "solid",
                   borderColor: `${accentColor.value}60`,
                 }}
               >
@@ -389,7 +400,7 @@ export function InstallationSettingsTab({
                 key={type}
                 variant={selectedVersionType === type ? "default" : "ghost"}
                 size="md"
-                className="cursor-pointer mr-2 mb-2 text-xl"
+                className={`cursor-pointer mr-2 mb-2 text-xl version-type-${type}`}
                 onClick={() => handleVersionTypeClick(type as VersionType)}
               >
                 {type}
@@ -408,12 +419,16 @@ export function InstallationSettingsTab({
               onChange={setSearchQuery}
               placeholder="search versions..."
               className="w-full text-2xl py-3"
+              variant="flat"
             />
           </div>
 
           <div className="flex-1 relative">
             {isLoadingVersions ? (
-              <Card variant="default" className="p-4 text-white/70 text-center">
+              <Card
+                variant="flat"
+                className="p-4 text-white/70 text-center border border-white/10 bg-black/20"
+              >
                 <div className="flex items-center justify-center">
                   <Icon
                     icon="solar:refresh-bold"
@@ -426,8 +441,8 @@ export function InstallationSettingsTab({
               </Card>
             ) : (
               <Card
-                variant="default"
-                className="max-h-48 overflow-y-auto custom-scrollbar"
+                variant="flat"
+                className="max-h-48 overflow-y-auto custom-scrollbar border border-white/10 bg-black/20"
               >
                 {filteredVersions.length === 0 ? (
                   <div className="p-4 text-2xl text-white/70 text-center select-none">
@@ -481,12 +496,12 @@ export function InstallationSettingsTab({
                 <button
                   key={loader.name}
                   className={cn(
-                    "p-3 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200",
+                    "p-3 flex flex-col items-center justify-center rounded-lg border transition-all duration-200",
                     `platform-${loader.name}`,
                     isSelected
                       ? "bg-white/20 text-white border-white/50"
                       : isCompatible
-                        ? "bg-black/20 text-white/70 border-white/20 hover:bg-black/30 hover:text-white"
+                        ? "bg-black/20 text-white/70 border-white/10 hover:bg-black/30 hover:text-white hover:border-white/20"
                         : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed",
                   )}
                   style={{
@@ -521,7 +536,10 @@ export function InstallationSettingsTab({
           <div ref={loaderVersionRef}>
             <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">{`${editedProfile.loader} version`}</h3>
             {isLoadingLoaderVersions ? (
-              <Card variant="default" className="p-4 text-white/70 text-center">
+              <Card
+                variant="flat"
+                className="p-4 text-white/70 text-center border border-white/10 bg-black/20"
+              >
                 <div className="flex items-center justify-center">
                   <Icon
                     icon="solar:refresh-bold"
@@ -544,11 +562,12 @@ export function InstallationSettingsTab({
                   })),
                 ]}
                 className="text-2xl py-3"
+                variant="flat"
               />
             ) : (
               <Card
-                variant="default"
-                className="p-4 text-2xl text-white/70 text-center select-none"
+                variant="flat"
+                className="p-4 text-2xl text-white/70 text-center select-none border border-white/10 bg-black/20"
               >
                 no {editedProfile.loader} versions available for minecraft{" "}
                 {editedProfile.game_version}

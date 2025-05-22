@@ -8,7 +8,10 @@ import { Button } from "../ui/buttons/Button";
 import { StatusMessage } from "../ui/StatusMessage";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Card } from "../ui/Card";
-import { gsap } from "gsap";
+import { toast } from "react-hot-toast";
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import * as ProfileService from "../../services/profile-service";
+import { useProfileStore } from "../../store/profile-store";
 
 interface ProfileImportProps {
   onClose: () => void;
@@ -26,56 +29,57 @@ export function ProfileImport({
   const contentRef = useRef<HTMLDivElement>(null);
   const formatItemsRef = useRef<HTMLUListElement>(null);
 
-  useEffect(() => {
-    if (contentRef.current) {
-      gsap.fromTo(
-        contentRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-
-    if (formatItemsRef.current) {
-      const items = formatItemsRef.current.children;
-      gsap.fromTo(
-        items,
-        { opacity: 0, x: -20 },
-        {
-          opacity: 1,
-          x: 0,
-          duration: 0.3,
-          stagger: 0.1,
-          ease: "power2.out",
-          delay: 0.2,
-        },
-      );
-    }
-  }, []);
-
   const handleImport = async () => {
+    const operationId = `profile-import-dialog-${Date.now()}`;
+    let loadingToastId: string | undefined = undefined; // To ensure it's only used if a file is selected
+
     try {
-      setIsImporting(true);
-      setError(null);
-      setSuccess(null);
+      const selectedPath = await openDialog({
+        multiple: false,
+        directory: false,
+        filters: [
+          {
+            name: "Modpack Files",
+            extensions: ["noriskpack", "mrpack"],
+          },
+        ],
+        title: "Select Modpack to Import",
+      });
 
-      await invoke("import_profile_from_file");
-
-      setSuccess("Profile successfully imported!");
-      onImportComplete();
-
-      setTimeout(() => {
+      if (selectedPath && typeof selectedPath === "string") {
+        setIsImporting(true);
         onClose();
-      }, 1500);
+
+        loadingToastId = `loading-${operationId}`;
+        const fileName = selectedPath.substring(selectedPath.lastIndexOf('/') + 1).substring(selectedPath.lastIndexOf('\\') + 1);
+        toast.loading(`Importing profile from ${fileName}...`, { id: loadingToastId });
+
+        await ProfileService.importProfileByPath(selectedPath);
+
+        toast.success(`Profile from ${fileName} imported successfully! List will refresh.`, { 
+          id: loadingToastId,
+          duration: 4000, 
+        });
+        useProfileStore.getState().fetchProfiles();
+        onImportComplete();
+
+      } else {
+        if (selectedPath === null) {
+          console.log("Profile import dialog cancelled by user.");
+          // No toast for cancellation is usually fine
+        } else {
+          console.warn("File selection dialog did not return a valid path or was an array:", selectedPath);
+          toast.error("Could not get selected file path. Please try again.");
+        }
+      }
     } catch (err) {
       console.error("Failed to import profile:", err);
-      setError(
-        `Failed to import profile: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (loadingToastId) {
+        toast.error(`Failed to import profile: ${errorMessage}`, { id: loadingToastId });
+      } else {
+        toast.error(`Failed to import profile: ${errorMessage}`);
+      }
     } finally {
       setIsImporting(false);
     }

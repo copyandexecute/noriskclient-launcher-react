@@ -10,6 +10,7 @@ import {
   useLaunchStateStore,
 } from "../../store/launch-state-store";
 import { useProfileStore } from "../../store/profile-store";
+import { useNavigate } from "react-router-dom";
 
 interface VersionInfoProps {
   profileId: string;
@@ -26,6 +27,7 @@ export function VersionInfo({ profileId, className }: VersionInfoProps) {
   const { launchState } = getProfileState(profileId || "");
 
   const { loading: initialDataLoading, error: initialDataError } = useProfileStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -55,6 +57,17 @@ export function VersionInfo({ profileId, className }: VersionInfoProps) {
 
     loadProfile();
   }, [profileId, initializeProfile, initialDataLoading]);
+
+  const handleNavigateToProfiles = () => {
+    if (profile && !profile.is_standard_version) {
+      navigate(`/profiles/${profile.id}`);
+    } else {
+      // For standard profiles or if profile data isn't fully loaded,
+      // navigating to /profiles is a safe fallback.
+      // ProfilesTab will handle toast notifications for standard profiles.
+      navigate("/profiles");
+    }
+  };
 
   if (initialDataLoading) {
     return (
@@ -142,7 +155,8 @@ export function VersionInfo({ profileId, className }: VersionInfoProps) {
       <Button
         variant={variant}
         size="md"
-        disabled
+        disabled={isLaunching}
+        onClick={!isLaunching ? handleNavigateToProfiles : undefined}
         icon={
           <img
             src={getModLoaderIcon(profile.loader) || "/placeholder.svg"}
@@ -153,7 +167,8 @@ export function VersionInfo({ profileId, className }: VersionInfoProps) {
             }}
           />
         }
-        className={cn("font-minecraft", className)}
+        className={cn("font-minecraft", !isLaunching && "cursor-pointer", className)}
+        title={!isLaunching ? "Go to Profiles Tab" : undefined}
       >
         {profile.name} ({profile.game_version})
         {isLaunching && (

@@ -21,6 +21,8 @@ import { NebulaGrid } from ".././effects/NebulaGrid";
 import { NebulaVoxels } from ".././effects/NebulaVoxels";
 import { NebulaLightning } from ".././effects/NebulaLightning";
 import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
+import { RetroGridEffect } from "../effects/RetroGridEffect";
+import PlainBackground from "../effects/PlainBackground";
 import * as ConfigService from "../../services/launcher-config-service";
 
 const navItems = [
@@ -29,7 +31,6 @@ const navItems = [
   { id: "mods", icon: "solar:widget-bold", label: "Mods" },
   { id: "skins", icon: "solar:emoji-funny-circle-bold", label: "Skins" },
   { id: "store", icon: "solar:shop-bold", label: "Store" },
-  { id: "news", icon: "solar:bell-bold", label: "News" },
   { id: "settings", icon: "solar:settings-bold", label: "Settings" },
 ];
 
@@ -53,11 +54,9 @@ export function AppLayout({
   const minimizeRef = useRef<HTMLDivElement>(null);
   const maximizeRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLDivElement>(null);
-  const accentColor = useThemeStore((state) => state.accentColor);
-
   const { currentEffect } = useBackgroundEffectStore();
   const { qualityLevel } = useQualitySettingsStore();
-  const { isBackgroundAnimationEnabled } = useThemeStore();
+  const { isBackgroundAnimationEnabled, accentColor: themeAccentColor } = useThemeStore();
 
   const getComplementaryBackground = () => {
     const hexToRgb = (hex: string) => {
@@ -71,7 +70,7 @@ export function AppLayout({
         : { r: 34, g: 34, b: 34 };
     };
 
-    const rgb = hexToRgb(accentColor.value);
+    const rgb = hexToRgb(themeAccentColor.value);
 
     const darkR = Math.floor(rgb.r * 0.1);
     const darkG = Math.floor(rgb.g * 0.1);
@@ -167,7 +166,7 @@ export function AppLayout({
           <MatrixRainEffect
             speed={qualityParams.speed}
             opacity={qualityParams.opacity}
-            forceEnable={true}
+            forceEnable={false}
           />
         );
       case BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES:
@@ -176,7 +175,7 @@ export function AppLayout({
             opacity={qualityParams.opacity}
             particleCount={qualityParams.particleCount}
             speed={qualityParams.speed}
-            forceEnable={true}
+            forceEnable={false}
           />
         );
       case BACKGROUND_EFFECTS.NEBULA_WAVES:
@@ -229,6 +228,21 @@ export function AppLayout({
             frequencyY={2}
           />
         );
+      case BACKGROUND_EFFECTS.RETRO_GRID:
+        const hexToRgbaWithLowOpacity = (hex: string) => {
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, 0.05)`;
+        };
+        return (
+          <div 
+            className="absolute inset-0"
+            style={{ backgroundColor: hexToRgbaWithLowOpacity(themeAccentColor.value) }}
+          ></div>
+        );
+      case BACKGROUND_EFFECTS.PLAIN_BACKGROUND:
+        return <PlainBackground accentColorValue={themeAccentColor.value} />;
       default:
         return (
           <div className="absolute inset-0 bg-red-500/20">
@@ -247,11 +261,11 @@ export function AppLayout({
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundImage: `linear-gradient(to bottom right, ${backgroundColor}, rgba(0,0,0,0.9))`,
-        borderColor: `${accentColor.value}30`,
-        boxShadow: `0 0 15px ${accentColor.value}30, inset 0 0 10px ${accentColor.value}20`,
+        borderColor: `${themeAccentColor.value}30`,
+        boxShadow: `0 0 15px ${themeAccentColor.value}30, inset 0 0 10px ${themeAccentColor.value}20`,
       }}
     >
-      <BorderGlowEffects accentColor={accentColor.value} />
+      <BorderGlowEffects accentColor={themeAccentColor.value} />
 
       <VerticalNavbar
         items={navItems}

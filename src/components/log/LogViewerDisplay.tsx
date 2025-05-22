@@ -43,6 +43,10 @@ interface LogViewerDisplayProps {
   selectedLogPath?: string | null;
   onLogSelect?: (value: string) => void;
   isInsideLogWindow?: boolean;
+  isWordWrapEnabled?: boolean;
+  onWordWrapChange?: (enabled: boolean) => void;
+  scrollToTop?: () => void;
+  scrollToBottom?: () => void;
 }
 
 function getFilename(path: string | null): string {
@@ -80,7 +84,7 @@ export function LogViewerDisplay({
   onCopyLog,
   logLevelsDefinition,
   isLiveLogs,
-  isAutoscrollEnabled,
+  isAutoscrollEnabled = true,
   onAutoscrollChange,
   scrollableContainerRef,
   onOpenFolder,
@@ -90,6 +94,10 @@ export function LogViewerDisplay({
   selectedLogPath = null,
   onLogSelect,
   isInsideLogWindow = false,
+  isWordWrapEnabled,
+  onWordWrapChange,
+  scrollToTop,
+  scrollToBottom,
 }: LogViewerDisplayProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const isAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
@@ -249,7 +257,7 @@ export function LogViewerDisplay({
             <IconButton
               onClick={onCopyLog}
               disabled={displayLines.length === 0 || isLoading || copied}
-              variant={copied ? "success" : "secondary"}
+              colorScheme={copied ? "success" : "secondary"}
               size="sm"
               icon={
                 <Icon
@@ -308,7 +316,7 @@ export function LogViewerDisplay({
                 disabled={
                   isLoading || parsedLogLinesCount === 0 || isSubmittingUpload
                 }
-                variant="secondary"
+                colorScheme="secondary"
                 size="sm"
                 icon={
                   <Icon
@@ -327,7 +335,7 @@ export function LogViewerDisplay({
               <IconButton
                 onClick={onOpenFolder}
                 disabled={isLoading}
-                variant="secondary"
+                colorScheme="secondary"
                 size="sm"
                 icon={<Icon icon="solar:folder-bold" />}
               />
@@ -458,6 +466,48 @@ export function LogViewerDisplay({
                 disabled={isLoading}
               />
             </div>
+          )}
+
+          {onWordWrapChange && (
+            <IconButton
+              onClick={() => onWordWrapChange(!isWordWrapEnabled)}
+              disabled={isLoading}
+              colorScheme={isWordWrapEnabled ? "default" : "secondary"}
+              size="sm"
+              icon={
+                isWordWrapEnabled ? (
+                  <Icon
+                    icon="solar:text-bold"
+                    className="w-4 h-4"
+                  />
+                ) : (
+                  <Icon
+                    icon="solar:text-bold"
+                    className="w-4 h-4"
+                  />
+                )
+              }
+            />
+          )}
+
+          {scrollToTop && (
+            <IconButton
+              onClick={scrollToTop}
+              disabled={isLoading}
+              colorScheme="secondary"
+              size="sm"
+              icon={<Icon icon="solar:double-alt-arrow-up-bold-duotone" className="w-4 h-4" />}
+            />
+          )}
+
+          {scrollToBottom && (
+            <IconButton
+              onClick={scrollToBottom}
+              disabled={isLoading}
+              colorScheme="secondary"
+              size="sm"
+              icon={<Icon icon="solar:double-alt-arrow-down-bold-duotone" className="w-4 h-4" />}
+            />
           )}
         </div>
       </div>

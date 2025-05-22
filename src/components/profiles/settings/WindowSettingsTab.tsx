@@ -108,7 +108,10 @@ export function WindowSettingsTab({
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             resolution
           </h3>
-          <Card variant="default" className="p-4">
+          <Card
+            variant="flat"
+            className="p-4 border border-white/10 bg-black/20"
+          >
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xl text-white/70 font-minecraft mb-2 lowercase tracking-wide select-none">
@@ -127,6 +130,7 @@ export function WindowSettingsTab({
                     );
                   }}
                   className="text-2xl py-3"
+                  variant="flat"
                 />
               </div>
               <div>
@@ -146,6 +150,7 @@ export function WindowSettingsTab({
                     );
                   }}
                   className="text-2xl py-3"
+                  variant="flat"
                 />
               </div>
             </div>
@@ -175,6 +180,7 @@ export function WindowSettingsTab({
               onChange={(e) => handleFullscreenChange(e.target.checked)}
               label="fullscreen"
               className="text-2xl"
+              variant="flat"
             />
           </Card>
         </div>

@@ -5,6 +5,7 @@ use crate::minecraft::api::mc_api::MinecraftApiService;
 use crate::minecraft::api::mclogs_api::upload_log_to_mclogs;
 use crate::minecraft::api::neo_forge_api::NeoForgeApi;
 use crate::minecraft::api::quilt_api::QuiltApi;
+use crate::minecraft::api::starlight_api::{GetSkinRenderPayload, StarlightApiService};
 use crate::minecraft::dto::fabric_meta::FabricVersionInfo;
 use crate::minecraft::dto::minecraft_profile::MinecraftProfile;
 use crate::minecraft::dto::quilt_meta::QuiltVersionInfo;
@@ -12,13 +13,17 @@ use crate::minecraft::dto::VersionManifest;
 use crate::state::skin_state::MinecraftSkin;
 use crate::state::state_manager::State;
 use crate::utils::mc_utils;
-use log::{debug, info, error};
+use log::{debug, error, info};
+use std::path::PathBuf;
+use std::sync::Arc;
 use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
 // --- New Imports for add_skin_locally ---
-use crate::minecraft::dto::skin_payloads::{AddLocalSkinCommandPayload, SkinSource, SkinModelVariant};
-use crate::utils::mc_utils::{fetch_image_as_base64, extract_skin_info_from_profile};
+use crate::minecraft::dto::skin_payloads::{
+    AddLocalSkinCommandPayload, SkinModelVariant, SkinSource,
+};
+use crate::utils::mc_utils::{extract_skin_info_from_profile, fetch_image_as_base64};
 use chrono::Utc;
 // --- End New Imports ---
 
@@ -586,9 +591,7 @@ pub async fn add_skin_locally(
 ) -> Result<MinecraftSkin, CommandError> {
     info!(
         "[CMD] add_skin_locally: TargetName='{}', TargetVariant='{}', SourceType={:?}",
-        payload.target_skin_name,
-        payload.target_skin_variant,
-        payload.source
+        payload.target_skin_name, payload.target_skin_variant, payload.source
     );
 
     let base64_data: String;
@@ -597,37 +600,62 @@ pub async fn add_skin_locally(
 
     match payload.source {
         SkinSource::Profile(profile_data) => {
-            debug!("[CMD] add_skin_locally: Processing Profile source for query: {}", profile_data.query);
+            debug!(
+                "[CMD] add_skin_locally: Processing Profile source for query: {}",
+                profile_data.query
+            );
             let api_service = MinecraftApiService::new();
-            let profile = api_service.get_profile_by_name_or_uuid(&profile_data.query).await?;
+            let profile = api_service
+                .get_profile_by_name_or_uuid(&profile_data.query)
+                .await?;
 
-            let (skin_url, source_variant, profile_name) = extract_skin_info_from_profile(&profile)?;
+            let (skin_url, source_variant, profile_name) =
+                extract_skin_info_from_profile(&profile)?;
 
             if final_skin_name.is_empty() {
                 final_skin_name = profile_name;
             }
             final_skin_variant = source_variant;
-            
+
             base64_data = fetch_image_as_base64(&skin_url).await?;
         }
         SkinSource::Url(url_data) => {
-            debug!("[CMD] add_skin_locally: Processing URL source: {}", url_data.url);
+            debug!(
+                "[CMD] add_skin_locally: Processing URL source: {}",
+                url_data.url
+            );
             base64_data = fetch_image_as_base64(&url_data.url).await?;
         }
         SkinSource::FilePath(filepath_data) => {
-            debug!("[CMD] add_skin_locally: Processing FilePath source: {}", filepath_data.path);
-            let file_content = std::fs::read(&filepath_data.path).map_err(|e| {
+            debug!(
+                "[CMD] add_skin_locally: Processing FilePath source (original): {}",
+                filepath_data.path
+            );
+
+            let mut corrected_path_string = filepath_data.path.clone();
+            if cfg!(windows) {
+                // Example: /C:/Users/username -> C:/Users/username
+                if corrected_path_string.starts_with("/") && corrected_path_string.len() > 2 && corrected_path_string.chars().nth(2) == Some(':') {
+                    corrected_path_string.remove(0);
+                }
+            }
+            let corrected_path = PathBuf::from(corrected_path_string);
+            debug!(
+                "[CMD] add_skin_locally: Using corrected path for reading: {:?}",
+                corrected_path
+            );
+
+            let file_content = tokio::fs::read(&corrected_path).await.map_err(|e| {
                 error!(
-                    "[CMD] add_skin_locally: Failed to read skin file from path {}: {}",
-                    filepath_data.path,
-                    e
+                    "[CMD] add_skin_locally: Failed to read skin file from path {:?}: {}",
+                    corrected_path, e
                 );
                 AppError::Io(e)
             })?;
             base64_data = base64::encode(&file_content);
 
             if final_skin_name.is_empty() {
-                final_skin_name = std::path::Path::new(&filepath_data.path)
+                final_skin_name = corrected_path // Use corrected_path here too
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("skin_from_file")
@@ -639,7 +667,7 @@ pub async fn add_skin_locally(
             base64_data = base64_content_data.base64_content;
         }
     }
-    
+
     if final_skin_name.is_empty() {
         error!("[CMD] add_skin_locally: Final skin name is empty after processing source.");
         return Err(CommandError::from(AppError::InvalidInput(
@@ -662,17 +690,59 @@ pub async fn add_skin_locally(
         name: final_skin_name,
         base64_data,
         variant: final_skin_variant.to_string(),
-        description: payload.description.unwrap_or_else(|| {
-            format!("Added on {}", current_time.format("%Y-%m-%d"))
-        }),
+        description: payload
+            .description
+            .unwrap_or_else(|| format!("Added on {}", current_time.format("%Y-%m-%d"))),
         added_at: current_time,
     };
 
     state.skin_manager.add_skin(skin_to_add.clone()).await?;
     info!(
         "[CMD] add_skin_locally: Successfully added skin '{}' (ID: {}) to local database.",
-        skin_to_add.name,
-        skin_to_add.id
+        skin_to_add.name, skin_to_add.id
     );
     Ok(skin_to_add)
+}
+
+#[tauri::command]
+pub async fn get_starlight_skin_render(
+    payload: GetSkinRenderPayload,
+) -> Result<PathBuf, CommandError> {
+    debug!(
+        "Command called: get_starlight_skin_render with payload: {:?}",
+        payload
+    );
+
+    let starlight_service = match StarlightApiService::new() {
+        Ok(service) => service,
+        Err(e) => {
+            error!(
+                "[CMD] get_starlight_skin_render: Failed to create StarlightApiService: {:?}",
+                e
+            );
+            return Err(CommandError::from(e));
+        }
+    };
+
+    match starlight_service
+        .get_skin_render(
+            &payload.player_name,
+            &payload.render_type,
+            &payload.render_view,
+            payload.base64_skin_data,
+        )
+        .await
+    {
+        Ok(path_buf) => {
+            debug!(
+                "Command completed: get_starlight_skin_render, path: {:?}",
+                path_buf
+            );
+            Ok(path_buf)
+        }
+        Err(e) => {
+            error!("Command failed: get_starlight_skin_render: {:?}", e);
+            Err(CommandError::from(e))
+        }
+    }
 }

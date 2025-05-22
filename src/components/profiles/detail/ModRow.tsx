@@ -212,7 +212,7 @@ export function ModRow({
       <div className="w-24 flex items-center justify-center">
         <IconButton
           onClick={handleDelete}
-          variant={isConfirmingDelete ? "destructive" : "secondary"}
+          colorScheme={isConfirmingDelete ? "destructive" : "secondary"}
           size="sm"
           icon={
             <Icon

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { WorldsTab } from "./detail/WorldsTab";
@@ -10,16 +10,14 @@ import * as ProfileService from "../../services/profile-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
+import { LaunchButton } from "../ui/buttons/LaunchButton";
 import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { ModsTabV2 } from "./detail/v2/ModsTabV2";
-import { ResourcePacksTabV2 } from "./detail/v2/ResourcePacksTabV2";
-import { NoRiskModsTabV2 } from "./detail/v2/NoRiskModsTabV2";
-import { ShaderPacksTab } from "./detail/ShaderPacksTab";
-import { DataPacksTab } from "./detail/DataPacksTab";
-import { ShaderPacksTabV2 } from "./detail/v2/ShaderPacksTabV2";
-import { DataPacksTabV2 } from "./detail/v2/DataPacksTabV2";
-import { ScreenshotsTab } from "./detail/ScreenshotsTab";
+import { LocalContentTabV2 } from "./detail/v2/LocalContentTabV2";
+import type { LocalContentItem } from "../../hooks/useLocalContentManager";
+import { ProfileIcon } from "./ProfileIcon";
+import { useProfileStore } from "../../store/profile-store";
 
 interface ProfileDetailViewProps {
   profile: Profile;
@@ -27,7 +25,7 @@ interface ProfileDetailViewProps {
   onEdit: () => void;
 }
 
-type MainTabType = "content" | "browse" | "worlds" | "logs" | "screenshots" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
+type MainTabType = "content" | "browse" | "worlds" | "logs" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
 type ContentSubType =
   | "modsv2"
   | "resourcepacksv2"
@@ -40,9 +38,7 @@ export function ProfileDetailView({
   onClose,
   onEdit,
 }: ProfileDetailViewProps) {
-  const [activeMainTab, setActiveMainTab] = useState<MainTabType>(
-    profile.is_standard_version ? "logs" : "content",
-  );
+  const [activeMainTab, setActiveMainTab] = useState<MainTabType>("content");
   const [activeContentType, setActiveContentType] =
     useState<ContentSubType>("modsv2");
   const [currentProfile, setCurrentProfile] = useState<Profile>(profile);
@@ -59,6 +55,20 @@ export function ProfileDetailView({
   const subMenuRef = useRef<HTMLDivElement>(null);
   const subItemsRef = useRef<(HTMLDivElement | null)[]>([]);
   const prevActiveMainTab = useRef<MainTabType | null>(null);
+
+  // Memoized callback for getDisplayFileName
+  const getGenericDisplayFileName = useCallback((item: LocalContentItem) => item.filename, []);
+
+  useEffect(() => {
+    // This effect ensures that if the profile prop changes (e.g., after cloning and navigating),
+    // the internal currentProfile state is updated, and relevant view states are reset.
+    setCurrentProfile(profile);
+    setActiveMainTab("content"); // Reset to default tab
+    setActiveContentType("modsv2"); // Reset to default sub-tab
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0; // Scroll to top for new profile
+    }
+  }, [profile]); // Depend on the entire profile object or profile.id if more stable
 
   useEffect(() => {
     if (containerRef.current && isBackgroundAnimationEnabled) {
@@ -110,6 +120,7 @@ export function ProfileDetailView({
     try {
       setIsRefreshing(true);
       const updatedProfile = await ProfileService.getProfile(profile.id);
+      useProfileStore.getState().refreshSingleProfileInStore(updatedProfile);
       setCurrentProfile(updatedProfile);
     } catch (error) {
       console.error("Failed to refresh profile:", error);
@@ -125,7 +136,7 @@ export function ProfileDetailView({
   };
 
   const handleContentTypeChange = (type: ContentSubType) => {
-    if (activeContentType === type) return;
+    if (activeContentType === type && activeMainTab === "content") return;
 
     if (isBackgroundAnimationEnabled) {
       gsap.to(`#dot-${activeContentType}`, {
@@ -155,22 +166,18 @@ export function ProfileDetailView({
     }
 
     setActiveContentType(type);
+    if (activeMainTab === "browse") {
+      setActiveMainTab("content");
+    }
   };
 
-  const mainTabs = profile.is_standard_version
-    ? [
-      { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
-      { id: "screenshots" as MainTabType, label: "Screenshots", icon: "solar:camera-bold" },
-      { id: "logs", label: "Logs", icon: "solar:file-text-bold" },
-      { id: "content", label: "Content", icon: "solar:widget-bold" },
-    ]
-    : [
-      { id: "content", label: "Content", icon: "solar:widget-bold" },
-      { id: "browse", label: "Browse", icon: "solar:magnifer-bold" },
-      { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
-      { id: "screenshots" as MainTabType, label: "Screenshots", icon: "solar:camera-bold" },
-      { id: "logs", label: "Logs", icon: "solar:code-bold" },
-    ];
+  const mainTabs = [
+    { id: "content", label: "Content", icon: "solar:widget-bold" },
+    // Browse tab is only for non-standard profiles
+    ...(profile.is_standard_version ? [] : [{ id: "browse" as MainTabType, label: "Browse", icon: "solar:magnifer-bold" }]),
+    { id: "worlds", label: "Worlds", icon: "solar:planet-bold" },
+    { id: "logs", label: "Logs", icon: "solar:code-bold" }, // solar:file-text-bold was for standard logs, solar:code-bold for non-standard. Let's unify to solar:code-bold or pick one. Using solar:code-bold for now.
+  ];
 
   const contentSubTabs = [
     { id: "modsv2" as ContentSubType, label: "Mods", icon: "solar:bolt-bold" },
@@ -221,15 +228,14 @@ export function ProfileDetailView({
           style={{ borderColor: `${accentColor.value}30` }}
         >
           <div className="flex items-center gap-3 mb-3">
-            <div
-              className="w-10 h-10 rounded flex items-center justify-center border-2 flex-shrink-0"
-              style={{
-                backgroundColor: `${accentColor.value}30`,
-                borderColor: `${accentColor.value}50`,
-              }}
-            >
-              <Icon icon="solar:cube-bold" className="w-6 h-6 text-white" />
-            </div>
+            <ProfileIcon
+              profileId={currentProfile.id}
+              banner={currentProfile.banner}
+              profileName={currentProfile.name}
+              accentColor={accentColor.value}
+              onSuccessfulUpdate={handleRefresh}
+              className="w-10 h-10"
+            />
             <div className="flex-1 min-w-0">
               <div className="font-minecraft-ten text-base text-white truncate">
                 {profile.name || profile.id}
@@ -258,7 +264,6 @@ export function ProfileDetailView({
                 onClick={onEdit}
                 title="Edit profile"
                 size="sm"
-                variant="secondary"
               />
             )}
 
@@ -274,7 +279,6 @@ export function ProfileDetailView({
               disabled={isRefreshing}
               title="Refresh profile"
               size="sm"
-              variant="secondary"
             />
           </div>
         </div>
@@ -299,7 +303,6 @@ export function ProfileDetailView({
               onClick={toggleSidebarPosition}
               title="Toggle Sidebar Position"
               size="xs"
-              variant="ghost"
               className="text-white hover:text-white/80"
             />
           </div>
@@ -323,8 +326,7 @@ export function ProfileDetailView({
 
                 {/* Content sub-navigation - directly below Content button */}
                 {tab.id === "content" &&
-                  activeMainTab === "content" &&
-                  !profile.is_standard_version && (
+                  (activeMainTab === "content" || activeMainTab === "browse") && (
                     <div ref={subMenuRef} className="ml-3 pl-4 relative">
                       {/* Vertical line connecting subpoints */}
                       <div
@@ -391,6 +393,20 @@ export function ProfileDetailView({
             ))}
           </div>
         </div>
+
+        {/* Divider and Launch Button (Moved here and classes updated) */}
+        <div className="mt-auto p-3">
+          <div 
+            className="h-px w-full mb-3"
+            style={{ backgroundColor: `${accentColor.value}30` }} 
+          />
+          <LaunchButton 
+            id={profile.id} 
+            name={profile.name} 
+            size="md" 
+            className="w-full"
+          />
+        </div>
       </div>
 
       {/* Main content */}
@@ -403,17 +419,73 @@ export function ProfileDetailView({
           }}
         >
           <>
-            {activeMainTab === "content" && !profile.is_standard_version && (
+            {activeMainTab === "content" && (
               <>
-                {activeContentType === "modsv2" && <ModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
-                {activeContentType === "resourcepacksv2" && <ResourcePacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                {activeContentType === "modsv2" && (
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="Mod"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="mod"
+                    itemTypeNamePlural="mods"
+                    addContentButtonText="Add Mods"
+                    emptyStateIconOverride="solar:gallery-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
+                  />
+                )}
+                {activeContentType === "resourcepacksv2" && (
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="ResourcePack"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="resource pack"
+                    itemTypeNamePlural="resource packs"
+                    addContentButtonText="Add Resource Packs"
+                    emptyStateIconOverride="solar:gallery-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
+                  />
+                )}
                 {activeContentType === "shaderpacksv2" && (
-                  <ShaderPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="ShaderPack"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="shader pack"
+                    itemTypeNamePlural="shader packs"
+                    addContentButtonText="Add Shader Packs"
+                    emptyStateIconOverride="solar:sun-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
+                  />
                 )}
                 {activeContentType === "datapacksv2" && (
-                  <DataPacksTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="DataPack"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="data pack"
+                    itemTypeNamePlural="data packs"
+                    addContentButtonText="Add Data Packs"
+                    emptyStateIconOverride="solar:database-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
+                  />
                 )}
-                {activeContentType === "noriskv2" && <NoRiskModsTabV2 profile={currentProfile} onRefreshRequired={handleRefresh} />}
+                  {activeContentType === "noriskv2" && (
+                  <LocalContentTabV2<LocalContentItem>
+                    profile={currentProfile}
+                    contentType="NoRiskMod"
+                    getDisplayFileName={getGenericDisplayFileName}
+                    itemTypeName="NoRisk Mod"
+                    itemTypeNamePlural="NoRisk Mods"
+                    addContentButtonText="Add NoRisk Mods"
+                    emptyStateIconOverride="solar:shield-check-bold-duotone"
+                    onRefreshRequired={handleRefresh}
+                    onBrowseContentRequest={handleBrowseContent}
+                  />
+                )}
               </>
             )}
             {activeMainTab === "browse" && !profile.is_standard_version && (
@@ -426,9 +498,6 @@ export function ProfileDetailView({
             )}
             {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
             {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
-            {activeMainTab === "screenshots" && (
-              <ScreenshotsTab profile={currentProfile} />
-            )}
           </>
         </div>
       </div>

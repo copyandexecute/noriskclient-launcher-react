@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { cn } from "../../lib/utils";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
@@ -20,19 +20,13 @@ export function MatrixRainEffect({
 }: MatrixRainEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
-  const isBackgroundAnimationEnabled = useThemeStore(
-    (state) => state.isBackgroundAnimationEnabled,
-  );
+  const staticBackground = useThemeStore((state) => state.staticBackground);
   const { qualityLevel } = useQualitySettingsStore();
 
-  // This is the key line - we need to respect forceEnable
-  const shouldRender = forceEnable || isBackgroundAnimationEnabled;
+  const [isPausedByFocus, setIsPausedByFocus] = useState(false);
+  const isAnimating = forceEnable || !staticBackground;
 
   useEffect(() => {
-    if (!shouldRender) {
-      return;
-    }
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -67,10 +61,10 @@ export function MatrixRainEffect({
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
       return result
         ? {
-            r: Number.parseInt(result[1], 16),
-            g: Number.parseInt(result[2], 16),
-            b: Number.parseInt(result[3], 16),
-          }
+          r: Number.parseInt(result[1], 16),
+          g: Number.parseInt(result[2], 16),
+          b: Number.parseInt(result[3], 16),
+        }
         : { r: 0, g: 0, b: 0 };
     };
 
@@ -86,7 +80,7 @@ export function MatrixRainEffect({
         .fill(null)
         .map((_, i) => ({
           x: i * FONT_SIZE,
-          y: Math.random() * -100,
+          y: staticBackground ? (Math.random() * canvas.height) : (Math.random() * -100),
           trail: Math.floor(
             Math.random() * ((canvas.height / FONT_SIZE) * 0.8) + 5,
           ),
@@ -101,6 +95,23 @@ export function MatrixRainEffect({
     resize();
     window.addEventListener("resize", resize);
     context.font = `${FONT_SIZE}px monospace`;
+
+    const handleBlur = () => {
+      console.log("Blur event triggered");
+      if (isAnimating) {
+        setIsPausedByFocus(true);
+      }
+    };
+    const handleFocus = () => {
+      console.log("Focus event triggered");
+      if (isAnimating) {
+        setIsPausedByFocus(false);
+      }
+    };
+
+    // Always register listeners
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
 
     let animationFrameId: number;
 
@@ -176,7 +187,7 @@ export function MatrixRainEffect({
         if (drop.y > canvas.height && Math.random() > RAINDROP_SPAWN_RATE) {
           drops[i] = {
             x: i * FONT_SIZE,
-            y: Math.random() * -100,
+            y: staticBackground ? (Math.random() * canvas.height) : (Math.random() * -100),
             trail: Math.floor(
               Math.random() * ((canvas.height / FONT_SIZE) * 0.8) + 5,
             ),
@@ -190,28 +201,43 @@ export function MatrixRainEffect({
       }
 
       time += 1;
-      animationFrameId = window.requestAnimationFrame(draw);
+      // Only request next frame if animating and not paused by focus
+      if (isAnimating && !isPausedByFocus) {
+        animationFrameId = window.requestAnimationFrame(draw);
+      }
     };
 
+    // Initial draw call
     draw();
 
-    return () => {
-      window.removeEventListener("resize", resize);
-      window.cancelAnimationFrame(animationFrameId);
+    // If static, we don't need the animation loop, just handle resize.
+    // The resize listener itself will call draw() once after resizing.
+    const resizeAndDrawOnce = () => {
+      resize(); // Recalculate dimensions and drops
+      draw(); // Draw a single frame
     };
-  }, [opacity, speed, accentColor.value, shouldRender, qualityLevel]);
 
-  if (!shouldRender) {
-    return (
-      <div
-        className={cn("absolute inset-0 w-full h-full", className)}
-        style={{
-          backgroundColor: "#121212",
-        }}
-      />
-    );
-  }
+    // Adjust event listener based on animation state
+    if (!isAnimating) { // If static (which is !isAnimating and not forced)
+      window.addEventListener("resize", resizeAndDrawOnce);
+    } else {
+      window.addEventListener("resize", resize);
+    }
 
+    return () => {
+      if (!isAnimating) {
+        window.removeEventListener("resize", resizeAndDrawOnce);
+      } else {
+        window.removeEventListener("resize", resize);
+      }
+      window.cancelAnimationFrame(animationFrameId);
+      // Always remove listeners
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [opacity, speed, accentColor.value, qualityLevel, isAnimating, staticBackground, isPausedByFocus]);
+
+  // The canvas is always rendered; its content is either static or animated by useEffect.
   return (
     <canvas
       ref={canvasRef}

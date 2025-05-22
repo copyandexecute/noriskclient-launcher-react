@@ -1,8 +1,8 @@
 [package]
 name = "noriskclient-launcher-v3"
-version = "0.0.3-beta.14"
+version = "0.0.4-beta.1"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["NoRiskk"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -84,4 +84,7 @@ codegen-units = 1 # Reduce number of codegen units to increase optimizations
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
+
+# [target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies]
+# tauri-plugin-single-instance = "2.2.4"
 

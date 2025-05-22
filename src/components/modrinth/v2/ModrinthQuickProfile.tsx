@@ -98,7 +98,7 @@ export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
             : <Icon icon="solar:copy-bold-duotone" className="w-5 h-5" />
           }
           onClick={handleToggleCopySection}
-          variant="secondary" 
+          colorScheme="ghost"
           size="md"
           disabled={isLoading}
           title={isActuallyCopying ? "Clear source profile selection" : "Copy settings from existing profile"}

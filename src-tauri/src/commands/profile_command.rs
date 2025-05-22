@@ -12,7 +12,7 @@ use crate::state::state_manager::State;
 use crate::utils::datapack_utils::DataPackInfo;
 use crate::utils::mc_utils::{self, WorldInfo};
 use crate::utils::path_utils::find_unique_profile_segment;
-use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo};
+use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo, LocalContentItem, GenericModrinthInfo, ContentType as ProfileUtilContentType, LoadItemsParams as ProfileUtilLoadItemsParams, LocalContentLoader as ProfileUtilLocalContentLoader};
 use crate::utils::resourcepack_utils::ResourcePackInfo;
 use crate::utils::shaderpack_utils::ShaderPackInfo;
 use crate::utils::world_utils;
@@ -43,7 +43,7 @@ pub struct CreateProfileParams {
     selected_norisk_pack_id: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct UpdateProfileParams {
     name: Option<String>,
     game_version: Option<String>,
@@ -51,6 +51,8 @@ pub struct UpdateProfileParams {
     loader_version: Option<String>,
     settings: Option<ProfileSettings>,
     selected_norisk_pack_id: Option<String>,
+    group: Option<String>,
+    clear_selected_norisk_pack: Option<bool>,
 }
 
 // Neue DTO für den copy_profile Command
@@ -134,6 +136,7 @@ pub async fn create_profile(params: CreateProfileParams) -> Result<Uuid, Command
         group: None,
         description: None,
         banner: None,
+        background: None,
         is_standard_version: false,
         norisk_information: None,
     };
@@ -402,27 +405,65 @@ pub async fn get_profile(id: Uuid) -> Result<Profile, CommandError> {
 
 #[tauri::command]
 pub async fn update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(), CommandError> {
+    info!("[CMD] update_profile called for ID: {} with params: {:?}", id, params);
+    match try_update_profile(id, params).await {
+        Ok(_) => {
+            info!("[CMD] update_profile successful for ID: {}", id);
+            Ok(())
+        }
+        Err(e) => {
+            error!("[CMD] update_profile failed for ID: {}: {:?}", id, e);
+            Err(e)
+        }
+    }
+}
+
+// Helper function to contain the actual logic and allow for ? operator
+async fn try_update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(), CommandError> {
+    info!("[CMD] try_update_profile for ID: {}. Received params: {:?}", id, params);
     let state = State::get().await?;
     let mut profile = state.profile_manager.get_profile(id).await?;
 
-    if let Some(name) = params.name {
-        profile.name = name;
+    if let Some(name) = &params.name { // Borrow params.name
+        info!("Updating profile name to: {}", name);
+        profile.name = name.clone();
     }
-    if let Some(game_version) = params.game_version {
-        profile.game_version = game_version;
+    if let Some(game_version) = &params.game_version { // Borrow params.game_version
+        info!("Updating game_version to: {}", game_version);
+        profile.game_version = game_version.clone();
     }
-    if let Some(loader) = params.loader {
-        profile.loader = ModLoader::from_str(&loader)?;
+    if let Some(loader_str) = &params.loader { // Borrow params.loader
+        info!("Updating loader to: {}", loader_str);
+        profile.loader = ModLoader::from_str(loader_str)?;
     }
-    if let Some(loader_version) = params.loader_version {
-        profile.loader_version = Some(loader_version);
+    if let Some(loader_version) = &params.loader_version { // Borrow params.loader_version
+        info!("Updating loader_version to: {}", loader_version);
+        profile.loader_version = Some(loader_version.clone());
     }
-    if let Some(settings) = params.settings {
-        profile.settings = settings;
+    if let Some(settings) = params.settings { // settings can be moved if it's Clone or Copy, or borrowed if not
+        info!("Updating settings: {:?}", settings);
+        profile.settings = settings; // Assuming ProfileSettings is Clone or params.settings is not used after this
     }
-    profile.selected_norisk_pack_id = params.selected_norisk_pack_id;
+
+    // Handle selected_norisk_pack_id based on clear_selected_norisk_pack and new value
+    if params.clear_selected_norisk_pack == Some(true) {
+        info!("Clearing selected_norisk_pack_id for profile {}", id);
+        profile.selected_norisk_pack_id = None;
+    } else if let Some(pack_id) = &params.selected_norisk_pack_id {
+        info!("Updating selected_norisk_pack_id to: {} for profile {}", pack_id, id);
+        profile.selected_norisk_pack_id = Some(pack_id.clone());
+    } else {
+        info!("selected_norisk_pack_id not explicitly changed or cleared for profile {}. Current: {:?}", id, profile.selected_norisk_pack_id);
+        // No change to selected_norisk_pack_id if neither clear is true nor a new value is provided
+    }
+
+    if let Some(new_group) = &params.group { // Borrow params.group
+        info!("Updating group to: {}", new_group);
+        profile.group = Some(new_group.clone());
+    }
 
     state.profile_manager.update_profile(id, profile).await?;
+    info!("Profile {} updated successfully.", id);
     Ok(())
 }
 
@@ -895,21 +936,96 @@ pub async fn import_profile_from_file(app_handle: tauri::AppHandle) -> Result<()
     }
 }
 
+/// Imports a profile from a specified file path.
+#[tauri::command]
+pub async fn import_profile(file_path_str: String) -> Result<Uuid, CommandError> {
+    log::info!(
+        "Executing import_profile command with file_path: {}",
+        file_path_str
+    );
+
+    let file_path_buf = PathBuf::from(file_path_str);
+
+    if !file_path_buf.exists() {
+        log::error!("File path does not exist: {:?}", file_path_buf);
+        return Err(CommandError::from(AppError::Other(format!(
+            "File not found at path: {}",
+            file_path_buf.display()
+        ))));
+    }
+
+    log::info!(
+        "Processing modpack file: {:?}. Triggering processing...",
+        file_path_buf
+    );
+
+    // Check the file extension
+    let file_extension = file_path_buf
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_lowercase());
+
+    let new_profile_id = match file_extension.as_deref() {
+        Some("mrpack") => {
+            log::info!("File extension is .mrpack, proceeding with mrpack processing.");
+            mrpack::import_mrpack_as_profile(file_path_buf).await?
+        }
+        Some("noriskpack") => {
+            log::info!("File extension is .noriskpack, proceeding with noriskpack processing.");
+            crate::integrations::norisk_packs::import_noriskpack_as_profile(file_path_buf).await?
+        }
+        _ => {
+            log::error!(
+                "Selected file has an invalid extension: {:?}",
+                file_path_buf
+            );
+            return Err(CommandError::from(AppError::Other(
+                "Invalid file type selected. Please select a .mrpack or .noriskpack file."
+                    .to_string(),
+            )));
+        }
+    };
+
+    // Get state to emit event
+    let state = State::get().await?;
+    // Emit event to trigger UI update for the newly created profile
+    if let Err(e) = state
+        .event_state
+        .trigger_profile_update(new_profile_id)
+        .await
+    {
+        log::error!(
+            "Failed to emit TriggerProfileUpdate event for new profile {}: {}",
+            new_profile_id,
+            e
+        );
+    }
+
+    Ok(new_profile_id)
+}
+
 // Command to get all resourcepacks in a profile
 #[tauri::command]
 pub async fn get_local_resourcepacks(
     profile_id: Uuid,
+    calculate_hashes: bool,
+    fetch_modrinth_data: bool,
 ) -> Result<Vec<resourcepack_utils::ResourcePackInfo>, CommandError> {
     log::info!(
-        "Executing get_local_resourcepacks command for profile {}",
-        profile_id
+        "Executing get_local_resourcepacks command for profile {}, fetch_modrinth_data: {}",
+        profile_id,
+        fetch_modrinth_data
     );
 
     let state = State::get().await?;
     let profile = state.profile_manager.get_profile(profile_id).await?;
 
     // Use the utility function to get all resourcepacks
-    let resourcepacks = resourcepack_utils::get_resourcepacks_for_profile(&profile)
+    let resourcepacks = resourcepack_utils::get_resourcepacks_for_profile(
+        &profile, 
+        calculate_hashes,
+        fetch_modrinth_data,
+    )
         .await
         .map_err(|e| CommandError::from(e))?;
 
@@ -1125,8 +1241,9 @@ pub async fn copy_profile(params: CopyProfileParams) -> Result<Uuid, CommandErro
         group: source_profile.group.clone(),
         is_standard_version: false,
         description: source_profile.description.clone(),
-        norisk_information: None,
-        banner: None,
+        norisk_information: source_profile.norisk_information.clone(),
+        banner: source_profile.banner.clone(),
+        background: source_profile.background.clone(),
     };
 
     // 6. Erstelle das neue Profilverzeichnis
@@ -1419,6 +1536,20 @@ pub async fn is_content_installed(
     );
     // Call the utility function and map the error
     Ok(profile_utils::check_content_installed(params).await?)
+}
+
+/// Batch checks the installation status of multiple content items for a profile.
+#[tauri::command]
+pub async fn batch_check_content_installed(
+    params: profile_utils::BatchCheckContentParams,
+) -> Result<profile_utils::BatchContentInstallStatus, CommandError> {
+    info!(
+        "Executing batch_check_content_installed command for profile {} with {} items",
+        params.profile_id,
+        params.requests.len()
+    );
+    // Call the batch utility function and map the error
+    Ok(profile_utils::check_content_installed_batch(params).await?)
 }
 
 /// Opens the latest log file for the specified profile using the system default application.
@@ -1752,4 +1883,53 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
         all_profiles: all_profiles_final,
         last_played_profile_id: effective_last_played_id,
     })
+}
+
+// --- DTO for GetLocalContent --- 
+// This DTO is no longer needed as we will use LoadItemsParams directly
+/*
+#[derive(Deserialize, Debug)]
+pub struct GetLocalContentParams {
+    profile_id: Uuid,
+    content_type: String, 
+    calculate_hashes: bool,
+    fetch_modrinth_data: bool,
+}
+*/
+
+#[tauri::command]
+pub async fn get_local_content(
+    params: ProfileUtilLoadItemsParams, // Use LoadItemsParams directly from profile_utils
+) -> Result<Vec<LocalContentItem>, CommandError> {
+    info!(
+        "Executing get_local_content command for profile {}, content_type: '{:?}', calc_hashes: {}, fetch_modrinth: {}",
+        params.profile_id,
+        params.content_type, // This is now the enum, so use {:?} for Debug display
+        params.calculate_hashes,
+        params.fetch_modrinth_data
+    );
+
+    // No need to map content_type string to enum, it's already the enum.
+    // The loader_params creation is also simplified as params is already the correct type.
+
+    match ProfileUtilLocalContentLoader::load_items(params.clone()).await { // .clone() if params is used later, or pass directly
+        Ok(items) => {
+            info!(
+                "Successfully loaded {} items of type '{:?}' for profile {}",
+                items.len(),
+                params.content_type, // Log the enum directly
+                params.profile_id
+            );
+            Ok(items)
+        }
+        Err(e) => {
+            error!(
+                "Failed to load content type '{:?}' for profile {}: {}",
+                params.content_type, // Log the enum directly
+                params.profile_id,
+                e
+            );
+            Err(CommandError::from(e))
+        }
+    }
 }

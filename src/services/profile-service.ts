@@ -9,6 +9,12 @@ import type {
   Profile,
   UpdateProfileParams,
   AllProfilesAndLastPlayed,
+  BatchCheckContentParams,
+  BatchContentInstallStatus,
+  LoadItemsParams,
+  LocalContentItem,
+  ImageSource,
+  UploadProfileIconPayload,
 } from "../types/profile";
 import type {
   DataPackInfo,
@@ -17,6 +23,7 @@ import type {
   ShaderPackInfo,
 } from "../types/modrinth";
 import { NoriskVersionsConfig } from "../types/noriskVersions";
+import { FileNode } from "../types/fileSystem";
 
 export async function listProfiles(): Promise<Profile[]> {
   return invoke<Profile[]>("list_profiles");
@@ -191,8 +198,8 @@ export async function openProfileFolder(profileId: string): Promise<void> {
 
 export async function getProfileDirectoryStructure(
   profileId: string,
-): Promise<any> {
-  return invoke<any>("get_profile_directory_structure", { profileId });
+): Promise<FileNode> {
+  return invoke<FileNode>("get_profile_directory_structure", { profileId });
 }
 
 export async function setNoriskModStatus(
@@ -279,6 +286,12 @@ export async function isContentInstalled(
   return invoke<ContentInstallStatus>("is_content_installed", { params });
 }
 
+export async function batchCheckContentInstalled(
+  params: BatchCheckContentParams,
+): Promise<BatchContentInstallStatus> {
+  return invoke<BatchContentInstallStatus>("batch_check_content_installed", { params });
+}
+
 export async function getNoriskPacks(): Promise<any> {
   return invoke<any>("get_norisk_packs");
 }
@@ -305,4 +318,27 @@ export async function getProfileLatestLogContent(profileId: string): Promise<str
 
 export async function getAllProfilesAndLastPlayed(): Promise<AllProfilesAndLastPlayed> {
   return invoke<AllProfilesAndLastPlayed>("get_all_profiles_and_last_played");
+}
+
+export async function getLocalContent(
+  params: LoadItemsParams,
+): Promise<LocalContentItem[]> {
+  return invoke<LocalContentItem[]>("get_local_content", { params });
+}
+
+export async function importProfileByPath(filePathStr: string): Promise<string> {
+  return invoke<string>("import_profile", { filePathStr });
+}
+
+export async function resolveImagePath(
+  imageSource: ImageSource,
+  profileId?: string,
+): Promise<string> {
+  return invoke<string>("resolve_image_path", { imageSource, profileId });
+}
+
+export async function uploadProfileImages(
+  payload: UploadProfileIconPayload,
+): Promise<string> {
+  return invoke<string>("upload_profile_images", { payload });
 }
