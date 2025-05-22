@@ -24,8 +24,8 @@ interface ScreenshotItem {
 
 interface ScreenshotsTabProps {
   profile: Profile;
-  // onRefresh?: () => void; // Placeholder for future refresh functionality
-  isActive?: boolean; // To control animations if needed directly
+  isActive?: boolean;
+  onOpenScreenshotModal: (screenshot: ActualScreenshotInfo) => void; // Add prop for opening modal
 }
 
 // Placeholder data for screenshots
@@ -72,19 +72,17 @@ const VirtuosoGridItemWrapper = ({
 
 export function ScreenshotsTab({
   profile,
-  isActive = true, // Assuming it\'s active when rendered by ProfileDetailView logic
+  isActive = true, // Assuming it's active when rendered by ProfileDetailView logic
+  onOpenScreenshotModal, // Destructure the new prop
 }: ScreenshotsTabProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
   );
   const containerRef = useRef<HTMLDivElement>(null);
-  const lightboxRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(true); // Simulate loading
   const [error, setError] = useState<string | null>(null); // Simulate error
 
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [selectedScreenshot, setSelectedScreenshot] = useState<ActualScreenshotInfo | null>(null);
   const [sortOrder, setSortOrder] = useState<string>("newest");
 
   // Simulate fetching and initial data state
@@ -156,46 +154,6 @@ export function ScreenshotsTab({
     }
   }, [isActive, isBackgroundAnimationEnabled, isLoading]); // Re-run animation when loading completes
 
-  const openLightbox = (screenshot: ActualScreenshotInfo) => {
-    setSelectedScreenshot(screenshot);
-    setIsLightboxOpen(true);
-  };
-
-  const closeLightbox = () => {
-    setIsLightboxOpen(false);
-    // Delay clearing selected screenshot for smoother exit animation if any
-    setTimeout(() => setSelectedScreenshot(null), 300);
-  };
-
-  useEffect(() => {
-    if (isLightboxOpen && lightboxRef.current && isBackgroundAnimationEnabled) {
-      gsap.fromTo(lightboxRef.current, { opacity: 0 }, { opacity: 1, duration: 0.3 });
-      gsap.fromTo(
-        lightboxRef.current?.querySelector(".lightbox-content"),
-        { scale: 0.9, opacity: 0 },
-        { scale: 1, opacity: 1, duration: 0.3, ease: "power2.out", delay: 0.1 },
-      );
-    } else if (!isLightboxOpen && lightboxRef.current && isBackgroundAnimationEnabled) {
-      // Exit animation for lightbox (optional)
-      gsap.to(lightboxRef.current, { opacity: 0, duration: 0.3 });
-    }
-  }, [isLightboxOpen, isBackgroundAnimationEnabled]);
-
-  // Handle Escape key to close lightbox
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeLightbox();
-      }
-    };
-    if (isLightboxOpen) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isLightboxOpen]);
-
   // --- Start Caching Logic ---
   const [previewCache, setPreviewCache] = useState<Map<string, string>>(new Map());
   const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set());
@@ -250,132 +208,102 @@ export function ScreenshotsTab({
           screenshot={screenshot}
           isBackgroundAnimationEnabled={isBackgroundAnimationEnabled}
           itemIndex={index}
-          onItemClick={openLightbox}
+          onItemClick={onOpenScreenshotModal}
           previewSrc={previewCache.get(path) || null}
           isLoading={loadingPreviews.has(path)}
           hasError={errorPreviews.has(path)}
         />
       </ThemedSurface>
     );
-  }, [sortedScreenshots, previewCache, loadingPreviews, errorPreviews, isBackgroundAnimationEnabled, openLightbox]);
+  }, [sortedScreenshots, previewCache, loadingPreviews, errorPreviews, isBackgroundAnimationEnabled, onOpenScreenshotModal]);
   // --- End Memoized itemContent ---
 
   return (
-    <div
-      ref={containerRef}
-      className="h-full flex flex-col select-none p-4 gap-4"
-      style={{ opacity: (isBackgroundAnimationEnabled && isLoading) ? 0 : 1 }}
-    >
-      {/* Header with styling similar to WorldsTab action bar */}
+    <>
       <div
-        className="flex items-center justify-between gap-4 mb-4 p-3 rounded-lg border backdrop-blur-sm"
-        style={{
-          backgroundColor: `${accentColor.value}10`,
-          borderColor: `${accentColor.value}30`,
-        }}
+        ref={containerRef}
+        className="h-full flex flex-col select-none p-4 gap-4"
+        style={{ opacity: (isBackgroundAnimationEnabled && isLoading) ? 0 : 1 }}
       >
-        <div>
-          <h2 className="font-minecraft text-lg text-white flex-shrink-0">Screenshots</h2>
-          {(!isLoading && !error) && (
-            <p className="font-minecraft-five text-sm text-white/60">
-              ({sortedScreenshots.length} total)
-            </p>
+        {/* Header with styling similar to WorldsTab action bar */}
+        <div
+          className="flex items-center justify-end gap-4 mb-4 p-3 rounded-lg border backdrop-blur-sm"
+          style={{
+            backgroundColor: `${accentColor.value}10`,
+            borderColor: `${accentColor.value}30`,
+          }}
+        >
+          <div className="w-full max-w-xs sm:max-w-[200px]">
+            <Select
+              value={sortOrder}
+              onChange={setSortOrder}
+              options={sortOptions}
+              size="md"
+              disabled={isLoading || (!isLoading && !error && sortedScreenshots.length === 0)} // Disable if loading or no items
+            />
+          </div>
+        </div>
+
+        {/* New main content wrapper with its own background */}
+        <div
+          className="flex-1 overflow-hidden rounded-lg border flex flex-col"
+          style={{
+            backgroundColor: `${accentColor.value}10`, 
+            borderColor: `${accentColor.value}30`,
+          }}
+        >
+          {isLoading && (
+            <EmptyState
+              icon="solar:gallery-send-bold-duotone"
+              message="loading screenshots..."
+            />
+          )}
+
+          {!isLoading && error && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+              <Icon icon="solar:gallery-remove-bold-duotone" className="w-20 h-20 mb-4 text-red-400/80" />
+              <p className="font-minecraft-ten text-xl text-red-400 mb-2">Oops! Something went wrong.</p>
+              <p className="text-white/60 font-minecraft-five text-base">{error}</p>
+            </div>
+          )}
+
+          {!isLoading && !error && sortedScreenshots.length === 0 && rawScreenshots.length > 0 && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+              <Icon icon="solar:gallery-minimalistic-bold-duotone" className="w-20 h-20 mb-4 text-white/40" />
+              <p className="font-minecraft-ten text-xl text-white/70 mb-2">No Screenshots Match Filter</p>
+              <p className="text-white/50 font-minecraft-five text-base">
+                Try adjusting your sort options.
+              </p>
+            </div>
+          )}
+
+          {!isLoading && !error && rawScreenshots.length === 0 && (
+            <EmptyState
+              icon="solar:camera-minimalistic-bold-duotone"
+              message="no screenshots yet"
+              description="take some in-game screenshots and they\'ll appear here!"
+              // iconClassName="text-white/30" // Icon color is handled by EmptyState or can be passed to Icon if customization is needed beyond accent
+            />
+          )}
+
+          {!isLoading && !error && sortedScreenshots.length > 0 && (
+            <>
+              <VirtuosoGrid
+                style={{ height: '100%' }} // Ensure VirtuosoGrid takes available space
+                totalCount={sortedScreenshots.length}
+                components={{
+                  List: VirtuosoGridList,
+                  Item: VirtuosoGridItemWrapper,
+                  Header: () => <div style={{ height: '0.75rem' }} />,
+                  Footer: () => <div style={{ height: '1.5rem' }} />,
+                }}
+                itemContent={memoizedItemContent}
+              />
+            </>
           )}
         </div>
-        <div className="w-full max-w-xs sm:max-w-[200px] ml-auto">
-          <Select
-            value={sortOrder}
-            onChange={setSortOrder}
-            options={sortOptions}
-            size="sm"
-            disabled={isLoading || (!isLoading && !error && sortedScreenshots.length === 0)} // Disable if loading or no items
-          />
-        </div>
       </div>
-
-      {/* New main content wrapper with its own background */}
-      <div
-        className="flex-1 overflow-hidden rounded-lg border flex flex-col"
-        style={{
-          backgroundColor: `${accentColor.value}10`, 
-          borderColor: `${accentColor.value}30`,
-        }}
-      >
-        {isLoading && (
-          <EmptyState
-            icon="solar:gallery-send-bold-duotone"
-            message="loading screenshots..."
-          />
-        )}
-
-        {!isLoading && error && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-            <Icon icon="solar:gallery-remove-bold-duotone" className="w-20 h-20 mb-4 text-red-400/80" />
-            <p className="font-minecraft-ten text-xl text-red-400 mb-2">Oops! Something went wrong.</p>
-            <p className="text-white/60 font-minecraft-five text-base">{error}</p>
-          </div>
-        )}
-
-        {!isLoading && !error && sortedScreenshots.length === 0 && rawScreenshots.length > 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-            <Icon icon="solar:gallery-minimalistic-bold-duotone" className="w-20 h-20 mb-4 text-white/40" />
-            <p className="font-minecraft-ten text-xl text-white/70 mb-2">No Screenshots Match Filter</p>
-            <p className="text-white/50 font-minecraft-five text-base">
-              Try adjusting your sort options.
-            </p>
-          </div>
-        )}
-
-        {!isLoading && !error && rawScreenshots.length === 0 && (
-          <EmptyState
-            icon="solar:camera-minimalistic-bold-duotone"
-            message="no screenshots yet"
-            description="take some in-game screenshots and they\'ll appear here!"
-            // iconClassName="text-white/30" // Icon color is handled by EmptyState or can be passed to Icon if customization is needed beyond accent
-          />
-        )}
-
-        {!isLoading && !error && sortedScreenshots.length > 0 && (
-          <>
-            <VirtuosoGrid
-              style={{ height: '100%' }} // Ensure VirtuosoGrid takes available space
-              totalCount={sortedScreenshots.length}
-              components={{
-                List: VirtuosoGridList,
-                Item: VirtuosoGridItemWrapper,
-              }}
-              itemContent={memoizedItemContent}
-            />
-          </>
-        )}
-      </div>
-
-      {isLightboxOpen && selectedScreenshot && (
-        <div
-          ref={lightboxRef}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-          onClick={closeLightbox} // Close on backdrop click
-        >
-          <div
-            className="lightbox-content relative max-w-4xl max-h-[90vh] w-full rounded-lg shadow-2xl overflow-hidden cursor-default bg-black/50"
-            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking on the content itself
-          >
-            <img
-              src={convertFileSrc(selectedScreenshot.path)}
-              alt={`Enlarged screenshot: ${selectedScreenshot.filename}`}
-              className="block max-w-full max-h-[90vh] w-auto h-auto object-contain rounded-md mx-auto"
-            />
-            <button
-              onClick={closeLightbox}
-              className="absolute top-3 right-3 z-10 p-2 rounded-full text-white transition-colors bg-[rgba(var(--accent-rgb),0.5)] hover:bg-[rgba(var(--accent-rgb),0.7)]"
-              aria-label="Close screenshot viewer"
-            >
-              <Icon icon="solar:close-circle-bold" className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
 

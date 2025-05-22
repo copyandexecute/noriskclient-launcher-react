@@ -19,11 +19,14 @@ import { LocalContentTabV2 } from "./detail/v2/LocalContentTabV2";
 import type { LocalContentItem } from "../../hooks/useLocalContentManager";
 import { ProfileIcon } from "./ProfileIcon";
 import { useProfileStore } from "../../store/profile-store";
+import type { ScreenshotInfo as ActualScreenshotInfo } from "../../types/profile";
 
 interface ProfileDetailViewProps {
   profile: Profile;
   onClose: () => void;
   onEdit: () => void;
+  onOpenScreenshotModal: (screenshot: ActualScreenshotInfo) => void;
+  screenshotListRefreshKey: number;
 }
 
 type MainTabType = "content" | "browse" | "worlds" | "logs" | "screenshots" | "modsv2" | "resourcepacksv2" | "noriskv2" | "datapacksv2" | "shaderpacksv2";
@@ -38,6 +41,8 @@ export function ProfileDetailView({
   profile,
   onClose,
   onEdit,
+  onOpenScreenshotModal,
+  screenshotListRefreshKey,
 }: ProfileDetailViewProps) {
   const [activeMainTab, setActiveMainTab] = useState<MainTabType>("content");
   const [activeContentType, setActiveContentType] =
@@ -499,7 +504,14 @@ export function ProfileDetailView({
               />
             )}
             {activeMainTab === "worlds" && <WorldsTab profile={currentProfile} />}
-            {activeMainTab === "screenshots" && <ScreenshotsTab profile={currentProfile} isActive={activeMainTab === "screenshots"} />}
+            {activeMainTab === "screenshots" && (
+              <ScreenshotsTab
+                key={`screenshots-tab-${screenshotListRefreshKey}`}
+                profile={currentProfile}
+                isActive={activeMainTab === "screenshots"}
+                onOpenScreenshotModal={onOpenScreenshotModal}
+              />
+            )}
             {activeMainTab === "logs" && <LogsTab profile={currentProfile} />}
           </>
         </div>

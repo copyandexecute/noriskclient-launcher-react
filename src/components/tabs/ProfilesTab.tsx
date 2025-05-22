@@ -19,6 +19,8 @@ import { ProfileDetailView } from "../profiles/ProfileDetailView";
 import { ExportProfileModal } from "../profiles/ExportProfileModal";
 import { TabLayout } from "../ui/TabLayout";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { ProfileScreenshotModal } from "../profiles/ProfileScreenshotModal";
+import type { ScreenshotInfo as ActualScreenshotInfo } from "../../types/profile";
 
 export function ProfilesTab() {
   console.log("[ProfilesTab] Rendering or re-rendering.");
@@ -49,6 +51,12 @@ export function ProfilesTab() {
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [profileToExport, setProfileToExport] = useState<Profile | null>(null);
+
+  // --- Screenshot Modal State ---
+  const [isScreenshotModalOpen, setIsScreenshotModalOpen] = useState(false);
+  const [selectedScreenshotForModal, setSelectedScreenshotForModal] = useState<ActualScreenshotInfo | null>(null);
+  const [screenshotListRefreshKey, setScreenshotListRefreshKey] = useState(0); // For forcing ScreenshotsTab refresh
+  // --- End Screenshot Modal State ---
 
   const navigate = useNavigate();
   const params = useParams<{ profileId?: string }>();
@@ -154,6 +162,25 @@ export function ProfilesTab() {
     if (profileGroupingCriterion === "game_version") return compareMinecraftVersions(a, b);
     return a.localeCompare(b);
   });
+
+  // --- Screenshot Modal Handlers ---
+  const openScreenshotModal = (screenshot: ActualScreenshotInfo) => {
+    setSelectedScreenshotForModal(screenshot);
+    setIsScreenshotModalOpen(true);
+  };
+
+  const closeScreenshotModal = () => {
+    setIsScreenshotModalOpen(false);
+    setSelectedScreenshotForModal(null);
+  };
+
+  const handleScreenshotDeleted = (deletedPath: string) => {
+    console.log("Screenshot deleted, path:", deletedPath, "incrementing refresh key.");
+    setScreenshotListRefreshKey(prevKey => prevKey + 1);
+    // The fetchProfiles() in ScreenshotsTab will handle re-fetching.
+    // Or, if desired, you could trigger a global profile list refresh here too.
+  };
+  // --- End Screenshot Modal Handlers ---
 
   const handleCreateProfile = () => {
     console.log("[ProfilesTab] handleCreateProfile called.");
@@ -267,6 +294,8 @@ export function ProfilesTab() {
                   handleEditProfile(selectedProfile); 
               }
             }}
+            onOpenScreenshotModal={openScreenshotModal}
+            screenshotListRefreshKey={screenshotListRefreshKey}
           />
         );
       }
@@ -348,6 +377,14 @@ export function ProfilesTab() {
       {profileToExport && (
         <ExportProfileModal profile={profileToExport} isOpen={isExportModalOpen} onClose={() => { setIsExportModalOpen(false); setProfileToExport(null); }} />
       )}
+
+      {/* Screenshot Display Modal */}
+      <ProfileScreenshotModal
+        isOpen={isScreenshotModalOpen}
+        onClose={closeScreenshotModal}
+        screenshot={selectedScreenshotForModal}
+        onScreenshotDeleted={handleScreenshotDeleted}
+      />
     </div>
   );
 }
