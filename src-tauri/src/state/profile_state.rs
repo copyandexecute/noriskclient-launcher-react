@@ -300,16 +300,13 @@ impl ProfileManager {
             Ok(profile)
         } else {
             // Profile not found in local manager, try standard versions
-            info!(
-                "Profile with ID {} not found in ProfileManager, checking standard versions via global State.",
-                id
-            );
+            //info!( "Profile with ID {} not found in ProfileManager, checking standard versions via global State.", id);
             // Access global state to get NoriskVersionManager
             // This assumes State::get() is available and NoriskVersionManager has get_profile_by_id
             match crate::state::state_manager::State::get().await {
                 Ok(state) => {
                     if let Some(standard_profile) = state.norisk_version_manager.get_profile_by_id(id).await {
-                        info!("Found standard profile '{}' for ID {}", standard_profile.name, id);
+                        //info!("Found standard profile '{}' for ID {}", standard_profile.name, id);
                         Ok(standard_profile)
                     } else {
                         info!("Profile ID {} not found in standard versions either.", id);
@@ -1176,10 +1173,7 @@ impl ProfileManager {
                 self.calculate_instance_path_for_profile(profile)
             }
             None => {
-                log::info!(
-                    "Profile {} not found, checking standard versions",
-                    profile_id
-                );
+                //log::info!("Profile {} not found, checking standard versions",profile_id);
                 // Get state to access norisk_version_manager
                 let state = crate::state::state_manager::State::get().await?;
 
@@ -1189,10 +1183,7 @@ impl ProfileManager {
                     .get_profile_by_id(profile_id)
                     .await
                 {
-                    log::info!(
-                        "Found standard profile '{}', converting to temporary profile",
-                        standard_profile.name
-                    );
+                    //log::info!("Found standard profile '{}', converting to temporary profile",standard_profile.name);
                     // Convert to a temporary profile
                     return self.calculate_instance_path_for_profile(&standard_profile);
                 }
