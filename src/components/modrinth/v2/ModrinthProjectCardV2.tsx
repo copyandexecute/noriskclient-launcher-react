@@ -418,7 +418,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                     )
                   }
                   iconPosition="left"
-                  disabled={isInstallingModpackAsProfile || isQuickInstalling}
+                  disabled={isInstallingModpackAsProfile || isQuickInstalling || (!!installStatus?.is_installed && !!selectedProfile)}
                 >
                   {isInstallingModpackAsProfile ? "Installing..." : "Install"}
                 </Button>
@@ -462,7 +462,7 @@ export const ModrinthProjectCardV2 = React.memo<ModrinthProjectCardV2Props>(
                     )
                   }
                   iconPosition="left"
-                  disabled={isQuickInstalling}
+                  disabled={isQuickInstalling || (!!installStatus?.is_installed && !!selectedProfile)}
                 >
                   {isQuickInstalling ? "Installing..." : "Install"}
                 </Button>
