@@ -1,7 +1,10 @@
-"use client";
-
-import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
@@ -28,95 +31,128 @@ export function RetroGridEffect({
   const { qualityLevel } = useQualitySettingsStore();
   const [isVisible, setIsVisible] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastUpdateTime = useRef<number>(0);
+
+  const handleIntersection = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      const now = Date.now();
+      if (now - lastUpdateTime.current < 100) return;
+      lastUpdateTime.current = now;
+
+      const isIntersecting = entries[0].isIntersecting;
+      if (isVisible !== isIntersecting) {
+        setIsVisible(isIntersecting);
+      }
+    },
+    [isVisible],
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        setIsVisible(entries[0].isIntersecting);
-      },
-      { threshold: 0.1 },
-    );
-
+    const observer = new IntersectionObserver(handleIntersection, {
+      threshold: 0.1,
+      rootMargin: "50px",
+    });
     observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [handleIntersection]);
 
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
+  const gridLineColor = useMemo(
+    () => customGridLineColor || `${accentColor.value}80`,
+    [customGridLineColor, accentColor.value],
+  );
 
-  const gridLineColor = customGridLineColor || `${accentColor.value}80`;
-
-  let effectiveGridBackgroundColor;
-  if (gridBackgroundColor !== undefined) {
-    effectiveGridBackgroundColor = gridBackgroundColor;
-  } else {
+  const effectiveGridBackgroundColor = useMemo(() => {
+    if (gridBackgroundColor !== undefined) return gridBackgroundColor;
     const r = Number.parseInt(accentColor.value.slice(1, 3), 16);
     const g = Number.parseInt(accentColor.value.slice(3, 5), 16);
     const b = Number.parseInt(accentColor.value.slice(5, 7), 16);
-    effectiveGridBackgroundColor = `rgba(${r}, ${g}, ${b}, 0)`;
-  }
+    return `rgba(${r}, ${g}, ${b}, 0)`;
+  }, [gridBackgroundColor, accentColor.value]);
 
-  const gridSize =
-    qualityLevel === "low"
-      ? "60px 30px"
-      : qualityLevel === "high"
-        ? "30px 15px"
-        : "40px 20px";
-  const animationDuration =
-    qualityLevel === "low" ? "15s" : qualityLevel === "high" ? "8s" : "10s";
+  const gridSize = useMemo(
+    () =>
+      qualityLevel === "low"
+        ? "80px 40px"
+        : qualityLevel === "high"
+          ? "40px 20px"
+          : "60px 30px",
+    [qualityLevel],
+  );
 
-  const baseGridStyles: React.CSSProperties = {
-    width: "150%",
-    height: "60%",
-    backgroundImage: `
+  const animationDuration = useMemo(
+    () =>
+      qualityLevel === "low" ? "20s" : qualityLevel === "high" ? "12s" : "15s",
+    [qualityLevel],
+  );
+
+  const baseGridStyles: React.CSSProperties = useMemo(
+    () => ({
+      width: "150%",
+      height: "60%",
+      backgroundImage: `
       linear-gradient(to right, ${gridLineColor} 1px, transparent 1px),
       linear-gradient(to bottom, ${gridLineColor} 1px, transparent 1px)
     `,
-    backgroundSize: gridSize,
-    position: "absolute",
-    left: "-25%",
-    pointerEvents: "none",
-  };
+      backgroundSize: gridSize,
+      position: "absolute",
+      left: "-25%",
+      pointerEvents: "none",
+      willChange: "transform", // GPU hint
+      backfaceVisibility: "hidden", // GPU hint
+      transform: "translate3d(0,0,0)", // Force GPU acceleration
+    }),
+    [gridLineColor, gridSize],
+  );
 
-  const bottomGridStyle: React.CSSProperties = {
-    ...baseGridStyles,
-    transform: "rotateX(140deg)",
-    bottom: "-10%",
-    animation:
-      isAnimationEnabled && isVisible
-        ? `moveGrid ${animationDuration} linear infinite`
-        : "none",
-    WebkitMaskImage:
-      "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
-    maskImage: "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
-  };
+  const bottomGridStyle: React.CSSProperties = useMemo(
+    () => ({
+      ...baseGridStyles,
+      transform: "translate3d(0,0,0) rotateX(140deg)",
+      bottom: "-10%",
+      animation:
+        isAnimationEnabled && isVisible
+          ? `moveGrid ${animationDuration} linear infinite`
+          : "none",
+      WebkitMaskImage:
+        "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
+      maskImage:
+        "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
+    }),
+    [baseGridStyles, isAnimationEnabled, isVisible, animationDuration],
+  );
 
-  const topGridStyle: React.CSSProperties = {
-    ...baseGridStyles,
-    transform: "rotateX(-140deg)",
-    top: "-10%",
-    animation:
-      isAnimationEnabled && isVisible
-        ? `moveGridReverse ${animationDuration} linear infinite`
-        : "none",
-    WebkitMaskImage:
-      "linear-gradient(to bottom, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
-    maskImage:
-      "linear-gradient(to bottom, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
-  };
+  const topGridStyle: React.CSSProperties = useMemo(
+    () => ({
+      ...baseGridStyles,
+      transform: "translate3d(0,0,0) rotateX(-140deg)",
+      top: "-10%",
+      animation:
+        isAnimationEnabled && isVisible
+          ? `moveGridReverse ${animationDuration} linear infinite`
+          : "none",
+      WebkitMaskImage:
+        "linear-gradient(to bottom, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
+      maskImage:
+        "linear-gradient(to bottom, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
+    }),
+    [baseGridStyles, isAnimationEnabled, isVisible, animationDuration],
+  );
 
   const keyframes = `
     @keyframes moveGrid {
-      0% { background-position-y: 0; }
-      100% { background-position-y: -200px; }
+      0% { transform: translate3d(0,0,0) rotateX(140deg); background-position-y: 0; }
+      100% { transform: translate3d(0,0,0) rotateX(140deg); background-position-y: -200px; }
     }
     @keyframes moveGridReverse {
-      0% { background-position-y: -200px; }
-      100% { background-position-y: 0; }
+      0% { transform: translate3d(0,0,0) rotateX(-140deg); background-position-y: -200px; }
+      100% { transform: translate3d(0,0,0) rotateX(-140deg); background-position-y: 0; }
     }
   `;
+
+  if (qualityLevel === "low" && !isAnimationEnabled) {
+    return null;
+  }
 
   return (
     <div
@@ -130,6 +166,9 @@ export function RetroGridEffect({
         backgroundColor: effectiveGridBackgroundColor,
         perspective: perspective,
         zIndex: 0,
+        willChange: "transform",
+        backfaceVisibility: "hidden",
+        transform: "translate3d(0,0,0)",
         ...style,
       }}
     >

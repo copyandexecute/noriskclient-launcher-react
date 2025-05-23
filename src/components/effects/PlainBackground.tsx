@@ -1,6 +1,4 @@
-"use client";
-
-import type React from "react";
+import React, { useMemo } from "react";
 
 interface PlainBackgroundProps {
   accentColorValue: string;
@@ -20,7 +18,10 @@ const PlainBackground: React.FC<PlainBackgroundProps> = ({
     return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   };
 
-  const backgroundColor = getDarkerShade(accentColorValue);
+  const backgroundColor = useMemo(
+    () => getDarkerShade(accentColorValue),
+    [accentColorValue],
+  );
 
   return (
     <div

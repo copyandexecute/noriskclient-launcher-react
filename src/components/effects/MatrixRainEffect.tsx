@@ -11,7 +11,6 @@ interface MatrixRainEffectProps {
   className?: string;
   forceEnable?: boolean;
 }
-
 export function MatrixRainEffect({
   opacity = 0.15,
   speed = 1,
