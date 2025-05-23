@@ -16,6 +16,7 @@ import { Button } from "../ui/buttons/Button";
 import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
+import { cn } from "../../lib/utils";
 
 interface ProfileSettingsProps {
   profile: Profile;
@@ -210,6 +211,22 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     </div>
   );
 
+  const handleTabClick = (tabId: string) => {
+    if (activeTab !== tabId) {
+      if (isBackgroundAnimationEnabled && contentRef.current) {
+        gsap.to(contentRef.current, {
+          opacity: 0,
+          y: 20,
+          duration: 0.2,
+          ease: "power2.in",
+          onComplete: () => setActiveTab(tabId as SettingsTab),
+        });
+      } else {
+        setActiveTab(tabId as SettingsTab);
+      }
+    }
+  };
+
   return (
     <Modal
       title={`profile settings: ${profile.name}`}
@@ -218,100 +235,46 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       footer={renderFooter()}
     >
       <div className="flex flex-1 h-[500px] overflow-hidden">
-        <div
+        <Card
           ref={sidebarRef}
-          className="w-64 border-r-2 overflow-y-auto custom-scrollbar"
-          style={{
-            borderColor: `${accentColor.value}40`,
-            backgroundColor: `${accentColor.value}20`,
-            boxShadow: `inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          }}
+          className="w-64 overflow-y-auto custom-scrollbar bg-black/20 border border-white/10 p-4"
+          variant="flat"
         >
-          <div className="p-4">
-            <Card
-              variant="flat"
-              className="mb-6 p-3"
-              withAnimation={isBackgroundAnimationEnabled}
-            >
-              <div className="flex items-center gap-2">
-                <Icon
-                  icon="solar:settings-bold"
-                  className="w-5 h-5 text-white"
-                />
-                <span className="text-xl font-minecraft text-white lowercase">
-                  profile settings
-                </span>
-              </div>
-            </Card>
+          <div className="space-y-3">
+            {tabConfig.map((tab) => {
+              const isActive = activeTab === tab.id;
 
-            <div className="space-y-3">
-              {tabConfig.map((tab) => {
-                const isActive = activeTab === tab.id;
-
-                return (
-                  <button
-                    key={tab.id}
-                    className="w-full text-left p-3 rounded-md transition-all duration-200 flex items-center gap-3 border-2"
-                    style={{
-                      backgroundColor: isActive
-                        ? `${accentColor.value}30`
-                        : "rgba(0,0,0,0.2)",
-                      borderColor: isActive
-                        ? `${accentColor.value}60`
-                        : "rgba(255,255,255,0.2)",
-                      borderBottomColor: isActive
-                        ? accentColor.value
-                        : "rgba(255,255,255,0.15)",
-                      borderBottomWidth: isActive ? "4px" : "2px",
-                      boxShadow: isActive
-                        ? `0 4px 0 rgba(0,0,0,0.2), 0 6px 10px rgba(0,0,0,0.15), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
-                        : "none",
-                    }}
-                    onClick={() => {
-                      if (activeTab !== tab.id) {
-                        if (
-                          isBackgroundAnimationEnabled &&
-                          contentRef.current
-                        ) {
-                          gsap.to(contentRef.current, {
-                            opacity: 0,
-                            y: 20,
-                            duration: 0.2,
-                            ease: "power2.in",
-                            onComplete: () =>
-                              setActiveTab(tab.id as SettingsTab),
-                          });
-                        } else {
-                          setActiveTab(tab.id as SettingsTab);
-                        }
-                      }
-                    }}
+              return (
+                <div key={tab.id} className="w-full">
+                  <Button
+                    variant={isActive ? "default" : "ghost"}
+                    size="lg"
+                    className={cn(
+                      "w-full text-left justify-start p-3 transition-all duration-200",
+                      isActive
+                        ? "bg-black/30 border-accent border-b-[3px] hover:bg-black/30"
+                        : "bg-transparent hover:bg-black/20 border-transparent",
+                    )}
+                    onClick={() => handleTabClick(tab.id)}
                   >
-                    <div
-                      className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 border-2"
-                      style={{
-                        backgroundColor: isActive
-                          ? `${accentColor.value}40`
-                          : "rgba(255,255,255,0.1)",
-                        borderColor: isActive
-                          ? `${accentColor.value}70`
-                          : "rgba(255,255,255,0.2)",
-                      }}
-                    >
+                    <div className="flex items-center gap-3">
                       <Icon
                         icon={tab.icon}
-                        className={`w-5 h-5 ${isActive ? "text-white" : "text-white/70"}`}
+                        className={cn(
+                          "w-6 h-6",
+                          isActive ? "text-accent" : "text-white/70",
+                        )}
                       />
+                      <span className="font-minecraft text-3xl lowercase">
+                        {tab.label}
+                      </span>
                     </div>
-                    <span className="font-minecraft text-3xl lowercase">
-                      {tab.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                  </Button>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </Card>
 
         <div className="flex-1 flex flex-col overflow-hidden">
           <div

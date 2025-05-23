@@ -387,7 +387,10 @@ export function JavaSettingsTab({
                   <h4 className="text-xs text-white/70 font-minecraft-ten mb-2 tracking-wide">
                     Detected Java Installations (click to use):
                   </h4>
-                  <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-1 pr-2">
+                  <Card
+                    variant="flat"
+                    className="max-h-40 overflow-y-auto custom-scrollbar space-y-1 p-2 border border-white/10 bg-black/10"
+                  >
                     {detectedJavaInstallations.map((java) => (
                       <button
                         key={java.path}
@@ -415,7 +418,7 @@ export function JavaSettingsTab({
                         </span>
                       </button>
                     ))}
-                  </div>
+                  </Card>
                 </div>
               )}
 

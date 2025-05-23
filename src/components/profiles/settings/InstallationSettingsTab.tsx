@@ -8,11 +8,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { StatusMessage } from "../../ui/StatusMessage";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { SearchInput } from "../../ui/SearchInput";
-import { Label } from "../../ui/Label";
 import { Select } from "../../ui/Select";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
 import { cn } from "../../../lib/utils";
+import { Button } from "../../ui/buttons/Button";
 
 interface InstallationSettingsTabProps {
   profile: Profile;
@@ -257,15 +257,13 @@ export function InstallationSettingsTab({
     if (selectedVersionType !== type) {
       setSelectedVersionType(type);
       if (isBackgroundAnimationEnabled && versionTypesRef.current) {
-        const activeLabel = versionTypesRef.current.querySelector(
+        const activeButton = versionTypesRef.current.querySelector(
           `.version-type-${type}`,
         );
-        const allLabels = versionTypesRef.current.querySelectorAll(
-          "span[role='button']",
-        );
+        const allButtons = versionTypesRef.current.querySelectorAll("button");
 
-        if (activeLabel) {
-          gsap.to(activeLabel, {
+        if (activeButton) {
+          gsap.to(activeButton, {
             backgroundColor: `${accentColor.value}40`,
             borderColor: accentColor.value,
             color: "#ffffff",
@@ -274,9 +272,9 @@ export function InstallationSettingsTab({
           });
         }
 
-        allLabels.forEach((label) => {
-          if (label !== activeLabel) {
-            gsap.to(label, {
+        allButtons.forEach((button) => {
+          if (button !== activeButton) {
+            gsap.to(button, {
               backgroundColor: "rgba(255,255,255,0.05)",
               borderColor: "rgba(255,255,255,0.1)",
               color: "rgba(255,255,255,0.7)",
@@ -396,15 +394,20 @@ export function InstallationSettingsTab({
           </h3>
           <div className="flex flex-wrap">
             {["release", "snapshot", "old-beta", "old-alpha"].map((type) => (
-              <Label
+              <Button
                 key={type}
                 variant={selectedVersionType === type ? "default" : "ghost"}
-                size="md"
-                className={`cursor-pointer mr-2 mb-2 text-xl version-type-${type}`}
+                size="sm"
+                className={cn(
+                  "mr-2 mb-2 text-xl version-type-" + type,
+                  selectedVersionType === type
+                    ? "bg-accent/20 border-accent text-white"
+                    : "bg-black/20 hover:bg-black/30 border-white/10 text-white/80",
+                )}
                 onClick={() => handleVersionTypeClick(type as VersionType)}
               >
                 {type}
-              </Label>
+              </Button>
             ))}
           </div>
         </div>
@@ -451,19 +454,24 @@ export function InstallationSettingsTab({
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 p-3">
                     {filteredVersions.map((version) => (
-                      <Label
+                      <Button
                         key={version}
                         variant={
                           editedProfile.game_version === version
                             ? "default"
                             : "ghost"
                         }
-                        size="md"
-                        className="cursor-pointer text-center text-xl"
+                        size="sm"
+                        className={cn(
+                          "text-center text-xl w-full",
+                          editedProfile.game_version === version
+                            ? "bg-accent/20 border-accent text-white"
+                            : "bg-black/20 hover:bg-black/30 border-white/10 text-white/80 hover:text-white",
+                        )}
                         onClick={() => handleGameVersionClick(version)}
                       >
                         {version}
-                      </Label>
+                      </Button>
                     ))}
                   </div>
                 )}
@@ -493,24 +501,18 @@ export function InstallationSettingsTab({
               const isSelected = editedProfile.loader === loader.name;
 
               return (
-                <button
+                <Card
                   key={loader.name}
+                  variant={isSelected ? "flat" : "flat-secondary"}
                   className={cn(
-                    "p-3 flex flex-col items-center justify-center rounded-lg border transition-all duration-200",
-                    `platform-${loader.name}`,
+                    "p-3 flex flex-col items-center justify-center cursor-pointer platform-${loader.name}",
                     isSelected
-                      ? "bg-white/20 text-white border-white/50"
+                      ? "bg-black/30 grayscale-0 text-white"
                       : isCompatible
                         ? "bg-black/20 text-white/70 border-white/10 hover:bg-black/30 hover:text-white hover:border-white/20"
                         : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed",
                   )}
-                  style={{
-                    borderBottomColor: isSelected
-                      ? accentColor.value
-                      : "transparent",
-                  }}
-                  onClick={() => handleLoaderClick(loader.name)}
-                  disabled={!isCompatible}
+                  onClick={() => isCompatible && handleLoaderClick(loader.name)}
                 >
                   <img
                     src={loader.icon || "/placeholder.svg"}
@@ -526,7 +528,7 @@ export function InstallationSettingsTab({
                       not compatible
                     </span>
                   )}
-                </button>
+                </Card>
               );
             })}
           </div>

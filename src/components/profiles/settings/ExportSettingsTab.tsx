@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { Profile } from "../../../types/profile"; // Adjust path as needed
 import { Input } from "../../ui/Input";
 import { Checkbox } from "../../ui/Checkbox";
@@ -173,7 +173,7 @@ export function ExportSettingsTab({
   useEffect(() => {
     if (isInModalContext && onExportActionAvailable) {
       onExportActionAvailable({
-        handleExport, 
+        handleExport,
         isDisabled: () =>
           isExporting || !exportFilename.trim() || isLoadingDirectory,
         exportOpenFolder,
@@ -183,7 +183,6 @@ export function ExportSettingsTab({
   }, [
     isInModalContext,
     onExportActionAvailable,
-    handleExport, // handleExport's identity is stable, but good to list if its behavior (via ref) changes what the parent might expect
     isExporting,
     exportFilename,
     isLoadingDirectory,
@@ -208,7 +207,7 @@ export function ExportSettingsTab({
       {/* Card now always wraps the main form elements */}
       <Card
         variant="flat"
-        className="p-5 space-y-4"
+        className="p-5 space-y-4 border border-white/10 bg-black/20"
         withAnimation={isBackgroundAnimationEnabled}
       >
         {/* Filename input section */}
@@ -285,7 +284,12 @@ export function ExportSettingsTab({
               onSelectionChange={handleFileSelectionChange}
               checkboxesEnabled={true}
               hideRootNode={true}
-              preSelectPaths={["resourcepacks", "shaderpacks", "options.txt", "NoRiskClientLauncher"]}
+              preSelectPaths={[
+                "resourcepacks",
+                "shaderpacks",
+                "options.txt",
+                "NoRiskClientLauncher",
+              ]}
               selectChildrenWithParent={true}
               defaultRootCollapsed={false}
               className="text-sm"

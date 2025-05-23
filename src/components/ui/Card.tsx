@@ -9,7 +9,13 @@ import { useThemeStore } from "../../store/useThemeStore";
 interface CardProps {
   children: ReactNode;
   className?: string;
-  variant?: "default" | "elevated" | "flat" | "secondary" | "3d";
+  variant?:
+    | "default"
+    | "elevated"
+    | "flat"
+    | "secondary"
+    | "3d"
+    | "flat-secondary";
   withAnimation?: boolean;
   onClick?: (e: React.MouseEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -112,30 +118,48 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
       case "elevated":
       case "secondary":
         return "border-2 border-b-4";
+      case "flat-secondary":
+      case "flat":
+        return "border border-b-2";
       default:
         return "border border-b-2";
     }
   };
 
+  // Get background color based on variant
   const getBackgroundColor = () => {
     if (variant === "secondary") {
       return "rgba(107, 114, 128, 0.2)";
     }
 
+    if (variant === "flat-secondary") {
+      return "rgba(107, 114, 128, 0.3)";
+    }
+
     return `${accentColor.value}30`;
   };
 
+  // Get border color based on variant and hover state
   const getBorderColor = () => {
     if (variant === "secondary") {
       return "rgba(107, 114, 128, 0.6)";
     }
 
+    if (variant === "flat-secondary") {
+      return "rgba(107, 114, 128, 0.8)";
+    }
+
     return `${accentColor.value}80`;
   };
 
+  // Get border bottom color based on variant and hover state
   const getBorderBottomColor = () => {
     if (variant === "secondary") {
       return "rgba(75, 85, 99, 1)";
+    }
+
+    if (variant === "flat-secondary") {
+      return isHovered ? "rgba(156, 163, 175, 1)" : "rgba(75, 85, 99, 1)";
     }
 
     return isHovered ? accentColor.hoverValue : accentColor.value;
@@ -168,8 +192,10 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
           style={{
             backgroundColor:
               variant === "3d"
-                ? "rgba(107, 114, 128, 0.6)"
-                : `${accentColor.value}80`,
+                ? "rgba(156, 163, 175, 0.8)"
+                : variant === "flat-secondary"
+                  ? "rgba(156, 163, 175, 0.8)"
+                  : `${accentColor.value}80`,
           }}
         />
       )}

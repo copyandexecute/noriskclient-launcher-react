@@ -8,6 +8,7 @@ import { Label } from "../../ui/Label";
 import { Input } from "../../ui/Input";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
+import { cn } from "../../../lib/utils";
 
 interface WindowSettingsTabProps {
   editedProfile: Profile;
@@ -167,7 +168,15 @@ export function WindowSettingsTab({
                       : "ghost"
                   }
                   size="md"
-                  className={`cursor-pointer text-xl preset-${preset.width}x${preset.height}`}
+                  className={cn(
+                    "cursor-pointer text-xl preset-${preset.width}x${preset.height}",
+                    editedProfile.settings?.resolution?.width ===
+                      preset.width &&
+                      editedProfile.settings?.resolution?.height ===
+                        preset.height
+                      ? "bg-accent/20 border-accent text-white"
+                      : "bg-black/20 hover:bg-black/30 border-white/10 text-white/80",
+                  )}
                   onClick={() => handlePresetClick(preset)}
                 >
                   {preset.label}
