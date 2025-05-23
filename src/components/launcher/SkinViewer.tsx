@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { cn } from "../../lib/utils";
 
 interface SkinViewerProps {
@@ -32,12 +32,13 @@ export function SkinViewer({
     setHasError(true);
   };
 
-  if (hasError || !skinUrl) { // Show fallback if error or no skinUrl provided
+  if (hasError || !skinUrl) {
+    // Show fallback if error or no skinUrl provided
     return (
       <div
         className={cn(
           "flex items-center justify-center bg-gray-700/50 rounded-md",
-          className
+          className,
         )}
         style={{ width, height, ...style }}
       >
@@ -48,16 +49,18 @@ export function SkinViewer({
 
   return (
     <img
-      src={skinUrl} // Use the skinUrl prop directly
+      src={skinUrl}
       alt={playerName ? `${playerName}'s Skin` : "Minecraft Skin"}
       width={width}
       height={height}
-      className={cn("object-contain rounded-md", className)}
+      className={cn("object-contain rounded-md select-none", className)}
       style={{
         imageRendering: "pixelated",
+        userSelect: "none",
         ...style,
       }}
-      onError={handleError} // Keep error handling for the img tag itself
+      draggable={false}
+      onError={handleError}
     />
   );
 }
