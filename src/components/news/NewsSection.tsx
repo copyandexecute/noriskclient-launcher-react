@@ -11,7 +11,6 @@ import { NewsCard } from "../ui/NewsCard";
 import { useThemeStore } from "../../store/useThemeStore";
 import { Skeleton } from "../ui/Skeleton";
 import { Card } from "../ui/Card";
-import { useSocialsModalStore } from "../../store/socials-modal-store";
 
 interface NewsSectionProps {
   className?: string;
@@ -26,7 +25,6 @@ export function NewsSection({ className }: NewsSectionProps) {
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
   );
-  const { openModal: openSocialsModal } = useSocialsModalStore();
 
   const loadNews = useCallback(async () => {
     setIsLoading(true);
@@ -202,13 +200,6 @@ export function NewsSection({ className }: NewsSectionProps) {
             <Icon icon="pixel:newspaper-solid" className="w-7 h-7 text-white" />
             <h2 className="text-2xl font-minecraft lowercase text-white">NEWS</h2>
           </div>
-          <Icon
-            icon="ic:baseline-discord"
-            className="w-6 h-6 text-white/70 hover:text-white transition-colors cursor-pointer"
-            onClick={() => {
-              openSocialsModal();
-            }}
-          />
         </div>
         <hr
           className="mt-2 border-t-2"

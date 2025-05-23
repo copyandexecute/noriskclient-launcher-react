@@ -8,6 +8,9 @@ import { RunningInstancesIndicator } from "../process/RunningInstancesIndicator"
 import { CurrentAccountDisplay } from "../account/CurrentAccountDisplay";
 import { Dropdown } from "../ui/dropdown/Dropdown";
 import { MinecraftAccountManager } from "../account/MinecraftAccountManager";
+import { IconButton } from "../ui/buttons/IconButton";
+import { useSocialsModalStore } from "../../store/socials-modal-store";
+import { Icon } from "@iconify/react";
 
 interface UserProfileBarProps {
   className?: string;
@@ -19,6 +22,7 @@ export function UserProfileBar({ className }: UserProfileBarProps) {
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   const { initializeAccounts } = useMinecraftAuthStore();
   const [_, setMounted] = useState(false);
+  const { openModal: openSocialsModal } = useSocialsModalStore();
 
   useEffect(() => {
     setMounted(true);
@@ -48,7 +52,7 @@ export function UserProfileBar({ className }: UserProfileBarProps) {
   };
 
   return (
-    <div className={cn("relative flex items-center gap-2", className)}>
+    <div className={cn("relative flex items-center gap-3", className)}>
       <div className="profile-bar-container flex items-center gap-2">
         <RunningInstancesIndicator />
 
@@ -58,7 +62,18 @@ export function UserProfileBar({ className }: UserProfileBarProps) {
             className="h-10"
           />
         </div>
+
+        <IconButton 
+          icon={<Icon icon="fluent:people-community-20-filled" className="w-5 h-5" />}
+          onClick={openSocialsModal}
+          variant="flat"
+          size="sm"
+          aria-label="Open Social Accounts"
+          className="text-white/70 hover:text-white h-10 w-10"
+        />
       </div>
+
+  
 
       <Dropdown
         ref={dropdownRef}
