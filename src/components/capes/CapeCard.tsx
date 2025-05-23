@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import type { CosmeticCape } from "../../types/noriskCapes";
 import { useThemeStore } from "../../store/useThemeStore";
-// import { Cape3DRenderer } from './Cape3DRenderer'; // Removed
-import { Button } from "../ui/buttons/Button";
 import { IconButton } from "../ui/buttons/IconButton";
 import { getPlayerProfileByUuidOrName } from "../../services/cape-service";
 // import type { MinecraftProfile } from '../../types/minecraft'; // Not needed if not fetching profile for display
 import { Icon } from "@iconify/react";
 import { CapeImage } from "./CapeImage"; // Assuming we want to show a 2D preview
+import { Card } from "../ui/Card";
+import { cn } from "../../lib/utils";
 
 interface CapeCardProps {
   cape: CosmeticCape;
@@ -17,12 +18,12 @@ interface CapeCardProps {
   isSelected?: boolean;
   isLoading?: boolean;
   index: number;
-  // isActuallyVisible?: boolean; // May not be needed if not using 3D renderer with visibility optimizations
   onDelete?: (e: React.MouseEvent) => void;
 }
 
 const CARD_MIN_WIDTH = 210;
-// const CAPE_MODEL_ASPECT_RATIO = 10 / 16; // Not needed for 2D
+const IMAGE_TARGET_HEIGHT = 160;
+const IMAGE_TARGET_WIDTH = 100;
 
 export function CapeCard({
   cape,
@@ -35,19 +36,14 @@ export function CapeCard({
   const { _id: capeHash, elytra, uses, firstSeen: creatorUuid } = cape;
   const imageUrl = `https://cdn.norisk.gg/capes-staging/prod/${capeHash}.png`;
   const [creatorName, setCreatorName] = useState<string | null>(null);
-  // const [profileError, setProfileError] = useState<string | null>(null); // Keep if creator fetching is kept
 
   const accentColor = useThemeStore((state) => state.accentColor);
-
-  // const RENDERER_TARGET_HEIGHT = Math.round(CARD_MIN_WIDTH * 1.1); // Not needed for 2D
-  // const RENDERER_TARGET_WIDTH = Math.round(RENDERER_TARGET_HEIGHT * CAPE_MODEL_ASPECT_RATIO); // Not needed for 2D
-  const IMAGE_TARGET_HEIGHT = 160; // Example height for 2D preview
-  const IMAGE_TARGET_WIDTH = 100; // Example width, CapeImage will calculate its own height based on its width prop and aspect ratio
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
 
   useEffect(() => {
-    // Fetch creator name logic can remain if desired
     if (creatorUuid && !creatorName) {
-      // Simplified condition if isActuallyVisible is removed
       let isMounted = true;
       getPlayerProfileByUuidOrName(creatorUuid)
         .then((profile) => {
@@ -61,7 +57,6 @@ export function CapeCard({
               `Failed to fetch profile for UUID ${creatorUuid}:`,
               err,
             );
-            // setProfileError('Failed to load creator'); // Optionally set error state
           }
         });
       return () => {
@@ -70,88 +65,89 @@ export function CapeCard({
     }
   }, [creatorUuid, creatorName]);
 
-  return (
-    <div
-      className={`relative group bg-black/20 border-white/20 backdrop-blur-md border-2 rounded-lg p-2.5 pt-1.5 pb-2 transition-all 
-        duration-200 flex flex-col text-center animate-slide-up-fade-in min-w-[${CARD_MIN_WIDTH}px]
-        ${isLoading ? "opacity-60 pointer-events-none" : ""}`}
-      style={{
-        animationDelay: `${index * 0.075}s`,
-        borderColor: isSelected ? `${accentColor.value}80` : undefined,
-        backgroundColor: isSelected ? `${accentColor.value}10` : undefined,
-      }}
-      title={
-        creatorName
-          ? `Cape by ${creatorName} (ID: ${capeHash})`
-          : `Cape ID: ${capeHash}`
-      }
-    >
-      <div
-        className="w-full flex items-center justify-center relative bg-black/10 rounded mt-1 mb-1 overflow-hidden"
-        style={{ height: `${IMAGE_TARGET_HEIGHT}px` }} // Use new height for 2D image container
-      >
-        {/* Replace Cape3DRenderer with CapeImage or simple img */}
-        <CapeImage
-          imageUrl={imageUrl}
-          part="front"
-          width={IMAGE_TARGET_WIDTH} // CapeImage will derive height from this width and its internal aspect ratio
-          className="max-h-full max-w-full object-contain" // Ensure it fits
-        />
+  const animationStyle = isBackgroundAnimationEnabled
+    ? { animationDelay: `${index * 0.075}s` }
+    : {};
+  const animationClasses = isBackgroundAnimationEnabled
+    ? "animate-in fade-in duration-500 fill-mode-both"
+    : "";
 
-        {elytra && (
+  return (
+    <div style={animationStyle} className={animationClasses}>
+      <Card
+        className={cn(
+          "relative p-4 pt-1.5 pb-2 h-[380px] flex flex-col text-center group",
+          "transition-all duration-300 ease-out hover:scale-105 hover:z-10",
+          isLoading ? "opacity-60 pointer-events-none" : "",
+          `min-w-[${CARD_MIN_WIDTH}px]`,
+        )}
+        variant={isSelected ? "flat" : "flat"}
+        onClick={() => !isLoading && onEquip(capeHash)}
+      >
+        <p
+          className="font-minecraft text-white lowercase truncate text-3xl transition-transform duration-300 ease-out group-hover:scale-110"
+          title={creatorName ? `By ${creatorName}` : capeHash}
+        >
+          {creatorName ? creatorName : "Unknown"}
+        </p>
+
+        <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center transition-transform duration-300 ease-out group-hover:scale-105">
           <div
-            className="absolute top-1 left-1 bg-accent text-accent-foreground px-1.5 py-0.5 text-xs font-bold rounded-sm pixelated-text shadow-md uppercase z-10"
-            title="This cape includes an Elytra texture."
+            className="w-full flex items-center justify-center relative bg-black/10 rounded overflow-hidden"
+            style={{ height: `${IMAGE_TARGET_HEIGHT}px` }}
           >
-            Elytra
+            <CapeImage
+              imageUrl={imageUrl}
+              part="front"
+              width={IMAGE_TARGET_WIDTH}
+              className="max-h-full max-w-full object-contain"
+            />
+
+            {elytra && (
+              <div
+                className="absolute top-1 left-1 bg-accent text-accent-foreground px-1.5 py-0.5 text-xs font-bold rounded-sm pixelated-text shadow-md uppercase z-10"
+                title="This cape includes an Elytra texture."
+                style={{ backgroundColor: accentColor.value, color: "#ffffff" }}
+              >
+                Elytra
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mt-auto">
+          <p className="text-white/60 font-minecraft lowercase text-2xl transition-transform duration-300 ease-out group-hover:scale-110">
+            Uses: {uses.toLocaleString()}
+          </p>
+        </div>
+
+        {isLoading && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg z-20 transition-opacity duration-300 ease-in-out">
+            <div className="w-20 h-20 border-4 border-t-transparent border-white rounded-full animate-spin mb-4 transition-all duration-300"></div>
+            <span className="font-minecraft text-2xl text-white lowercase animate-pulse transition-all duration-300">
+              Applying...
+            </span>
           </div>
         )}
 
         {onDelete && (
-          <IconButton
-            className="absolute top-1 right-1 z-20 shadow-md opacity-85 hover:opacity-100"
-            size="xs"
-            variant="destructive"
-            icon={
-              <Icon icon="solar:trash-bin-trash-bold" className="w-3.5 h-3.5" />
-            }
-            onClick={onDelete}
-            aria-label="Delete Cape"
-            title="Delete Cape"
-            shadowDepth="short"
-          />
+          <div className="absolute bottom-1.5 right-1.5 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out group-hover:scale-110">
+            <IconButton
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete(event);
+              }}
+              title="Delete cape"
+              disabled={isLoading}
+              size="xs"
+              variant="destructive"
+              icon={
+                <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+              }
+            />
+          </div>
         )}
-      </div>
-
-      <div className="text-white/60 font-minecraft lowercase text-base py-0.5 mt-0.5">
-        Uses: {uses.toLocaleString()}
-      </div>
-      {creatorName && (
-        <div
-          className="text-white/50 font-minecraft lowercase text-sm py-0.5 truncate mt-0.5"
-          title={`Creator: ${creatorName} (Cape ID: ${capeHash})`}
-        >
-          By: {creatorName}
-        </div>
-      )}
-      {!creatorName && (
-        <div className="text-white/30 font-minecraft lowercase text-sm py-0.5 truncate mt-0.5">
-          Loading Creator...
-        </div>
-      )}
-
-      <div className="mt-auto pt-2 border-t border-white/10">
-        <Button
-          onClick={() => onEquip(capeHash)}
-          variant="secondary"
-          size="sm"
-          className="w-full font-minecraft lowercase text-lg py-1.5 disabled:opacity-70"
-          disabled={isLoading}
-          aria-label={`Equip cape ${capeHash}`}
-        >
-          {isLoading ? "Applying..." : "Auswählen"}
-        </Button>
-      </div>
+      </Card>
     </div>
   );
 }
