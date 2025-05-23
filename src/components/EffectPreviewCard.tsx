@@ -109,20 +109,21 @@ export default function EffectPreviewCard({
       ref={cardRef}
       className={cn(
         "relative overflow-hidden transition-all duration-300 p-3 rounded-md h-40",
-        "border-2 border-b-4 cursor-pointer",
+        "border border-b-2 cursor-pointer",
         "bg-black/20 backdrop-blur-md",
         isActive ? "ring-2 ring-white/30" : "hover:bg-black/40",
       )}
       style={{
-        borderColor: isActive ? accentColor.value : `${accentColor.value}40`,
+        borderColor: isActive
+          ? `${accentColor.value}80`
+          : `${accentColor.value}40`,
         borderBottomColor: isActive
           ? accentColor.value
           : `${accentColor.value}60`,
-        boxShadow:
-          "0 4px 0 rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
         backgroundColor: isActive
           ? `${accentColor.value}20`
           : "rgba(0, 0, 0, 0.2)",
+        filter: isHovered ? "brightness(1.1)" : "brightness(1)",
       }}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}

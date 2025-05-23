@@ -10,7 +10,7 @@ import {
 import { Icon } from "@iconify/react";
 import { Button } from ".././ui/buttons/Button";
 import { Input } from ".././ui/Input";
-import { Label } from ".././ui/Label";
+import { Card } from ".././ui/Card";
 import { ToggleSwitch } from ".././ui/ToggleSwitch";
 import { ColorPicker } from ".././ColorPicker";
 import type { LauncherConfig } from "../../types/launcherConfig";
@@ -41,6 +41,8 @@ export function SettingsTab() {
   );
   const contentRef = useRef<HTMLDivElement>(null);
   const tabRef = useRef<HTMLDivElement>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isResettingRef = useRef<boolean>(false);
 
   const { accentColor, isBackgroundAnimationEnabled } = useThemeStore();
   const { currentEffect, setCurrentEffect } = useBackgroundEffectStore();
@@ -50,7 +52,7 @@ export function SettingsTab() {
     {
       id: BACKGROUND_EFFECTS.MATRIX_RAIN,
       name: "Matrix Rain",
-      icon: "solar:cube-bold",
+      icon: "solar:code-bold",
     },
     {
       id: BACKGROUND_EFFECTS.ENCHANTMENT_PARTICLES,
@@ -60,7 +62,7 @@ export function SettingsTab() {
     {
       id: BACKGROUND_EFFECTS.NEBULA_WAVES,
       name: "Nebula Waves",
-      icon: "solar:wave-linear",
+      icon: "solar:soundwave-bold",
     },
     {
       id: BACKGROUND_EFFECTS.NEBULA_PARTICLES,
@@ -70,12 +72,12 @@ export function SettingsTab() {
     {
       id: BACKGROUND_EFFECTS.NEBULA_GRID,
       name: "Nebula Grid",
-      icon: "solar:square-academic-cap-bold",
+      icon: "solar:widget-bold",
     },
     {
       id: BACKGROUND_EFFECTS.NEBULA_VOXELS,
       name: "Nebula Voxels",
-      icon: "solar:cube-3d-bold",
+      icon: "solar:asteroid-bold",
     },
     {
       id: BACKGROUND_EFFECTS.NEBULA_LIGHTNING,
@@ -85,29 +87,33 @@ export function SettingsTab() {
     {
       id: BACKGROUND_EFFECTS.NEBULA_LIQUID_CHROME,
       name: "Liquid Chrome",
-      icon: "solar:liquid-bold",
+      icon: "solar:cloud-waterdrops-bold",
     },
     {
       id: BACKGROUND_EFFECTS.RETRO_GRID,
       name: "Retro Grid",
-      icon: "solar:squares-four-bold",
+      icon: "solar:widget-5-bold",
     },
     {
       id: BACKGROUND_EFFECTS.PLAIN_BACKGROUND,
       name: "Plain Color",
-      icon: "solar:palette-bold-duotone",
+      icon: "solar:palette-bold",
     },
   ];
 
   const qualityOptions: { value: QualityLevel; label: string; icon: string }[] =
     [
-      { value: "low", label: "Low", icon: "solar:speedometer-slow-bold" },
+      {
+        value: "low",
+        label: "Low",
+        icon: "solar:battery-half-bold",
+      },
       {
         value: "medium",
         label: "Medium",
-        icon: "solar:speedometer-medium-bold",
+        icon: "solar:battery-full-bold",
       },
-      { value: "high", label: "High", icon: "solar:speedometer-bold" },
+      { value: "high", label: "High", icon: "solar:battery-charge-bold" },
     ];
 
   const loadConfig = useCallback(async () => {
@@ -126,6 +132,36 @@ export function SettingsTab() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const autoSaveConfig = useCallback(async (configToSave: LauncherConfig) => {
+    if (isResettingRef.current) {
+      return;
+    }
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      setSaving(true);
+      try {
+        const updatedConfig =
+          await ConfigService.setLauncherConfig(configToSave);
+        setConfig(updatedConfig);
+        console.log("Configuration auto-saved successfully:", updatedConfig);
+        toast.success("Settings auto-saved!", {
+          duration: 2000,
+          position: "bottom-right",
+        });
+      } catch (err) {
+        console.error("Failed to auto-save configuration:", err);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        toast.error(`Auto-save failed: ${errorMessage}`);
+      } finally {
+        setSaving(false);
+      }
+    }, 0);
   }, []);
 
   useEffect(() => {
@@ -156,27 +192,15 @@ export function SettingsTab() {
     }
   }, [activeTab, isBackgroundAnimationEnabled]);
 
-  const saveConfig = useCallback(async () => {
-    if (!tempConfig) return;
-
-    setSaving(true);
-    setError(null);
-
-    try {
-      const updatedConfig = await ConfigService.setLauncherConfig(tempConfig);
-      setConfig(updatedConfig);
-      setTempConfig({ ...updatedConfig });
-      console.log("Configuration saved successfully:", updatedConfig);
-      toast.success("Settings saved!");
-    } catch (err) {
-      console.error("Failed to save configuration:", err);
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      setError(errorMessage);
-      toast.error(`Failed to save settings: ${errorMessage}`);
-    } finally {
-      setSaving(false);
+  useEffect(() => {
+    if (
+      tempConfig &&
+      config &&
+      JSON.stringify(config) !== JSON.stringify(tempConfig)
+    ) {
+      autoSaveConfig(tempConfig);
     }
-  }, [tempConfig]);
+  }, [tempConfig, config, autoSaveConfig]);
 
   const handleConcurrentDownloadsChange = (
     e: ChangeEvent<HTMLInputElement>,
@@ -198,8 +222,14 @@ export function SettingsTab() {
 
   const resetChanges = () => {
     if (config) {
+      isResettingRef.current = true;
       setTempConfig({ ...config });
       setError(null);
+      toast.success("Settings reset to saved values");
+
+      setTimeout(() => {
+        isResettingRef.current = false;
+      }, 100);
     }
   };
 
@@ -208,47 +238,23 @@ export function SettingsTab() {
     tempConfig &&
     JSON.stringify(config) !== JSON.stringify(tempConfig);
 
-  const cardStyle = {
-    borderColor: `${accentColor.value}80`,
-    borderBottomColor: accentColor.value,
-    boxShadow:
-      "0 8px 0 rgba(0,0,0,0.3), 0 10px 15px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
-    backgroundColor: `${accentColor.value}10`,
-  };
-
-  const settingItemStyle = {
-    borderColor: `${accentColor.value}40`,
-    backgroundColor: "rgba(0, 0, 0, 0.2)",
-  };
-
   const renderGeneralTab = () => (
     <div className="space-y-6">
-      <div
-        className={cn(
-          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
-          "border-2 border-b-4",
-          "bg-black/20 backdrop-blur-md",
-        )}
-        style={cardStyle}
-      >
+      <Card variant="flat" className="p-6">
         <div className="mb-4">
-          <Label
-            size="lg"
-            className="mb-2"
-            icon={<Icon icon="solar:settings-bold" />}
-          >
-            Launcher Settings
-          </Label>
+          <div className="flex items-center gap-2 mb-2">
+            <Icon icon="solar:settings-bold" className="w-6 h-6 text-white" />
+            <h3 className="text-3xl font-minecraft text-white lowercase">
+              Launcher Settings
+            </h3>
+          </div>
           <p className="text-xl text-white/70 font-minecraft mt-2">
             Configure basic launcher settings
           </p>
         </div>
 
         <div className="space-y-4 mt-6">
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Experimental Mode
@@ -269,10 +275,7 @@ export function SettingsTab() {
             />
           </div>
 
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Auto Updates
@@ -289,10 +292,7 @@ export function SettingsTab() {
             />
           </div>
 
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Discord Presence
@@ -312,10 +312,7 @@ export function SettingsTab() {
             />
           </div>
 
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Beta Updates
@@ -332,10 +329,7 @@ export function SettingsTab() {
             />
           </div>
 
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Open Logs After Starting
@@ -355,10 +349,7 @@ export function SettingsTab() {
             />
           </div>
 
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Concurrent Downloads
@@ -375,14 +366,12 @@ export function SettingsTab() {
                 disabled={saving}
                 className="w-24"
                 icon={<Icon icon="solar:multiple-forward-right-bold" />}
+                variant="flat"
               />
             </div>
           </div>
 
-          <div
-            className="flex items-center justify-between p-3 rounded-lg border hover:bg-black/30 transition-colors"
-            style={settingItemStyle}
-          >
+          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div>
               <h5 className="font-minecraft text-2xl lowercase text-white">
                 Concurrent I/O Operations
@@ -399,55 +388,51 @@ export function SettingsTab() {
                 disabled={saving}
                 className="w-24"
                 icon={<Icon icon="solar:server-bold" />}
+                variant="flat"
               />
             </div>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 
   const renderAppearanceTab = () => (
     <div className="space-y-6">
-      <div
-        className={cn(
-          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
-          "border-2 border-b-4",
-          "bg-black/20 backdrop-blur-md",
-        )}
-        style={cardStyle}
-      >
+      <Card variant="flat" className="p-6">
         <div className="mb-4">
-          <Label
-            size="lg"
-            className="mb-2"
-            icon={<Icon icon="solar:palette-bold" />}
-          >
-            Accent Color
-          </Label>
+          <div className="flex items-center gap-2 mb-2">
+            <Icon icon="solar:palette-bold" className="w-6 h-6 text-white" />
+            <h3 className="text-3xl font-minecraft text-white lowercase">
+              Accent Color
+            </h3>
+          </div>
           <p className="text-xl text-white/70 font-minecraft mt-2">
             Choose your preferred accent color for the launcher
           </p>
         </div>
 
         <div className="mt-6">
-          <ColorPicker shape="square" size="md" showCustomOption={true} />
+          <ColorPicker shape="square" size="md" showCustomOption={false} />
         </div>
 
-        <div className="mt-6 p-4 rounded-lg border" style={settingItemStyle}>
-          <Label
-            size="md"
-            className="mb-3"
-            icon={<Icon icon="solar:eye-bold" />}
-          >
-            Preview
-          </Label>
+        <div className="mt-6 p-4 rounded-lg border border-[#ffffff20]">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon icon="solar:eye-bold" className="w-5 h-5 text-white" />
+            <h4 className="text-2xl font-minecraft text-white lowercase">
+              Preview
+            </h4>
+          </div>
           <div className="flex flex-wrap gap-4 mt-3">
-            <Button icon={<Icon icon="solar:play-bold" />} size="md">
+            <Button
+              icon={<Icon icon="solar:play-bold" />}
+              size="md"
+              variant="flat"
+            >
               Play Game
             </Button>
             <Button
-              variant="secondary"
+              variant="flat-secondary"
               icon={<Icon icon="solar:settings-bold" />}
               size="md"
             >
@@ -462,24 +447,31 @@ export function SettingsTab() {
             </Button>
           </div>
         </div>
-      </div>
 
-      <div
-        className={cn(
-          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
-          "border-2 border-b-4",
-          "bg-black/20 backdrop-blur-md",
-        )}
-        style={cardStyle}
-      >
+        <div className="mt-6 p-4 rounded-lg border border-[#ffffff20] bg-black/10">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon icon="solar:lock-bold" className="w-5 h-5 text-white/50" />
+            <h4 className="text-xl font-minecraft text-white/50 lowercase">
+              Custom Colors
+            </h4>
+          </div>
+          <p className="text-sm text-white/40 font-minecraft">
+            Custom color selection is currently disabled
+          </p>
+        </div>
+      </Card>
+
+      <Card variant="flat" className="p-6">
         <div className="mb-4">
-          <Label
-            size="lg"
-            className="mb-2"
-            icon={<Icon icon="solar:speedometer-medium-bold" />}
-          >
-            Visual Quality
-          </Label>
+          <div className="flex items-center gap-2 mb-2">
+            <Icon
+              icon="solar:speedometer-medium-bold"
+              className="w-6 h-6 text-white"
+            />
+            <h3 className="text-3xl font-minecraft text-white lowercase">
+              Visual Quality
+            </h3>
+          </div>
           <p className="text-xl text-white/70 font-minecraft mt-2">
             Adjust visual quality for all effects
           </p>
@@ -487,32 +479,15 @@ export function SettingsTab() {
 
         <div className="grid grid-cols-3 gap-4 mt-6">
           {qualityOptions.map((option) => (
-            <button
+            <Card
               key={option.value}
+              variant="flat"
               className={cn(
-                "relative overflow-hidden transition-all duration-300 p-4 rounded-md",
-                "border-2 border-b-4",
-                "bg-black/20 backdrop-blur-md",
+                "relative cursor-pointer transition-all duration-300 p-4",
                 qualityLevel === option.value
                   ? "ring-2 ring-white/30"
                   : "hover:bg-black/40",
               )}
-              style={{
-                borderColor:
-                  qualityLevel === option.value
-                    ? accentColor.value
-                    : `${accentColor.value}40`,
-                borderBottomColor:
-                  qualityLevel === option.value
-                    ? accentColor.value
-                    : `${accentColor.value}60`,
-                boxShadow:
-                  "0 4px 0 rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 0 1px rgba(255,255,255,0.05)",
-                backgroundColor:
-                  qualityLevel === option.value
-                    ? `${accentColor.value}20`
-                    : "rgba(0, 0, 0, 0.2)",
-              }}
               onClick={() => setQualityLevel(option.value)}
             >
               <div className="flex flex-col items-center gap-2">
@@ -521,7 +496,6 @@ export function SettingsTab() {
                   {option.label}
                 </h5>
               </div>
-
               {qualityLevel === option.value && (
                 <div className="absolute top-2 right-2">
                   <Icon
@@ -531,11 +505,11 @@ export function SettingsTab() {
                   />
                 </div>
               )}
-            </button>
+            </Card>
           ))}
         </div>
 
-        <div className="mt-6 p-4 rounded-lg border" style={settingItemStyle}>
+        <div className="mt-6 p-4 rounded-lg border border-[#ffffff20]">
           <p className="text-sm text-white/70 font-minecraft">
             {qualityLevel === "low" &&
               "Low quality reduces particle count and detail for better performance."}
@@ -545,24 +519,16 @@ export function SettingsTab() {
               "High quality increases visual fidelity but may impact performance on older systems."}
           </p>
         </div>
-      </div>
+      </Card>
 
-      <div
-        className={cn(
-          "relative overflow-hidden transition-all duration-300 p-6 rounded-md",
-          "border-2 border-b-4",
-          "bg-black/20 backdrop-blur-md",
-        )}
-        style={cardStyle}
-      >
+      <Card variant="flat" className="p-6">
         <div className="mb-4">
-          <Label
-            size="lg"
-            className="mb-2"
-            icon={<Icon icon="solar:stars-bold" />}
-          >
-            Background Effect
-          </Label>
+          <div className="flex items-center gap-2 mb-2">
+            <Icon icon="solar:stars-bold" className="w-6 h-6 text-white" />
+            <h3 className="text-3xl font-minecraft text-white lowercase">
+              Background Effect
+            </h3>
+          </div>
           <p className="text-xl text-white/70 font-minecraft mt-2">
             Choose a background effect for the launcher
           </p>
@@ -580,7 +546,7 @@ export function SettingsTab() {
             />
           ))}
         </div>
-      </div>
+      </Card>
     </div>
   );
 
@@ -621,7 +587,6 @@ export function SettingsTab() {
                 variant="secondary"
                 size="sm"
                 icon={<Icon icon="solar:refresh-bold" className="w-5 h-5" />}
-                disabled={loading}
               >
                 Try Again
               </Button>
@@ -651,35 +616,7 @@ export function SettingsTab() {
     }
   };
 
-  const settingsActions = (
-    <div className="flex items-center gap-3">
-      <Button
-        onClick={resetChanges}
-        disabled={saving || !hasChanges}
-        variant="secondary"
-        size="sm"
-        icon={<Icon icon="solar:refresh-bold" className="w-4 h-4" />}
-      >
-        Reset
-      </Button>
-      <Button
-        onClick={saveConfig}
-        disabled={saving || !hasChanges}
-        variant="default"
-        size="sm"
-        icon={<Icon icon="solar:disk-bold" className="w-4 h-4" />}
-      >
-        {saving ? (
-          <>
-            <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
-            <span>Saving...</span>
-          </>
-        ) : (
-          "Save"
-        )}
-      </Button>
-    </div>
-  );
+  const settingsActions = <div className="flex items-center gap-3"></div>;
 
   return (
     <div ref={tabRef} className="flex flex-col h-full overflow-hidden">
@@ -688,10 +625,9 @@ export function SettingsTab() {
         icon="solar:settings-bold"
         actions={
           <div className="flex items-center gap-3">
-            <Label
-              variant={activeTab === "general" ? "default" : "ghost"}
+            <Button
+              variant={activeTab === "general" ? "flat" : "ghost"}
               size="sm"
-              className="cursor-pointer"
               onClick={() => setActiveTab("general")}
               icon={
                 <Icon
@@ -701,18 +637,20 @@ export function SettingsTab() {
               }
             >
               general
-            </Label>
-            <Label
-              variant={activeTab === "appearance" ? "default" : "ghost"}
+            </Button>
+            <Button
+              variant={activeTab === "appearance" ? "flat" : "ghost"}
               size="sm"
-              className="cursor-pointer"
               onClick={() => setActiveTab("appearance")}
               icon={
-                <Icon icon="solar:brush-bold" className="w-4 h-4 text-white" />
+                <Icon
+                  icon="solar:palette-bold"
+                  className="w-4 h-4 text-white"
+                />
               }
             >
               appearance
-            </Label>
+            </Button>
             {settingsActions}
           </div>
         }

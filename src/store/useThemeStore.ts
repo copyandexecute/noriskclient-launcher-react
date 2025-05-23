@@ -13,6 +13,14 @@ export type AccentColor = {
 };
 
 export const ACCENT_COLORS: Record<string, AccentColor> = {
+  cyan: {
+    name: "Cyan",
+    value: "#00B9E8",
+    hoverValue: "#0099CC",
+    shadowValue: "rgba(0, 185, 232, 0.5)",
+    light: "#22d3ee",
+    dark: "#0891b2",
+  },
   blue: {
     name: "Blue",
     value: "#4f8eff",
@@ -29,61 +37,109 @@ export const ACCENT_COLORS: Record<string, AccentColor> = {
     light: "#a78bfa",
     dark: "#7c3aed",
   },
+  violet: {
+    name: "Violet",
+    value: "#8b5cf6",
+    hoverValue: "#7c3aed",
+    shadowValue: "rgba(139, 92, 246, 0.5)",
+    light: "#a78bfa",
+    dark: "#6d28d9",
+  },
+  pink: {
+    name: "Pink",
+    value: "#ec4899",
+    hoverValue: "#db2777",
+    shadowValue: "rgba(236, 72, 153, 0.5)",
+    light: "#f472b6",
+    dark: "#be185d",
+  },
   green: {
     name: "Green",
-    value: "#4caf50",
-    hoverValue: "#3d9140",
-    shadowValue: "rgba(76, 175, 80, 0.5)",
+    value: "#10b981",
+    hoverValue: "#059669",
+    shadowValue: "rgba(16, 185, 129, 0.5)",
     light: "#34d399",
-    dark: "#059669",
+    dark: "#047857",
+  },
+  emerald: {
+    name: "Emerald",
+    value: "#059669",
+    hoverValue: "#047857",
+    shadowValue: "rgba(5, 150, 105, 0.5)",
+    light: "#10b981",
+    dark: "#065f46",
   },
   teal: {
     name: "Teal",
-    value: "#26c6da",
-    hoverValue: "#21b6c9",
-    shadowValue: "rgba(38, 198, 218, 0.5)",
+    value: "#14b8a6",
+    hoverValue: "#0d9488",
+    shadowValue: "rgba(20, 184, 166, 0.5)",
     light: "#2dd4bf",
-    dark: "#0d9488",
+    dark: "#0f766e",
   },
   orange: {
     name: "Orange",
-    value: "#ff9800",
-    hoverValue: "#e68900",
-    shadowValue: "rgba(255, 152, 0, 0.5)",
+    value: "#f97316",
+    hoverValue: "#ea580c",
+    shadowValue: "rgba(249, 115, 22, 0.5)",
     light: "#fb923c",
-    dark: "#ea580c",
+    dark: "#c2410c",
+  },
+  amber: {
+    name: "Amber",
+    value: "#f59e0b",
+    hoverValue: "#d97706",
+    shadowValue: "rgba(245, 158, 11, 0.5)",
+    light: "#fbbf24",
+    dark: "#b45309",
   },
   red: {
     name: "Red",
-    value: "#f44336",
-    hoverValue: "#e53935",
-    shadowValue: "rgba(244, 67, 54, 0.5)",
+    value: "#ef4444",
+    hoverValue: "#dc2626",
+    shadowValue: "rgba(239, 68, 68, 0.5)",
     light: "#f87171",
-    dark: "#dc2626",
+    dark: "#b91c1c",
   },
-  yellow: {
-    name: "Yellow",
-    value: "#ffeb3b",
-    hoverValue: "#fdd835",
-    shadowValue: "rgba(255, 235, 59, 0.5)",
-    light: "#fde047",
-    dark: "#ca8a04",
+  rose: {
+    name: "Rose",
+    value: "#f43f5e",
+    hoverValue: "#e11d48",
+    shadowValue: "rgba(244, 63, 94, 0.5)",
+    light: "#fb7185",
+    dark: "#be123c",
   },
-  gray: {
-    name: "Gray",
-    value: "#9e9e9e",
-    hoverValue: "#757575",
-    shadowValue: "rgba(158, 158, 158, 0.5)",
+  indigo: {
+    name: "Indigo",
+    value: "#6366f1",
+    hoverValue: "#4f46e5",
+    shadowValue: "rgba(99, 102, 241, 0.5)",
+    light: "#818cf8",
+    dark: "#3730a3",
+  },
+  slate: {
+    name: "Slate",
+    value: "#64748b",
+    hoverValue: "#475569",
+    shadowValue: "rgba(100, 116, 139, 0.5)",
+    light: "#94a3b8",
+    dark: "#334155",
+  },
+  steel: {
+    name: "Steel",
+    value: "#8b9dc3",
+    hoverValue: "#6b7fa3",
+    shadowValue: "rgba(139, 157, 195, 0.5)",
+    light: "#a8b8d8",
+    dark: "#5a6b8a",
+  },
+  charcoal: {
+    name: "Charcoal",
+    value: "#6b7280",
+    hoverValue: "#4b5563",
+    shadowValue: "rgba(107, 114, 128, 0.5)",
     light: "#9ca3af",
-    dark: "#4b5563",
-  },
-  dark: {
-    name: "Dark",
-    value: "#424242",
-    hoverValue: "#303030",
-    shadowValue: "rgba(66, 66, 66, 0.5)",
-    light: "#6b7280",
-    dark: "#1f2937",
+    dark: "#374151",
   },
 };
 
@@ -160,7 +216,7 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      accentColor: ACCENT_COLORS.blue,
+      accentColor: ACCENT_COLORS.cyan,
       isBackgroundAnimationEnabled: false,
       isDetailViewSidebarOnLeft: true,
       profileGroupingCriterion: "none",
@@ -189,7 +245,9 @@ export const useThemeStore = create<ThemeState>()(
       },
 
       toggleDetailViewSidebarPosition: () => {
-        set((state) => ({ isDetailViewSidebarOnLeft: !state.isDetailViewSidebarOnLeft }));
+        set((state) => ({
+          isDetailViewSidebarOnLeft: !state.isDetailViewSidebarOnLeft,
+        }));
       },
 
       setProfileGroupingCriterion: async (criterion: string) => {
