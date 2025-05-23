@@ -205,7 +205,7 @@ export function SocialsModal() {
       onClose={closeModal}
       width="md" // Adjusted width for more content
     >
-      <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+      <div className="p-4 space-y-3 min-h-[55vh] max-h-[60vh] overflow-y-auto custom-scrollbar">
         {isLoadingDiscordStatus && socialPlatforms.find(p => p.key === 'discord')?.isImplemented ? (
           <div className="space-y-2">
             {socialPlatforms.filter(p => p.isImplemented && p.key === 'discord').map((platform, i) => (
