@@ -678,8 +678,8 @@ export function SettingsTab() {
         actions={
           <div className="flex items-center gap-3">
             <Button
+              className="h-[42px]"
               variant={activeTab === "general" ? "flat" : "ghost"}
-              size="sm"
               onClick={() => setActiveTab("general")}
               icon={
                 <Icon
@@ -691,8 +691,8 @@ export function SettingsTab() {
               general
             </Button>
             <Button
+              className="h-[42px]"
               variant={activeTab === "appearance" ? "flat" : "ghost"}
-              size="sm"
               onClick={() => setActiveTab("appearance")}
               icon={
                 <Icon
