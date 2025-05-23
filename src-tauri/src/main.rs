@@ -362,7 +362,10 @@ async fn main() {
             get_local_content,
             install_local_content_to_profile,
             switch_content_version,
-            commands::minecraft_command::get_starlight_skin_render
+            commands::minecraft_command::get_starlight_skin_render,
+            commands::nrc_commands::discord_auth_link,
+            commands::nrc_commands::discord_auth_status,
+            commands::nrc_commands::discord_auth_unlink
         ])
         .build(tauri::generate_context!()) 
         .expect("error while building tauri application") 

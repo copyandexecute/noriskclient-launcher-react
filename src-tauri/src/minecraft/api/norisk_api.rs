@@ -131,6 +131,57 @@ impl NoRiskApi {
         })
     }
 
+    pub async fn delete_from_norisk_endpoint_text_with_parameters(
+        endpoint: &str,
+        norisk_token: &str,
+        extra_params: Option<HashMap<&str, &str>>,
+        is_experimental: bool,
+    ) -> Result<String> {
+        let base_url = Self::get_api_base(is_experimental);
+        let url = format!("{}/{}", base_url, endpoint);
+
+        debug!("[NoRisk API] Making DELETE request to endpoint: {}", endpoint);
+        debug!("[NoRisk API] Full URL: {}", url);
+
+        let mut request = HTTP_CLIENT
+            .delete(url)
+            .header("Authorization", format!("Bearer {}", norisk_token));
+
+        if let Some(extra) = extra_params {
+            debug!("[NoRisk API] Adding {} query parameters", extra.len());
+            request = request.query(&extra);
+        }
+
+        debug!("[NoRisk API] Sending DELETE request");
+        let response = request.send().await.map_err(|e| {
+            error!("[NoRisk API] DELETE request failed: {}", e);
+            AppError::RequestError(format!(
+                "Failed to send DELETE request to NoRisk API: {}",
+                e
+            ))
+        })?;
+
+        let status = response.status();
+        debug!("[NoRisk API] Response status: {}", status);
+
+        if !status.is_success() {
+            error!("[NoRisk API] Error response: Status {}", status);
+            return Err(AppError::RequestError(format!(
+                "NoRisk API returned error status: {}",
+                status
+            )));
+        }
+
+        debug!("[NoRisk API] Reading response body as text");
+        response.text().await.map_err(|e| {
+            error!("[NoRisk API] Failed to read response text: {}", e);
+            AppError::ParseError(format!(
+                "Failed to read NoRisk API response text: {}",
+                e
+            ))
+        })
+    }
+
     pub async fn refresh_norisk_token(
         token: &str,
         hwid: &str,
@@ -254,6 +305,47 @@ impl NoRiskApi {
         );
         Self::get_from_norisk_endpoint("launcher/versions", norisk_token, None, is_experimental)
             .await
+    }
+
+    /// Request discord link status
+    pub async fn discord_link_status(
+        norisk_token: &str,
+        request_uuid: &str,
+        is_experimental: bool,
+    ) -> Result<bool> {
+        debug!(
+            "[NoRisk API] Requesting Discord link status with UUID: {}",
+            request_uuid
+        );
+        Self::request_from_norisk_endpoint(
+            "core/oauth/discord/check",
+            norisk_token,
+            request_uuid,
+            is_experimental,
+        )
+        .await
+    }
+
+    /// Request to unlink Discord account
+    pub async fn unlink_discord(
+        norisk_token: &str,
+        request_uuid: &str,
+        is_experimental: bool,
+    ) -> Result<String> {
+        debug!(
+            "[NoRisk API] Requesting Discord unlink with UUID: {}",
+            request_uuid
+        );
+        let mut extra_params = HashMap::new();
+        extra_params.insert("uuid", request_uuid);
+
+        Self::delete_from_norisk_endpoint_text_with_parameters(
+            "core/oauth/discord/unlink",
+            norisk_token,
+            Some(extra_params),
+            is_experimental,
+        )
+        .await
     }
 
     // Add more NoRisk API methods as needed
