@@ -182,9 +182,23 @@ async fn main() {
                     Ok(state_manager_instance) => { 
                         let config = state_manager_instance.config_manager.get_config().await;
                         let check_beta_channel = config.check_beta_channel;
-                        info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
-                        updater_utils::check_for_updates(state_init_app_handle.clone(), check_beta_channel, updater_window.clone()).await;
-                        info!("Update check process has finished.");
+                        let auto_check_updates_enabled = config.auto_check_updates;
+
+                        if auto_check_updates_enabled {
+                            info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
+                            updater_utils::check_for_updates(state_init_app_handle.clone(), check_beta_channel, updater_window.clone()).await;
+                            info!("Update check process has finished.");
+                        } else {
+                            info!("Auto-check for updates is disabled in settings. Skipping update check.");
+                            // Ensure the updater window (if created) is closed if we skip the check.
+                            if let Some(win) = updater_window {
+                                updater_utils::emit_status(&state_init_app_handle, "close", "Auto-update disabled.".to_string(), None);
+                                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await; // Give time for emit to process
+                                if let Err(close_err) = win.close() {
+                                    error!("Failed to close updater window when skipping updates: {}", close_err);
+                                }
+                            }
+                        }
                     }
                     Err(e) => {
                         error!("Failed to get global state for update check: {}.", e);
