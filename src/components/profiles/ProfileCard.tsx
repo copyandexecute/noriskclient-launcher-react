@@ -12,10 +12,11 @@ import { toast } from "react-hot-toast";
 import { ProfileContextMenu } from "./ProfileContextMenu";
 import * as ProfileService from "../../services/profile-service";
 import { LaunchButton } from "../ui/buttons/LaunchButton";
-import { ThemedSurface } from '../ui/ThemedSurface';
-import { useNavigate } from 'react-router-dom';
+import { Card } from "../ui/Card";
+import { useNavigate } from "react-router-dom";
 import { ProfileIcon } from "./ProfileIcon";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { cn } from "../../lib/utils";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -38,32 +39,29 @@ export function ProfileCard({
   interactionMode = "launch",
   onSettingsNavigation,
 }: ProfileCardProps) {
-  const accentColorValue = useThemeStore((state) => state.accentColor.value);
+  const accentColor = useThemeStore((state) => state.accentColor);
   const navigate = useNavigate();
 
   const [isCloning, setIsCloning] = useState(false);
   const [isCardHovered, setIsCardHovered] = useState(false);
-  const [shouldShowSpinnerForThisProfile, setShouldShowSpinnerForThisProfile] = useState(false);
-  const [detailedLaunchMessage, setDetailedLaunchMessage] = useState<string | null>(null);
-  const [resolvedBackgroundImageUrl, setResolvedBackgroundImageUrl] = useState<string | null>(null);
+  const [shouldShowSpinnerForThisProfile, setShouldShowSpinnerForThisProfile] =
+    useState(false);
+  const [detailedLaunchMessage, setDetailedLaunchMessage] = useState<
+    string | null
+  >(null);
+  const [resolvedBackgroundImageUrl, setResolvedBackgroundImageUrl] = useState<
+    string | null
+  >(null);
   const [isBgLoading, setIsBgLoading] = useState(false);
 
   const { confirm, confirmDialog } = useConfirmDialog();
   const cardRef = useRef<HTMLDivElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
-
-  const hexToRgbString = (hex: string): string | null => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result
-      ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(
-          result[3],
-          16,
-        )}`
-      : null;
-  };
-  const accentColorRgbString = hexToRgbString(accentColorValue);
+  const [contextMenuPosition, setContextMenuPosition] = useState({
+    x: 0,
+    y: 0,
+  });
 
   const handleLaunchButtonStateChange = (isLaunchingFromButton: boolean) => {
     setShouldShowSpinnerForThisProfile(isLaunchingFromButton);
@@ -93,7 +91,7 @@ export function ProfileCard({
     const resolveBackgroundImage = async () => {
       if (profile.background?.source) {
         setIsBgLoading(true);
-        setResolvedBackgroundImageUrl(null); // Reset while loading new one
+        setResolvedBackgroundImageUrl(null);
         try {
           const resolvedPathOrUrl = await ProfileService.resolveImagePath(
             profile.background.source,
@@ -107,12 +105,11 @@ export function ProfileCard({
           ) {
             if (resolvedPathOrUrl) {
               const assetUrl = await convertFileSrc(resolvedPathOrUrl);
-              setResolvedBackgroundImageUrl(assetUrl + '?v=' + Date.now()); // Cache busting
+              setResolvedBackgroundImageUrl(assetUrl + "?v=" + Date.now());
             } else {
               setResolvedBackgroundImageUrl(null);
             }
           } else {
-            // For URL or Base64, the resolvedPathOrUrl is already the final URL
             setResolvedBackgroundImageUrl(resolvedPathOrUrl);
           }
         } catch (error) {
@@ -148,14 +145,6 @@ export function ProfileCard({
         return "/icons/minecraft.png";
     }
   };
-
-  const getProfileIconSource = () => {
-    if (profile.banner?.source.type === "url") {
-      return profile.banner.source.url;
-    }
-    return null;
-  };
-  const profileIconSrc = getProfileIconSource();
 
   const handleClone = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -287,8 +276,8 @@ export function ProfileCard({
   const handleDivClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const isInteractiveElementClick =
-      target.closest('button') ||
-      target.closest('a') ||
+      target.closest("button") ||
+      target.closest("a") ||
       (contextMenuRef.current && contextMenuRef.current.contains(target));
 
     if (!isInteractiveElementClick) {
@@ -298,121 +287,181 @@ export function ProfileCard({
 
   return (
     <>
-    <div
-      style={{
-        opacity: isCloning ? 0.7 : 1,
-      }}
-      className="transition-opacity duration-150 ease-in-out"
-      onMouseEnter={() => setIsCardHovered(true)}
-      onMouseLeave={() => setIsCardHovered(false)}
-    >
-      <ThemedSurface
-        surfaceRef={cardRef}
-        onClick={handleDivClick}
-        onContextMenu={handleContextMenu}
-        className="p-4 rounded-lg flex flex-col gap-3 transition-shadow duration-150 ease-in-out hover:shadow-xl relative"
-        style={resolvedBackgroundImageUrl ? {
-          backgroundImage: `url("${resolvedBackgroundImageUrl}")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        } : {}}
+      <div
+        style={{
+          opacity: isCloning ? 0.7 : 1,
+        }}
+        className="transition-opacity duration-150 ease-in-out"
+        onMouseEnter={() => setIsCardHovered(true)}
+        onMouseLeave={() => setIsCardHovered(false)}
       >
-        {resolvedBackgroundImageUrl && !isBgLoading && accentColorRgbString && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              borderRadius: 'inherit',
-              zIndex: 0,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-        <div className="flex items-center gap-4 relative z-10">
-          <div
-            className="relative w-20 h-20 flex-shrink-0 rounded-md border flex items-center justify-center group overflow-hidden"
-            style={{
-              backgroundColor: `${accentColorValue}1A`,
-              borderColor: `${accentColorValue}4D`,
-            }}
-          >
-            <ProfileIcon 
-              profileId={profile.id}
-              banner={profile.banner}
-              profileName={profile.name}
-              accentColor={accentColorValue}
-              onSuccessfulUpdate={() => {}}
-              isEditable={false}
-              variant="bare"
-              className="w-full h-full"
-              placeholderIcon="ph:package-duotone"
-              iconClassName="w-10 h-10"
+        <Card
+          ref={cardRef}
+          onClick={handleDivClick}
+          onContextMenu={handleContextMenu}
+          className={cn(
+            "p-4 flex flex-col gap-3 relative overflow-hidden",
+            "transition-all duration-300 ease-out hover:scale-[1.02]",
+            isCloning && "pointer-events-none",
+          )}
+          variant="flat"
+          withAnimation={false}
+        >
+          {/* Background image overlay */}
+          {resolvedBackgroundImageUrl && !isBgLoading && (
+            <div
+              className="absolute inset-0 z-0 opacity-20"
+              style={{
+                backgroundImage: `url("${resolvedBackgroundImageUrl}")`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                filter: "blur(2px)",
+              }}
             />
-            {!isCloning && (shouldShowSpinnerForThisProfile || isCardHovered) && (
-              <div 
-                className="absolute inset-0 flex items-center justify-center bg-black/30 transition-opacity duration-150 cursor-pointer"
-                onClick={interactionMode === "settings" ? handleSettingsClick : undefined}
-                aria-label={interactionMode === "settings" ? `Settings for ${profile.name}` : undefined}
-                role={interactionMode === "settings" ? "button" : undefined}
-                tabIndex={interactionMode === "settings" ? 0 : undefined}
-                onKeyDown={interactionMode === "settings" ? (e) => { if (e.key === 'Enter' || e.key === ' ') handleSettingsClick(e as any); } : undefined}
+          )}
+
+          {/* Content */}
+          <div className="flex items-center gap-4 relative z-10 w-full">
+            <div
+              className="relative w-20 h-20 flex-shrink-0 rounded-lg border-2 flex items-center justify-center group overflow-hidden"
+              style={{
+                backgroundColor: `${accentColor.value}20`,
+                borderColor: `${accentColor.value}60`,
+              }}
+            >
+              <ProfileIcon
+                profileId={profile.id}
+                banner={profile.banner}
+                profileName={profile.name}
+                accentColor={accentColor.value}
+                onSuccessfulUpdate={() => {}}
+                isEditable={false}
+                variant="bare"
+                className="w-full h-full"
+                placeholderIcon="ph:package-duotone"
+                iconClassName="w-10 h-10"
+              />
+              {!isCloning &&
+                (shouldShowSpinnerForThisProfile || isCardHovered) && (
+                  <div
+                    className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-150 cursor-pointer"
+                    onClick={
+                      interactionMode === "settings"
+                        ? handleSettingsClick
+                        : undefined
+                    }
+                    aria-label={
+                      interactionMode === "settings"
+                        ? `Settings for ${profile.name}`
+                        : undefined
+                    }
+                    role={interactionMode === "settings" ? "button" : undefined}
+                    tabIndex={interactionMode === "settings" ? 0 : undefined}
+                    onKeyDown={
+                      interactionMode === "settings"
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ")
+                              handleSettingsClick(e as any);
+                          }
+                        : undefined
+                    }
+                  >
+                    {interactionMode === "launch" ? (
+                      <LaunchButton
+                        id={profile.id}
+                        name={profile.name}
+                        isIconOnly={true}
+                        disabled={isCloning}
+                        forceDisplaySpinner={shouldShowSpinnerForThisProfile}
+                        onInternalLaunchStateChange={
+                          handleLaunchButtonStateChange
+                        }
+                        onEventMessage={handleLaunchEventMessage}
+                        className="text-white"
+                      />
+                    ) : (
+                      <Icon
+                        icon="solar:settings-bold"
+                        className="w-12 h-12 text-white hover:text-white/80 transition-colors"
+                      />
+                    )}
+                  </div>
+                )}
+            </div>
+
+            <div className="flex-grow min-w-0 mr-auto pr-2 max-w-[calc(100%-80px)]">
+              <h3
+                className="font-minecraft text-white lowercase text-3xl whitespace-nowrap overflow-hidden text-ellipsis max-w-full"
+                title={profile.name}
               >
-                {interactionMode === "launch" ? (
-                  <LaunchButton
-                    id={profile.id}
-                    name={profile.name}
-                    isIconOnly={true}
-                    disabled={isCloning}
-                    forceDisplaySpinner={shouldShowSpinnerForThisProfile}
-                    onInternalLaunchStateChange={handleLaunchButtonStateChange}
-                    onEventMessage={handleLaunchEventMessage}
-                    className="text-white"
-                  />
+                {profile.name}
+              </h3>
+              <div
+                className="flex items-center gap-2 text-white/60 mt-1 font-minecraft lowercase text-2xl whitespace-nowrap overflow-hidden text-ellipsis h-5 max-w-full"
+                title={
+                  isCloning
+                    ? "Cloning profile..."
+                    : shouldShowSpinnerForThisProfile
+                      ? detailedLaunchMessage || "Starting..."
+                      : `${profile.loader || "Vanilla"} - ${profile.game_version}`
+                }
+              >
+                {isCloning ? (
+                  <span className="animate-pulse">Cloning profile...</span>
+                ) : shouldShowSpinnerForThisProfile ? (
+                  <span className="animate-pulse">
+                    {detailedLaunchMessage || "Starting..."}
+                  </span>
                 ) : (
-                  <Icon 
-                    icon="solar:settings-bold"
-                    className="w-12 h-12 text-white hover:text-white/80 transition-colors" 
-                  />
+                  <>
+                    <img
+                      src={getModLoaderIcon() || "/placeholder.svg"}
+                      alt={profile.loader || "Vanilla"}
+                      className="w-4 h-4 object-contain"
+                    />
+                    <span>
+                      {profile.loader || "Vanilla"} {profile.game_version}
+                    </span>
+                  </>
                 )}
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="flex-grow min-w-0">
-            <h3
-              className="text-lg font-minecraft-ten text-white whitespace-nowrap overflow-hidden text-ellipsis"
-              title={profile.name}
-            >
-              {profile.name}
-            </h3>
-            <div 
-              className="flex items-center text-xs text-white/60 mt-1 font-minecraft-ten whitespace-nowrap overflow-hidden text-ellipsis h-4"
-              title={
-                isCloning ? "Cloning profile..." :
-                shouldShowSpinnerForThisProfile ? (detailedLaunchMessage || "Starting...") :
-                `${profile.loader || "Vanilla"} - ${profile.game_version}`
-              }
-            >
-              {isCloning ? (
-                <span>Cloning profile...</span>
-              ) : shouldShowSpinnerForThisProfile ? (
-                detailedLaunchMessage ? (
-                  <span>{detailedLaunchMessage}</span>
-                ) : (
-                  <span>Starting...</span>
-                )
-              ) : (
-                <>
-                  <span>
-                    {profile.loader || "Vanilla"} {profile.game_version}
-                  </span>
-                </>
-              )}
+            {/* Action buttons */}
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-4 top-4">
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                title="Edit profile"
+                disabled={isCloning}
+                size="sm"
+                variant="secondary"
+                icon={<Icon icon="solar:pen-bold" className="w-4 h-4" />}
+              />
+              <IconButton
+                onClick={handleClone}
+                title="Clone profile"
+                disabled={isCloning}
+                size="sm"
+                variant="secondary"
+                icon={<Icon icon="solar:copy-bold" className="w-4 h-4" />}
+              />
+              <IconButton
+                onClick={handleDelete}
+                title="Delete profile"
+                disabled={isCloning}
+                size="sm"
+                variant="destructive"
+                icon={
+                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
+                }
+              />
             </div>
           </div>
-        </div>
-      </ThemedSurface>
-    </div>
+        </Card>
+      </div>
 
       {confirmDialog}
       <ProfileContextMenu
