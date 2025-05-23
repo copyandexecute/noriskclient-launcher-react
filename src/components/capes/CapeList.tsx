@@ -222,8 +222,8 @@ function AddCapeCard({ onClick, onDownloadTemplate }: AddCapeCardProps) {
             onDownloadTemplate();
           }}
           className="download-template-button w-full mt-2 cursor-pointer rounded-md transition-colors duration-150 group/template-btn"
-          variant="flat-secondary"
-          size="sm"
+          variant="ghost"
+          size="md"
         >
           <div className="flex items-center justify-center gap-2">
             <Icon
