@@ -98,9 +98,9 @@ export function RetroGridEffect({
       position: "absolute",
       left: "-25%",
       pointerEvents: "none",
-      willChange: "transform", // GPU hint
-      backfaceVisibility: "hidden", // GPU hint
-      transform: "translate3d(0,0,0)", // Force GPU acceleration
+      willChange: "transform",
+      backfaceVisibility: "hidden",
+      transform: "translate3d(0,0,0)",
     }),
     [gridLineColor, gridSize],
   );
