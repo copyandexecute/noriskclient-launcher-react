@@ -44,7 +44,13 @@ export function SettingsTab() {
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isResettingRef = useRef<boolean>(false);
 
-  const { accentColor, isBackgroundAnimationEnabled } = useThemeStore();
+  const {
+    accentColor,
+    isBackgroundAnimationEnabled,
+    staticBackground,
+    toggleStaticBackground,
+    toggleBackgroundAnimation,
+  } = useThemeStore();
   const { currentEffect, setCurrentEffect } = useBackgroundEffectStore();
   const { qualityLevel, setQualityLevel } = useQualitySettingsStore();
 
@@ -255,10 +261,14 @@ export function SettingsTab() {
 
         <div className="space-y-4 mt-6">
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Experimental Mode
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Enable experimental features and unstable functionality. May
+                cause crashes or unexpected behavior.
+              </p>
             </div>
             <ToggleSwitch
               checked={tempConfig?.is_experimental || false}
@@ -276,10 +286,14 @@ export function SettingsTab() {
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Auto Updates
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Automatically check for and download launcher updates when
+                available.
+              </p>
             </div>
             <ToggleSwitch
               checked={tempConfig?.auto_check_updates || false}
@@ -293,10 +307,14 @@ export function SettingsTab() {
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Discord Presence
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Show your current game and launcher status in Discord. Displays
+                what you're playing to friends.
+              </p>
             </div>
             <ToggleSwitch
               checked={tempConfig?.enable_discord_presence || false}
@@ -313,10 +331,14 @@ export function SettingsTab() {
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Beta Updates
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Receive beta versions and pre-release updates. These may be
+                unstable and contain bugs.
+              </p>
             </div>
             <ToggleSwitch
               checked={tempConfig?.check_beta_channel || false}
@@ -330,10 +352,14 @@ export function SettingsTab() {
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Open Logs After Starting
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Automatically open the game logs window when launching
+                Minecraft. Useful for debugging issues.
+              </p>
             </div>
             <ToggleSwitch
               checked={tempConfig?.open_logs_after_starting || false}
@@ -350,10 +376,14 @@ export function SettingsTab() {
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Concurrent Downloads
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Maximum number of files downloaded simultaneously. Lower values
+                reduce bandwidth usage but slow downloads.
+              </p>
             </div>
             <div className="flex items-center">
               <Input
@@ -372,10 +402,14 @@ export function SettingsTab() {
           </div>
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div>
-              <h5 className="font-minecraft text-2xl lowercase text-white">
+            <div className="flex-1">
+              <h5 className="font-minecraft text-3xl lowercase text-white">
                 Concurrent I/O Operations
               </h5>
+              <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+                Maximum number of files written to disk simultaneously. Lower
+                values reduce disk stress and I/O errors.
+              </p>
             </div>
             <div className="flex items-center">
               <Input
@@ -518,6 +552,27 @@ export function SettingsTab() {
             {qualityLevel === "high" &&
               "High quality increases visual fidelity but may impact performance on older systems."}
           </p>
+        </div>
+
+        <div className="mt-6 flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
+          <div className="flex-1">
+            <h5 className="font-minecraft text-2xl lowercase text-white">
+              Background Animations
+            </h5>
+            <p className="text-sm text-white/60 font-minecraft-ten mt-1">
+              Enable or disable animated background effects. Disabling improves
+              performance on slower systems.
+            </p>
+          </div>
+          <ToggleSwitch
+            checked={!staticBackground}
+            onChange={() => {
+              toggleStaticBackground();
+              toggleBackgroundAnimation();
+            }}
+            disabled={saving}
+            size="lg"
+          />
         </div>
       </Card>
 

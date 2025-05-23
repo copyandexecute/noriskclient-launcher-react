@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { VersionInfo } from "../launcher/VersionInfo";
 import { NewsSection } from "../news/NewsSection";
 import { ErrorMessage } from "../ui/ErrorMessage";
 import { useMinecraftAuthStore } from "../../store/minecraft-auth-store";
 import { useProfileStore } from "../../store/profile-store";
-import { Checkbox } from "../ui/Checkbox";
 import { useThemeStore } from "../../store/useThemeStore";
 import { PlayerActionsDisplay } from "../launcher/PlayerActionsDisplay";
 import { RetroGridEffect } from "../effects/RetroGridEffect";
-import { useBackgroundEffectStore, BACKGROUND_EFFECTS } from "../../store/background-effect-store";
+import {
+  BACKGROUND_EFFECTS,
+  useBackgroundEffectStore,
+} from "../../store/background-effect-store";
 
 export function PlayTab() {
   const {
@@ -22,13 +23,7 @@ export function PlayTab() {
   } = useProfileStore();
 
   const { activeAccount } = useMinecraftAuthStore();
-  const { 
-    isBackgroundAnimationEnabled,
-    toggleBackgroundAnimation,
-    staticBackground,
-    toggleStaticBackground,
-    accentColor 
-  } = useThemeStore();
+  const { staticBackground, accentColor } = useThemeStore();
   const { currentEffect } = useBackgroundEffectStore();
 
   useEffect(() => {
@@ -42,7 +37,8 @@ export function PlayTab() {
     setSelectedProfile(profileToSelect);
   };
 
-  const currentDisplayProfile = storeSelectedProfile || (profiles.length > 0 ? profiles[0] : null);
+  const currentDisplayProfile =
+    storeSelectedProfile || (profiles.length > 0 ? profiles[0] : null);
 
   const versions = profiles.map((profile) => ({
     id: profile.id,
@@ -69,12 +65,20 @@ export function PlayTab() {
         /> */}
 
         <div className="relative z-10">
-          {(profilesError && !loading) && <ErrorMessage message={profilesError || "An unknown error occurred"} />}
+          {profilesError && !loading && (
+            <ErrorMessage
+              message={profilesError || "An unknown error occurred"}
+            />
+          )}
 
           <PlayerActionsDisplay
             displayMode="playerName"
-            playerName={activeAccount?.minecraft_username || activeAccount?.username}
-            launchButtonDefaultVersion={storeSelectedProfile?.id || versions[0]?.id || ""}
+            playerName={
+              activeAccount?.minecraft_username || activeAccount?.username
+            }
+            launchButtonDefaultVersion={
+              storeSelectedProfile?.id || versions[0]?.id || ""
+            }
             onLaunchVersionChange={handleVersionChange}
             launchButtonVersions={versions}
             className=""
@@ -83,18 +87,6 @@ export function PlayTab() {
       </div>
 
       <NewsSection className="w-1/3 border-l-2 border-white/40 bg-black/10 backdrop-blur-lg p-5 overflow-hidden flex flex-col relative z-10" />
-
-      <div className="absolute bottom-4 left-4 z-20">
-        <Checkbox
-          label="Animation"
-          checked={!staticBackground}
-          onChange={() => {
-            toggleStaticBackground();
-            toggleBackgroundAnimation();
-          }}
-          customSize="sm"
-        />
-      </div>
     </div>
   );
 }
