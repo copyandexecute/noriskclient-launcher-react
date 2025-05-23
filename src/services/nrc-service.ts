@@ -91,4 +91,34 @@ export const refreshNrcDataOnMount = async (): Promise<void> => {
   }
   // Kein expliziter finally-Block hier nötig, um loading auf false zu setzen,
   // da dies entweder durch fetchProfiles() oder den catch-Block oben abgedeckt wird.
+};
+
+/**
+ * Initiates the Discord account linking process.
+ *
+ * @returns A promise that resolves when the command is successfully sent.
+ * @throws If the backend command fails.
+ */
+export const discordAuthLink = (): Promise<void> => {
+  return invoke('discord_auth_link');
+};
+
+/**
+ * Checks the Discord account linking status.
+ *
+ * @returns A promise that resolves to a boolean indicating if a Discord account is linked.
+ * @throws If the backend command fails.
+ */
+export const discordAuthStatus = (): Promise<boolean> => {
+  return invoke('discord_auth_status');
+};
+
+/**
+ * Unlinks the currently linked Discord account.
+ *
+ * @returns A promise that resolves when the unlinking process is successful.
+ * @throws If the backend command fails.
+ */
+export const discordAuthUnlink = (): Promise<void> => {
+  return invoke('discord_auth_unlink');
 }; 

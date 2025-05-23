@@ -24,6 +24,7 @@ import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
 import { RetroGridEffect } from "../effects/RetroGridEffect";
 import PlainBackground from "../effects/PlainBackground";
 import * as ConfigService from "../../services/launcher-config-service";
+import { SocialsModal } from "../modals/SocialsModal";
 
 const navItems = [
   { id: "play", icon: "solar:play-bold", label: "Play" },
@@ -290,6 +291,8 @@ export function AppLayout({
           </div>
         </div>
       </div>
+      {/* Global Modals Portal */}
+      <SocialsModal />
     </div>
   );
 }
@@ -361,7 +364,7 @@ function HeaderBar({ minimizeRef, maximizeRef, closeRef }: HeaderBarProps) {
       data-tauri-drag-region
     >
       <div className="flex items-center gap-4" data-tauri-drag-region>
-        <div className="flex flex-col items-start">
+        <div className="flex flex-col items-start -mt-2.5">
           <h1
             className="font-minecraft text-4xl tracking-wider text-white font-bold lowercase text-shadow"
             data-tauri-drag-region

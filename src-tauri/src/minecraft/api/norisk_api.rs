@@ -317,10 +317,10 @@ impl NoRiskApi {
             "[NoRisk API] Requesting Discord link status with UUID: {}",
             request_uuid
         );
-        Self::request_from_norisk_endpoint(
+        Self::get_from_norisk_endpoint(
             "core/oauth/discord/check",
             norisk_token,
-            request_uuid,
+            Some(request_uuid),
             is_experimental,
         )
         .await
