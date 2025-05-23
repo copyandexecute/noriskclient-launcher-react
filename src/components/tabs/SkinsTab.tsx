@@ -22,11 +22,11 @@ import { useSkinStore } from "../../store/useSkinStore";
 import { toast } from "react-hot-toast";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { ThemedSurface } from "../ui/ThemedSurface";
 import { Input } from "../ui/Input";
 import { RadioButton } from "../ui/RadioButton";
 import { TabLayout } from "../ui/TabLayout";
 import { cn } from "../../lib/utils";
+import { Card } from "../ui/Card";
 
 const SkinPreview = memo(
   ({
@@ -147,7 +147,7 @@ const SkinPreview = memo(
           clearTimeout(spinnerTimeoutRef.current);
         }
       };
-    }, [skin.name]);
+    }, [skin?.name, skin?.base64_data, skin]);
 
     const animationStyle = isBackgroundAnimationEnabled
       ? { animationDelay: `${index * 0.075}s` }
@@ -158,24 +158,25 @@ const SkinPreview = memo(
 
     return (
       <div key={skin.id} style={animationStyle} className={animationClasses}>
-        <ThemedSurface
+        <Card
           className={cn(
             "relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group",
+            "transition-all duration-300 ease-out hover:scale-105 hover:z-10",
             isDisabled ? "opacity-60 pointer-events-none" : "",
           )}
-          alwaysActive={isSelected}
+          variant={isSelected ? "flat" : "flat"}
           onClick={() =>
             !isDisabled && !isApplied && !isSelected && onClick(skin)
           }
         >
           <p
-            className="font-minecraft text-white lowercase truncate text-3xl"
+            className="font-minecraft text-white lowercase truncate text-3xl transition-transform duration-300 ease-out group-hover:scale-110"
             title={skin.name}
           >
             {skin.name}
           </p>
 
-          <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center">
+          <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center transition-transform duration-300 ease-out group-hover:scale-105">
             {isRenderLoading && canShowSpinner ? (
               <div className="w-12 h-12 border-4 border-t-transparent border-[var(--accent)] rounded-full animate-spin"></div>
             ) : !isRenderLoading ? (
@@ -189,12 +190,12 @@ const SkinPreview = memo(
           </div>
 
           <div className="flex items-center justify-between mt-auto">
-            <p className="text-white/60 font-minecraft lowercase text-2xl">
+            <p className="text-white/60 font-minecraft lowercase text-2xl transition-transform duration-300 ease-out group-hover:scale-110">
               {skin.variant === "slim" ? "Slim" : "Classic"}
             </p>
 
             {isApplied && (
-              <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-minecraft flex items-center">
+              <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-minecraft flex items-center transition-transform duration-300 ease-out group-hover:scale-110">
                 <Icon icon="solar:check-circle-bold" className="w-4 h-4 mr-1" />
                 Applied
               </span>
@@ -210,7 +211,7 @@ const SkinPreview = memo(
             </div>
           )}
 
-          <div className="absolute bottom-1.5 right-1.5 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute bottom-1.5 right-1.5 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 ease-out group-hover:scale-110">
             {onEditSkin && (
               <IconButton
                 onClick={(event) => {
@@ -241,7 +242,7 @@ const SkinPreview = memo(
               />
             )}
           </div>
-        </ThemedSurface>
+        </Card>
       </div>
     );
   },
@@ -266,15 +267,16 @@ const AddSkinCard = memo(
         style={animationStyle}
         className={animationClasses}
       >
-        <ThemedSurface
-          className="relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group cursor-pointer border-dashed"
+        <Card
+          className="relative p-4 pt-1 pb-2 h-[380px] flex flex-col text-center group cursor-pointer border-dashed transition-all duration-300 ease-out hover:scale-105 hover:z-10"
+          variant="flat"
           onClick={onClick}
         >
-          <p className="font-minecraft text-white lowercase truncate text-3xl">
+          <p className="font-minecraft text-white lowercase truncate text-3xl transition-transform duration-300 ease-out group-hover:scale-110">
             Add New Skin
           </p>
 
-          <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center">
+          <div className="h-64 flex relative pt-2 pb-2 flex-grow items-center justify-center transition-transform duration-300 ease-out group-hover:scale-105">
             <SkinViewer
               skinUrl="/skins/default_skin_full.png"
               width={130}
@@ -283,10 +285,10 @@ const AddSkinCard = memo(
             />
           </div>
 
-          <p className="text-white/60 font-minecraft lowercase text-2xl mt-auto">
+          <p className="text-white/60 font-minecraft lowercase text-2xl mt-auto transition-transform duration-300 ease-out group-hover:scale-110">
             Upload or import a skin
           </p>
-        </ThemedSurface>
+        </Card>
       </div>
     );
   },
@@ -423,10 +425,11 @@ const EditSkinModal = memo(
       <Modal
         title={`${skin ? "Edit Skin Properties" : "Add Skin"}`}
         onClose={cancel}
+        variant="flat"
         footer={
           <div className="flex gap-3 justify-center">
             <Button
-              variant="default"
+              variant="flat"
               onClick={finishEditingSkin}
               disabled={localSkinsLoading}
               size="sm"
@@ -434,7 +437,7 @@ const EditSkinModal = memo(
               {localSkinsLoading ? "Saving..." : "Save Changes"}
             </Button>
             <Button
-              variant="secondary"
+              variant="flat-secondary"
               onClick={cancel}
               disabled={localSkinsLoading}
               size="sm"
@@ -456,6 +459,7 @@ const EditSkinModal = memo(
                 placeholder="Enter skin name"
                 disabled={localSkinsLoading}
                 size="md"
+                variant="flat"
               />
             </div>
           )}
@@ -473,6 +477,7 @@ const EditSkinModal = memo(
                   placeholder="Copy by username, UUID or download from URL"
                   disabled={localSkinsLoading}
                   size="md"
+                  variant="flat"
                   className="flex-grow"
                 />
                 <IconButton
@@ -480,7 +485,7 @@ const EditSkinModal = memo(
                   title="Upload Skin from file"
                   disabled={localSkinsLoading}
                   size="md"
-                  variant="secondary"
+                  variant="flat-secondary"
                   icon={<Icon icon="solar:folder-bold" className="w-5 h-5" />}
                 />
               </div>
@@ -499,9 +504,8 @@ const EditSkinModal = memo(
                 onChange={() => setVariant("classic")}
                 disabled={localSkinsLoading}
                 label="Classic (Steve)"
-                variant="default"
                 size="md"
-                shadowDepth="short"
+                shadowDepth="none"
               />
               <RadioButton
                 name="editSkinVariant"
@@ -510,9 +514,8 @@ const EditSkinModal = memo(
                 onChange={() => setVariant("slim")}
                 disabled={localSkinsLoading}
                 label="Slim (Alex)"
-                variant="default"
                 size="md"
-                shadowDepth="short"
+                shadowDepth="none"
               />
             </div>
           </div>
@@ -791,26 +794,11 @@ export function SkinsTab() {
     return skin.id === currentSkinId;
   };
 
-  // Removed renderSkeletonGrid function
-  // const renderSkeletonGrid = () => {
-  //   return (
-  //     <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
-  //       {Array.from({ length: 6 }).map((_, index) => (
-  //         <SkeletonSkinCard
-  //           key={`skeleton-${index}`}
-  //           index={index}
-  //           skinVariant={index % 2 === 0 ? "classic" : "slim"}
-  //         />
-  //       ))}
-  //     </div>
-  //   );
-  // };
-
   // Add skin button for the TabLayout
   const addSkinButton = (
     <Button
       onClick={() => startEditSkin(null)}
-      variant="default"
+      variant="flat"
       size="md"
       className="h-[42px]"
       icon={<Icon icon="solar:add-circle-bold" className="w-5 h-5" />}
@@ -833,19 +821,11 @@ export function SkinsTab() {
       actions={addSkinButton}
     >
       <div className="space-y-8">
-        {accountLoading ? //     variant="text" //   <Skeleton // <div className="space-y-4"> // Skeletons for accountLoading removed
-        //     height={28}
-        //     width="50%"
-        //     className="mx-auto"
-        //   />
-        //   <Skeleton
-        //     variant="text"
-        //     height={20}
-        //     width="70%"
-        //     className="mx-auto"
-        //   />
-        // </div>
-        null : accountError ? ( // Or a minimal loading indicator like <p>Loading account...</p>
+        {accountLoading ? (
+          <p className="text-white/70 font-minecraft text-xl text-center py-4">
+            Loading account...
+          </p>
+        ) : accountError ? (
           <StatusMessage
             type="error"
             className="font-minecraft text-lg"
@@ -858,8 +838,11 @@ export function SkinsTab() {
         ) : (
           <>
             <div className="space-y-5 text-center">
-              {localSkinsLoading && !editingSkin ? null : localSkinsError && // renderSkeletonGrid() call removed
-                !editingSkin ? ( // Or a minimal loading indicator like <p>Loading skins...</p>
+              {localSkinsLoading && !editingSkin ? (
+                <p className="text-white/70 font-minecraft text-xl text-center py-4">
+                  Loading skins...
+                </p>
+              ) : localSkinsError && !editingSkin ? (
                 <StatusMessage
                   type="error"
                   className="font-minecraft text-lg"

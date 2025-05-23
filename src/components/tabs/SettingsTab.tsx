@@ -498,10 +498,7 @@ export function SettingsTab() {
       <Card variant="flat" className="p-6">
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <Icon
-              icon="solar:speedometer-medium-bold"
-              className="w-6 h-6 text-white"
-            />
+            <Icon icon="solar:star-fall-bold" className="w-6 h-6 text-white" />
             <h3 className="text-3xl font-minecraft text-white lowercase">
               Visual Quality
             </h3>
