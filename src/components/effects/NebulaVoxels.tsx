@@ -34,21 +34,34 @@ export function NebulaVoxels({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const { qualityLevel } = useQualitySettingsStore();
+  const visibleRef = useRef<boolean>(true);
+  const animationFrameIdRef = useRef<number>();
+  const lastFrameTimeRef = useRef<number>(0);
+  const cubesRef = useRef<Cube[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
 
-    let animationFrameId: number;
-    let cubes: Cube[] = [];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        visibleRef.current = entries[0].isIntersecting;
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(canvas);
 
     const qualityMultiplier =
-      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+      qualityLevel === "low" ? 0.3 : qualityLevel === "high" ? 0.8 : 0.5;
     const adjustedCubeCount = Math.floor(cubeCount * qualityMultiplier);
     const adjustedSpeed = speed * qualityMultiplier;
+    const targetFps =
+      qualityLevel === "low" ? 15 : qualityLevel === "high" ? 30 : 24;
+    const frameInterval = 1000 / targetFps;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -64,21 +77,23 @@ export function NebulaVoxels({
     const rgb = hexToRgb(accentColor.value);
 
     const resize = () => {
-      const { width, height } = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
       ctx.scale(dpr, dpr);
 
-      initCubes();
+      if (cubesRef.current.length === 0) {
+        initCubes();
+      }
     };
 
     const initCubes = () => {
       const { width, height } = canvas.getBoundingClientRect();
-      cubes = [];
+      cubesRef.current = [];
 
       for (let i = 0; i < adjustedCubeCount; i++) {
-        cubes.push({
+        cubesRef.current.push({
           x: Math.random() * width,
           y: Math.random() * height,
           z: Math.random() * 500 - 250,
@@ -95,11 +110,15 @@ export function NebulaVoxels({
     };
 
     const drawCube = (cube: Cube) => {
-      const { width, height } = canvas.getBoundingClientRect();
-      const centerX = width / 2;
-      const centerY = height / 2;
-
       const halfSize = cube.size / 2;
+
+      const cosX = Math.cos(cube.rotationX);
+      const sinX = Math.sin(cube.rotationX);
+      const cosY = Math.cos(cube.rotationY);
+      const sinY = Math.sin(cube.rotationY);
+      const cosZ = Math.cos(cube.rotationZ);
+      const sinZ = Math.sin(cube.rotationZ);
+
       const vertices = [
         { x: -halfSize, y: -halfSize, z: halfSize },
         { x: halfSize, y: -halfSize, z: halfSize },
@@ -112,20 +131,14 @@ export function NebulaVoxels({
       ];
 
       const rotatedVertices = vertices.map((v) => {
-        const y1 =
-          v.y * Math.cos(cube.rotationX) - v.z * Math.sin(cube.rotationX);
-        const z1 =
-          v.y * Math.sin(cube.rotationX) + v.z * Math.cos(cube.rotationX);
+        const y1 = v.y * cosX - v.z * sinX;
+        const z1 = v.y * sinX + v.z * cosX;
 
-        const x2 =
-          v.x * Math.cos(cube.rotationY) + z1 * Math.sin(cube.rotationY);
-        const z2 =
-          -v.x * Math.sin(cube.rotationY) + z1 * Math.cos(cube.rotationY);
+        const x2 = v.x * cosY + z1 * sinY;
+        const z2 = -v.x * sinY + z1 * cosY;
 
-        const x3 =
-          x2 * Math.cos(cube.rotationZ) - y1 * Math.sin(cube.rotationZ);
-        const y3 =
-          x2 * Math.sin(cube.rotationZ) + y1 * Math.cos(cube.rotationZ);
+        const x3 = x2 * cosZ - y1 * sinZ;
+        const y3 = x2 * sinZ + y1 * cosZ;
 
         const scale = 1000 / (1000 + cube.z);
         return {
@@ -173,7 +186,7 @@ export function NebulaVoxels({
     };
 
     const updateCubes = () => {
-      cubes.forEach((cube) => {
+      cubesRef.current.forEach((cube) => {
         cube.rotationX += cube.speedX;
         cube.rotationY += cube.speedY;
         cube.rotationZ += cube.speedZ;
@@ -184,30 +197,37 @@ export function NebulaVoxels({
       });
     };
 
-    const renderCubes = () => {
-      const { width, height } = canvas.getBoundingClientRect();
+    const renderCubes = (timestamp: number) => {
+      animationFrameIdRef.current = requestAnimationFrame(renderCubes);
 
+      if (!visibleRef.current) return;
+
+      const elapsed = timestamp - lastFrameTimeRef.current;
+      if (elapsed < frameInterval) return;
+
+      lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
+
+      const { width, height } = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, width, height);
 
       updateCubes();
 
-      const sortedCubes = [...cubes].sort((a, b) => a.z - b.z);
+      const sortedCubes = [...cubesRef.current].sort((a, b) => a.z - b.z);
 
-      sortedCubes.forEach((cube) => {
-        drawCube(cube);
-      });
-
-      animationFrameId = requestAnimationFrame(renderCubes);
+      sortedCubes.forEach(drawCube);
     };
 
     window.addEventListener("resize", resize);
     resize();
-    initCubes();
-    renderCubes();
+    animationFrameIdRef.current = requestAnimationFrame(renderCubes);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animationFrameId);
+
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+      }
     };
   }, [accentColor.value, cubeCount, opacity, speed, qualityLevel]);
 

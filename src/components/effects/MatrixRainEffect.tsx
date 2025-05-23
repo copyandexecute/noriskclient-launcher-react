@@ -22,7 +22,7 @@ export function MatrixRainEffect({
   const accentColor = useThemeStore((state) => state.accentColor);
   const staticBackground = useThemeStore((state) => state.staticBackground);
   const { qualityLevel } = useQualitySettingsStore();
-
+  const [isVisible, setIsVisible] = useState(true);
   const [isPausedByFocus, setIsPausedByFocus] = useState(false);
   const isAnimating = forceEnable || !staticBackground;
 
@@ -30,8 +30,17 @@ export function MatrixRainEffect({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { alpha: true });
     if (!context) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIsVisible(entries[0].isIntersecting);
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(canvas);
 
     const FONT_SIZE = 16;
     const CHARACTERS =
@@ -39,10 +48,12 @@ export function MatrixRainEffect({
     const charactersArray = CHARACTERS.split("");
     const RAINDROP_SPAWN_RATE = 0.99;
 
-    // Adjust based on quality level
     const qualityMultiplier =
-      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+      qualityLevel === "low" ? 0.3 : qualityLevel === "high" ? 0.8 : 0.5;
     const adjustedSpeed = speed * qualityMultiplier;
+    const targetFps =
+      qualityLevel === "low" ? 20 : qualityLevel === "high" ? 30 : 24;
+    const frameInterval = 1000 / targetFps;
 
     let columns: number;
     let drops: {
@@ -56,23 +67,24 @@ export function MatrixRainEffect({
       pulseFactor: number;
     }[];
     let time = 0;
+    let lastFrameTime = 0;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
       return result
         ? {
-          r: Number.parseInt(result[1], 16),
-          g: Number.parseInt(result[2], 16),
-          b: Number.parseInt(result[3], 16),
-        }
+            r: Number.parseInt(result[1], 16),
+            g: Number.parseInt(result[2], 16),
+            b: Number.parseInt(result[3], 16),
+          }
         : { r: 0, g: 0, b: 0 };
     };
 
     const resize = () => {
-      const { width, height } = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
       context.scale(dpr, dpr);
 
       columns = Math.floor(canvas.width / FONT_SIZE);
@@ -80,7 +92,9 @@ export function MatrixRainEffect({
         .fill(null)
         .map((_, i) => ({
           x: i * FONT_SIZE,
-          y: staticBackground ? (Math.random() * canvas.height) : (Math.random() * -100),
+          y: staticBackground
+            ? Math.random() * canvas.height
+            : Math.random() * -100,
           trail: Math.floor(
             Math.random() * ((canvas.height / FONT_SIZE) * 0.8) + 5,
           ),
@@ -97,25 +111,36 @@ export function MatrixRainEffect({
     context.font = `${FONT_SIZE}px monospace`;
 
     const handleBlur = () => {
-      console.log("Blur event triggered");
       if (isAnimating) {
         setIsPausedByFocus(true);
       }
     };
+
     const handleFocus = () => {
-      console.log("Focus event triggered");
       if (isAnimating) {
         setIsPausedByFocus(false);
       }
     };
 
-    // Always register listeners
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
 
     let animationFrameId: number;
 
-    const draw = () => {
+    const draw = (timestamp: number) => {
+      if (!isVisible || isPausedByFocus) {
+        animationFrameId = window.requestAnimationFrame(draw);
+        return;
+      }
+
+      const elapsed = timestamp - lastFrameTime;
+      if (elapsed < frameInterval) {
+        animationFrameId = window.requestAnimationFrame(draw);
+        return;
+      }
+
+      lastFrameTime = timestamp - (elapsed % frameInterval);
+
       const rgb = hexToRgb(accentColor.value);
 
       context.clearRect(0, 0, canvas.width, canvas.height);
@@ -124,7 +149,6 @@ export function MatrixRainEffect({
       const cols = Math.ceil(canvas.width / gridSize) + 1;
       const rows = Math.ceil(canvas.height / gridSize) + 1;
 
-      // Draw subtle grid lines
       for (let y = 0; y < rows; y++) {
         const posY = y * gridSize;
         const lineOpacity =
@@ -151,24 +175,20 @@ export function MatrixRainEffect({
         context.stroke();
       }
 
-      // Draw matrix characters
       for (let i = 0; i < drops.length; i++) {
         const drop = drops[i];
 
-        // Update pulse
         drop.pulse += drop.pulseFactor;
         if (drop.pulse > 1) drop.pulse = 0;
 
         const pulseBrightness = 0.5 + 0.5 * Math.sin(Math.PI * 2 * drop.pulse);
         const colorAlpha = drop.brightness * pulseBrightness * opacity * 2;
 
-        // Draw head character with brighter color
         const headChar =
           charactersArray[Math.floor(Math.random() * charactersArray.length)];
         context.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${Math.min(1, colorAlpha * 3)})`;
         context.fillText(headChar, drop.x, drop.y);
 
-        // Draw trail characters with fading opacity
         for (let j = 1; j < drop.trail; j++) {
           if (drop.y - j * FONT_SIZE < 0) continue;
 
@@ -180,14 +200,14 @@ export function MatrixRainEffect({
           context.fillText(trailChar, drop.x, drop.y - j * FONT_SIZE);
         }
 
-        // Move drop
         drop.y += drop.speed;
 
-        // Reset drop when it reaches bottom
         if (drop.y > canvas.height && Math.random() > RAINDROP_SPAWN_RATE) {
           drops[i] = {
             x: i * FONT_SIZE,
-            y: staticBackground ? (Math.random() * canvas.height) : (Math.random() * -100),
+            y: staticBackground
+              ? Math.random() * canvas.height
+              : Math.random() * -100,
             trail: Math.floor(
               Math.random() * ((canvas.height / FONT_SIZE) * 0.8) + 5,
             ),
@@ -201,43 +221,30 @@ export function MatrixRainEffect({
       }
 
       time += 1;
-      // Only request next frame if animating and not paused by focus
-      if (isAnimating && !isPausedByFocus) {
-        animationFrameId = window.requestAnimationFrame(draw);
-      }
+      animationFrameId = window.requestAnimationFrame(draw);
     };
 
     // Initial draw call
-    draw();
-
-    // If static, we don't need the animation loop, just handle resize.
-    // The resize listener itself will call draw() once after resizing.
-    const resizeAndDrawOnce = () => {
-      resize(); // Recalculate dimensions and drops
-      draw(); // Draw a single frame
-    };
-
-    // Adjust event listener based on animation state
-    if (!isAnimating) { // If static (which is !isAnimating and not forced)
-      window.addEventListener("resize", resizeAndDrawOnce);
-    } else {
-      window.addEventListener("resize", resize);
-    }
+    animationFrameId = window.requestAnimationFrame(draw);
 
     return () => {
-      if (!isAnimating) {
-        window.removeEventListener("resize", resizeAndDrawOnce);
-      } else {
-        window.removeEventListener("resize", resize);
-      }
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
       window.cancelAnimationFrame(animationFrameId);
-      // Always remove listeners
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [opacity, speed, accentColor.value, qualityLevel, isAnimating, staticBackground, isPausedByFocus]);
+  }, [
+    opacity,
+    speed,
+    accentColor.value,
+    qualityLevel,
+    isAnimating,
+    staticBackground,
+    isPausedByFocus,
+    isVisible,
+  ]);
 
-  // The canvas is always rendered; its content is either static or animated by useEffect.
   return (
     <canvas
       ref={canvasRef}

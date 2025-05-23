@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
 
@@ -20,19 +20,30 @@ export function NebulaGrid({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const { qualityLevel } = useQualitySettingsStore();
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIsVisible(entries[0].isIntersecting);
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(canvas);
 
     let animationFrameId: number;
     let time = 0;
+    let lastFrameTime = 0;
 
     const qualityMultiplier =
-      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+      qualityLevel === "low" ? 0.3 : qualityLevel === "high" ? 0.8 : 0.5;
     const adjustedSpeed = speed * qualityMultiplier;
     const adjustedGridSize =
       qualityLevel === "low"
@@ -40,6 +51,9 @@ export function NebulaGrid({
         : qualityLevel === "high"
           ? gridSize * 0.7
           : gridSize;
+    const targetFps =
+      qualityLevel === "low" ? 20 : qualityLevel === "high" ? 30 : 24;
+    const frameInterval = 1000 / targetFps;
 
     const hexToRgb = (hex: string) => {
       const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -55,14 +69,27 @@ export function NebulaGrid({
     const rgb = hexToRgb(accentColor.value);
 
     const resize = () => {
-      const { width, height } = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
       ctx.scale(dpr, dpr);
     };
 
-    const renderGrid = () => {
+    const renderGrid = (timestamp: number) => {
+      if (!isVisible) {
+        animationFrameId = requestAnimationFrame(renderGrid);
+        return;
+      }
+
+      const elapsed = timestamp - lastFrameTime;
+      if (elapsed < frameInterval) {
+        animationFrameId = requestAnimationFrame(renderGrid);
+        return;
+      }
+
+      lastFrameTime = timestamp - (elapsed % frameInterval);
+
       const { width, height } = canvas.getBoundingClientRect();
 
       ctx.clearRect(0, 0, width, height);
@@ -76,13 +103,12 @@ export function NebulaGrid({
 
       for (let y = 0; y < rows; y++) {
         const posY = y * cellSize - offsetY;
+        const lineOpacity =
+          opacity * (0.3 + 0.7 * Math.sin(y * 0.1 + time * 0.001));
 
         ctx.beginPath();
         ctx.moveTo(0, posY);
         ctx.lineTo(width, posY);
-
-        const lineOpacity =
-          opacity * (0.3 + 0.7 * Math.sin(y * 0.1 + time * 0.001));
         ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineOpacity})`;
         ctx.lineWidth = 1;
         ctx.stroke();
@@ -90,23 +116,21 @@ export function NebulaGrid({
 
       for (let x = 0; x < cols; x++) {
         const posX = x * cellSize - offsetX;
+        const lineOpacity =
+          opacity * (0.3 + 0.7 * Math.sin(x * 0.1 + time * 0.001));
 
         ctx.beginPath();
         ctx.moveTo(posX, 0);
         ctx.lineTo(posX, height);
-
-        const lineOpacity =
-          opacity * (0.3 + 0.7 * Math.sin(x * 0.1 + time * 0.001));
         ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineOpacity})`;
         ctx.lineWidth = 1;
         ctx.stroke();
       }
 
-      for (let x = 0; x < cols; x++) {
-        for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x += 2) {
+        for (let y = 0; y < rows; y += 2) {
           const posX = x * cellSize - offsetX;
           const posY = y * cellSize - offsetY;
-
           const pulse =
             0.5 +
             0.5 * Math.sin(x * 0.5 + y * 0.5 + time * 0.003 * adjustedSpeed);
@@ -121,19 +145,19 @@ export function NebulaGrid({
       }
 
       time += 1;
-
       animationFrameId = requestAnimationFrame(renderGrid);
     };
 
     window.addEventListener("resize", resize);
     resize();
-    renderGrid();
+    animationFrameId = requestAnimationFrame(renderGrid);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, opacity, speed, gridSize, qualityLevel]);
+  }, [accentColor.value, opacity, speed, gridSize, qualityLevel, isVisible]);
 
   return (
     <canvas

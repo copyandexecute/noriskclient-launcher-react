@@ -24,7 +24,7 @@ export function NebulaLiquidChrome({
   const { qualityLevel } = useQualitySettingsStore();
 
   const qualityMultiplier =
-    qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+    qualityLevel === "low" ? 0.3 : qualityLevel === "high" ? 0.8 : 0.5;
   const adjustedSpeed = speed * qualityMultiplier;
   const adjustedAmplitude = amplitude * qualityMultiplier;
 

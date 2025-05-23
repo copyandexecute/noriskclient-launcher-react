@@ -1,10 +1,8 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mesh, Program, Renderer, Triangle } from "ogl";
-
-import "./LiquidChrome.css";
 
 interface LiquidChromeProps extends React.HTMLAttributes<HTMLDivElement> {
   baseColor?: [number, number, number];
@@ -25,14 +23,33 @@ export function LiquidChrome({
   ...props
 }: LiquidChromeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const rendererRef = useRef<Renderer | null>(null);
+  const animationIdRef = useRef<number>(0);
+  const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const container = containerRef.current;
-    const renderer = new Renderer({ antialias: true });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIsVisible(entries[0].isIntersecting);
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(container);
+
+    const renderer = new Renderer({
+      antialias: false,
+      powerPreference: "low-power",
+      alpha: true,
+    });
+    rendererRef.current = renderer;
+
     const gl = renderer.gl;
-    gl.clearColor(1, 1, 1, 1);
+    gl.clearColor(1, 1, 1, 0);
 
     const vertexShader = `
       attribute vec2 position;
@@ -45,7 +62,7 @@ export function LiquidChrome({
     `;
 
     const fragmentShader = `
-      precision highp float;
+      precision mediump float;
       uniform float uTime;
       uniform vec3 uResolution;
       uniform vec3 uBaseColor;
@@ -55,43 +72,28 @@ export function LiquidChrome({
       uniform vec2 uMouse;
       varying vec2 vUv;
 
-      // Render function for a given uv coordinate.
       vec4 renderImage(vec2 uvCoord) {
-          // Convert uvCoord (in [0,1]) to a fragment coordinate.
           vec2 fragCoord = uvCoord * uResolution.xy;
-          // Map fragCoord to a normalized space.
           vec2 uv = (2.0 * fragCoord - uResolution.xy) / min(uResolution.x, uResolution.y);
 
-          // Iterative cosine-based distortions.
-          for (float i = 1.0; i < 10.0; i++){
+          for (float i = 1.0; i < 6.0; i++){
               uv.x += uAmplitude / i * cos(i * uFrequencyX * uv.y + uTime + uMouse.x * 3.14159);
               uv.y += uAmplitude / i * cos(i * uFrequencyY * uv.x + uTime + uMouse.y * 3.14159);
           }
 
-          // Add a liquid ripple effect based on the mouse position.
           vec2 diff = (uvCoord - uMouse);
           float dist = length(diff);
           float falloff = exp(-dist * 20.0);
           float ripple = sin(10.0 * dist - uTime * 2.0) * 0.03;
           uv += (diff / (dist + 0.0001)) * ripple * falloff;
 
-          // Original vibrant color computation.
           vec3 color = uBaseColor / abs(sin(uTime - uv.y - uv.x));
           return vec4(color, 1.0);
       }
 
       void main() {
-          // 3x3 supersampling for anti-aliasing.
-          vec4 col = vec4(0.0);
-          int samples = 0;
-          for (int i = -1; i <= 1; i++){
-              for (int j = -1; j <= 1; j++){
-                  vec2 offset = vec2(float(i), float(j)) * (1.0 / min(uResolution.x, uResolution.y));
-                  col += renderImage(vUv + offset);
-                  samples++;
-              }
-          }
-          gl_FragColor = col / float(samples);
+          vec4 col = renderImage(vUv);
+          gl_FragColor = col;
       }
     `;
 
@@ -112,26 +114,26 @@ export function LiquidChrome({
         uAmplitude: { value: amplitude },
         uFrequencyX: { value: frequencyX },
         uFrequencyY: { value: frequencyY },
-        uMouse: { value: new Float32Array([0, 0]) },
+        uMouse: { value: new Float32Array([0.5, 0.5]) },
       },
     });
     const mesh = new Mesh(gl, { geometry, program });
 
     function resize() {
-      const scale = 1;
-      renderer.setSize(
-        container.offsetWidth * scale,
-        container.offsetHeight * scale,
-      );
+      const rect = container.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      renderer.setSize(rect.width, rect.height);
       const resUniform = program.uniforms.uResolution.value as Float32Array;
       resUniform[0] = gl.canvas.width;
       resUniform[1] = gl.canvas.height;
       resUniform[2] = gl.canvas.width / gl.canvas.height;
     }
+
     window.addEventListener("resize", resize);
     resize();
 
     function handleMouseMove(event: MouseEvent) {
+      if (!interactive) return;
       const rect = container.getBoundingClientRect();
       const x = (event.clientX - rect.left) / rect.width;
       const y = 1 - (event.clientY - rect.top) / rect.height;
@@ -141,47 +143,95 @@ export function LiquidChrome({
     }
 
     function handleTouchMove(event: TouchEvent) {
-      if (event.touches.length > 0) {
-        const touch = event.touches[0];
-        const rect = container.getBoundingClientRect();
-        const x = (touch.clientX - rect.left) / rect.width;
-        const y = 1 - (touch.clientY - rect.top) / rect.height;
-        const mouseUniform = program.uniforms.uMouse.value as Float32Array;
-        mouseUniform[0] = x;
-        mouseUniform[1] = y;
-      }
+      if (!interactive || event.touches.length === 0) return;
+      const touch = event.touches[0];
+      const rect = container.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) / rect.width;
+      const y = 1 - (touch.clientY - rect.top) / rect.height;
+      const mouseUniform = program.uniforms.uMouse.value as Float32Array;
+      mouseUniform[0] = x;
+      mouseUniform[1] = y;
     }
 
     if (interactive) {
-      container.addEventListener("mousemove", handleMouseMove);
-      container.addEventListener("touchmove", handleTouchMove);
+      container.addEventListener("mousemove", handleMouseMove, {
+        passive: true,
+      });
+      container.addEventListener("touchmove", handleTouchMove, {
+        passive: true,
+      });
     }
 
-    let animationId: number;
+    let lastFrameTime = 0;
+    const targetFps = 30;
+    const frameInterval = 1000 / targetFps;
+
     function update(t: number) {
-      animationId = requestAnimationFrame(update);
+      if (!isVisible) {
+        animationIdRef.current = requestAnimationFrame(update);
+        return;
+      }
+
+      const elapsed = t - lastFrameTime;
+      if (elapsed < frameInterval) {
+        animationIdRef.current = requestAnimationFrame(update);
+        return;
+      }
+
+      lastFrameTime = t - (elapsed % frameInterval);
+
       program.uniforms.uTime.value = t * 0.001 * speed;
       renderer.render({ scene: mesh });
+
+      animationIdRef.current = requestAnimationFrame(update);
     }
-    animationId = requestAnimationFrame(update);
+
+    animationIdRef.current = requestAnimationFrame(update);
 
     container.appendChild(gl.canvas);
+    gl.canvas.style.position = "absolute";
+    gl.canvas.style.top = "0";
+    gl.canvas.style.left = "0";
+    gl.canvas.style.width = "100%";
+    gl.canvas.style.height = "100%";
 
     return () => {
-      cancelAnimationFrame(animationId);
+      observer.disconnect();
+      cancelAnimationFrame(animationIdRef.current);
       window.removeEventListener("resize", resize);
+
       if (interactive) {
         container.removeEventListener("mousemove", handleMouseMove);
         container.removeEventListener("touchmove", handleTouchMove);
       }
+
       if (gl.canvas.parentElement) {
         gl.canvas.parentElement.removeChild(gl.canvas);
       }
+
       gl.getExtension("WEBGL_lose_context")?.loseContext();
+      rendererRef.current = null;
     };
-  }, [baseColor, speed, amplitude, frequencyX, frequencyY, interactive]);
+  }, [
+    baseColor,
+    speed,
+    amplitude,
+    frequencyX,
+    frequencyY,
+    interactive,
+    isVisible,
+  ]);
 
   return (
-    <div ref={containerRef} className="liquidChrome-container" {...props} />
+    <div
+      ref={containerRef}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+      }}
+      {...props}
+    />
   );
 }

@@ -42,9 +42,9 @@ export function EnchantmentParticlesEffect({
     y: null,
   });
   const animationFrameRef = useRef<number>();
+  const lastFrameTimeRef = useRef<number>(0);
   const { qualityLevel } = useQualitySettingsStore();
-
-  // This is the key line - we need to respect forceEnable
+  const visibleRef = useRef<boolean>(true);
   const shouldRender = forceEnable || isBackgroundAnimationEnabled;
 
   const hexToRgba = (hex: string, alpha: number) => {
@@ -63,11 +63,13 @@ export function EnchantmentParticlesEffect({
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    // Adjust based on quality level
     const qualityMultiplier =
-      qualityLevel === "low" ? 0.5 : qualityLevel === "high" ? 1.5 : 1;
+      qualityLevel === "low" ? 0.3 : qualityLevel === "high" ? 0.8 : 0.5;
     const adjustedParticleCount = Math.floor(particleCount * qualityMultiplier);
     const adjustedSpeed = speed * qualityMultiplier;
+    const targetFps =
+      qualityLevel === "low" ? 24 : qualityLevel === "high" ? 40 : 30;
+    const frameInterval = 1000 / targetFps;
 
     const enchantmentChars = [
       "⍑",
@@ -93,15 +95,29 @@ export function EnchantmentParticlesEffect({
       "⍡",
       "⊬",
       "⋮",
-      "⋮",
       "⟊",
       "⟋",
     ];
 
+    const observer = new IntersectionObserver(
+      (entries) => {
+        visibleRef.current = entries[0].isIntersecting;
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(canvas);
+
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      initParticles();
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      context.scale(dpr, dpr);
+
+      if (particlesRef.current.length === 0) {
+        initParticles();
+      }
     };
 
     const initParticles = () => {
@@ -156,9 +172,17 @@ export function EnchantmentParticlesEffect({
       mouseRef.current = { x: null, y: null };
     };
 
-    const animate = () => {
-      context.clearRect(0, 0, canvas.width, canvas.height);
+    const animate = (timestamp: number) => {
+      animationFrameRef.current = requestAnimationFrame(animate);
 
+      if (!visibleRef.current) return;
+
+      const elapsed = timestamp - lastFrameTimeRef.current;
+      if (elapsed < frameInterval) return;
+
+      lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
+
+      context.clearRect(0, 0, canvas.width, canvas.height);
       context.fillStyle = `rgba(0, 0, 0, ${opacity / 2})`;
       context.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -174,12 +198,9 @@ export function EnchantmentParticlesEffect({
 
         particle.x += particle.vx;
         particle.y += particle.vy;
-
         particle.x += Math.sin(particle.life * 0.05) * 0.2 * adjustedSpeed;
-
         particle.vy *= 0.99;
 
-        context.save();
         context.font = `${particle.size}px "Times New Roman", serif`;
         context.fillStyle = hexToRgba(
           accentColor.value,
@@ -188,7 +209,6 @@ export function EnchantmentParticlesEffect({
         context.textAlign = "center";
         context.textBaseline = "middle";
         context.fillText(particle.character, particle.x, particle.y);
-        context.restore();
 
         return particle.life < particle.maxLife;
       });
@@ -199,8 +219,6 @@ export function EnchantmentParticlesEffect({
           Math.random() * canvas.height,
         );
       }
-
-      animationFrameRef.current = requestAnimationFrame(animate);
     };
 
     resizeCanvas();
@@ -208,9 +226,10 @@ export function EnchantmentParticlesEffect({
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("mouseleave", handleMouseLeave);
 
-    animate();
+    animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", resizeCanvas);
       canvas.removeEventListener("mousemove", handleMouseMove);
       canvas.removeEventListener("mouseleave", handleMouseLeave);
