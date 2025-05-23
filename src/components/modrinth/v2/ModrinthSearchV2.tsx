@@ -66,6 +66,7 @@ export interface ModrinthSearchV2Props {
   initialSidebarVisible?: boolean; // New prop for initial sidebar visibility
   overrideDisplayContext?: "detail" | "standalone"; // New prop
   initialProjectType?: ModrinthProjectType; // Added new prop
+  allowedProjectTypes?: ModrinthProjectType[]; // New prop for allowed project types
 }
 
 const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'];
@@ -87,10 +88,17 @@ export function ModrinthSearchV2({
   initialSidebarVisible = true, // Default to true if not provided
   overrideDisplayContext, // Destructure new prop
   initialProjectType, // Added new prop
+  allowedProjectTypes, // Destructure new prop
 }: ModrinthSearchV2Props) {
   const searchResultsAreaRef = useRef<HTMLDivElement>(null); // Ref for the scrollable area
   const [searchTerm, setSearchTerm] = useState('');
-  const [projectType, setProjectType] = useState<ModrinthProjectType>(initialProjectType || 'mod');
+  const [projectType, setProjectType] = useState<ModrinthProjectType>(() => {
+    const effectiveAllowedTypes = allowedProjectTypes || ALL_MODRINTH_PROJECT_TYPES;
+    if (initialProjectType && effectiveAllowedTypes.includes(initialProjectType)) {
+      return initialProjectType;
+    }
+    return effectiveAllowedTypes[0] || 'mod'; // Default to first allowed type or 'mod'
+  });
   const [searchResults, setSearchResults] = useState<ModrinthSearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,8 +122,8 @@ export function ModrinthSearchV2({
   const [allLoadersData, setAllLoadersData] = useState<ModrinthLoader[]>([]);
 
   const initialCategoriesState = useMemo(() => 
-    ALL_MODRINTH_PROJECT_TYPES.reduce((acc, pt) => ({ ...acc, [pt]: [] }), {} as Record<ModrinthProjectType, string[]>)
-  , []);
+    (allowedProjectTypes || ALL_MODRINTH_PROJECT_TYPES).reduce((acc, pt) => ({ ...acc, [pt]: [] }), {} as Record<ModrinthProjectType, string[]>)
+  , [allowedProjectTypes]);
   const [selectedCategoriesByProjectType, setSelectedCategoriesByProjectType] = useState(initialCategoriesState);
   
   const [selectedLoadersByProjectType, setSelectedLoadersByProjectType] = useState(initialCategoriesState);
@@ -361,7 +369,8 @@ export function ModrinthSearchV2({
       const newGlobalSelections = { ...prevGlobalSelections, [projectType]: updatedSelectionsForCurrentType };
 
       // Synchronize with other project types
-      for (const otherPT of ALL_MODRINTH_PROJECT_TYPES) {
+      const effectiveAllowedTypes = allowedProjectTypes || ALL_MODRINTH_PROJECT_TYPES;
+      for (const otherPT of effectiveAllowedTypes) {
         if (otherPT === projectType) continue; // Skip the currently active type
 
         const selectionsForOtherPT = newGlobalSelections[otherPT] || [];
@@ -409,7 +418,8 @@ export function ModrinthSearchV2({
       const newGlobalSelections = { ...prevGlobalSelections, [projectType]: updatedSelectionsForCurrentType };
 
       // Synchronize with other project types
-      for (const otherPT of ALL_MODRINTH_PROJECT_TYPES) {
+      const effectiveAllowedTypes = allowedProjectTypes || ALL_MODRINTH_PROJECT_TYPES;
+      for (const otherPT of effectiveAllowedTypes) {
         if (otherPT === projectType) continue; // Skip the currently active type
 
         const selectionsForOtherPT = newGlobalSelections[otherPT] || [];
@@ -2178,7 +2188,7 @@ export function ModrinthSearchV2({
           onSearchTermChange={setSearchTerm}
           projectType={projectType}
           onProjectTypeChange={handleProjectTypeChange}
-          allProjectTypes={ALL_MODRINTH_PROJECT_TYPES} // Pass the constant
+          allProjectTypes={allowedProjectTypes || ALL_MODRINTH_PROJECT_TYPES} // Use filtered list
           profiles={internalProfiles}
           selectedProfile={selectedProfile}
           onSelectedProfileChange={(profile) => {

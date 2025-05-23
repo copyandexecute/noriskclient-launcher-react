@@ -152,6 +152,7 @@ export function BrowseTab({
           profiles={[currentProfile]}
           selectedProfileId={currentProfile.id}
           initialProjectType={getProjectType() as ModrinthProjectType}
+          allowedProjectTypes={["mod", "resourcepack", "shader", "datapack"]}
           className="h-full"
           initialSidebarVisible={false}
           overrideDisplayContext="detail"
