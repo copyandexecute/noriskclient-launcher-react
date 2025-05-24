@@ -65,16 +65,21 @@ export function ProfileDetailView({
   // Memoized callback for getDisplayFileName
   const getGenericDisplayFileName = useCallback((item: LocalContentItem) => item.filename, []);
 
+  // Effect to synchronize the internal currentProfile state with the profile prop.
+  // This ensures that any updates to the profile data (e.g., name change) are reflected in the view.
   useEffect(() => {
-    // This effect ensures that if the profile prop changes (e.g., after cloning and navigating),
-    // the internal currentProfile state is updated, and relevant view states are reset.
     setCurrentProfile(profile);
+  }, [profile]);
+
+  // Effect to reset view states (active tabs, scroll position) when the profile ID changes.
+  // This typically happens when navigating to a completely different profile, or after cloning.
+  useEffect(() => {
     setActiveMainTab("content"); // Reset to default tab
     setActiveContentType("modsv2"); // Reset to default sub-tab
     if (contentRef.current) {
       contentRef.current.scrollTop = 0; // Scroll to top for new profile
     }
-  }, [profile]); // Depend on the entire profile object or profile.id if more stable
+  }, [profile.id]); // Depend on profile.id
 
   useEffect(() => {
     if (containerRef.current && isBackgroundAnimationEnabled) {
