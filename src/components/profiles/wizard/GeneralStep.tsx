@@ -7,7 +7,6 @@ import type { Profile } from "../../../types/profile";
 import { invoke } from "@tauri-apps/api/core";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { Input } from "../../ui/Input";
-import { TextArea } from "../../ui/TextArea";
 import { Select } from "../../ui/Select";
 import { RangeSlider } from "../../ui/RangeSlider";
 import { Card } from "../../ui/Card";
@@ -39,12 +38,18 @@ export function GeneralStep({
     profile.settings?.memory?.max || 4096,
   );
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const detailsCardRef = useRef<HTMLDivElement>(null);
   const settingsCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Animate cards on mount
-    if (detailsCardRef.current && settingsCardRef.current) {
+    if (
+      isBackgroundAnimationEnabled &&
+      detailsCardRef.current &&
+      settingsCardRef.current
+    ) {
       gsap.fromTo(
         [detailsCardRef.current, settingsCardRef.current],
         { opacity: 0, y: 20 },
@@ -75,7 +80,7 @@ export function GeneralStep({
     };
 
     loadNoriskPacks();
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const name = e.target.value;
@@ -119,7 +124,11 @@ export function GeneralStep({
         </p>
       </div>
 
-      <Card ref={detailsCardRef} variant="default" className="p-6 space-y-6">
+      <Card
+        ref={detailsCardRef}
+        variant="flat"
+        className="p-6 space-y-6 bg-black/20 border border-white/10"
+      >
         <div>
           <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
             profile name <span className="text-red-400">*</span>
@@ -130,19 +139,6 @@ export function GeneralStep({
             placeholder="My Awesome Profile"
             error={nameError}
             icon={<Icon icon="solar:user-bold" className="w-5 h-5" />}
-          />
-        </div>
-
-        <div>
-          <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
-            description
-          </label>
-          <TextArea
-            value={profile.description || ""}
-            onChange={(e) =>
-              updateProfile({ description: e.target.value || null })
-            }
-            placeholder="A brief description of your profile"
           />
         </div>
 
@@ -159,7 +155,11 @@ export function GeneralStep({
         </div>
       </Card>
 
-      <Card ref={settingsCardRef} variant="default" className="p-6 space-y-6">
+      <Card
+        ref={settingsCardRef}
+        variant="flat"
+        className="p-6 space-y-6 bg-black/20 border border-white/10"
+      >
         <div>
           <label className="block text-2xl font-minecraft text-white mb-2 lowercase">
             maximum ram: {memoryMaxMb} mb ({(memoryMaxMb / 1024).toFixed(1)} gb)
@@ -184,7 +184,8 @@ export function GeneralStep({
 
             return (
               <p className="text-xs text-white/60 mt-3 font-minecraft-ten tracking-wide">
-                Recommended: {recommendedDisplayRam} MB ({(recommendedDisplayRam / 1024).toFixed(1)} GB)
+                Recommended: {recommendedDisplayRam} MB (
+                {(recommendedDisplayRam / 1024).toFixed(1)} GB)
               </p>
             );
           })()}
@@ -220,7 +221,10 @@ export function GeneralStep({
               />
               {profile.selected_norisk_pack_id &&
                 noriskPacks[profile.selected_norisk_pack_id] && (
-                  <Card variant="flat" className="mt-4 p-4">
+                  <Card
+                    variant="flat"
+                    className="mt-4 p-4 bg-black/20 border border-white/10"
+                  >
                     <p className="text-xs text-white/80 font-minecraft-ten tracking-wide">
                       {noriskPacks[profile.selected_norisk_pack_id].description}
                     </p>

@@ -32,6 +32,9 @@ interface ProfileWizardProps {
 export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
   const { createProfile } = useProfileStore();
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const [step, setStep] = useState(1);
   const [profile, setProfile] = useState<Partial<Profile>>({
     name: "",
@@ -42,7 +45,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
     group: null,
     settings: {
       memory: { min: 1024, max: 4096 },
-      resolution: { width: 854, height: 480  },
+      resolution: { width: 854, height: 480 },
       fullscreen: false,
       custom_jvm_args: null,
       java_path: null,
@@ -120,14 +123,14 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
   }, []);
 
   useEffect(() => {
-    if (contentRef.current) {
+    if (isBackgroundAnimationEnabled && contentRef.current) {
       gsap.fromTo(
         contentRef.current,
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
       );
     }
-  }, [step]);
+  }, [step, isBackgroundAnimationEnabled]);
 
   const updateProfile = (updates: Partial<Profile>) => {
     setProfile((prev) => ({ ...prev, ...updates }));
@@ -135,7 +138,17 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
 
   const handleNext = () => {
     if (step < totalSteps) {
-      setStep(step + 1);
+      if (isBackgroundAnimationEnabled && contentRef.current) {
+        gsap.to(contentRef.current, {
+          opacity: 0,
+          y: 20,
+          duration: 0.2,
+          ease: "power2.in",
+          onComplete: () => setStep(step + 1),
+        });
+      } else {
+        setStep(step + 1);
+      }
     } else {
       handleCreate();
     }
@@ -143,13 +156,33 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
 
   const handleBack = () => {
     if (step > 1) {
-      setStep(step - 1);
+      if (isBackgroundAnimationEnabled && contentRef.current) {
+        gsap.to(contentRef.current, {
+          opacity: 0,
+          y: 20,
+          duration: 0.2,
+          ease: "power2.in",
+          onComplete: () => setStep(step - 1),
+        });
+      } else {
+        setStep(step - 1);
+      }
     }
   };
 
   const handleStepClick = (stepNumber: number) => {
     if (stepNumber <= step || isStepValid(step)) {
-      setStep(stepNumber);
+      if (isBackgroundAnimationEnabled && contentRef.current) {
+        gsap.to(contentRef.current, {
+          opacity: 0,
+          y: 20,
+          duration: 0.2,
+          ease: "power2.in",
+          onComplete: () => setStep(stepNumber),
+        });
+      } else {
+        setStep(stepNumber);
+      }
     }
   };
 
@@ -234,8 +267,8 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
     if (loading) {
       return (
         <Card
-          variant="default"
-          className="flex flex-col items-center justify-center h-full p-8"
+          variant="flat"
+          className="flex flex-col items-center justify-center h-full p-8 bg-black/20 border border-white/10"
         >
           <div className="w-16 h-16 mb-4">
             <Icon
@@ -307,6 +340,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
             disabled={creating || loading}
             icon={<Icon icon="solar:arrow-left-bold" className="w-5 h-5" />}
             size="md"
+            className="text-2xl"
           >
             back
           </Button>
@@ -318,6 +352,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
           onClick={onClose}
           disabled={creating || loading}
           size="md"
+          className="text-2xl"
         >
           cancel
         </Button>
@@ -326,7 +361,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
           onClick={handleNext}
           disabled={creating || loading || !canProceed()}
           size="md"
-          className="min-w-[180px]"
+          className="min-w-[180px] text-2xl"
           icon={
             step < totalSteps ? (
               <Icon icon="solar:arrow-right-bold" className="w-5 h-5" />
@@ -359,7 +394,7 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
       width="xl"
       footer={renderFooter()}
     >
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 h-[500px] overflow-hidden">
         <WizardSidebar
           currentStep={step}
           totalSteps={totalSteps}
@@ -372,7 +407,6 @@ export function ProfileWizard({ onClose, onSave }: ProfileWizardProps) {
         <div
           ref={contentRef}
           className="flex-1 p-6 overflow-y-auto custom-scrollbar"
-          style={{ backgroundColor: `${accentColor.value}10` }}
         >
           {renderStepContent()}
         </div>

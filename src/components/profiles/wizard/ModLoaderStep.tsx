@@ -9,6 +9,7 @@ import { Select } from "../../ui/Select";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
 import { cn } from "../../../lib/utils";
+import { Button } from "../../ui/buttons/Button";
 
 interface ModLoaderStepProps {
   profile: Partial<Profile>;
@@ -36,12 +37,15 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
     neoforge: false,
   });
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const loaderCardRef = useRef<HTMLDivElement>(null);
   const versionCardRef = useRef<HTMLDivElement>(null);
   const summaryCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (loaderCardRef.current) {
+    if (isBackgroundAnimationEnabled && loaderCardRef.current) {
       gsap.fromTo(
         loaderCardRef.current,
         { opacity: 0, y: 20 },
@@ -53,39 +57,41 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
         },
       );
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   useEffect(() => {
-    if (profile.loader !== "vanilla" && versionCardRef.current) {
-      gsap.fromTo(
-        versionCardRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
+    if (isBackgroundAnimationEnabled) {
+      if (profile.loader !== "vanilla" && versionCardRef.current) {
+        gsap.fromTo(
+          versionCardRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
+      }
 
-    if (
-      profile.loader !== "vanilla" &&
-      profile.loader_version &&
-      summaryCardRef.current
-    ) {
-      gsap.fromTo(
-        summaryCardRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
+      if (
+        profile.loader !== "vanilla" &&
+        profile.loader_version &&
+        summaryCardRef.current
+      ) {
+        gsap.fromTo(
+          summaryCardRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
+      }
     }
-  }, [profile.loader, profile.loader_version]);
+  }, [profile.loader, profile.loader_version, isBackgroundAnimationEnabled]);
 
   const checkCompatibility = async () => {
     if (!profile.game_version) return;
@@ -252,8 +258,12 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
         </p>
       </div>
 
-      <Card ref={loaderCardRef} variant="default" className="p-6 space-y-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <Card
+        ref={loaderCardRef}
+        variant="flat"
+        className="p-6 space-y-6 bg-black/20 border border-white/10"
+      >
+        <div className="grid grid-cols-2 md:grid-cols-3  gap-3">
           <ModLoaderCard
             name="vanilla"
             icon="/icons/minecraft.png"
@@ -302,7 +312,11 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
       </Card>
 
       {profile.loader !== "vanilla" && (
-        <Card ref={versionCardRef} variant="default" className="p-6 space-y-6">
+        <Card
+          ref={versionCardRef}
+          variant="flat"
+          className="p-6 space-y-6 bg-black/20 border border-white/10"
+        >
           <div>
             <label className="block text-2xl font-minecraft text-white mb-4 lowercase">{`${profile.loader} version`}</label>
             {loading ? (
@@ -339,18 +353,10 @@ export function ModLoaderStep({ profile, updateProfile }: ModLoaderStepProps) {
       {profile.loader !== "vanilla" && profile.loader_version && (
         <Card
           ref={summaryCardRef}
-          variant="default"
-          className="p-6 flex items-center gap-4"
+          variant="flat"
+          className="p-6 flex items-center gap-4 bg-black/20 border border-white/10"
         >
-          <div
-            className="w-12 h-12 flex items-center justify-center rounded-md overflow-hidden"
-            style={{
-              backgroundColor: `${accentColor.value}30`,
-              borderWidth: "2px",
-              borderStyle: "solid",
-              borderColor: `${accentColor.value}60`,
-            }}
-          >
+          <div className="w-12 h-12 flex items-center justify-center rounded-md overflow-hidden bg-black/30 border border-white/20">
             <img
               src={`/icons/${profile.loader}.png`}
               alt={profile.loader}
@@ -392,10 +398,13 @@ function ModLoaderCard({
   description,
 }: ModLoaderCardProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const cardRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (cardRef.current && isSelected) {
+    if (cardRef.current && isSelected && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         cardRef.current,
         { scale: 0.95 },
@@ -406,22 +415,20 @@ function ModLoaderCard({
         },
       );
     }
-  }, [isSelected]);
+  }, [isSelected, isBackgroundAnimationEnabled]);
 
   return (
-    <button
+    <Button
       ref={cardRef}
+      variant={isSelected ? "default" : "ghost"}
       className={cn(
-        "p-4 flex flex-col items-center justify-center rounded-lg border-2 border-b-4 transition-all duration-200",
+        "p-6 flex flex-col items-center justify-center cursor-pointer w-full h-full min-h-[140px]",
         isSelected
-          ? "bg-white/20 text-white border-white/50"
+          ? "bg-black/30 grayscale-0 text-white"
           : isCompatible
-            ? "bg-black/20 text-white/70 border-white/20 hover:bg-black/30 hover:text-white"
+            ? "bg-black/20 text-white/70 border-white/10 hover:bg-black/30 hover:text-white hover:border-white/20"
             : "bg-black/10 text-white/30 border-white/10 cursor-not-allowed",
       )}
-      style={{
-        borderBottomColor: isSelected ? accentColor.value : "transparent",
-      }}
       onClick={isCompatible ? onClick : undefined}
       disabled={!isCompatible}
     >
@@ -434,13 +441,10 @@ function ModLoaderCard({
           (e.target as HTMLImageElement).src = "/icons/minecraft.png";
         }}
       />
-      <span className="font-minecraft-ten text-xl mb-1">{name}</span>
-      <span className="text-xs text-white/60 text-center font-minecraft-ten">
-        {description}
-      </span>
+      <span className="font-minecraft text-xl lowercase">{name}</span>
       {!isCompatible && (
-        <span className="text-sm text-red-400 mt-1">not compatible</span>
+        <span className="text-lg text-white/50 mt-2">not compatible</span>
       )}
-    </button>
+    </Button>
   );
 }

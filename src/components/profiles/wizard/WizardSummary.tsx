@@ -14,29 +14,34 @@ interface WizardSummaryProps {
 
 export function WizardSummary({ profile, error }: WizardSummaryProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const profileCardRef = useRef<HTMLDivElement>(null);
   const detailsGridRef = useRef<HTMLDivElement>(null);
   const infoCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const elements = [
-      profileCardRef.current,
-      detailsGridRef.current,
-      infoCardRef.current,
-    ].filter(Boolean);
+    if (isBackgroundAnimationEnabled) {
+      const elements = [
+        profileCardRef.current,
+        detailsGridRef.current,
+        infoCardRef.current,
+      ].filter(Boolean);
 
-    gsap.fromTo(
-      elements,
-      { opacity: 0, y: 20 },
-      {
-        opacity: 1,
-        y: 0,
-        duration: 0.4,
-        stagger: 0.1,
-        ease: "power2.out",
-      },
-    );
-  }, []);
+      gsap.fromTo(
+        elements,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          stagger: 0.1,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isBackgroundAnimationEnabled]);
 
   return (
     <div className="space-y-8">
@@ -52,23 +57,19 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
       {error && (
         <Card
           variant="flat"
-          className="p-4 border-2 border-red-500 bg-red-500/20"
+          className="p-4 border-2 border-red-500 bg-black/20"
         >
           <p className="text-red-400 font-minecraft text-xl">{error}</p>
         </Card>
       )}
 
-      <Card ref={profileCardRef} variant="default" className="p-6 space-y-6">
+      <Card
+        ref={profileCardRef}
+        variant="flat"
+        className="p-6 space-y-6 bg-black/20 border border-white/10"
+      >
         <div className="flex items-center gap-4">
-          <div
-            className="w-16 h-16 flex items-center justify-center rounded-md"
-            style={{
-              backgroundColor: `${accentColor.value}30`,
-              borderWidth: "2px",
-              borderStyle: "solid",
-              borderColor: `${accentColor.value}60`,
-            }}
-          >
+          <div className="w-16 h-16 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
             <Icon icon="solar:user-bold" className="w-8 h-8 text-white" />
           </div>
           <div>
@@ -82,7 +83,7 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
             )}
             {profile.group && (
               <div className="mt-2">
-                <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-minecraft text-white/80">
+                <span className="px-3 py-1 bg-black/30 border border-white/20 rounded-md text-sm font-minecraft text-white/80">
                   {profile.group}
                 </span>
               </div>
@@ -95,20 +96,12 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
         ref={detailsGridRef}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        <Card variant="default" className="p-6">
+        <Card variant="flat" className="p-6 bg-black/20 border border-white/10">
           <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
             minecraft version
           </h3>
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 flex items-center justify-center rounded-md"
-              style={{
-                backgroundColor: `${accentColor.value}30`,
-                borderWidth: "2px",
-                borderStyle: "solid",
-                borderColor: `${accentColor.value}60`,
-              }}
-            >
+            <div className="w-10 h-10 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
               <Icon icon="solar:widget-bold" className="w-6 h-6 text-white" />
             </div>
             <div className="text-xs text-white font-minecraft-ten tracking-wide">
@@ -117,20 +110,12 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
           </div>
         </Card>
 
-        <Card variant="default" className="p-6">
+        <Card variant="flat" className="p-6 bg-black/20 border border-white/10">
           <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
             mod loader
           </h3>
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 flex items-center justify-center rounded-md overflow-hidden"
-              style={{
-                backgroundColor: `${accentColor.value}30`,
-                borderWidth: "2px",
-                borderStyle: "solid",
-                borderColor: `${accentColor.value}60`,
-              }}
-            >
+            <div className="w-10 h-10 flex items-center justify-center rounded-md overflow-hidden bg-black/30 border border-white/20">
               <img
                 src={`/icons/${profile.loader}.png`}
                 alt={profile.loader}
@@ -148,20 +133,12 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
           </div>
         </Card>
 
-        <Card variant="default" className="p-6">
+        <Card variant="flat" className="p-6 bg-black/20 border border-white/10">
           <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
             memory allocation
           </h3>
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 flex items-center justify-center rounded-md"
-              style={{
-                backgroundColor: `${accentColor.value}30`,
-                borderWidth: "2px",
-                borderStyle: "solid",
-                borderColor: `${accentColor.value}60`,
-              }}
-            >
+            <div className="w-10 h-10 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
               <Icon
                 icon="solar:ssd-square-bold"
                 className="w-6 h-6 text-white"
@@ -175,20 +152,15 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
         </Card>
 
         {profile.selected_norisk_pack_id && (
-          <Card variant="default" className="p-6">
+          <Card
+            variant="flat"
+            className="p-6 bg-black/20 border border-white/10"
+          >
             <h3 className="text-2xl text-white font-minecraft tracking-wide lowercase mb-4">
               norisk client pack
             </h3>
             <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 flex items-center justify-center rounded-md"
-                style={{
-                  backgroundColor: `${accentColor.value}30`,
-                  borderWidth: "2px",
-                  borderStyle: "solid",
-                  borderColor: `${accentColor.value}60`,
-                }}
-              >
+              <div className="w-10 h-10 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
                 <Icon icon="solar:shield-bold" className="w-6 h-6 text-white" />
               </div>
               <div className="text-xl text-white font-minecraft tracking-wide lowercase">
@@ -201,18 +173,10 @@ export function WizardSummary({ profile, error }: WizardSummaryProps) {
 
       <Card
         ref={infoCardRef}
-        variant="default"
-        className="p-6 flex items-center gap-4"
+        variant="flat"
+        className="p-6 flex items-center gap-4 bg-black/20 border border-white/10"
       >
-        <div
-          className="w-12 h-12 flex items-center justify-center rounded-full"
-          style={{
-            backgroundColor: `${accentColor.value}30`,
-            borderWidth: "2px",
-            borderStyle: "solid",
-            borderColor: `${accentColor.value}60`,
-          }}
-        >
+        <div className="w-12 h-12 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
           <Icon icon="solar:info-circle-bold" className="w-7 h-7 text-white" />
         </div>
         <div className="text-xs text-white/80 font-minecraft-ten tracking-wide">

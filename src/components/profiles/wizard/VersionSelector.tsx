@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../../store/useThemeStore";
 import { SearchInput } from "../../ui/SearchInput";
-import { Label } from "../../ui/Label";
 import { Card } from "../../ui/Card";
 import { gsap } from "gsap";
 import { cn } from "../../../lib/utils";
+import { Button } from "../../ui/buttons/Button";
 
 type VersionType = "release" | "snapshot" | "old-beta" | "old-alpha";
 
@@ -26,12 +26,15 @@ export function VersionSelector({
   versions,
 }: VersionSelectorProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const typeButtonsRef = useRef<HTMLDivElement>(null);
   const versionsGridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (typeButtonsRef.current) {
+    if (isBackgroundAnimationEnabled && typeButtonsRef.current) {
       gsap.fromTo(
         typeButtonsRef.current.children,
         { opacity: 0, y: 10 },
@@ -44,10 +47,10 @@ export function VersionSelector({
         },
       );
     }
-  }, []);
+  }, [isBackgroundAnimationEnabled]);
 
   useEffect(() => {
-    if (versionsGridRef.current) {
+    if (isBackgroundAnimationEnabled && versionsGridRef.current) {
       gsap.fromTo(
         versionsGridRef.current,
         { opacity: 0.5, y: 10 },
@@ -59,7 +62,7 @@ export function VersionSelector({
         },
       );
     }
-  }, [selectedVersionType, searchQuery]);
+  }, [selectedVersionType, searchQuery, isBackgroundAnimationEnabled]);
 
   const filteredVersions = versions.filter((version) =>
     searchQuery
@@ -74,17 +77,28 @@ export function VersionSelector({
           <h3 className="text-3xl font-minecraft text-white mb-3 lowercase">
             version type
           </h3>
-          <div ref={typeButtonsRef} className="flex flex-wrap">
-            {["release", "snapshot", "old-beta", "old-alpha"].map((type) => (
-              <Label
-                key={type}
-                variant={selectedVersionType === type ? "default" : "ghost"}
+          <div ref={typeButtonsRef} className="flex flex-wrap gap-2">
+            {[
+              { id: "release", label: "release" },
+              { id: "snapshot", label: "snapshot" },
+              { id: "old-beta", label: "old beta" },
+              { id: "old-alpha", label: "old alpha" },
+            ].map((type) => (
+              <Button
+                key={type.id}
+                variant={
+                  selectedVersionType === type.id ? "default" : "secondary"
+                }
                 size="md"
-                className="cursor-pointer mr-2 mb-2 text-xl"
-                onClick={() => onVersionTypeSelect(type as VersionType)}
+                className={cn(
+                  "text-xl",
+                  selectedVersionType === type.id &&
+                    "border-b-[3px] border-b-accent",
+                )}
+                onClick={() => onVersionTypeSelect(type.id as VersionType)}
               >
-                {type}
-              </Label>
+                {type.label}
+              </Button>
             ))}
           </div>
         </div>
@@ -105,7 +119,7 @@ export function VersionSelector({
           <div className="flex-1 relative">
             <Card
               variant="flat"
-              className="max-h-48 overflow-y-auto custom-scrollbar"
+              className="max-h-48 overflow-y-auto custom-scrollbar bg-black/20 border border-white/10"
             >
               {filteredVersions.length === 0 ? (
                 <div className="p-4 text-2xl text-white/70 text-center select-none">
@@ -142,10 +156,13 @@ interface VersionButtonProps {
 
 function VersionButton({ version, isSelected, onClick }: VersionButtonProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (buttonRef.current && isSelected) {
+    if (buttonRef.current && isSelected && isBackgroundAnimationEnabled) {
       gsap.fromTo(
         buttonRef.current,
         { scale: 0.95 },
@@ -156,24 +173,16 @@ function VersionButton({ version, isSelected, onClick }: VersionButtonProps) {
         },
       );
     }
-  }, [isSelected]);
+  }, [isSelected, isBackgroundAnimationEnabled]);
 
   return (
-    <button
+    <Button
       ref={buttonRef}
-      className={cn(
-        "py-3 px-4 font-minecraft text-xl text-center lowercase tracking-wide rounded-md transition-all duration-200",
-        isSelected
-          ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-          : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white hover:border-white/30",
-      )}
+      variant={isSelected ? "default" : "ghost"}
       onClick={onClick}
-      style={{
-        borderBottomWidth: "4px",
-        borderBottomColor: isSelected ? accentColor.value : "transparent",
-      }}
+      size="sm"
     >
       {version}
-    </button>
+    </Button>
   );
 }

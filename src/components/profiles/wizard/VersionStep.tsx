@@ -28,37 +28,42 @@ export function VersionStep({
     [],
   );
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const selectorCardRef = useRef<HTMLDivElement>(null);
   const summaryCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selectorCardRef.current) {
-      gsap.fromTo(
-        selectorCardRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
+    if (isBackgroundAnimationEnabled) {
+      if (selectorCardRef.current) {
+        gsap.fromTo(
+          selectorCardRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
+      }
 
-    if (summaryCardRef.current && profile.game_version) {
-      gsap.fromTo(
-        summaryCardRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-          delay: 0.1,
-        },
-      );
+      if (summaryCardRef.current && profile.game_version) {
+        gsap.fromTo(
+          summaryCardRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+            delay: 0.1,
+          },
+        );
+      }
     }
-  }, [profile.game_version]);
+  }, [profile.game_version, isBackgroundAnimationEnabled]);
 
   useEffect(() => {
     const filtered = minecraftVersions.filter((v) => {
@@ -78,7 +83,12 @@ export function VersionStep({
     ) {
       updateProfile({ game_version: filtered[0].id });
     }
-  }, [selectedVersionType, minecraftVersions, profile.game_version]);
+  }, [
+    selectedVersionType,
+    minecraftVersions,
+    profile.game_version,
+    updateProfile,
+  ]);
 
   const handleVersionChange = (version: string) => {
     updateProfile({ game_version: version });
@@ -96,7 +106,11 @@ export function VersionStep({
         </p>
       </div>
 
-      <Card ref={selectorCardRef} variant="default" className="p-6 space-y-6">
+      <Card
+        ref={selectorCardRef}
+        variant="flat"
+        className="p-6 space-y-6 bg-black/20 border border-white/10"
+      >
         <VersionSelector
           selectedVersion={profile.game_version || ""}
           onVersionSelect={handleVersionChange}
@@ -109,18 +123,10 @@ export function VersionStep({
       {profile.game_version && (
         <Card
           ref={summaryCardRef}
-          variant="default"
-          className="p-6 flex items-center gap-4"
+          variant="flat"
+          className="p-6 flex items-center gap-4 bg-black/20 border border-white/10"
         >
-          <div
-            className="w-12 h-12 flex items-center justify-center rounded-md"
-            style={{
-              backgroundColor: `${accentColor.value}30`,
-              borderWidth: "2px",
-              borderStyle: "solid",
-              borderColor: `${accentColor.value}60`,
-            }}
-          >
+          <div className="w-12 h-12 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
             <Icon icon="solar:widget-bold" className="w-7 h-7 text-white" />
           </div>
           <div>
