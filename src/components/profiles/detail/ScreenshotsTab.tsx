@@ -1,20 +1,28 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Icon } from "@iconify/react";
-import type { Profile, ScreenshotInfo as ActualScreenshotInfo } from "../../../types/profile"; // Renamed ScreenshotInfo to ActualScreenshotInfo
+import type {
+  Profile,
+  ScreenshotInfo as ActualScreenshotInfo,
+} from "../../../types/profile"; // Renamed ScreenshotInfo to ActualScreenshotInfo
 import { useThemeStore } from "../../../store/useThemeStore";
 import { gsap } from "gsap";
 import { cn } from "../../../lib/utils"; // Assuming you have a cn utility
 import { Select, type SelectOption } from "../../ui/Select"; // Import Select and SelectOption
 import { EmptyState } from "../../ui/EmptyState"; // Import EmptyState
 import { invoke } from "@tauri-apps/api/core"; // Import invoke
-import { convertFileSrc } from "@tauri-apps/api/core"; // Import convertFileSrc
 import { ScreenshotGridItem } from "./ScreenshotGridItem"; // Import ScreenshotGridItem
-import { VirtuosoGrid } from 'react-virtuoso'; // Added import
-import { ThemedSurface } from '../../ui/ThemedSurface'; // Added import
+import { VirtuosoGrid } from "react-virtuoso"; // Added import
+import { ThemedSurface } from "../../ui/ThemedSurface"; // Added import
 import { getImagePreview as getImgPreviewServiceCall } from "../../../services/tauri-service"; // Import service
-import type { ImagePreviewPayload, ImagePreviewResponse } from "../../../types/fileSystem"; // Import types
+import type { ImagePreviewPayload } from "../../../types/fileSystem"; // Import types
 
 interface ScreenshotItem {
   id: string;
@@ -37,8 +45,16 @@ interface ScreenshotsTabProps {
 // }));
 
 const sortOptions: SelectOption[] = [
-  { value: "newest", label: "newest first", icon: <Icon icon="solar:sort-amount-down-bold-duotone" /> },
-  { value: "oldest", label: "oldest first", icon: <Icon icon="solar:sort-amount-up-bold-duotone" /> },
+  {
+    value: "newest",
+    label: "newest first",
+    icon: <Icon icon="solar:sort-amount-down-bold-duotone" />,
+  },
+  {
+    value: "oldest",
+    label: "oldest first",
+    icon: <Icon icon="solar:sort-amount-up-bold-duotone" />,
+  },
 ];
 
 const ITEMS_PER_PAGE = 16; // 4 columns * 4 rows, changed from 8
@@ -57,7 +73,7 @@ const VirtuosoGridList = React.forwardRef<
     {children}
   </div>
 ));
-VirtuosoGridList.displayName = 'VirtuosoGridList';
+VirtuosoGridList.displayName = "VirtuosoGridList";
 
 const VirtuosoGridItemWrapper = ({
   children,
@@ -65,7 +81,7 @@ const VirtuosoGridItemWrapper = ({
 }: {
   children?: React.ReactNode;
 }) => (
-  <div {...props} style={{ display: 'flex', alignItems: 'stretch' }}>
+  <div {...props} style={{ display: "flex", alignItems: "stretch" }}>
     {children}
   </div>
 );
@@ -86,7 +102,9 @@ export function ScreenshotsTab({
   const [sortOrder, setSortOrder] = useState<string>("newest");
 
   // Simulate fetching and initial data state
-  const [rawScreenshots, setRawScreenshots] = useState<ActualScreenshotInfo[]>([]);
+  const [rawScreenshots, setRawScreenshots] = useState<ActualScreenshotInfo[]>(
+    [],
+  );
 
   useEffect(() => {
     const fetchScreenshots = async () => {
@@ -137,85 +155,97 @@ export function ScreenshotsTab({
   }, [rawScreenshots, sortOrder]);
 
   useEffect(() => {
-    if (containerRef.current && isActive && isBackgroundAnimationEnabled && !isLoading) {
-      gsap.fromTo(
-        containerRef.current,
-        { opacity: 0, y: 20 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-          delay: 0.1, // Small delay to ensure tab switch animation completes
-        },
-      );
-    } else if (containerRef.current && isActive && !isLoading) {
+    if (containerRef.current && isActive) {
       gsap.set(containerRef.current, { opacity: 1, y: 0 });
     }
-  }, [isActive, isBackgroundAnimationEnabled, isLoading]); // Re-run animation when loading completes
+  }, [isActive, isBackgroundAnimationEnabled, isLoading]);
 
   // --- Start Caching Logic ---
-  const [previewCache, setPreviewCache] = useState<Map<string, string>>(new Map());
-  const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(new Set());
+  const [previewCache, setPreviewCache] = useState<Map<string, string>>(
+    new Map(),
+  );
+  const [loadingPreviews, setLoadingPreviews] = useState<Set<string>>(
+    new Set(),
+  );
   const [errorPreviews, setErrorPreviews] = useState<Set<string>>(new Set());
   // --- End Caching Logic ---
 
   // --- Memoized itemContent for VirtuosoGrid ---
-  const memoizedItemContent = useCallback((index: number) => {
-    const screenshot = sortedScreenshots[index];
-    const path = screenshot.path;
+  const memoizedItemContent = useCallback(
+    (index: number) => {
+      const screenshot = sortedScreenshots[index];
+      const path = screenshot.path;
 
-    if (path && !previewCache.has(path) && !loadingPreviews.has(path) && !errorPreviews.has(path)) {
-      setLoadingPreviews(prev => new Set(prev).add(path));
-      const payload: ImagePreviewPayload = {
-        path: path,
-        width: 256,
-        height: 144, // User updated value
-        quality: 75,
-      };
-      getImgPreviewServiceCall(payload)
-        .then(response => {
-          const imageType = screenshot.filename.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
-          const src = `data:image/${imageType};base64,${response.base64_image}`;
-          setPreviewCache(prev => {
-            if (prev.get(path) === src) return prev;
-            const next = new Map(prev);
-            next.set(path, src);
-            return next;
+      if (
+        path &&
+        !previewCache.has(path) &&
+        !loadingPreviews.has(path) &&
+        !errorPreviews.has(path)
+      ) {
+        setLoadingPreviews((prev) => new Set(prev).add(path));
+        const payload: ImagePreviewPayload = {
+          path: path,
+          width: 256,
+          height: 144, // User updated value
+          quality: 75,
+        };
+        getImgPreviewServiceCall(payload)
+          .then((response) => {
+            const imageType = screenshot.filename.toLowerCase().endsWith(".png")
+              ? "png"
+              : "jpeg";
+            const src = `data:image/${imageType};base64,${response.base64_image}`;
+            setPreviewCache((prev) => {
+              if (prev.get(path) === src) return prev;
+              const next = new Map(prev);
+              next.set(path, src);
+              return next;
+            });
+          })
+          .catch((err) => {
+            console.error(
+              `Failed to load preview for ${path} in ScreenshotsTab:`,
+              err,
+            );
+            setErrorPreviews((prev) => new Set(prev).add(path));
+          })
+          .finally(() => {
+            setLoadingPreviews((prev) => {
+              const next = new Set(prev);
+              next.delete(path);
+              return next;
+            });
           });
-        })
-        .catch(err => {
-          console.error(`Failed to load preview for ${path} in ScreenshotsTab:`, err);
-          setErrorPreviews(prev => new Set(prev).add(path));
-        })
-        .finally(() => {
-          setLoadingPreviews(prev => {
-            const next = new Set(prev);
-            next.delete(path);
-            return next;
-          });
-        });
-    }
+      }
 
-    return (
-      <ThemedSurface
-        key={path} 
-        className={cn(
-          "flex p-0 transition-transform duration-300 ease-out hover:scale-105 active:scale-95",
-        )}
-      >
-        <ScreenshotGridItem
-          screenshot={screenshot}
-          isBackgroundAnimationEnabled={isBackgroundAnimationEnabled}
-          itemIndex={index}
-          onItemClick={onOpenScreenshotModal}
-          previewSrc={previewCache.get(path) || null}
-          isLoading={loadingPreviews.has(path)}
-          hasError={errorPreviews.has(path)}
-        />
-      </ThemedSurface>
-    );
-  }, [sortedScreenshots, previewCache, loadingPreviews, errorPreviews, isBackgroundAnimationEnabled, onOpenScreenshotModal]);
+      return (
+        <ThemedSurface
+          key={path}
+          className={cn(
+            "flex p-0 transition-transform duration-300 ease-out hover:scale-105 active:scale-95",
+          )}
+        >
+          <ScreenshotGridItem
+            screenshot={screenshot}
+            isBackgroundAnimationEnabled={isBackgroundAnimationEnabled}
+            itemIndex={index}
+            onItemClick={onOpenScreenshotModal}
+            previewSrc={previewCache.get(path) || null}
+            isLoading={loadingPreviews.has(path)}
+            hasError={errorPreviews.has(path)}
+          />
+        </ThemedSurface>
+      );
+    },
+    [
+      sortedScreenshots,
+      previewCache,
+      loadingPreviews,
+      errorPreviews,
+      isBackgroundAnimationEnabled,
+      onOpenScreenshotModal,
+    ],
+  );
   // --- End Memoized itemContent ---
 
   return (
@@ -223,7 +253,6 @@ export function ScreenshotsTab({
       <div
         ref={containerRef}
         className="h-full flex flex-col select-none p-4 gap-4"
-        style={{ opacity: (isBackgroundAnimationEnabled && isLoading) ? 0 : 1 }}
       >
         {/* Header with styling similar to WorldsTab action bar */}
         <div
@@ -239,7 +268,10 @@ export function ScreenshotsTab({
               onChange={setSortOrder}
               options={sortOptions}
               size="md"
-              disabled={isLoading || (!isLoading && !error && sortedScreenshots.length === 0)} // Disable if loading or no items
+              disabled={
+                isLoading ||
+                (!isLoading && !error && sortedScreenshots.length === 0)
+              } // Disable if loading or no items
             />
           </div>
         </div>
@@ -248,7 +280,7 @@ export function ScreenshotsTab({
         <div
           className="flex-1 overflow-hidden rounded-lg border flex flex-col"
           style={{
-            backgroundColor: `${accentColor.value}10`, 
+            backgroundColor: `${accentColor.value}10`,
             borderColor: `${accentColor.value}30`,
           }}
         >
@@ -261,21 +293,36 @@ export function ScreenshotsTab({
 
           {!isLoading && error && (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-              <Icon icon="solar:gallery-remove-bold-duotone" className="w-20 h-20 mb-4 text-red-400/80" />
-              <p className="font-minecraft-ten text-xl text-red-400 mb-2">Oops! Something went wrong.</p>
-              <p className="text-white/60 font-minecraft-five text-base">{error}</p>
-            </div>
-          )}
-
-          {!isLoading && !error && sortedScreenshots.length === 0 && rawScreenshots.length > 0 && (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-              <Icon icon="solar:gallery-minimalistic-bold-duotone" className="w-20 h-20 mb-4 text-white/40" />
-              <p className="font-minecraft-ten text-xl text-white/70 mb-2">No Screenshots Match Filter</p>
-              <p className="text-white/50 font-minecraft-five text-base">
-                Try adjusting your sort options.
+              <Icon
+                icon="solar:gallery-remove-bold-duotone"
+                className="w-20 h-20 mb-4 text-red-400/80"
+              />
+              <p className="font-minecraft-ten text-xl text-red-400 mb-2">
+                Oops! Something went wrong.
+              </p>
+              <p className="text-white/60 font-minecraft-five text-base">
+                {error}
               </p>
             </div>
           )}
+
+          {!isLoading &&
+            !error &&
+            sortedScreenshots.length === 0 &&
+            rawScreenshots.length > 0 && (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+                <Icon
+                  icon="solar:gallery-minimalistic-bold-duotone"
+                  className="w-20 h-20 mb-4 text-white/40"
+                />
+                <p className="font-minecraft-ten text-xl text-white/70 mb-2">
+                  No Screenshots Match Filter
+                </p>
+                <p className="text-white/50 font-minecraft-five text-base">
+                  Try adjusting your sort options.
+                </p>
+              </div>
+            )}
 
           {!isLoading && !error && rawScreenshots.length === 0 && (
             <EmptyState
@@ -289,13 +336,13 @@ export function ScreenshotsTab({
           {!isLoading && !error && sortedScreenshots.length > 0 && (
             <>
               <VirtuosoGrid
-                style={{ height: '100%' }} // Ensure VirtuosoGrid takes available space
+                style={{ height: "100%" }} // Ensure VirtuosoGrid takes available space
                 totalCount={sortedScreenshots.length}
                 components={{
                   List: VirtuosoGridList,
                   Item: VirtuosoGridItemWrapper,
-                  Header: () => <div style={{ height: '0.75rem' }} />,
-                  Footer: () => <div style={{ height: '1.5rem' }} />,
+                  Header: () => <div style={{ height: "0.75rem" }} />,
+                  Footer: () => <div style={{ height: "1.5rem" }} />,
                 }}
                 itemContent={memoizedItemContent}
               />
@@ -312,7 +359,7 @@ export function ScreenshotsTab({
 
 // It's generally better to define keyframes in a global CSS file (e.g., globals.css)
 // For Tailwind, you can also define custom animations in tailwind.config.js
-// If you must include it here and are not in a Next.js pages dir, 
+// If you must include it here and are not in a Next.js pages dir,
 // you might need a different approach than <style jsx> or ensure your setup supports it.
 // For now, adding a utility class `animate-fadeInUpItem` and assuming it's defined globally:
 /*
@@ -332,4 +379,4 @@ export function ScreenshotsTab({
   animation-fill-mode: forwards;
   animation-timing-function: ease-out;
 }
-*/ 
+*/
