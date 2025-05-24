@@ -95,7 +95,7 @@ pub async fn install_minecraft_version(
 
     if should_throw_error {
         info!("[InstallTest] Randomly decided to throw test error.");
-        return Err(AppError::Unknown("Testfehler (50% Chance) für das Error-Handling!".to_string()));
+        //return Err(AppError::Unknown("Testfehler (50% Chance) für das Error-Handling!".to_string()));
     } else {
         info!("[InstallTest] Randomly decided NOT to throw test error. Proceeding normally.");
     }

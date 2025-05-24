@@ -1228,7 +1228,7 @@ impl ProfileManager {
     /// Lists relevant custom mods found in the profile's `custom_mods` directory.
     /// Only includes files ending in `.jar` or `.jar.disabled`.
     pub async fn list_custom_mods(&self, profile: &Profile) -> Result<Vec<CustomModInfo>> {
-        let custom_mods_path = self.calculate_instance_path_for_profile(profile)?;
+        let custom_mods_path = self.get_profile_custom_mods_path(profile.id).await?;
         let mut custom_mods = Vec::new();
 
         if !custom_mods_path.exists() {
