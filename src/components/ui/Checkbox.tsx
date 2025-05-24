@@ -60,9 +60,9 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 
     const getBorderClasses = () => {
       if (variant === "3d") {
-        return "border-2 border-b-3";
+        return "border-2";
       }
-      return "border border-b-2";
+      return "border";
     };
 
     const getBackgroundColor = () => {
@@ -82,11 +82,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     };
 
     const getBorderBottomColor = () => {
-      if (props.checked) {
-        return accentColor.dark;
-      }
-
-      return accentColor.value;
+      return getBorderColor();
     };
 
     const getBoxShadow = () => {
