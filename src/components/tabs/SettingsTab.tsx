@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  type ChangeEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { Button } from ".././ui/buttons/Button";
-import { Input } from ".././ui/Input";
 import { Card } from ".././ui/Card";
 import { ToggleSwitch } from ".././ui/ToggleSwitch";
 import { ColorPicker } from ".././ColorPicker";
@@ -24,11 +17,11 @@ import {
   type QualityLevel,
   useQualitySettingsStore,
 } from "../../store/quality-settings-store";
-import { gsap } from "gsap";
 import { cn } from "../../lib/utils";
 import { toast } from "react-hot-toast";
 import { TabLayout } from ".././ui/TabLayout";
 import EffectPreviewCard from ".././EffectPreviewCard";
+import { RangeSlider } from ".././ui/RangeSlider";
 
 export function SettingsTab() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -167,36 +160,12 @@ export function SettingsTab() {
       } finally {
         setSaving(false);
       }
-    }, 0);
+    }, 500); // Added a delay to prevent rapid saving
   }, []);
 
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
-
-  useEffect(() => {
-    if (tabRef.current && isBackgroundAnimationEnabled) {
-      gsap.fromTo(
-        tabRef.current,
-        { opacity: 0 },
-        {
-          opacity: 1,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [isBackgroundAnimationEnabled]);
-
-  useEffect(() => {
-    if (contentRef.current && isBackgroundAnimationEnabled) {
-      gsap.fromTo(
-        contentRef.current,
-        { opacity: 0, y: 20 },
-        { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
-      );
-    }
-  }, [activeTab, isBackgroundAnimationEnabled]);
 
   useEffect(() => {
     if (
@@ -208,22 +177,36 @@ export function SettingsTab() {
     }
   }, [tempConfig, config, autoSaveConfig]);
 
-  const handleConcurrentDownloadsChange = (
-    e: ChangeEvent<HTMLInputElement>,
-  ) => {
-    if (!tempConfig) return;
-    const value = Number.parseInt(e.target.value, 10);
-    if (!isNaN(value) && value >= 1 && value <= 10) {
-      setTempConfig({ ...tempConfig, concurrent_downloads: value });
+  // Track slider values locally without saving immediately
+  const [concurrentDownloads, setConcurrentDownloads] = useState(3);
+  const [concurrentIoLimit, setConcurrentIoLimit] = useState(10);
+
+  // Initialize local state from config when it loads
+  useEffect(() => {
+    if (tempConfig) {
+      setConcurrentDownloads(tempConfig.concurrent_downloads || 3);
+      setConcurrentIoLimit(tempConfig.concurrent_io_limit || 10);
     }
+  }, [tempConfig]);
+
+  // Update local state without saving
+  const handleConcurrentDownloadsChange = (value: number) => {
+    setConcurrentDownloads(value);
   };
 
-  const handleConcurrentIoLimitChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleConcurrentIoLimitChange = (value: number) => {
+    setConcurrentIoLimit(value);
+  };
+
+  // Save only when sliding ends
+  const handleConcurrentDownloadsChangeEnd = (value: number) => {
     if (!tempConfig) return;
-    const value = Number.parseInt(e.target.value, 10);
-    if (!isNaN(value) && value >= 1 && value <= 20) {
-      setTempConfig({ ...tempConfig, concurrent_io_limit: value });
-    }
+    setTempConfig({ ...tempConfig, concurrent_downloads: value });
+  };
+
+  const handleConcurrentIoLimitChangeEnd = (value: number) => {
+    if (!tempConfig) return;
+    setTempConfig({ ...tempConfig, concurrent_io_limit: value });
   };
 
   const resetChanges = () => {
@@ -262,7 +245,7 @@ export function SettingsTab() {
         <div className="space-y-4 mt-6">
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Experimental Mode
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -287,7 +270,7 @@ export function SettingsTab() {
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Auto Updates
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -308,7 +291,7 @@ export function SettingsTab() {
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Discord Presence
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -332,7 +315,7 @@ export function SettingsTab() {
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Beta Updates
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -353,7 +336,7 @@ export function SettingsTab() {
 
           <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
             <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Open Logs After Starting
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -375,9 +358,9 @@ export function SettingsTab() {
             />
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+          <div className="p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
+            <div className="flex-1 mb-3">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Concurrent Downloads
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -385,25 +368,32 @@ export function SettingsTab() {
                 reduce bandwidth usage but slow downloads.
               </p>
             </div>
-            <div className="flex items-center">
-              <Input
-                type="number"
-                id="concurrent_downloads"
-                min="1"
-                max="10"
-                value={tempConfig?.concurrent_downloads || 3}
+            <div className="w-full px-2">
+              <RangeSlider
+                value={concurrentDownloads}
                 onChange={handleConcurrentDownloadsChange}
+                onChangeEnd={handleConcurrentDownloadsChangeEnd}
+                min={1}
+                max={10}
+                step={1}
                 disabled={saving}
-                className="w-24"
-                icon={<Icon icon="solar:multiple-forward-right-bold" />}
                 variant="flat"
+                size="md"
+                minLabel="1"
+                maxLabel="10"
+                icon={
+                  <Icon
+                    icon="solar:multiple-forward-right-bold"
+                    className="w-4 h-4"
+                  />
+                }
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
-            <div className="flex-1">
-              <h5 className="font-minecraft text-3xl lowercase text-white">
+          <div className="p-3 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
+            <div className="flex-1 mb-3">
+              <h5 className="font-minecraft text-2xl lowercase text-white">
                 Concurrent I/O Operations
               </h5>
               <p className="text-sm text-white/60 font-minecraft-ten mt-1">
@@ -411,18 +401,20 @@ export function SettingsTab() {
                 values reduce disk stress and I/O errors.
               </p>
             </div>
-            <div className="flex items-center">
-              <Input
-                type="number"
-                id="concurrent_io_limit"
-                min="1"
-                max="20"
-                value={tempConfig?.concurrent_io_limit || 10}
+            <div className="w-full px-2">
+              <RangeSlider
+                value={concurrentIoLimit}
                 onChange={handleConcurrentIoLimitChange}
+                onChangeEnd={handleConcurrentIoLimitChangeEnd}
+                min={1}
+                max={20}
+                step={1}
                 disabled={saving}
-                className="w-24"
-                icon={<Icon icon="solar:server-bold" />}
                 variant="flat"
+                size="md"
+                minLabel="1"
+                maxLabel="20"
+                icon={<Icon icon="solar:server-bold" className="w-4 h-4" />}
               />
             </div>
           </div>
@@ -498,7 +490,10 @@ export function SettingsTab() {
       <Card variant="flat" className="p-6">
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-2">
-            <Icon icon="solar:star-fall-bold" className="w-6 h-6 text-white" />
+            <Icon
+              icon="solar:speedometer-medium-bold"
+              className="w-6 h-6 text-white"
+            />
             <h3 className="text-3xl font-minecraft text-white lowercase">
               Visual Quality
             </h3>
@@ -678,8 +673,8 @@ export function SettingsTab() {
         actions={
           <div className="flex items-center gap-3">
             <Button
-              className="h-[42px]"
               variant={activeTab === "general" ? "flat" : "ghost"}
+              size="sm"
               onClick={() => setActiveTab("general")}
               icon={
                 <Icon
@@ -691,8 +686,8 @@ export function SettingsTab() {
               general
             </Button>
             <Button
-              className="h-[42px]"
               variant={activeTab === "appearance" ? "flat" : "ghost"}
+              size="sm"
               onClick={() => setActiveTab("appearance")}
               icon={
                 <Icon

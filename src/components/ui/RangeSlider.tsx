@@ -1,13 +1,15 @@
 "use client";
 
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { cn } from "../../lib/utils";
-import { gsap } from "gsap";
+import { Icon } from "@iconify/react";
 
 interface RangeSliderProps {
   value: number;
   onChange: (value: number) => void;
+  onChangeEnd?: (value: number) => void;
   min: number;
   max: number;
   step?: number;
@@ -19,11 +21,13 @@ interface RangeSliderProps {
   size?: "sm" | "md" | "lg";
   className?: string;
   variant?: "default" | "flat" | "3d";
+  icon?: React.ReactNode;
 }
 
 export function RangeSlider({
   value,
   onChange,
+  onChangeEnd,
   min,
   max,
   step = 1,
@@ -34,150 +38,110 @@ export function RangeSlider({
   showValue = true,
   size = "md",
   className,
-  variant = "default",
+  variant = "flat",
+  icon,
 }: RangeSliderProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
-  const isBackgroundAnimationEnabled = useThemeStore(
-    (state) => state.isBackgroundAnimationEnabled,
-  );
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [localValue, setLocalValue] = useState(value);
   const sliderRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const valueDisplayRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
 
   const sizeConfig = {
     sm: {
-      track: "h-4",
-      thumb: "h-6 w-6",
+      track: "h-2",
+      thumb: "w-5 h-5",
+      text: "text-xs",
     },
     md: {
-      track: "h-6",
-      thumb: "h-8 w-8",
+      track: "h-3",
+      thumb: "w-6 h-6",
+      text: "text-sm",
     },
     lg: {
-      track: "h-8",
-      thumb: "h-10 w-10",
+      track: "h-4",
+      thumb: "w-8 h-8",
+      text: "text-base",
     },
   };
 
-  useEffect(() => {
-    if (sliderRef.current && isBackgroundAnimationEnabled) {
-      gsap.fromTo(
-        sliderRef.current,
-        { opacity: 0, y: 10 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [isBackgroundAnimationEnabled]);
+  const getPercentage = (val: number) => {
+    return ((val - min) / (max - min)) * 100;
+  };
 
-  const percentage = ((value - min) / (max - min)) * 100;
+  const updateUI = () => {
+    if (!progressRef.current || !thumbRef.current) return;
+
+    const percentage = getPercentage(localValue);
+
+    progressRef.current.style.width = `${percentage}%`;
+
+    thumbRef.current.style.left = `${percentage}%`;
+  };
 
   useEffect(() => {
-    if (progressRef.current && thumbRef.current) {
-      progressRef.current.style.width = `${percentage}%`;
-
-      const thumbSizePx = size === "sm" ? 24 : size === "lg" ? 40 : 32;
-      const thumbOffset =
-        thumbSizePx / (size === "sm" ? 4 : size === "lg" ? 4 : 4);
-
-      thumbRef.current.style.left = `calc(${percentage}% - ${thumbOffset}px)`;
-
-      if (valueDisplayRef.current && isBackgroundAnimationEnabled) {
-        gsap.to(valueDisplayRef.current, {
-          scale: 1.1,
-          duration: 0.1,
-          yoyo: true,
-          repeat: 1,
-          ease: "power2.inOut",
-        });
-      }
-    }
-  }, [percentage, size, isBackgroundAnimationEnabled]);
+    updateUI();
+  }, [localValue, min, max]);
 
   const handleMouseEnter = () => {
     if (disabled) return;
     setIsHovered(true);
-
-    if (isBackgroundAnimationEnabled) {
-      if (thumbRef.current) {
-        gsap.to(thumbRef.current, {
-          scale: 1.1,
-          boxShadow:
-            variant === "3d"
-              ? "0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.4)"
-              : `0 0 10px ${accentColor.value}60`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
-      if (trackRef.current && variant === "3d") {
-        gsap.to(trackRef.current, {
-          boxShadow: `0 6px 0 rgba(0,0,0,0.25), 0 8px 15px rgba(0,0,0,0.3), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
-    }
   };
 
   const handleMouseLeave = () => {
     if (disabled) return;
     setIsHovered(false);
-
-    if (isBackgroundAnimationEnabled) {
-      if (thumbRef.current && !isDragging) {
-        gsap.to(thumbRef.current, {
-          scale: 1,
-          boxShadow:
-            variant === "3d"
-              ? "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)"
-              : `0 0 0 1px ${accentColor.value}60`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
-      if (trackRef.current && variant === "3d") {
-        gsap.to(trackRef.current, {
-          boxShadow: `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
-    }
   };
 
-  const handleMouseDown = () => {
+  const handleMouseDown = (e: React.MouseEvent) => {
     if (disabled) return;
     setIsDragging(true);
 
-    if (thumbRef.current && isBackgroundAnimationEnabled) {
-      gsap.to(thumbRef.current, {
-        scale: 0.95,
-        duration: 0.1,
-        ease: "power2.out",
-      });
+    if (trackRef.current) {
+      const rect = trackRef.current.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const width = rect.width;
+      const percentage = Math.max(0, Math.min(1, offsetX / width));
+      let newValue = min + percentage * (max - min);
+
+      if (step > 0) {
+        newValue = Math.round(newValue / step) * step;
+      }
+
+      newValue = Math.max(min, Math.min(max, newValue));
+
+      setLocalValue(newValue);
+      onChange(newValue);
     }
+
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+    e.preventDefault();
   };
 
   const handleMouseUp = () => {
     if (disabled) return;
     setIsDragging(false);
 
-    if (thumbRef.current && isBackgroundAnimationEnabled) {
-      gsap.to(thumbRef.current, {
-        scale: isHovered ? 1.1 : 1,
-        duration: 0.2,
-        ease: "elastic.out(1.2, 0.4)",
-      });
+    if (onChangeEnd && localValue !== value) {
+      onChangeEnd(localValue);
     }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = Number(e.target.value);
+    setLocalValue(newValue);
+    onChange(newValue);
   };
 
   useEffect(() => {
@@ -186,40 +150,52 @@ export function RangeSlider({
         handleMouseUp();
       }
     };
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !trackRef.current) return;
+
+      const rect = trackRef.current.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const width = rect.width;
+
+      const percentage = Math.max(0, Math.min(1, offsetX / width));
+      let newValue = min + percentage * (max - min);
+
+      if (step > 0) {
+        newValue = Math.round(newValue / step) * step;
+      }
+
+      newValue = Math.max(min, Math.min(max, newValue));
+
+      setLocalValue(newValue);
+      onChange(newValue);
+    };
+
     document.addEventListener("mouseup", handleGlobalMouseUp);
+    document.addEventListener("mousemove", handleGlobalMouseMove);
+
     return () => {
       document.removeEventListener("mouseup", handleGlobalMouseUp);
+      document.removeEventListener("mousemove", handleGlobalMouseMove);
     };
-  }, [isDragging, isBackgroundAnimationEnabled]);
-
-  const getBorderClasses = () => {
-    if (variant === "3d") {
-      return "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]";
-    }
-    return "border border-white/10";
-  };
-
-  const getThumbBorderClasses = () => {
-    if (variant === "3d") {
-      return "border-2 border-b-4 shadow-[0_4px_0_rgba(0,0,0,0.3),0_6px_10px_rgba(0,0,0,0.35)]";
-    }
-    return "border border-white/20";
-  };
+  }, [isDragging, min, max, step, onChange]);
 
   return (
     <div
       ref={sliderRef}
       className={cn(
-        "relative",
+        "relative w-full",
         disabled && "opacity-50 cursor-not-allowed",
         className,
       )}
     >
       {valueLabel && (
-        <div className="text-center mb-3">
+        <div className="flex items-center gap-2 mb-2">
+          {icon && <span className="text-white">{icon}</span>}
           <span
             className={cn(
-              "text-white font-minecraft-ten text-xs tracking-wide",
+              "text-white font-minecraft-ten tracking-wide",
+              sizeConfig[size].text,
             )}
           >
             {valueLabel}
@@ -227,22 +203,43 @@ export function RangeSlider({
         </div>
       )}
 
-      <div className="mb-4">
+      <div className="mb-2">
         {showValue && (
-          <div className="flex justify-between mb-2">
+          <div className="flex justify-between mb-1">
             {minLabel && (
-              <span className={cn("text-white/70 font-minecraft-ten text-xs")}>
+              <span
+                className={cn(
+                  "text-white/70 font-minecraft-ten",
+                  sizeConfig[size].text,
+                )}
+              >
                 {minLabel}
               </span>
             )}
-            <span
-              ref={valueDisplayRef}
-              className={cn("text-white font-minecraft-ten text-xs")}
-            >
-              {value}
-            </span>
+            <div className="flex items-center gap-1">
+              <span
+                ref={valueDisplayRef}
+                className={cn(
+                  "text-white font-minecraft-ten",
+                  sizeConfig[size].text,
+                )}
+              >
+                {localValue}
+              </span>
+              {localValue === max && (
+                <Icon
+                  icon="solar:star-bold"
+                  className="w-3 h-3 text-yellow-400"
+                />
+              )}
+            </div>
             {maxLabel && (
-              <span className={cn("text-white/70 font-minecraft-ten text-xs")}>
+              <span
+                className={cn(
+                  "text-white/70 font-minecraft-ten",
+                  sizeConfig[size].text,
+                )}
+              >
                 {maxLabel}
               </span>
             )}
@@ -250,93 +247,80 @@ export function RangeSlider({
         )}
 
         <div
-          className={cn(
-            "relative rounded-md overflow-hidden backdrop-blur-md transition-colors duration-200",
-            getBorderClasses(),
-            "focus-within:ring-2 focus-within:ring-white/30 focus-within:ring-offset-1 focus-within:ring-offset-black/20",
-            sizeConfig[size].track,
-          )}
-          style={{
-            backgroundColor: `${accentColor.value}15`,
-            borderColor:
-              variant === "3d"
-                ? `${accentColor.value}40`
-                : `${accentColor.value}30`,
-            borderBottomColor:
-              variant === "3d" ? accentColor.value : `${accentColor.value}30`,
-            boxShadow:
-              variant === "3d"
-                ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`
-                : `0 0 0 1px ${accentColor.value}20`,
-          }}
-          ref={trackRef}
+          className="relative pt-4 pb-4 cursor-pointer"
+          onMouseDown={handleMouseDown}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          {variant === "3d" && (
-            <span
-              className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+          <div
+            className={cn(
+              "relative overflow-hidden transition-colors duration-200",
+              "border border-white/10",
+              "focus-within:ring-1 focus-within:ring-white/30",
+              sizeConfig[size].track,
+            )}
+            style={{
+              backgroundColor: `${accentColor.value}15`,
+              borderColor: `${accentColor.value}40`,
+            }}
+            ref={trackRef}
+          >
+            <div
+              ref={progressRef}
+              className="absolute h-full"
               style={{
-                backgroundColor: `${accentColor.value}80`,
-                opacity: isHovered ? 1 : 0.8,
+                width: `${getPercentage(localValue)}%`,
+                backgroundColor: `${accentColor.value}${isHovered ? "60" : "50"}`,
               }}
             />
-          )}
-
-          <div
-            ref={progressRef}
-            className="absolute h-full"
-            style={{
-              width: `${percentage}%`,
-              backgroundColor: `${accentColor.value}40`,
-            }}
-          />
+          </div>
 
           <div
             ref={thumbRef}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 rounded-full",
-              getThumbBorderClasses(),
-              "flex items-center justify-center",
+              "absolute top-2 -translate-x-1/2 z-10 cursor-grab",
+              isDragging && "cursor-grabbing",
+              "border-2",
               sizeConfig[size].thumb,
+              "transition-colors duration-200",
             )}
             style={{
-              backgroundColor: `${accentColor.value}50`,
-              borderColor:
-                variant === "3d"
-                  ? `${accentColor.value}80`
-                  : `${accentColor.value}60`,
-              borderBottomColor:
-                variant === "3d" ? accentColor.value : `${accentColor.value}60`,
-              boxShadow:
-                variant === "3d"
-                  ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`
-                  : `0 0 0 1px ${accentColor.value}60`,
+              backgroundColor: `${accentColor.value}${isHovered || isDragging ? "90" : "80"}`,
+              borderColor: `${accentColor.value}`,
+              left: `${getPercentage(localValue)}%`,
+              transform: isDragging
+                ? "translateX(0) scale(1.1)"
+                : "translateX(0) scale(1)",
             }}
           >
             <div
-              className="absolute inset-0 bg-gradient-radial from-white/30 via-transparent to-transparent transition-opacity duration-300 rounded-full"
-              style={{ opacity: isHovered ? 0.5 : 0 }}
+              className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent transition-opacity duration-200"
+              style={{ opacity: isHovered || isDragging ? 0.5 : 0 }}
             />
+
+            <div className="absolute inset-0 flex items-center justify-center opacity-70">
+              <div className="w-2/3 h-[2px] bg-white/50"></div>
+            </div>
           </div>
         </div>
       </div>
 
       <input
+        ref={inputRef}
         type="range"
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
+        value={localValue}
+        onChange={handleChange}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         disabled={disabled}
         aria-valuemin={min}
         aria-valuemax={max}
-        aria-valuenow={value}
-        aria-valuetext={valueLabel ? `${valueLabel}: ${value}` : `${value}`}
+        aria-valuenow={localValue}
+        aria-valuetext={
+          valueLabel ? `${valueLabel}: ${localValue}` : `${localValue}`
+        }
       />
     </div>
   );
