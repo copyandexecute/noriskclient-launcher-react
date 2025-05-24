@@ -4,7 +4,6 @@ import type React from "react";
 import { forwardRef, useRef, useState } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { cn } from "../../lib/utils";
-import { gsap } from "gsap";
 import { ThemedSurface } from "./ThemedSurface";
 
 export interface TagBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -37,7 +36,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       children,
       className,
       iconElement,
-      variant = "flat",
+      variant = "default",
       size = "md",
       onClick,
       disabled = false,
@@ -52,9 +51,6 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
     );
     const [isHovered, setIsHovered] = useState(false);
     const [isPressed, setIsPressed] = useState(false);
-    const [ripples, setRipples] = useState<RippleType[]>([]);
-    const rippleCounter = useRef(0);
-
     const isClickable = !!onClick && !disabled;
 
     const mergedRef = (node: HTMLDivElement) => {
@@ -68,60 +64,14 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
       badgeRef.current = node;
     };
 
-    const handleRipple = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (disabled || !isClickable) return;
-
-      const badge = badgeRef.current;
-      if (!badge) return;
-
-      const rect = badge.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const rippleSize = Math.max(rect.width, rect.height) * 2.5;
-
-      const newRipple: RippleType = {
-        x,
-        y,
-        size: rippleSize,
-        id: rippleCounter.current,
-      };
-
-      rippleCounter.current += 1;
-      setRipples((prevRipples) => [...prevRipples, newRipple]);
-
-      setTimeout(() => {
-        setRipples((prevRipples) =>
-          prevRipples.filter((ripple) => ripple.id !== newRipple.id),
-        );
-      }, 850);
-
-      if (onClick) onClick(e);
-    };
-
     const handleMouseDown = () => {
       if (disabled || !isClickable) return;
       setIsPressed(true);
-
-      if (badgeRef.current && isBackgroundAnimationEnabled) {
-        gsap.to(badgeRef.current, {
-          scale: 0.95,
-          duration: 0.1,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseUp = () => {
       if (disabled || !isClickable) return;
       setIsPressed(false);
-
-      if (badgeRef.current && isBackgroundAnimationEnabled) {
-        gsap.to(badgeRef.current, {
-          scale: 1,
-          duration: 0.2,
-          ease: "elastic.out(1.2, 0.4)",
-        });
-      }
     };
 
     const handleMouseEnter = () => {
@@ -249,7 +199,7 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
         )}
         baseColorHex={variantStyles.main}
         alwaysActive={true}
-        onClick={isClickable ? handleRipple : undefined}
+        onClick={isClickable ? onClick : undefined}
         onMouseDown={isClickable ? handleMouseDown : undefined}
         onMouseUp={isClickable ? handleMouseUp : undefined}
         onMouseEnter={isClickable ? handleMouseEnter : undefined}
@@ -257,19 +207,6 @@ export const TagBadge = forwardRef<HTMLDivElement, TagBadgeProps>(
         style={customStyling}
         {...props}
       >
-        {ripples.map((ripple) => (
-          <span
-            key={ripple.id}
-            className="absolute rounded-full pointer-events-none bg-white/30 animate-ripple"
-            style={{
-              left: ripple.x - ripple.size / 2,
-              top: ripple.y - ripple.size / 2,
-              width: ripple.size,
-              height: ripple.size,
-            }}
-          />
-        ))}
-
         <span
           className={cn(
             "relative z-10 flex items-center font-minecraft-ten",

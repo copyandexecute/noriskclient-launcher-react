@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { cn } from "../../../lib/utils";
 import { gsap } from "gsap";
 import { useThemeStore } from "../../../store/useThemeStore";
@@ -52,8 +52,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const buttonRef = useRef<HTMLButtonElement>(null);
-    const [ripples, setRipples] = useState<RippleType[]>([]);
-    const rippleCounter = useRef(0);
     const accentColor = useThemeStore((state) => state.accentColor);
     const isBackgroundAnimationEnabled = useThemeStore(
       (state) => state.isBackgroundAnimationEnabled,
@@ -72,50 +70,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       buttonRef.current = node;
     };
 
-    useEffect(() => {
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
-        gsap.fromTo(
-          buttonRef.current,
-          { scale: 0.95, opacity: 0 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-    }, [isBackgroundAnimationEnabled]);
-
     const handleRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
       if (disabled) return;
-
-      const button = buttonRef.current;
-      if (!button) return;
-
-      const rect = button.getBoundingClientRect();
-
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      const size = Math.max(rect.width, rect.height) * 2.5;
-
-      const newRipple: RippleType = {
-        x,
-        y,
-        size,
-        id: rippleCounter.current,
-      };
-
-      rippleCounter.current += 1;
-
-      setRipples((prevRipples) => [...prevRipples, newRipple]);
-
-      setTimeout(() => {
-        setRipples((prevRipples) =>
-          prevRipples.filter((ripple) => ripple.id !== newRipple.id),
-        );
-      }, 850);
 
       if (onClick) onClick(e);
     };
@@ -123,27 +79,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const handleMouseDown = () => {
       if (disabled) return;
       setIsPressed(true);
-
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
-        gsap.to(buttonRef.current, {
-          scale: 0.95,
-          duration: 0.1,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseUp = () => {
       if (disabled) return;
       setIsPressed(false);
-
-      if (buttonRef.current && isBackgroundAnimationEnabled) {
-        gsap.to(buttonRef.current, {
-          scale: 1,
-          duration: 0.2,
-          ease: "elastic.out(1.2, 0.4)",
-        });
-      }
     };
 
     const handleMouseEnter = () => {
@@ -344,7 +284,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={cn(
-          "font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-200",
+          "font-minecraft relative overflow-hidden backdrop-blur-md",
           "rounded-md text-white tracking-wider lowercase",
           "flex items-center justify-center gap-2",
           "text-shadow-sm whitespace-nowrap",
@@ -378,19 +318,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             }}
           />
         )}
-
-        {ripples.map((ripple) => (
-          <span
-            key={ripple.id}
-            className="absolute rounded-full pointer-events-none bg-white/30 animate-ripple"
-            style={{
-              left: ripple.x - ripple.size / 2,
-              top: ripple.y - ripple.size / 2,
-              width: ripple.size,
-              height: ripple.size,
-            }}
-          />
-        ))}
 
         <div
           className="flex items-center justify-center gap-2 transition-transform duration-200"

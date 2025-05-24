@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
@@ -40,10 +40,6 @@ export function Select({
   const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
-  const [ripples, setRipples] = useState<
-    { x: number; y: number; size: number; id: number }[]
-  >([]);
-  const rippleCounter = useRef(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
@@ -55,94 +51,19 @@ export function Select({
 
   const selectedOption = options.find((option) => option.value === value);
 
-  useEffect(() => {
-    if (containerRef.current && shouldAnimate) {
-      gsap.fromTo(
-        containerRef.current,
-        { scale: 0.95, opacity: 0 },
-        {
-          scale: 1,
-          opacity: 1,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [shouldAnimate]);
-
-  const handleRipple = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-
-    const button = triggerRef.current;
-    if (!button) return;
-
-    const rect = button.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const size = Math.max(rect.width, rect.height) * 2.5;
-
-    const newRipple = {
-      x,
-      y,
-      size,
-      id: rippleCounter.current++,
-    };
-
-    setRipples((prev) => [...prev, newRipple]);
-
-    setTimeout(() => {
-      setRipples((prev) => prev.filter((ripple) => ripple.id !== newRipple.id));
-    }, 850);
-
-    handleClick();
-  };
-
   const handleClick = () => {
     if (disabled) return;
     setIsOpen(!isOpen);
-
-    if (triggerRef.current && shouldAnimate) {
-      gsap.to(triggerRef.current, {
-        scale: 0.95,
-        duration: 0.1,
-        ease: "power2.out",
-        onComplete: () => {
-          if (triggerRef.current) {
-            gsap.to(triggerRef.current, {
-              scale: 1,
-              duration: 0.2,
-              ease: "elastic.out(1.2, 0.4)",
-            });
-          }
-        },
-      });
-    }
   };
 
   const handleMouseDown = () => {
     if (disabled) return;
     setIsPressed(true);
-
-    if (triggerRef.current && shouldAnimate) {
-      gsap.to(triggerRef.current, {
-        scale: 0.95,
-        duration: 0.1,
-        ease: "power2.out",
-      });
-    }
   };
 
   const handleMouseUp = () => {
     if (disabled) return;
     setIsPressed(false);
-
-    if (triggerRef.current && shouldAnimate) {
-      gsap.to(triggerRef.current, {
-        scale: 1,
-        duration: 0.2,
-        ease: "elastic.out(1.2, 0.4)",
-      });
-    }
   };
 
   const handleMouseEnter = () => {
@@ -175,18 +96,6 @@ export function Select({
   const handleOptionSelect = (optionValue: string) => {
     onChange(optionValue);
     setIsOpen(false);
-
-    if (triggerRef.current && shouldAnimate) {
-      gsap.fromTo(
-        triggerRef.current,
-        { scale: 0.95 },
-        {
-          scale: 1,
-          duration: 0.3,
-          ease: "elastic.out(1.2, 0.4)",
-        },
-      );
-    }
   };
 
   const sizeStyles = {
@@ -323,13 +232,13 @@ export function Select({
       <button
         ref={triggerRef}
         type="button"
-        onClick={handleRipple}
+        onClick={handleClick}
         onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={cn(
-          "font-minecraft relative overflow-hidden backdrop-blur-md transition-all duration-200",
+          "font-minecraft relative overflow-hidden backdrop-blur-md",
           "text-white tracking-wider lowercase rounded-md",
           "flex items-center justify-between w-full",
           "text-shadow-sm",
@@ -363,19 +272,6 @@ export function Select({
             }}
           />
         )}
-
-        {ripples.map((ripple) => (
-          <span
-            key={ripple.id}
-            className="absolute rounded-full pointer-events-none bg-white/30 animate-ripple"
-            style={{
-              left: ripple.x - ripple.size / 2,
-              top: ripple.y - ripple.size / 2,
-              width: ripple.size,
-              height: ripple.size,
-            }}
-          />
-        ))}
 
         {buttonContent}
       </button>

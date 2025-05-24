@@ -1,9 +1,8 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, type ReactNode, useEffect, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
-import { gsap } from "gsap";
 import { useThemeStore } from "../../store/useThemeStore";
 
 interface CardProps {
@@ -50,53 +49,12 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     cardRef.current = node;
   };
 
-  useEffect(() => {
-    if (withAnimation && isBackgroundAnimationEnabled && cardRef.current) {
-      gsap.fromTo(
-        cardRef.current,
-        { scale: 0.95, opacity: 0 },
-        {
-          scale: 1,
-          opacity: 1,
-          duration: 0.4,
-          ease: "power2.out",
-        },
-      );
-    }
-  }, [withAnimation, isBackgroundAnimationEnabled]);
-
   const handleMouseEnter = () => {
     setIsHovered(true);
-    if (
-      onClick &&
-      isBackgroundAnimationEnabled &&
-      cardRef.current &&
-      variant === "3d"
-    ) {
-      gsap.to(cardRef.current, {
-        y: 0,
-        boxShadow: `0 13px 0 rgba(0,0,0,0.25), 0 16px 20px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
-    if (
-      onClick &&
-      isBackgroundAnimationEnabled &&
-      cardRef.current &&
-      variant === "3d"
-    ) {
-      gsap.to(cardRef.current, {
-        y: 0,
-        boxShadow: getBoxShadow(),
-        duration: 0.2,
-        ease: "power2.out",
-      });
-    }
   };
 
   const getBoxShadow = () => {
@@ -126,7 +84,6 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     }
   };
 
-  // Get background color based on variant
   const getBackgroundColor = () => {
     if (variant === "secondary") {
       return "rgba(107, 114, 128, 0.2)";
@@ -139,7 +96,6 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     return `${accentColor.value}30`;
   };
 
-  // Get border color based on variant and hover state
   const getBorderColor = () => {
     if (variant === "secondary") {
       return "rgba(107, 114, 128, 0.6)";
@@ -152,7 +108,6 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     return `${accentColor.value}80`;
   };
 
-  // Get border bottom color based on variant and hover state
   const getBorderBottomColor = () => {
     if (variant === "secondary") {
       return "rgba(75, 85, 99, 1)";
@@ -169,7 +124,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
     <div
       ref={mergedRef}
       className={cn(
-        "relative backdrop-blur-md rounded-lg overflow-hidden transition-all duration-200",
+        "relative backdrop-blur-md rounded-lg overflow-hidden",
         getBorderStyle(),
         onClick && "cursor-pointer",
         className,

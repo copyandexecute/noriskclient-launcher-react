@@ -1,11 +1,10 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
-import { gsap } from "gsap";
 
 export interface InputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
@@ -36,83 +35,24 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const accentColor = useThemeStore((state) => state.accentColor);
 
-    useEffect(() => {
-      if (containerRef.current) {
-        gsap.fromTo(
-          containerRef.current,
-          { scale: 0.98, opacity: 0 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-    }, []);
-
     const handleFocus = () => {
       if (props.disabled) return;
       setIsFocused(true);
-
-      if (containerRef.current && variant === "3d") {
-        gsap.to(containerRef.current, {
-          y: -5,
-          boxShadow: error
-            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
-            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleBlur = () => {
       if (props.disabled) return;
       setIsFocused(false);
-
-      if (containerRef.current && variant === "3d") {
-        gsap.to(containerRef.current, {
-          y: 0,
-          boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseEnter = () => {
       if (props.disabled) return;
       setIsHovered(true);
-
-      if (!isFocused && containerRef.current && variant === "3d") {
-        gsap.to(containerRef.current, {
-          y: -3,
-          boxShadow: error
-            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
-            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseLeave = () => {
       if (props.disabled) return;
       setIsHovered(false);
-
-      if (!isFocused && containerRef.current && variant === "3d") {
-        gsap.to(containerRef.current, {
-          y: 0,
-          boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleClear = () => {
@@ -151,7 +91,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <div
           ref={containerRef}
           className={cn(
-            "relative rounded-md transition-all duration-200",
+            "relative rounded-md",
             getBorderClasses(),
             "overflow-hidden",
             error ? "border-red-500" : "",
@@ -172,14 +112,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             boxShadow:
               variant === "3d"
                 ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)`
-                : "none",
-            transform:
-              variant === "3d"
-                ? isFocused
-                  ? "translateY(-5px)"
-                  : isHovered
-                    ? "translateY(-3px)"
-                    : "translateY(0)"
                 : "none",
             filter:
               (isFocused || isHovered) && !props.disabled

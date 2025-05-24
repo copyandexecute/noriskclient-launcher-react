@@ -1,9 +1,8 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { cn } from "../../lib/utils";
-import { gsap } from "gsap";
 import { useThemeStore } from "../../store/useThemeStore";
 
 export interface TextAreaProps
@@ -22,115 +21,22 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       (state) => state.isBackgroundAnimationEnabled,
     );
 
-    useEffect(() => {
-      if (containerRef.current && isBackgroundAnimationEnabled) {
-        gsap.fromTo(
-          containerRef.current,
-          { scale: 0.98, opacity: 0 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-    }, [isBackgroundAnimationEnabled]);
-
     const handleFocus = () => {
       setIsFocused(true);
-      if (
-        containerRef.current &&
-        isBackgroundAnimationEnabled &&
-        variant === "3d"
-      ) {
-        gsap.to(containerRef.current, {
-          y: -5,
-          boxShadow: error
-            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.4), inset 0 0 0 1px rgba(239, 68, 68, 0.2)`
-            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-
-        const content = containerRef.current.querySelector("textarea");
-        if (content) {
-          gsap.to(content, {
-            scale: 1.05,
-            duration: 0.2,
-            ease: "power2.out",
-          });
-        }
-      }
     };
 
     const handleBlur = () => {
       setIsFocused(false);
-      if (
-        containerRef.current &&
-        isBackgroundAnimationEnabled &&
-        variant === "3d"
-      ) {
-        gsap.to(containerRef.current, {
-          y: 0,
-          boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-
-        const content = containerRef.current.querySelector("textarea");
-        if (content) {
-          gsap.to(content, {
-            scale: 1,
-            duration: 0.2,
-            ease: "power2.out",
-          });
-        }
-      }
     };
 
     const handleMouseEnter = () => {
       if (props.disabled) return;
       setIsHovered(true);
-
-      if (
-        !isFocused &&
-        containerRef.current &&
-        isBackgroundAnimationEnabled &&
-        variant === "3d"
-      ) {
-        gsap.to(containerRef.current, {
-          y: -3,
-          boxShadow: error
-            ? `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(239, 68, 68, 0.3), inset 0 0 0 1px rgba(239, 68, 68, 0.15)`
-            : `0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4), inset 0 1px 0 ${accentColor.value}30, inset 0 0 0 1px ${accentColor.value}15`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const handleMouseLeave = () => {
       if (props.disabled) return;
       setIsHovered(false);
-
-      if (
-        !isFocused &&
-        containerRef.current &&
-        isBackgroundAnimationEnabled &&
-        variant === "3d"
-      ) {
-        gsap.to(containerRef.current, {
-          y: 0,
-          boxShadow: error
-            ? `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(239, 68, 68, 0.1)`
-            : `0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35), inset 0 1px 0 ${accentColor.value}20, inset 0 0 0 1px ${accentColor.value}10`,
-          duration: 0.2,
-          ease: "power2.out",
-        });
-      }
     };
 
     const getBorderClasses = () => {
@@ -140,35 +46,12 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
       return "border border-b-2";
     };
 
-    let currentBoxShadow =
-      variant === "3d"
-        ? "0 4px 0 rgba(0,0,0,0.3), 0 6px 10px rgba(0,0,0,0.35)"
-        : "none";
-    if (isBackgroundAnimationEnabled && variant === "3d") {
-      if (isFocused) {
-        currentBoxShadow =
-          "0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)";
-      } else if (isHovered) {
-        currentBoxShadow =
-          "0 6px 0 rgba(0,0,0,0.25), 0 8px 12px rgba(0,0,0,0.4)";
-      }
-    }
-
-    let currentTransform = "translateY(0)";
-    if (isBackgroundAnimationEnabled && variant === "3d") {
-      if (isFocused) {
-        currentTransform = "translateY(-5px)";
-      } else if (isHovered) {
-        currentTransform = "translateY(-3px)";
-      }
-    }
-
     return (
       <div className="w-full">
         <div
           ref={containerRef}
           className={cn(
-            "relative rounded-md transition-all duration-200",
+            "relative rounded-md",
             getBorderClasses(),
             "overflow-hidden",
             error ? "border-red-500" : "",
@@ -185,9 +68,6 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(
               : isHovered || isFocused
                 ? accentColor.hoverValue
                 : accentColor.value,
-            boxShadow: currentBoxShadow,
-            transform: currentTransform,
-            // Update the filter brightness to match Button
             filter:
               (isHovered || isFocused) && !props.disabled
                 ? "brightness(1.1)"

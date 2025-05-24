@@ -1,11 +1,10 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import { useThemeStore } from "../../store/useThemeStore";
-import { gsap } from "gsap";
 
 export interface CheckboxProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type" | "size"> {
@@ -41,21 +40,6 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
       lg: "w-6 h-6",
     };
 
-    useEffect(() => {
-      if (labelRef.current && isBackgroundAnimationEnabled) {
-        gsap.fromTo(
-          labelRef.current,
-          { scale: 0.95, opacity: 0 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-    }, [isBackgroundAnimationEnabled]);
-
     const handleMouseEnter = () => {
       if (props.disabled) return;
       setIsHovered(true);
@@ -68,21 +52,6 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (props.disabled) return;
-
-      if (checkboxRef.current && isBackgroundAnimationEnabled) {
-        gsap.to(checkboxRef.current, {
-          scale: 0.9,
-          duration: 0.1,
-          ease: "power2.out",
-          onComplete: () => {
-            gsap.to(checkboxRef.current, {
-              scale: 1,
-              duration: 0.2,
-              ease: "elastic.out(1.2, 0.4)",
-            });
-          },
-        });
-      }
 
       if (props.onChange) {
         props.onChange(e);

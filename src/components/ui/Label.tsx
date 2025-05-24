@@ -1,9 +1,8 @@
 "use client";
 
 import type React from "react";
-import { forwardRef, useEffect, useRef } from "react";
+import { forwardRef, useRef } from "react";
 import { cn } from "../../lib/utils";
-import { gsap } from "gsap";
 import { useThemeStore } from "../../store/useThemeStore";
 
 interface LabelProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -50,21 +49,6 @@ export const Label = forwardRef<HTMLDivElement, LabelProps>(
       }
       labelRef.current = node;
     };
-
-    useEffect(() => {
-      if (withAnimation && labelRef.current) {
-        gsap.fromTo(
-          labelRef.current,
-          { scale: 0.95, opacity: 0 },
-          {
-            scale: 1,
-            opacity: 1,
-            duration: 0.4,
-            ease: "power2.out",
-          },
-        );
-      }
-    }, [withAnimation]);
 
     const getVariantColors = () => {
       switch (variant) {
