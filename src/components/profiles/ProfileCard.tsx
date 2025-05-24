@@ -394,13 +394,13 @@ export function ProfileCard({
 
             <div className="flex-grow min-w-0 mr-auto pr-2 max-w-[calc(100%-80px)]">
               <h3
-                className="font-minecraft text-white lowercase text-3xl whitespace-nowrap overflow-hidden text-ellipsis max-w-full"
+                className="font-minecraft-ten text-white text-lg whitespace-nowrap overflow-hidden text-ellipsis max-w-full"
                 title={profile.name}
               >
                 {profile.name}
               </h3>
               <div
-                className="flex items-center gap-2 text-white/60 mt-1 font-minecraft lowercase text-2xl whitespace-nowrap overflow-hidden text-ellipsis h-5 max-w-full"
+                className="flex items-center gap-2 text-white/60 mt-1 font-minecraft-ten text-xs whitespace-nowrap overflow-hidden text-ellipsis h-5 max-w-full"
                 title={
                   isCloning
                     ? "Cloning profile..."

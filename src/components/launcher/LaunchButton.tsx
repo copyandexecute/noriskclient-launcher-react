@@ -77,10 +77,43 @@ export function LaunchButton({
     profileState;
 
   useEffect(() => {
-    if (defaultVersion && !selectedVersion) {
-      setSelectedVersion(defaultVersion);
+    // Get the current selected version from the store
+    const currentStoreVersion = selectedVersion;
+
+    // Check if the version currently in the store is valid against the list of versions passed as props
+    const storeVersionIsValidInProps = versions?.some(v => v.id === currentStoreVersion);
+
+    if (defaultVersion) { // A defaultVersion is provided via props
+      // Case 1: The version in store is no longer valid (e.g., profile deleted)
+      // OR Case 2: The defaultVersion prop has changed and the store version doesn't match it yet.
+      if (!storeVersionIsValidInProps || currentStoreVersion !== defaultVersion) {
+        // Attempt to set the store version to the defaultVersion prop,
+        // but first ensure this defaultVersion prop itself is valid within the current `versions` list.
+        const defaultVersionPropIsValidInProps = versions?.some(v => v.id === defaultVersion);
+
+        if (defaultVersionPropIsValidInProps) {
+          setSelectedVersion(defaultVersion);
+        } else if (versions && versions.length > 0) {
+          // Fallback: If the defaultVersion prop is somehow invalid, use the first available version from props.
+          setSelectedVersion(versions[0].id);
+        } else {
+          // Fallback: No versions available at all.
+          setSelectedVersion("");
+        }
+      }
+      // If storeVersionIsValidInProps is true AND currentStoreVersion === defaultVersion, do nothing (already synchronized).
+    } else { // No defaultVersion prop is provided
+      // If the store version is invalid and no default is given, try to pick the first available version.
+      if (!storeVersionIsValidInProps) {
+        if (versions && versions.length > 0) {
+          setSelectedVersion(versions[0].id);
+        } else {
+          setSelectedVersion(""); // No versions available.
+        }
+      }
+      // If storeVersionIsValidInProps is true, and no defaultVersion prop, leave store version as is.
     }
-  }, [defaultVersion, selectedVersion, setSelectedVersion]);
+  }, [defaultVersion, versions, selectedVersion, setSelectedVersion]);
 
   // Effect for managing event listeners (game start/exit, detailed status)
   useEffect(() => {
