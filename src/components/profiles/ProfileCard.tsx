@@ -410,9 +410,9 @@ export function ProfileCard({
                 }
               >
                 {isCloning ? (
-                  <span className="animate-pulse">Cloning profile...</span>
+                  <span className="opacity-70">Cloning profile...</span>
                 ) : shouldShowSpinnerForThisProfile ? (
-                  <span className="animate-pulse">
+                  <span className="opacity-70">
                     {detailedLaunchMessage || "Starting..."}
                   </span>
                 ) : (
