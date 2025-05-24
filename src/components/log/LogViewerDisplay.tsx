@@ -269,7 +269,7 @@ export function LogViewerDisplay({
             value={searchTerm}
             onChange={onSearchChange}
             placeholder="Filter lines..."
-            className="w-full md:w-44"
+            size="sm"
           />
 
           <div className="flex items-center gap-2">
