@@ -674,12 +674,13 @@ export function SettingsTab() {
           <div className="flex items-center gap-3">
             <Button
               variant={activeTab === "general" ? "flat" : "ghost"}
-              size="sm"
+              size="md"
               onClick={() => setActiveTab("general")}
+              className="h-[42px]"
               icon={
                 <Icon
                   icon="solar:settings-bold"
-                  className="w-4 h-4 text-white"
+                  className="w-5 h-5 text-white"
                 />
               }
             >
@@ -687,12 +688,13 @@ export function SettingsTab() {
             </Button>
             <Button
               variant={activeTab === "appearance" ? "flat" : "ghost"}
-              size="sm"
+              size="md"
               onClick={() => setActiveTab("appearance")}
+              className="h-[42px]"
               icon={
                 <Icon
                   icon="solar:palette-bold"
-                  className="w-4 h-4 text-white"
+                  className="w-5 h-5 text-white"
                 />
               }
             >
