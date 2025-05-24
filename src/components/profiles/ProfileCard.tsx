@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { Profile } from "../../types/profile";
 import { useProfileStore } from "../../store/profile-store";
-import { IconButton } from "../ui/buttons/IconButton";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
@@ -228,12 +227,16 @@ export function ProfileCard({
   };
 
   const handleDuplicateFromContextMenu = () => {
-    const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
+    const mockEvent = {
+      stopPropagation: () => {},
+    } as React.MouseEvent;
     handleClone(mockEvent);
   };
 
   const handleDeleteFromContextMenu = () => {
-    const mockEvent = { stopPropagation: () => {} } as React.MouseEvent;
+    const mockEvent = {
+      stopPropagation: () => {},
+    } as React.MouseEvent;
     handleDelete(mockEvent);
   };
 
@@ -425,39 +428,6 @@ export function ProfileCard({
                   </>
                 )}
               </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute right-4 top-4">
-              <IconButton
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-                title="Edit profile"
-                disabled={isCloning}
-                size="sm"
-                variant="secondary"
-                icon={<Icon icon="solar:pen-bold" className="w-4 h-4" />}
-              />
-              <IconButton
-                onClick={handleClone}
-                title="Clone profile"
-                disabled={isCloning}
-                size="sm"
-                variant="secondary"
-                icon={<Icon icon="solar:copy-bold" className="w-4 h-4" />}
-              />
-              <IconButton
-                onClick={handleDelete}
-                title="Delete profile"
-                disabled={isCloning}
-                size="sm"
-                variant="destructive"
-                icon={
-                  <Icon icon="solar:trash-bin-trash-bold" className="w-4 h-4" />
-                }
-              />
             </div>
           </div>
         </Card>
