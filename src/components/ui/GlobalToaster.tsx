@@ -46,13 +46,13 @@ function animateToast(id: string) {
         {
           x: 50,
           opacity: 0,
-          scale: 0.9,
+          scale: 0.95,
         },
         {
           x: 0,
           opacity: 1,
           scale: 1,
-          duration: 0.3,
+          duration: 0.4,
           ease: "power2.out",
         },
       );
@@ -62,20 +62,51 @@ function animateToast(id: string) {
 
 export function GlobalToaster() {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
   const toasterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!isBackgroundAnimationEnabled) return;
+
     const toasts = document.querySelectorAll('[id^="toast-"]');
     toasts.forEach((toast) => {
       gsap.to(toast, {
-        backgroundColor: "rgba(var(--accent-rgb), 0.3)",
-        borderColor: "rgba(var(--accent-rgb), 0.8)",
-        borderBottomColor: "var(--accent)",
-        borderRadius: "0px",
-        duration: 0.3,
+        backgroundColor: `${accentColor.value}30`,
+        borderColor: `${accentColor.value}80`,
+        borderBottomColor: accentColor.value,
+        duration: 0.2,
+        ease: "power2.out",
       });
     });
-  }, [accentColor]);
+  }, [accentColor, isBackgroundAnimationEnabled]);
+
+  const getToastVariantStyles = (variant: string) => {
+    switch (variant) {
+      case "success":
+        return {
+          backgroundColor: "rgba(16, 185, 129, 0.3)",
+          borderColor: "rgba(16, 185, 129, 0.8)",
+          borderBottomColor: "#059669",
+          color: "#d1fae5",
+        };
+      case "error":
+        return {
+          backgroundColor: "rgba(239, 68, 68, 0.3)",
+          borderColor: "rgba(239, 68, 68, 0.8)",
+          borderBottomColor: "#dc2626",
+          color: "#fee2e2",
+        };
+      default:
+        return {
+          backgroundColor: `${accentColor.value}30`,
+          borderColor: `${accentColor.value}80`,
+          borderBottomColor: accentColor.value,
+          color: "#ffffff",
+        };
+    }
+  };
 
   return (
     <div ref={toasterRef}>
@@ -84,27 +115,27 @@ export function GlobalToaster() {
         toastOptions={{
           className: "font-minecraft tracking-wider lowercase text-shadow-sm",
           style: {
-            borderWidth: "2px",
-            borderBottomWidth: "4px",
-            boxShadow:
-              "0 6px 0 rgba(0,0,0,0.3), 0 8px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1px rgba(255,255,255,0.1)",
-            padding: "12px 16px",
+            borderWidth: "1px",
+            borderBottomWidth: "2px",
+            borderStyle: "solid",
+            borderRadius: "0px",
+            boxShadow: "none",
+            padding: "12px 20px",
             backdropFilter: "blur(8px)",
             WebkitBackdropFilter: "blur(8px)",
-            backgroundColor: "rgba(var(--accent-rgb), 0.3)",
-            borderColor: "rgba(var(--accent-rgb), 0.8)",
-            borderBottomColor: "var(--accent)",
-            color: "#f0f0f0",
-            borderRadius: "0px",
-            minWidth: "290px",
+            backgroundColor: `${accentColor.value}30`,
+            borderColor: `${accentColor.value}80`,
+            borderBottomColor: accentColor.value,
+            color: "#ffffff",
+            minWidth: "300px",
+            transition: "all 0.2s ease",
+            fontWeight: "500",
           },
           success: {
             style: {
-              backgroundColor: "rgba(16, 185, 129, 0.3)",
-              borderColor: "rgba(16, 185, 129, 0.8)",
-              borderBottomColor: "#059669",
-              color: "#d1fae5",
+              ...getToastVariantStyles("success"),
               borderRadius: "0px",
+              boxShadow: "none",
             },
             iconTheme: {
               primary: "#059669",
@@ -113,17 +144,27 @@ export function GlobalToaster() {
           },
           error: {
             style: {
-              backgroundColor: "rgba(239, 68, 68, 0.3)",
-              borderColor: "rgba(239, 68, 68, 0.8)",
-              borderBottomColor: "#dc2626",
-              color: "#fee2e2",
+              ...getToastVariantStyles("error"),
               borderRadius: "0px",
+              boxShadow: "none",
             },
             iconTheme: {
               primary: "#dc2626",
               secondary: "#fee2e2",
             },
           },
+          loading: {
+            style: {
+              ...getToastVariantStyles("default"),
+              borderRadius: "0px",
+              boxShadow: "none",
+            },
+            iconTheme: {
+              primary: accentColor.value,
+              secondary: "#ffffff",
+            },
+          },
+          duration: 4000,
         }}
       />
     </div>
