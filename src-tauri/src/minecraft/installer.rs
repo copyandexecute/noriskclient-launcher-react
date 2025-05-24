@@ -14,7 +14,7 @@ use crate::minecraft::{MinecraftLaunchParameters, MinecraftLauncher};
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::profile_state::{ModLoader, Profile};
 use crate::state::state_manager::State;
-use log::{error, info};
+use log::{error, info, warn};
 use uuid::Uuid;
 use rand::Rng;
 
@@ -359,7 +359,7 @@ pub async fn install_minecraft_version(
     .await?;
 
     // Create and use Minecraft launcher
-    let launcher = MinecraftLauncher::new(java_path.clone(), game_directory.clone(), credentials);
+    let launcher = MinecraftLauncher::new(java_path.clone(), game_directory.clone(), credentials.clone());
 
     info!("\nPreparing launch parameters...");
 
@@ -443,10 +443,37 @@ pub async fn install_minecraft_version(
     let loaded_norisk_config: Option<NoriskModpacksConfig> =
         if let Some(pack_id) = &profile.selected_norisk_pack_id {
             info!(
-                "Fetching Norisk config because pack '{}' is selected.",
+                "Fetching Norisk config because pack '{}' is selected. Attempting to refresh first.",
                 pack_id
             );
+            if let Some(creds) = credentials.as_ref() {
+                match creds.norisk_credentials.get_token_for_mode(is_experimental_mode) {
+                    Ok(norisk_token_value) => {
+                        info!("Attempting to update Norisk pack configuration using obtained token for pack '{}'...", pack_id);
+                        if let Err(update_err) = state.norisk_pack_manager.fetch_and_update_config(&norisk_token_value, is_experimental_mode).await {
+                            warn!(
+                                "Failed to update Norisk pack '{}' configuration: {}. Will proceed with cached version.",
+                                pack_id, update_err
+                            );
+                        } else {
+                            info!("Successfully updated Norisk pack '{}' configuration from API.", pack_id);
+                        }
+                    }
+                    Err(token_err) => {
+                        warn!(
+                            "Could not obtain Norisk token for pack '{}' to update configuration: {}. Will proceed with cached version.",
+                            pack_id, token_err
+                        );
+                    }
+                }
+            } else {
+                error!(
+                    "A Norisk pack ('{}') is selected, but no credentials were provided. Cannot attempt to update pack configuration.",
+                    pack_id
+                );
+            }
             // No need to clone state here, it's still valid in this scope
+            // Always attempt to get the config, which will be the latest if updated, or cached otherwise.
             Some(state.norisk_pack_manager.get_config().await)
         } else {
             None
