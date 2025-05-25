@@ -220,7 +220,7 @@ pub async fn check_for_updates(
     // {{target}} will also be replaced by Tauri *if* platform_specific_target is "{{target}}".
     // Otherwise, our specific target (e.g., "debian") is used directly.
     let update_url_str = format!(
-        "{}/{}/{{arch}}/{{current_version}}",
+        "{}/{}/{{{{arch}}}}/{{{{current_version}}}}",
         base_repo_url,
         platform_specific_target
     );
