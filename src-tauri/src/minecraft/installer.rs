@@ -656,9 +656,13 @@ pub async fn install_minecraft_version(
         "Syncing mods from cache to profile directory for '{}'...",
         profile.name
     );
-    // Pass the resolved target_mods list to the sync function
+
+    // Get the correct mods directory path for the profile
+    let profile_mods_path = state.profile_manager.get_profile_mods_path(profile)?;
+
+    // Pass the resolved target_mods list and the specific mods path to the sync function
     mod_downloader_service
-        .sync_mods_to_profile(&target_mods, &game_directory)
+        .sync_mods_to_profile(&target_mods, &profile_mods_path)
         .await?;
 
     info!("Mod sync completed for profile '{}'", profile.name);

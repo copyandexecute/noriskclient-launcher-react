@@ -166,16 +166,14 @@ impl ModDownloadService {
     pub async fn sync_mods_to_profile(
         &self,
         target_mods: &[TargetMod],
-        game_directory: &PathBuf,
+        profile_mods_dir: &PathBuf,
     ) -> Result<()> {
         let profile_name = "Target Profile";
         info!(
             "Syncing resolved mods to profile mods directory '{:?}' for '{}'...",
-            game_directory.join("mods"),
+            profile_mods_dir,
             profile_name
         );
-
-        let profile_mods_dir = game_directory.join("mods");
 
         if !profile_mods_dir.exists() {
             debug!("Creating profile mods directory: {:?}", profile_mods_dir);

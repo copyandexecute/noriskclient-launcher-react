@@ -1207,6 +1207,34 @@ impl ProfileManager {
         Ok(default_profile_path().join(&profile.path))
     }
 
+    /// Returns the path to the mods directory for a given profile.
+    /// The mods directory is located inside the instance path.
+    /// For Fabric, it's specifically within a versioned fabric subfolder.
+    pub fn get_profile_mods_path(&self, profile: &Profile) -> Result<PathBuf> {
+        let instance_path = self.calculate_instance_path_for_profile(profile)?;
+        log::debug!(
+            "Calculating mods path for profile '{}' (Loader: {:?}, Game Version: {}) starting from instance path: {:?}",
+            profile.name,
+            profile.loader,
+            profile.game_version,
+            instance_path
+        );
+
+        let mods_path = match profile.loader {
+            ModLoader::Fabric => {
+                let fabric_version_folder = format!("{}-{}", profile.game_version, "fabric");
+                instance_path.join("mods").join(fabric_version_folder)
+            }
+            _ => instance_path.join("mods"),
+        };
+        log::info!(
+            "Calculated mods path for profile '{}': {:?}",
+            profile.name,
+            mods_path
+        );
+        Ok(mods_path)
+    }
+
     /// Returns the path to the custom_mods directory for a given profile ID.
     /// The directory is located next to the .minecraft directory within the instance folder.
     pub async fn get_profile_custom_mods_path(&self, profile_id: Uuid) -> Result<PathBuf> {

@@ -8,6 +8,7 @@ use crate::minecraft::JvmArguments;
 use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
 use log::info;
+use log::warn;
 use std::path::PathBuf;
 use std::process::Command;
 use uuid::Uuid;
@@ -269,6 +270,26 @@ impl MinecraftLauncher {
             ));
         } else {
             info!("[NoRisk Launcher] No credentials available, skipping NoRisk parameters");
+        }
+
+        // Add Fabric specific mods folder argument if loader is Fabric
+        if let Some(p_ref) = &profile { 
+            if p_ref.loader == crate::state::profile_state::ModLoader::Fabric {
+                match state.profile_manager.get_profile_mods_path(p_ref) {
+                    Ok(mods_path) => {
+                        let mods_path_str = mods_path.to_string_lossy().replace("\\", "/");
+                        let fabric_mods_arg = format!("-Dfabric.modsFolder={}", mods_path_str);
+                        info!("Adding Fabric mods folder JVM argument: {}", fabric_mods_arg);
+                        command.arg(fabric_mods_arg);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Could not get Fabric mods path for profile '{}' (ID: {}): {}. Fabric mods folder argument will not be set.",
+                            p_ref.name, p_ref.id, e
+                        );
+                    }
+                }
+            }
         }
 
         // Add additional JVM arguments
