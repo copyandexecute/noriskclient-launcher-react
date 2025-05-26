@@ -22,6 +22,7 @@ import { toast } from "react-hot-toast";
 import { TabLayout } from ".././ui/TabLayout";
 import EffectPreviewCard from ".././EffectPreviewCard";
 import { RangeSlider } from ".././ui/RangeSlider";
+import { FullscreenEffectRenderer } from "../FullscreenEffectRenderer";
 
 export function SettingsTab() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -32,6 +33,7 @@ export function SettingsTab() {
   const [activeTab, setActiveTab] = useState<"general" | "appearance">(
     "general",
   );
+  const [showFullscreenPreview, setShowFullscreenPreview] = useState<boolean>(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const tabRef = useRef<HTMLDivElement>(null);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -593,6 +595,18 @@ export function SettingsTab() {
             />
           ))}
         </div>
+        {currentEffect !== BACKGROUND_EFFECTS.PLAIN_BACKGROUND && (
+          <div className="mt-6 flex justify-center">
+            <Button
+              onClick={() => setShowFullscreenPreview(true)}
+              variant="flat"
+              size="md"
+              icon={<Icon icon="solar:eye-scan-bold" className="w-5 h-5" />}
+            >
+              Preview Fullscreen
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -706,6 +720,12 @@ export function SettingsTab() {
       >
         <div ref={contentRef}>{renderTabContent()}</div>
       </TabLayout>
+      {showFullscreenPreview && currentEffect && (
+        <FullscreenEffectRenderer 
+          effectId={currentEffect} 
+          onClose={() => setShowFullscreenPreview(false)} 
+        />
+      )}
     </div>
   );
 }
