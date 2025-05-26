@@ -1,3 +1,5 @@
+import { ProcessMetadata } from "./processState";
+
 export enum EventType {
   InstallingJava = "installing_java",
   DownloadingLibraries = "downloading_libraries",
@@ -40,4 +42,5 @@ export interface MinecraftProcessExitedPayload {
   process_id: string;
   exit_code: number | null;
   success: boolean;
+  process_metadata: ProcessMetadata | null;
 }

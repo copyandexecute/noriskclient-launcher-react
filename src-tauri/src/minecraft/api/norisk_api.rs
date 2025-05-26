@@ -2,13 +2,21 @@ use crate::integrations::norisk_packs::NoriskModpacksConfig;
 use crate::integrations::norisk_versions::NoriskVersionsConfig;
 use crate::minecraft::auth::minecraft_auth::NoRiskToken;
 use crate::minecraft::dto::norisk_meta::NoriskAssets;
+use crate::state::process_state::ProcessMetadata;
 use crate::{
     config::HTTP_CLIENT,
     error::{AppError, Result},
 };
 use log::{debug, error, info};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CrashlogDto {
+    pub mc_logs_url: String,
+    pub metadata: Option<ProcessMetadata>,
+}
 
 pub struct NoRiskApi;
 
@@ -346,6 +354,56 @@ impl NoRiskApi {
             is_experimental,
         )
         .await
+    }
+
+    /// Submits a crash log to the NoRisk API.
+    pub async fn submit_crash_log(
+        norisk_token: &str,
+        crash_log_data: &CrashlogDto,
+        is_experimental: bool,
+    ) -> Result<()> {
+        let base_url = Self::get_api_base(is_experimental);
+        let endpoint = "core/crashlog";
+        let url = format!("{}/{}", base_url, endpoint);
+
+        debug!("[NoRisk API] Submitting crash log to endpoint: {}", endpoint);
+        debug!("[NoRisk API] Full URL: {}", url);
+        debug!("[NoRisk API] Crash log data: {:?}", crash_log_data);
+
+        let response = HTTP_CLIENT
+            .post(url)
+            .header("Authorization", format!("Bearer {}", norisk_token))
+            .json(crash_log_data)
+            .send()
+            .await
+            .map_err(|e| {
+                error!("[NoRisk API] Crash log submission request failed: {}", e);
+                AppError::RequestError(format!(
+                    "Failed to send crash log to NoRisk API: {}",
+                    e
+                ))
+            })?;
+
+        let status = response.status();
+        debug!("[NoRisk API] Crash log submission response status: {}", status);
+
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error body".to_string());
+            error!(
+                "[NoRisk API] Crash log submission error response: Status {}, Body: {}",
+                status, error_body
+            );
+            return Err(AppError::RequestError(format!(
+                "NoRisk API returned error status for crash log: {}, Body: {}",
+                status, error_body
+            )));
+        }
+
+        info!("[NoRisk API] Crash log submitted successfully.");
+        Ok(())
     }
 
     // Add more NoRisk API methods as needed

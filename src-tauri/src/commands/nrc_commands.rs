@@ -8,6 +8,7 @@ use crate::state::state_manager::State;
 use crate::minecraft::api::norisk_api::NoRiskApi;
 use crate::minecraft::auth::minecraft_auth::Credentials;
 use log::{debug, error};
+use crate::minecraft::api::norisk_api::CrashlogDto;
 
 /// Fetches news and changelog posts from the WordPress API.
 ///
@@ -137,5 +138,30 @@ pub async fn discord_auth_unlink() -> Result<(), CommandError> {
     debug!("Unlinking Discord for account {} (experimental: {})", account_id_str, is_experimental);
 
     NoRiskApi::unlink_discord(&token, &account_id_str, is_experimental).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn submit_crash_log_command(payload: CrashlogDto) -> Result<(), CommandError> {
+    debug!("Executing submit_crash_log_command with payload: {:?}", payload);
+    let state = State::get().await?;
+    let is_experimental = state.config_manager.is_experimental_mode().await;
+
+    let selected_account_arc = state
+        .minecraft_account_manager_v2
+        .get_active_account()
+        .await?
+        .ok_or(AppError::AccountError("No active account found for submitting crash log.".to_string()))?;
+    
+    let norisk_creds = &selected_account_arc.norisk_credentials;
+    let token = norisk_creds.get_token_for_mode(is_experimental)?;
+
+    debug!(
+        "Submitting crash log for account {} (experimental: {}).",
+        selected_account_arc.id,
+        is_experimental
+    );
+
+    NoRiskApi::submit_crash_log(&token, &payload, is_experimental).await?;
     Ok(())
 }

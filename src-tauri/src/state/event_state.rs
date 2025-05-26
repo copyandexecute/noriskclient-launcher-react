@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::Emitter;
 use uuid::Uuid;
+use crate::state::process_state::ProcessMetadata;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -52,6 +53,7 @@ pub struct MinecraftProcessExitedPayload {
     pub process_id: Uuid,
     pub exit_code: Option<i32>,
     pub success: bool,
+    pub process_metadata: Option<ProcessMetadata>,
 }
 
 #[derive(Clone)]

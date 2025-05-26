@@ -4,32 +4,41 @@ import { useCrashModalStore } from '../../store/crash-modal-store';
 import { Button } from '../ui/buttons/Button';
 import { Icon } from '@iconify/react';
 import { toast } from 'react-hot-toast';
-import { Profile } from '../../types/profile';
 import { getProfile, getProfileLatestLogContent } from '../../services/profile-service';
 import { uploadLogToMclogs } from '../../services/log-service';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { submitCrashLog } from '../../services/process-service';
+import type { CrashlogDto } from '../../types/processState';
+import { openExternalUrl } from '../../services/tauri-service';
 
 export function GlobalCrashReportModal() {
   const { isCrashModalOpen, crashData, closeCrashModal } = useCrashModalStore();
   const [profileName, setProfileName] = useState<string>('');
-  const [mclogsUrl, setMclogsUrl] = useState<string | null>(null); // Still needed for upload logic
+  const [mclogsUrl, setMclogsUrl] = useState<string | null>(null);
+  const [isUploadingAndReporting, setIsUploadingAndReporting] = useState(false);
 
   useEffect(() => {
     if (crashData?.profile_id) {
-      setProfileName(crashData.profile_id);
-      getProfile(crashData.profile_id)
-        .then(details => {
-          if (details?.name) {
-            setProfileName(details.name);
-          }
-        })
-        .catch(err => {
-          console.error(`Failed to fetch profile details for ${crashData.profile_id}:`, err);
-        });
+      if (crashData.process_metadata?.profile_name) {
+        setProfileName(crashData.process_metadata.profile_name);
+      } else {
+        setProfileName(crashData.profile_id);
+        getProfile(crashData.profile_id)
+          .then(details => {
+            if (details?.name) {
+              setProfileName(details.name);
+            }
+          })
+          .catch(err => {
+            console.error(`Failed to fetch profile details for ${crashData.profile_id}:`, err);
+          });
+      }
       setMclogsUrl(null);
+      setIsUploadingAndReporting(false); // Reset reporting state
     } else {
       setProfileName('');
       setMclogsUrl(null);
+      setIsUploadingAndReporting(false);
     }
   }, [crashData]);
 
@@ -37,9 +46,14 @@ export function GlobalCrashReportModal() {
     return null;
   }
 
-  const handleUploadLogs = async () => {
-    if (!crashData?.profile_id) return;
-    if (mclogsUrl) {
+  const handleUploadAndReport = async () => {
+    if (!crashData?.profile_id || !crashData?.process_metadata) {
+      toast.error("Cannot proceed: Missing critical crash data.");
+      console.error("Upload/Report error: Missing profile_id or process_metadata", crashData);
+      return;
+    }
+
+    if (mclogsUrl) { // Logs already uploaded, just copy URL
       try {
         await writeText(mclogsUrl);
         toast.success("mclogs.com URL copied to clipboard!");
@@ -50,49 +64,88 @@ export function GlobalCrashReportModal() {
       return;
     }
 
-    const uploadPromise = getProfileLatestLogContent(crashData.profile_id)
+    setIsUploadingAndReporting(true);
+
+    const combinedPromise = getProfileLatestLogContent(crashData.profile_id)
       .then(logContent => {
         if (!logContent || logContent.trim() === "") {
           throw new Error("No log content found to upload.");
         }
+        toast.loading('Uploading to mclogs.com...'); // Initial toast
         return uploadLogToMclogs(logContent);
       })
-      .then(async (url) => {
-        setMclogsUrl(url); // Store the URL, but won't display it in modal body
+      .then(async (newMclogsUrl) => {
+        setMclogsUrl(newMclogsUrl);
+        toast.dismiss(); // Dismiss mclogs upload toast
+        toast.success("Log uploaded to mclogs.com!")
+        
+        // Now submit to NoRisk server
+        const crashReportPayload: CrashlogDto = {
+          mcLogsUrl: newMclogsUrl,
+          metadata: crashData.process_metadata!, // We checked for process_metadata earlier
+        };
+        toast.loading('Submitting crash report to NoRisk...');
+        return submitCrashLog(crashReportPayload).then(() => newMclogsUrl); // Pass URL for final success
+      })
+      .then(async (finalUrl) => {
+        toast.dismiss();
         try {
-          await writeText(url);
-          return "Log uploaded successfully & URL copied!";
+          await writeText(finalUrl);
+          return "Report submitted & Log URL copied!";
         } catch (copyError) {
-          console.error("Failed to copy mclogs URL to clipboard after upload:", copyError);
-          return `Log uploaded: ${url} (Copying failed)`;
+          console.error("Failed to copy mclogs URL to clipboard after report:", copyError);
+          return `Report submitted. Log URL: ${finalUrl} (Copying failed)`;
         }
       });
 
-    toast.promise(uploadPromise, {
-      loading: 'Fetching log and uploading to mclogs.com...',
-      success: (message) => message,
-      error: (err) => err.message || 'Error uploading log.',
+    toast.promise(combinedPromise, {
+      loading: 'Processing crash report...', // This will be quickly replaced by specific loading toasts
+      success: (message) => {
+        setIsUploadingAndReporting(false);
+        return message;
+      },
+      error: (err) => {
+        setIsUploadingAndReporting(false);
+        toast.dismiss(); // Ensure any stray loading toasts are dismissed
+        return err.message || 'An error occurred during the process.';
+      },
     });
   };
-
-  const handleContactSupport = () => {
-    toast("Contact support function not yet implemented.", { icon: '헬멧' });
+  
+  const handleContactSupport = async () => {
+    try {
+      await openExternalUrl('https://discord.norisk.gg');
+      toast.success("Opened NoRisk Discord in your browser!");
+    } catch (error) {
+      console.error("Failed to open Discord URL:", error);
+      toast.error("Could not open Discord. Please go to discord.norisk.gg manually.");
+    }
   };
 
   const modalFooter = (
     <div className="flex flex-wrap justify-end gap-3">
-      <Button onClick={handleUploadLogs} variant="secondary" icon={<Icon icon="solar:upload-linear" className="w-5 h-5" />}>
-        Upload Logs
+      <Button 
+        onClick={handleUploadAndReport} 
+        variant="secondary" 
+        icon={<Icon icon="solar:upload-linear" className="w-5 h-5" />}
+        disabled={isUploadingAndReporting || !crashData?.process_metadata}
+      >
+        {mclogsUrl ? 'Copy Log URL' : 'Upload Logs & Report'}
       </Button>
-      <Button onClick={handleContactSupport} variant="default" icon={<Icon icon="solar:letter-linear" className="w-5 h-5" />}>
+      <Button 
+        onClick={handleContactSupport} 
+        variant="default" 
+        icon={<Icon icon="solar:letter-linear" className="w-5 h-5" />}
+        disabled={isUploadingAndReporting} // Disable if main action is in progress
+      >
         Contact Support
       </Button>
     </div>
   );
 
   const titleSubtitleNode = (
-    <p className="text-xs font-minecraft-ten text-gray-400"> 
-      Profile: {profileName || 'Loading...'}
+    <p className="text-xs font-minecraft-ten text-gray-400">
+      Profile: {crashData.process_metadata?.profile_name || profileName || 'Loading...'}
     </p>
   );
 
@@ -101,8 +154,8 @@ export function GlobalCrashReportModal() {
       title="Minecraft Crash Report"
       titleIcon={<Icon icon="solar:danger-bold" className="w-7 h-7 text-red-400" />}
       titleSubtitle={titleSubtitleNode}
-      onClose={closeCrashModal}
-      width="md" // Changed width to md as content is less
+      onClose={() => !isUploadingAndReporting && closeCrashModal()} // Prevent close during operation
+      width="md"
       footer={modalFooter}
     >
       <div className="p-6 space-y-4 text-white text-base text-center">

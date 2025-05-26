@@ -390,12 +390,19 @@ impl ProcessManager {
                 success = true;
             }
 
+            // Get the metadata for the payload
+            let exiting_process_metadata_clone: Option<ProcessMetadata> = {
+                let processes_map_reader = processes_arc_clone.read().await;
+                processes_map_reader.get(&process_id).map(|p_entry| p_entry.metadata.clone())
+            };
+
             // Create the specific payload
             let specific_payload = MinecraftProcessExitedPayload {
                 profile_id, // This comes from the start_process context
                 process_id,
                 exit_code,
                 success, // Uses the potentially overridden success value
+                process_metadata: exiting_process_metadata_clone,
             };
 
             // Serialize the specific payload to JSON

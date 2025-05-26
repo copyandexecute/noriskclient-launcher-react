@@ -379,7 +379,8 @@ async fn main() {
             commands::minecraft_command::get_starlight_skin_render,
             commands::nrc_commands::discord_auth_link,
             commands::nrc_commands::discord_auth_status,
-            commands::nrc_commands::discord_auth_unlink
+            commands::nrc_commands::discord_auth_unlink,
+            commands::nrc_commands::submit_crash_log_command
         ])
         .build(tauri::generate_context!()) 
         .expect("error while building tauri application") 

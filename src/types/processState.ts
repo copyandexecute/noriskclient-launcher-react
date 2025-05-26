@@ -32,3 +32,12 @@ export interface ProcessMetadata {
   profile_name?: string | null;
   profile_image_url?: string | null;
 }
+
+/**
+ * DTO for submitting crash logs.
+ * Corresponds to the Rust struct `CrashlogDto`.
+ */
+export interface CrashlogDto {
+  mcLogsUrl: string;
+  metadata: ProcessMetadata | null;
+}

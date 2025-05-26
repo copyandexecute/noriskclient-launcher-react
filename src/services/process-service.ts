@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 // Import the actual type with corrected path
-import type { ProcessMetadata } from "../types/processState";
+import type { ProcessMetadata, CrashlogDto } from "../types/processState";
 
 export async function isMinecraftRunning(profileId: string): Promise<boolean> {
   try {
@@ -92,5 +92,19 @@ export async function getLogContentForProcess(processId: string): Promise<string
     // Return an empty string or re-throw based on how errors should be handled downstream
     return ""; 
     // throw error; 
+  }
+}
+
+/**
+ * Submits a crash log to the backend.
+ */
+export async function submitCrashLog(payload: CrashlogDto): Promise<void> {
+  console.debug("[ProcessService] Submitting crash log:", payload);
+  try {
+    await invoke<void>("submit_crash_log_command", { payload });
+    console.log("[ProcessService] Crash log submitted successfully.");
+  } catch (error) {
+    console.error("[ProcessService] Failed to submit crash log:", error);
+    throw error; // Re-throw or handle as needed
   }
 }
