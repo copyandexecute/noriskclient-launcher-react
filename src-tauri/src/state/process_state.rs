@@ -39,6 +39,7 @@ pub struct ProcessManager {
     
     notify_event_tx: mpsc::Sender<CrashReportNotification>, 
     active_watchers: Arc<RwLock<HashMap<Uuid, RecommendedWatcher>>>,
+    crash_report_contents: Arc<DashMap<Uuid, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +93,7 @@ impl ProcessManager {
         let save_lock = Mutex::new(());
         let launching_processes = Arc::new(DashMap::new());
         let active_watchers = Arc::new(RwLock::new(HashMap::new()));
+        let crash_report_contents = Arc::new(DashMap::new());
 
         let (notify_event_tx, notify_event_rx) = // rx hier als mut deklarieren, wenn sie direkt hier verwendet wird
             mpsc::channel::<CrashReportNotification>(NOTIFY_EVENT_CHANNEL_BUFFER);
@@ -106,6 +108,7 @@ impl ProcessManager {
             launching_processes,
             notify_event_tx: notify_event_tx.clone(), // tx klonen für den Manager
             active_watchers: Arc::clone(&active_watchers),
+            crash_report_contents: Arc::clone(&crash_report_contents),
         };
         
         // Task zum Verarbeiten von notify-Events starten
@@ -165,6 +168,14 @@ impl ProcessManager {
                     let file_name = notification.file_path.file_name().unwrap_or_default().to_string_lossy();
                     let message_to_log = format!("[CRASH REPORT - {}]:\\n{}", file_name, content);
                     
+                    // Store the crash report content
+                    if let Ok(global_state) = State::get().await {
+                        global_state.process_manager.crash_report_contents.insert(notification.process_id, content.clone());
+                        log::info!("Stored crash report content for process {} in ProcessManager.", notification.process_id);
+                    } else {
+                        log::error!("Failed to get global state to store crash report content for process {}.", notification.process_id);
+                    }
+
                     let report_event_payload = EventPayload {
                         event_id: Uuid::new_v4(),
                         event_type: EventType::MinecraftOutput, 
@@ -565,14 +576,42 @@ impl ProcessManager {
                 processes_map_reader.get(&process_id).map(|p_entry| p_entry.metadata.clone())
             };
 
+            let mut crash_content_for_payload: Option<String> = None;
+            if !success && !was_intentionally_stopped { // It's a crash
+                log::info!("Process {} crashed. Checking for crash report content for a short duration...", process_id);
+                if let Ok(state) = &state_for_monitor_res {
+                    for i in 0..15 { // Try for up to 3 seconds (15 * 200ms)
+                        if let Some(content_tuple) = state.process_manager.crash_report_contents.remove(&process_id) {
+                            log::info!("Found crash report content for {} during polling attempt {}.", process_id, i + 1);
+                            crash_content_for_payload = Some(content_tuple.1); // .1 to get the value from (key, value)
+                            break;
+                        }
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                    }
+                    if crash_content_for_payload.is_none() {
+                        log::warn!("Crash report content for {} not found after polling.", process_id);
+                    }
+                } else {
+                    log::error!("Monitor task for crashed process {} could not get state to retrieve crash report.", process_id);
+                }
+            } else { // Process exited normally or was intentionally stopped, but still do a quick check if a report was logged
+                if let Ok(state) = &state_for_monitor_res {
+                    if let Some(content_tuple) = state.process_manager.crash_report_contents.remove(&process_id) {
+                        log::info!("Found (and removed) lingering crash report content for non-crashed process {}. This might happen if a report was generated just before a clean exit.", process_id);
+                        crash_content_for_payload = Some(content_tuple.1);
+                    }
+                }
+            }
+
             // Event an UI senden
-            if let Ok(state) = &state_for_monitor_res {
+            if let Ok(state) = &state_for_monitor_res { // Re-access state for this block, or ensure it's still valid
                 let specific_payload = MinecraftProcessExitedPayload {
                     profile_id, 
                     process_id,
                     exit_code,
                     success, 
                     process_metadata: exiting_process_metadata_clone,
+                    crash_report_content: crash_content_for_payload,
                 };
                 let specific_payload_json = serde_json::to_string(&specific_payload).unwrap_or_else(|e| {
                     log::error!("Failed to serialize MinecraftProcessExitedPayload for {}: {}", process_id, e);

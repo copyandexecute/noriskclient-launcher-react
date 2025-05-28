@@ -54,6 +54,7 @@ pub struct MinecraftProcessExitedPayload {
     pub exit_code: Option<i32>,
     pub success: bool,
     pub process_metadata: Option<ProcessMetadata>,
+    pub crash_report_content: Option<String>,
 }
 
 #[derive(Clone)]

@@ -64,12 +64,19 @@ export function GlobalCrashReportModal() {
       if (!currentMclogsUrl) {
         toast.loading('Fetching latest log content...', { id: mainToastId });
         const logContent = await getProfileLatestLogContent(crashData.profile_id);
-        if (!logContent || logContent.trim() === "") {
+        
+        let combinedLogContent = logContent;
+        if (crashData.crash_report_content && crashData.crash_report_content.trim() !== "") {
+          combinedLogContent = `--- CRASH REPORT ---\n${crashData.crash_report_content}\n\n--- LATEST LOG ---\n${logContent}`;
+          toast.loading('Preparing combined log (crash report + latest.log)...', { id: mainToastId });
+        }
+
+        if (!combinedLogContent || combinedLogContent.trim() === "") {
           throw new Error("No log content found to upload.");
         }
         
         toast.loading('Uploading to mclogs.com...', { id: mainToastId });
-        currentMclogsUrl = await uploadLogToMclogs(logContent);
+        currentMclogsUrl = await uploadLogToMclogs(combinedLogContent);
         setMclogsUrl(currentMclogsUrl);
       }
 

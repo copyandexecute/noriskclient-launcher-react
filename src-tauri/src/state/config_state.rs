@@ -53,7 +53,7 @@ fn default_profile_grouping_criterion() -> Option<String> {
 }
 
 fn default_open_logs_after_starting() -> bool {
-    false
+    true
 }
 
 fn default_concurrent_io_limit() -> usize {

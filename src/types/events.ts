@@ -43,4 +43,5 @@ export interface MinecraftProcessExitedPayload {
   exit_code: number | null;
   success: boolean;
   process_metadata: ProcessMetadata | null;
+  crash_report_content?: string;
 }
