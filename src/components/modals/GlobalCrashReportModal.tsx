@@ -10,6 +10,10 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { submitCrashLog } from '../../services/process-service';
 import type { CrashlogDto } from '../../types/processState';
 import { openExternalUrl } from '../../services/tauri-service';
+import { Window } from '@tauri-apps/api/window';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import type { EventPayload, CrashReportContentAvailablePayload } from '../../types/events';
+import { EventType } from '../../types/events';
 
 export function GlobalCrashReportModal() {
   const { isCrashModalOpen, crashData, closeCrashModal } = useCrashModalStore();
@@ -17,6 +21,8 @@ export function GlobalCrashReportModal() {
   const [mclogsUrl, setMclogsUrl] = useState<string | null>(null);
   const [noriskReportSubmitted, setNoriskReportSubmitted] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [displayedCrashReportContent, setDisplayedCrashReportContent] = useState<string | undefined>(undefined);
+  const [isListeningForCrashContent, setIsListeningForCrashContent] = useState(false);
 
   useEffect(() => {
     if (crashData?.profile_id) {
@@ -37,13 +43,95 @@ export function GlobalCrashReportModal() {
       setMclogsUrl(null);
       setNoriskReportSubmitted(false);
       setIsProcessing(false);
+      setDisplayedCrashReportContent(crashData.crash_report_content);
+      setIsListeningForCrashContent(false);
     } else {
       setProfileName('');
       setMclogsUrl(null);
       setNoriskReportSubmitted(false);
       setIsProcessing(false);
+      setDisplayedCrashReportContent(undefined);
+      setIsListeningForCrashContent(false);
     }
   }, [crashData]);
+
+  useEffect(() => {
+    const focusRelevantWindow = async () => {
+      if (isCrashModalOpen && crashData?.process_id) {
+        const crashedProcessId = crashData.process_id;
+        console.log(`Crash modal open for process ${crashedProcessId}. Attempting to focus relevant window.`);
+
+        const logWindowLabel = `log_window_${crashedProcessId}`;
+        try {
+          const targetWindowInstance = await Window.getByLabel(logWindowLabel);
+          if (targetWindowInstance) {
+            console.log(`Focusing log window: ${logWindowLabel}`);
+            await targetWindowInstance.show();
+            await targetWindowInstance.unminimize();
+            await targetWindowInstance.setFocus();
+          }
+        } catch (e) {
+          console.warn(`Log window with label ${logWindowLabel} not found for process ${crashedProcessId}:`, e);
+        }
+
+        try {
+          const mainWindowInstance = await Window.getByLabel('main');
+          if (mainWindowInstance) {
+            console.log("Focusing main application window as fallback.");
+            await mainWindowInstance.show();
+            await mainWindowInstance.unminimize();
+            await mainWindowInstance.setFocus();
+          }
+        } catch (e) {
+          console.error("Error getting or focusing main window:", e);
+        }
+      }
+    };
+
+    focusRelevantWindow();
+  }, [isCrashModalOpen, crashData]);
+
+  useEffect(() => {
+    let unlistenFn: UnlistenFn | undefined;
+
+    const listenForCrashContent = async () => {
+      if (isCrashModalOpen && crashData?.process_id && !displayedCrashReportContent && !isListeningForCrashContent) {
+        setIsListeningForCrashContent(true);
+        console.log(`Listening for CrashReportContentAvailable for process ${crashData.process_id}`);
+        try {
+          unlistenFn = await listen<EventPayload>(EventType.CrashReportContentAvailable, (event) => {
+            if (event.payload.target_id === crashData.process_id) {
+              try {
+                const contentPayload = JSON.parse(event.payload.message) as CrashReportContentAvailablePayload;
+                if (contentPayload.content) {
+                  console.log(`Received CrashReportContentAvailable for process ${crashData.process_id}`);
+                  setDisplayedCrashReportContent(contentPayload.content);
+                  toast.success("Detailed crash report loaded!");
+                  setIsListeningForCrashContent(false);
+                  if (unlistenFn) unlistenFn();
+                }
+              } catch (e) {
+                console.error("Failed to parse CrashReportContentAvailablePayload:", e);
+              }
+            }
+          });
+        } catch (error) {
+          console.error("Failed to set up listener for CrashReportContentAvailable:", error);
+          setIsListeningForCrashContent(false);
+        }
+      }
+    };
+
+    listenForCrashContent();
+
+    return () => {
+      if (unlistenFn) {
+        console.log("Cleaning up CrashReportContentAvailable listener.");
+        unlistenFn();
+      }
+      setIsListeningForCrashContent(false);
+    };
+  }, [isCrashModalOpen, crashData?.process_id, displayedCrashReportContent, isListeningForCrashContent]);
 
   if (!isCrashModalOpen || !crashData) {
     return null;
@@ -66,8 +154,8 @@ export function GlobalCrashReportModal() {
         const logContent = await getProfileLatestLogContent(crashData.profile_id);
         
         let combinedLogContent = logContent;
-        if (crashData.crash_report_content && crashData.crash_report_content.trim() !== "") {
-          combinedLogContent = `--- CRASH REPORT ---\n${crashData.crash_report_content}\n\n--- LATEST LOG ---\n${logContent}`;
+        if (displayedCrashReportContent && displayedCrashReportContent.trim() !== "") {
+          combinedLogContent = `--- CRASH REPORT ---\n${displayedCrashReportContent}\n\n--- LATEST LOG ---\n${logContent}`;
           toast.loading('Preparing combined log (crash report + latest.log)...', { id: mainToastId });
         }
 
@@ -98,13 +186,10 @@ export function GlobalCrashReportModal() {
           toast.success(`Report submitted. Log URL: ${currentMclogsUrl} (Copying failed)`, { id: mainToastId });
         }
       } else if (currentMclogsUrl && noriskReportSubmitted) {
-        // This case is for when logs are already uploaded and report submitted,
-        // and the user clicks "Copy Log URL"
-        toast.dismiss(mainToastId); // Dismiss the general processing toast
+        toast.dismiss(mainToastId);
         await writeText(currentMclogsUrl);
         toast.success("mclogs.com URL copied to clipboard!");
       } else {
-        // Should not happen given the button logic, but as a fallback:
         toast.dismiss(mainToastId);
       }
     } catch (error: any) {

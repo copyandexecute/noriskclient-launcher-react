@@ -26,6 +26,7 @@ export enum EventType {
   MinecraftProcessExited = "minecraft_process_exited",
   Error = "error",
   LaunchSuccessful = "launch_successful",
+  CrashReportContentAvailable = "crash_report_content_available",
 }
 
 export interface EventPayload {
@@ -44,4 +45,9 @@ export interface MinecraftProcessExitedPayload {
   success: boolean;
   process_metadata: ProcessMetadata | null;
   crash_report_content?: string;
+}
+
+export interface CrashReportContentAvailablePayload {
+  process_id: string;
+  content: string;
 }

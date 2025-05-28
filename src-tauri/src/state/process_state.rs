@@ -172,8 +172,29 @@ impl ProcessManager {
                     if let Ok(global_state) = State::get().await {
                         global_state.process_manager.crash_report_contents.insert(notification.process_id, content.clone());
                         log::info!("Stored crash report content for process {} in ProcessManager.", notification.process_id);
+
+                        // Emit new event with crash report content
+                        let crash_report_available_payload = crate::state::event_state::CrashReportContentAvailablePayload {
+                            process_id: notification.process_id,
+                            content: content.clone(), // Clone content for the new event
+                        };
+                        let event_payload = EventPayload {
+                            event_id: Uuid::new_v4(),
+                            event_type: EventType::CrashReportContentAvailable,
+                            target_id: Some(notification.process_id),
+                            message: serde_json::to_string(&crash_report_available_payload).unwrap_or_else(|e| {
+                                log::error!("Failed to serialize CrashReportContentAvailablePayload for {}: {}", notification.process_id, e);
+                                String::from("{ \"error\": \"serialization failed\" }")
+                            }),
+                            progress: None,
+                            error: None,
+                        };
+                        if let Err(e) = global_state.event_state.emit(event_payload).await {
+                            log::error!("Failed to emit CrashReportContentAvailable event for process {}: {}", notification.process_id, e);
+                        }
+
                     } else {
-                        log::error!("Failed to get global state to store crash report content for process {}.", notification.process_id);
+                        log::error!("Failed to get global state to store/emit crash report content for process {}.", notification.process_id);
                     }
 
                     let report_event_payload = EventPayload {
@@ -576,32 +597,15 @@ impl ProcessManager {
                 processes_map_reader.get(&process_id).map(|p_entry| p_entry.metadata.clone())
             };
 
-            let mut crash_content_for_payload: Option<String> = None;
-            if !success && !was_intentionally_stopped { // It's a crash
-                log::info!("Process {} crashed. Checking for crash report content for a short duration...", process_id);
+            // Try to get crash content if it was processed very fast. No extensive polling here.
+            let crash_content_for_payload: Option<String> = {
                 if let Ok(state) = &state_for_monitor_res {
-                    for i in 0..15 { // Try for up to 3 seconds (15 * 200ms)
-                        if let Some(content_tuple) = state.process_manager.crash_report_contents.remove(&process_id) {
-                            log::info!("Found crash report content for {} during polling attempt {}.", process_id, i + 1);
-                            crash_content_for_payload = Some(content_tuple.1); // .1 to get the value from (key, value)
-                            break;
-                        }
-                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                    }
-                    if crash_content_for_payload.is_none() {
-                        log::warn!("Crash report content for {} not found after polling.", process_id);
-                    }
+                    state.process_manager.crash_report_contents.remove(&process_id).map(|(_, text)| text)
                 } else {
-                    log::error!("Monitor task for crashed process {} could not get state to retrieve crash report.", process_id);
+                    log::error!("Monitor task for process {} could not get state to attempt retrieving crash report.", process_id);
+                    None
                 }
-            } else { // Process exited normally or was intentionally stopped, but still do a quick check if a report was logged
-                if let Ok(state) = &state_for_monitor_res {
-                    if let Some(content_tuple) = state.process_manager.crash_report_contents.remove(&process_id) {
-                        log::info!("Found (and removed) lingering crash report content for non-crashed process {}. This might happen if a report was generated just before a clean exit.", process_id);
-                        crash_content_for_payload = Some(content_tuple.1);
-                    }
-                }
-            }
+            };
 
             // Event an UI senden
             if let Ok(state) = &state_for_monitor_res { // Re-access state for this block, or ensure it's still valid

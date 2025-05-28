@@ -35,6 +35,7 @@ pub enum EventType {
     StarlightSkinUpdated,
     Error,
     LaunchSuccessful,
+    CrashReportContentAvailable,
 }
 
 #[derive(Serialize, Clone)]
@@ -55,6 +56,12 @@ pub struct MinecraftProcessExitedPayload {
     pub success: bool,
     pub process_metadata: Option<ProcessMetadata>,
     pub crash_report_content: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CrashReportContentAvailablePayload {
+    pub process_id: Uuid,
+    pub content: String,
 }
 
 #[derive(Clone)]
