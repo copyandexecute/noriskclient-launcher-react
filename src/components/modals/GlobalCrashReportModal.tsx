@@ -15,7 +15,8 @@ export function GlobalCrashReportModal() {
   const { isCrashModalOpen, crashData, closeCrashModal } = useCrashModalStore();
   const [profileName, setProfileName] = useState<string>('');
   const [mclogsUrl, setMclogsUrl] = useState<string | null>(null);
-  const [isUploadingAndReporting, setIsUploadingAndReporting] = useState(false);
+  const [noriskReportSubmitted, setNoriskReportSubmitted] = useState<boolean>(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (crashData?.profile_id) {
@@ -34,11 +35,13 @@ export function GlobalCrashReportModal() {
           });
       }
       setMclogsUrl(null);
-      setIsUploadingAndReporting(false); // Reset reporting state
+      setNoriskReportSubmitted(false);
+      setIsProcessing(false);
     } else {
       setProfileName('');
       setMclogsUrl(null);
-      setIsUploadingAndReporting(false);
+      setNoriskReportSubmitted(false);
+      setIsProcessing(false);
     }
   }, [crashData]);
 
@@ -46,70 +49,63 @@ export function GlobalCrashReportModal() {
     return null;
   }
 
-  const handleUploadAndReport = async () => {
+  const handlePrimaryAction = async () => {
     if (!crashData?.profile_id || !crashData?.process_metadata) {
       toast.error("Cannot proceed: Missing critical crash data.");
-      console.error("Upload/Report error: Missing profile_id or process_metadata", crashData);
+      console.error("Action error: Missing profile_id or process_metadata", crashData);
       return;
     }
 
-    if (mclogsUrl) { // Logs already uploaded, just copy URL
-      try {
-        await writeText(mclogsUrl);
-        toast.success("mclogs.com URL copied to clipboard!");
-      } catch (error) {
-        toast.error("Error copying URL to clipboard.");
-        console.error("Failed to copy mclogs URL to clipboard:", error);
-      }
-      return;
-    }
+    setIsProcessing(true);
+    let currentMclogsUrl = mclogsUrl;
+    const mainToastId = toast.loading('Processing crash report...');
 
-    setIsUploadingAndReporting(true);
-
-    const combinedPromise = getProfileLatestLogContent(crashData.profile_id)
-      .then(logContent => {
+    try {
+      if (!currentMclogsUrl) {
+        toast.loading('Fetching latest log content...', { id: mainToastId });
+        const logContent = await getProfileLatestLogContent(crashData.profile_id);
         if (!logContent || logContent.trim() === "") {
           throw new Error("No log content found to upload.");
         }
-        toast.loading('Uploading to mclogs.com...'); // Initial toast
-        return uploadLogToMclogs(logContent);
-      })
-      .then(async (newMclogsUrl) => {
-        setMclogsUrl(newMclogsUrl);
-        toast.dismiss(); // Dismiss mclogs upload toast
-        toast.success("Log uploaded to mclogs.com!")
         
-        // Now submit to NoRisk server
-        const crashReportPayload: CrashlogDto = {
-          mcLogsUrl: newMclogsUrl,
-          metadata: crashData.process_metadata!, // We checked for process_metadata earlier
-        };
-        toast.loading('Submitting crash report to NoRisk...');
-        return submitCrashLog(crashReportPayload).then(() => newMclogsUrl); // Pass URL for final success
-      })
-      .then(async (finalUrl) => {
-        toast.dismiss();
-        try {
-          await writeText(finalUrl);
-          return "Report submitted & Log URL copied!";
-        } catch (copyError) {
-          console.error("Failed to copy mclogs URL to clipboard after report:", copyError);
-          return `Report submitted. Log URL: ${finalUrl} (Copying failed)`;
-        }
-      });
+        toast.loading('Uploading to mclogs.com...', { id: mainToastId });
+        currentMclogsUrl = await uploadLogToMclogs(logContent);
+        setMclogsUrl(currentMclogsUrl);
+      }
 
-    toast.promise(combinedPromise, {
-      loading: 'Processing crash report...', // This will be quickly replaced by specific loading toasts
-      success: (message) => {
-        setIsUploadingAndReporting(false);
-        return message;
-      },
-      error: (err) => {
-        setIsUploadingAndReporting(false);
-        toast.dismiss(); // Ensure any stray loading toasts are dismissed
-        return err.message || 'An error occurred during the process.';
-      },
-    });
+      if (currentMclogsUrl && !noriskReportSubmitted) {
+        toast.loading('Submitting crash report to NoRisk...', { id: mainToastId });
+        const crashReportPayload: CrashlogDto = {
+          mcLogsUrl: currentMclogsUrl,
+          metadata: crashData.process_metadata!, 
+        };
+        
+        await submitCrashLog(crashReportPayload);
+        setNoriskReportSubmitted(true);
+        
+        try {
+          await writeText(currentMclogsUrl);
+          toast.success("Report submitted & Log URL copied!", { id: mainToastId });
+        } catch (copyError) {
+          console.error("Failed to copy mclogs URL after report:", copyError);
+          toast.success(`Report submitted. Log URL: ${currentMclogsUrl} (Copying failed)`, { id: mainToastId });
+        }
+      } else if (currentMclogsUrl && noriskReportSubmitted) {
+        // This case is for when logs are already uploaded and report submitted,
+        // and the user clicks "Copy Log URL"
+        toast.dismiss(mainToastId); // Dismiss the general processing toast
+        await writeText(currentMclogsUrl);
+        toast.success("mclogs.com URL copied to clipboard!");
+      } else {
+        // Should not happen given the button logic, but as a fallback:
+        toast.dismiss(mainToastId);
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'An unexpected error occurred.', { id: mainToastId });
+      console.error("Crash report processing error:", error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
   
   const handleContactSupport = async () => {
@@ -122,21 +118,26 @@ export function GlobalCrashReportModal() {
     }
   };
 
+  let primaryButtonText = 'Upload Logs & Report';
+  if (mclogsUrl && noriskReportSubmitted) {
+    primaryButtonText = 'Copy Log URL';
+  }
+
   const modalFooter = (
     <div className="flex flex-wrap justify-end gap-3">
       <Button 
-        onClick={handleUploadAndReport} 
+        onClick={handlePrimaryAction} 
         variant="secondary" 
-        icon={<Icon icon="solar:upload-linear" className="w-5 h-5" />}
-        disabled={isUploadingAndReporting || !crashData?.process_metadata}
+        icon={<Icon icon={mclogsUrl && noriskReportSubmitted ? "solar:copy-line-duotone" : "solar:upload-linear"} className="w-5 h-5" />}
+        disabled={isProcessing || !crashData?.process_metadata}
       >
-        {mclogsUrl ? 'Copy Log URL' : 'Upload Logs & Report'}
+        {primaryButtonText}
       </Button>
       <Button 
         onClick={handleContactSupport} 
         variant="default" 
         icon={<Icon icon="solar:letter-linear" className="w-5 h-5" />}
-        disabled={isUploadingAndReporting} // Disable if main action is in progress
+        disabled={isProcessing}
       >
         Contact Support
       </Button>
@@ -154,7 +155,7 @@ export function GlobalCrashReportModal() {
       title="Minecraft Crash Report"
       titleIcon={<Icon icon="solar:danger-bold" className="w-7 h-7 text-red-400" />}
       titleSubtitle={titleSubtitleNode}
-      onClose={() => !isUploadingAndReporting && closeCrashModal()} // Prevent close during operation
+      onClose={() => !isProcessing && closeCrashModal()}
       width="md"
       footer={modalFooter}
     >

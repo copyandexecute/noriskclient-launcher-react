@@ -162,6 +162,6 @@ pub async fn submit_crash_log_command(payload: CrashlogDto) -> Result<(), Comman
         is_experimental
     );
 
-    NoRiskApi::submit_crash_log(&token, &payload, is_experimental).await?;
+    NoRiskApi::submit_crash_log(&token, &payload, &selected_account_arc.id.to_string(), is_experimental).await?;
     Ok(())
 }

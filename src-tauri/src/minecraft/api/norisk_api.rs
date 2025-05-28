@@ -360,6 +360,7 @@ impl NoRiskApi {
     pub async fn submit_crash_log(
         norisk_token: &str,
         crash_log_data: &CrashlogDto,
+        request_uuid: &str,
         is_experimental: bool,
     ) -> Result<()> {
         let base_url = Self::get_api_base(is_experimental);
@@ -368,11 +369,13 @@ impl NoRiskApi {
 
         debug!("[NoRisk API] Submitting crash log to endpoint: {}", endpoint);
         debug!("[NoRisk API] Full URL: {}", url);
+        debug!("[NoRisk API] With request UUID: {}", request_uuid);
         debug!("[NoRisk API] Crash log data: {:?}", crash_log_data);
 
         let response = HTTP_CLIENT
             .post(url)
             .header("Authorization", format!("Bearer {}", norisk_token))
+            .query(&[("uuid", request_uuid)])
             .json(crash_log_data)
             .send()
             .await
