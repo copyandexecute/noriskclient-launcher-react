@@ -1,5 +1,6 @@
 use crate::error::Result;
 use dashmap::DashMap;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::Emitter;
@@ -79,10 +80,13 @@ pub struct EventState {
 
 impl EventState {
     pub fn new(app: Option<Arc<tauri::AppHandle>>) -> Self {
-        Self {
+        info!("Initializing EventState...");
+        let state = Self {
             app,
             active_events: DashMap::new(),
-        }
+        };
+        info!("Successfully initialized EventState.");
+        state
     }
 
     pub async fn emit(&self, payload: EventPayload) -> Result<()> {

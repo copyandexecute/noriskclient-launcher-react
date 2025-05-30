@@ -96,6 +96,7 @@ impl ConfigManager {
 
         // Load config if it exists
         manager.load_config().await?;
+        info!("Successfully initialized ConfigManager.");
 
         Ok(manager)
     }
@@ -134,7 +135,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    async fn save_config(&self) -> Result<()> {
+    pub async fn save_config(&self) -> Result<()> {
         let _guard = self.save_lock.lock().await;
         debug!("Acquired save lock, proceeding to save config...");
 
@@ -142,7 +143,6 @@ impl ConfigManager {
         if let Some(parent_dir) = self.config_path.parent() {
             if !parent_dir.exists() {
                 fs::create_dir_all(parent_dir).await?;
-                info!("Created directory for config file: {:?}", parent_dir);
             }
         }
 

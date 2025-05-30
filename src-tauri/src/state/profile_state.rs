@@ -236,6 +236,7 @@ impl ProfileManager {
     pub async fn new(profiles_path: PathBuf) -> Result<Self> {
         info!("Initializing ProfileManager with path: {:?}", profiles_path);
         let profiles = Self::load_profiles(&profiles_path).await?;
+        info!("Successfully initialized ProfileManager.");
         Ok(Self {
             profiles: Arc::new(RwLock::new(profiles)),
             profiles_path,

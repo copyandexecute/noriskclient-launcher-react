@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager; // Keep for app_handle.state()
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
+use std::sync::atomic::AtomicBool;
 
 // Discord application ID for NoRiskClient
 const DISCORD_APP_ID: &str = "775352010345021450"; // Replace with actual Discord application ID
@@ -22,7 +23,7 @@ pub struct DiscordManager {
     client: Arc<Mutex<Option<DiscordIpcClient>>>,
     current_state: Arc<RwLock<DiscordState>>,
     enabled: Arc<RwLock<bool>>,
-    idle_start_timestamp: Arc<RwLock<Option<i64>>>, // Added timestamp for idle state
+    idle_start_timestamp: Arc<RwLock<Option<i64>>>,
 }
 
 impl DiscordManager {
@@ -42,28 +43,23 @@ impl DiscordManager {
             client: Arc::new(Mutex::new(None)),
             current_state: Arc::new(RwLock::new(DiscordState::Idle)),
             enabled: Arc::new(RwLock::new(enabled)),
-            idle_start_timestamp: Arc::new(RwLock::new(initial_timestamp)), // Initialize with current time or None
+            idle_start_timestamp: Arc::new(RwLock::new(initial_timestamp)),
         };
 
         // Initialize Discord presence if enabled
         if enabled {
             debug!("Discord Rich Presence initially enabled, connecting...");
-            // Errors während der Initialisierung werden ignoriert, aber geloggt
             if let Err(e) = manager.connect().await {
                 error!("Failed to connect to Discord during initialization: {}", e);
-                // Trotzdem fortsetzen, kein Return mit Fehler
             }
-
-            // Force initial Discord state update
             debug!("Setting initial Discord state to Idle");
-            // Force-Parameter auf true setzen, um den State auch zu setzen, wenn er schon Idle ist
             if let Err(e) = manager.set_state_internal(DiscordState::Idle, true).await {
                 error!("Failed to set initial Discord state: {}", e);
-                // Trotzdem fortsetzen, kein Return mit Fehler
             }
         } else {
             info!("Discord Rich Presence is disabled");
         }
+        info!("Successfully initialized Discord Rich Presence Manager");
 
         Ok(manager)
     }

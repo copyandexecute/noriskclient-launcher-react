@@ -85,10 +85,7 @@ impl ProcessManager {
         processes_file_path: PathBuf,
         app_handle: Arc<tauri::AppHandle>,
     ) -> Result<Self> {
-        log::info!(
-            "Initializing ProcessManager with state file: {:?}",
-            processes_file_path
-        );
+        log::info!("Initializing ProcessManager...");
         let processes = Arc::new(RwLock::new(HashMap::new()));
         let save_lock = Mutex::new(());
         let launching_processes = Arc::new(DashMap::new());
@@ -141,6 +138,7 @@ impl ProcessManager {
         let tailer_processes_arc = Arc::clone(&manager.processes);
         tokio::spawn(Self::periodic_log_tailer(tailer_processes_arc));
 
+        log::info!("Successfully initialized ProcessManager.");
         Ok(manager)
     }
 

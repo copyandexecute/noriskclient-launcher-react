@@ -35,6 +35,7 @@ impl NoriskVersionManager {
             error!("Critical error loading norisk_versions.json (path: {:?}): {}. Using default empty config.", config_path, e);
             NoriskVersionsConfig { profiles: vec![] }
         });
+        info!("Successfully initialized NoriskVersionManager.");
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             config_path,

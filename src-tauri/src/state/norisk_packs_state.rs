@@ -28,6 +28,7 @@ impl NoriskPackManager {
             config_path
         );
         let config = Self::load_config(&config_path).await?;
+        info!("Successfully initialized NoriskPackManager.");
         Ok(Self {
             config: Arc::new(RwLock::new(config)),
             config_path,

@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::{Mutex, RwLock};
+use std::collections::HashMap;
 
 const SKINS_FILENAME: &str = "minecraft_skins.json";
 
@@ -59,6 +60,7 @@ impl SkinManager {
 
         // Load skins if the file exists
         manager.load_skins().await?;
+        info!("Successfully initialized SkinManager.");
 
         Ok(manager)
     }
