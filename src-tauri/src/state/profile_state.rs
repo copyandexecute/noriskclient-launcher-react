@@ -2,6 +2,8 @@ use crate::config::LAUNCHER_DIRECTORY;
 use crate::error::AppError;
 use crate::error::Result;
 use crate::integrations::modrinth::{self, ModrinthDependencyType, ModrinthVersion};
+use crate::state::post_init::PostInitializationHandler;
+use async_trait::async_trait;
 use crate::utils::hash_utils;
 use crate::utils::path_utils;
 use chrono::{DateTime, Utc};
@@ -233,19 +235,20 @@ pub struct ProfileManager {
 }
 
 impl ProfileManager {
-    pub async fn new(profiles_path: PathBuf) -> Result<Self> {
-        info!("Initializing ProfileManager with path: {:?}", profiles_path);
-        let profiles = Self::load_profiles(&profiles_path).await?;
-        info!("Successfully initialized ProfileManager.");
+    pub fn new(profiles_path: PathBuf) -> Result<Self> {
+        info!(
+            "ProfileManager: Initializing with path: {:?} (profiles loading deferred)",
+            profiles_path
+        );
         Ok(Self {
-            profiles: Arc::new(RwLock::new(profiles)),
+            profiles: Arc::new(RwLock::new(HashMap::new())), // Start with empty profiles
             profiles_path,
             save_lock: Mutex::new(()),
         })
     }
 
-    // JSON Laden/Speichern
-    async fn load_profiles(path: &PathBuf) -> Result<HashMap<Uuid, Profile>> {
+    // Renamed from load_profiles to avoid conflict, made internal
+    async fn load_profiles_internal(&self, path: &PathBuf) -> Result<HashMap<Uuid, Profile>> {
         if !path.exists() {
             return Ok(HashMap::new());
         }
@@ -1684,6 +1687,19 @@ impl ProfileManager {
                 filename, profile_id
             )))
         }
+    }
+}
+
+#[async_trait]
+impl PostInitializationHandler for ProfileManager {
+    async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        info!("ProfileManager: on_state_ready called. Loading profiles...");
+        let loaded_profiles = self.load_profiles_internal(&self.profiles_path.clone()).await?;
+        let mut profiles_guard = self.profiles.write().await;
+        *profiles_guard = loaded_profiles;
+        drop(profiles_guard);
+        info!("ProfileManager: Successfully loaded profiles in on_state_ready.");
+        Ok(())
     }
 }
 

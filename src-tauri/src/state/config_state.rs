@@ -1,5 +1,7 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
+use crate::state::post_init::PostInitializationHandler;
+use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -84,24 +86,18 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let config_path = LAUNCHER_DIRECTORY.root_dir().join(CONFIG_FILENAME);
-        info!("Initializing ConfigManager with path: {:?}", config_path);
+        info!("ConfigManager: Initializing with path: {:?} (config loading deferred)", config_path);
 
-        let manager = Self {
+        Ok(Self {
             config: Arc::new(RwLock::new(LauncherConfig::default())),
             config_path,
             save_lock: Mutex::new(()),
-        };
-
-        // Load config if it exists
-        manager.load_config().await?;
-        info!("Successfully initialized ConfigManager.");
-
-        Ok(manager)
+        })
     }
 
-    async fn load_config(&self) -> Result<()> {
+    async fn load_config_internal(&self) -> Result<()> {
         if !self.config_path.exists() {
             info!("Config file not found, using default configuration");
             // Save the default config
@@ -281,6 +277,16 @@ impl ConfigManager {
             }
         }
 
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl PostInitializationHandler for ConfigManager {
+    async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        info!("ConfigManager: on_state_ready called. Loading configuration...");
+        self.load_config_internal().await?;
+        info!("ConfigManager: Successfully loaded configuration in on_state_ready.");
         Ok(())
     }
 }

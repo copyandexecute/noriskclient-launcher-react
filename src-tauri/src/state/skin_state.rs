@@ -1,5 +1,7 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
+use crate::state::post_init::PostInitializationHandler;
+use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -49,24 +51,20 @@ pub struct SkinManager {
 
 impl SkinManager {
     /// Create a new skin manager
-    pub async fn new(skins_path: PathBuf) -> Result<Self> {
-        info!("Initializing SkinManager with path: {:?}", skins_path);
-
-        let manager = Self {
+    pub fn new(skins_path: PathBuf) -> Result<Self> {
+        info!(
+            "SkinManager: Initializing with path: {:?} (skins loading deferred)",
+            skins_path
+        );
+        Ok(Self {
             skins: Arc::new(RwLock::new(SkinDatabase::default())),
             skins_path,
             save_lock: Mutex::new(()),
-        };
-
-        // Load skins if the file exists
-        manager.load_skins().await?;
-        info!("Successfully initialized SkinManager.");
-
-        Ok(manager)
+        })
     }
 
     /// Load skins from the database file
-    async fn load_skins(&self) -> Result<()> {
+    async fn load_skins_internal(&self) -> Result<()> {
         if !self.skins_path.exists() {
             info!("Skins database file not found, using empty database");
             // Save the empty database
@@ -223,6 +221,16 @@ impl SkinManager {
             debug!("No skin found with ID: {}", id);
             Ok(None)
         }
+    }
+}
+
+#[async_trait]
+impl PostInitializationHandler for SkinManager {
+    async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        info!("SkinManager: on_state_ready called. Loading skins...");
+        self.load_skins_internal().await?;
+        info!("SkinManager: Successfully loaded skins in on_state_ready.");
+        Ok(())
     }
 }
 

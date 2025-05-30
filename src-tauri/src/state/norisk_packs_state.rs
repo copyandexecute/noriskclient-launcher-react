@@ -2,6 +2,8 @@ use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
 use crate::integrations::norisk_packs::NoriskModpacksConfig;
 use crate::minecraft::api::norisk_api::NoRiskApi;
+use crate::state::post_init::PostInitializationHandler;
+use async_trait::async_trait;
 use log::{debug, error, info};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,15 +24,13 @@ pub struct NoriskPackManager {
 impl NoriskPackManager {
     /// Creates a new NoriskPackManager instance, loading the configuration from the specified path.
     /// If the file doesn't exist, it initializes with a default empty configuration.
-    pub async fn new(config_path: PathBuf) -> Result<Self> {
+    pub fn new(config_path: PathBuf) -> Result<Self> {
         info!(
-            "Initializing NoriskPackManager with path: {:?}",
+            "NoriskPackManager: Initializing with path: {:?} (config loading deferred)",
             config_path
         );
-        let config = Self::load_config(&config_path).await?;
-        info!("Successfully initialized NoriskPackManager.");
         Ok(Self {
-            config: Arc::new(RwLock::new(config)),
+            config: Arc::new(RwLock::new(NoriskModpacksConfig::default())),
             config_path,
             save_lock: Mutex::new(()),
         })
@@ -38,7 +38,7 @@ impl NoriskPackManager {
 
     /// Loads the Norisk packs configuration from a JSON file.
     /// Returns a default empty config if the file doesn't exist or cannot be parsed.
-    async fn load_config(path: &PathBuf) -> Result<NoriskModpacksConfig> {
+    async fn load_config_internal(&self, path: &PathBuf) -> Result<NoriskModpacksConfig> {
         if !path.exists() {
             info!(
                 "Norisk packs config file not found at {:?}, using default empty config.",
@@ -162,6 +162,19 @@ impl NoriskPackManager {
     // Add more specific accessor methods if needed, e.g.:
     // pub async fn get_pack_definition(&self, pack_id: &str) -> Option<NoriskPackDefinition> { ... }
     // pub async fn get_repository_url(&self, repo_ref: &str) -> Option<String> { ... }
+}
+
+#[async_trait]
+impl PostInitializationHandler for NoriskPackManager {
+    async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        info!("NoriskPackManager: on_state_ready called. Loading configuration...");
+        let loaded_config = self.load_config_internal(&self.config_path.clone()).await?;
+        let mut config_guard = self.config.write().await;
+        *config_guard = loaded_config;
+        drop(config_guard);
+        info!("NoriskPackManager: Successfully loaded configuration in on_state_ready.");
+        Ok(())
+    }
 }
 
 /// Returns the default path for the norisk_modpacks.json file within the launcher directory.

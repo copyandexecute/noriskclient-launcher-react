@@ -31,6 +31,15 @@ pub struct NoriskModpacksConfig {
     pub repositories: HashMap<String, String>,
 }
 
+impl Default for NoriskModpacksConfig {
+    fn default() -> Self {
+        Self {
+            packs: HashMap::new(),
+            repositories: HashMap::new(),
+        }
+    }
+}
+
 /// Defines a single Norisk modpack variant (e.g., production, development).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NoriskPackDefinition {

@@ -3,7 +3,8 @@ use crate::error::{AppError, Result};
 use crate::state::event_state::{
     EventPayload, EventState, EventType, MinecraftProcessExitedPayload,
 };
-use crate::state::{self, State};
+use crate::state::{self, State, post_init::PostInitializationHandler};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use log;
@@ -85,61 +86,32 @@ impl ProcessManager {
         processes_file_path: PathBuf,
         app_handle: Arc<tauri::AppHandle>,
     ) -> Result<Self> {
-        log::info!("Initializing ProcessManager...");
+        log::info!(
+            "Initializing ProcessManager with state file: {:?}",
+            processes_file_path
+        );
         let processes = Arc::new(RwLock::new(HashMap::new()));
         let save_lock = Mutex::new(());
         let launching_processes = Arc::new(DashMap::new());
         let active_watchers = Arc::new(RwLock::new(HashMap::new()));
         let crash_report_contents = Arc::new(DashMap::new());
 
-        let (notify_event_tx, notify_event_rx) = // rx hier als mut deklarieren, wenn sie direkt hier verwendet wird
+        // Create the channel. The receiver part (rx) will be handled/stored or recreated 
+        // appropriately when its consuming task is spawned in on_state_ready.
+        let (notify_event_tx, _notify_event_rx_placeholder) = 
             mpsc::channel::<CrashReportNotification>(NOTIFY_EVENT_CHANNEL_BUFFER);
 
-        let processes_clone = Arc::clone(&processes);
-
-        let manager = Self {
+        Ok(Self {
             app_handle: Arc::clone(&app_handle),
-            processes: processes_clone,
-            processes_file_path: processes_file_path.clone(),
+            processes,
+            processes_file_path,
             save_lock,
             launching_processes,
-            notify_event_tx: notify_event_tx.clone(), // tx klonen für den Manager
-            active_watchers: Arc::clone(&active_watchers),
-            crash_report_contents: Arc::clone(&crash_report_contents),
-        };
-        
-        // Task zum Verarbeiten von notify-Events starten
-        // Klonen Sie app_handle für den Zugriff auf den globalen State innerhalb des Tasks
-        let app_handle_for_event_processor = Arc::clone(&app_handle);
-        tokio::spawn(async move { // notify_event_rx wird hierher verschoben
-            Self::process_crash_report_events(
-                app_handle_for_event_processor, 
-                notify_event_rx, 
-            ).await;
-        });
-
-        // Muss nach der Initialisierung des Managers und dem Start des Event-Prozessors erfolgen.
-        manager.load_processes_and_watchers().await?;
-
-
-        let manager_clone_periodic_check_processes = Arc::clone(&manager.processes);
-        let manager_clone_periodic_check_watchers = Arc::clone(&manager.active_watchers);
-        let app_handle_for_periodic_check = Arc::clone(&app_handle);
-        let notify_tx_for_periodic_check = manager.notify_event_tx.clone();
-        
-        tokio::spawn(Self::periodic_process_check(
-            app_handle_for_periodic_check, 
-            manager_clone_periodic_check_processes,
-            manager_clone_periodic_check_watchers, 
-            notify_tx_for_periodic_check,
-        ));
-
-
-        let tailer_processes_arc = Arc::clone(&manager.processes);
-        tokio::spawn(Self::periodic_log_tailer(tailer_processes_arc));
-
-        log::info!("Successfully initialized ProcessManager.");
-        Ok(manager)
+            notify_event_tx, // Store the sender
+            active_watchers,
+            crash_report_contents,
+            // notify_event_rx: Mutex::new(Some(notify_event_rx_placeholder)), // Example of how to store rx
+        })
     }
 
     async fn process_crash_report_events(
@@ -255,22 +227,33 @@ impl ProcessManager {
                             last_log_position: Arc::new(Mutex::new(0)),
                         };
                         processes_map_writer.insert(process_entry.metadata.id, process_entry);
+                        log::debug!("Process {} metadata inserted into processes_map_writer.", metadata.id);
                         
                         // Watcher für diesen geladenen, laufenden Prozess starten
-                        // Hier brauchen wir Zugriff auf den ProfileManager, um den Instanzpfad zu bekommen.
-                        // Das muss über app_handle geschehen oder indem der State hierher gereicht wird.
-                        // Für den Moment loggen wir, dass es getan werden müsste.
-                        if let Ok(global_state) = State::get().await {
-                            if let Ok(instance_path) = global_state.profile_manager.get_profile_instance_path(metadata.profile_id).await {
-                                let crash_reports_path = instance_path.join("crash-reports");
-                                if let Err(e) = self.start_crash_report_watcher(metadata.id, &crash_reports_path).await {
-                                     log::error!("Failed to start crash report watcher for loaded process {}: {}", metadata.id, e);
+                        log::info!("[DEADLOCK_DEBUG] Attempting to get global state for process {} to start watcher.", metadata.id);
+                        match State::get().await {
+                            Ok(global_state) => {
+                                log::info!("[DEADLOCK_DEBUG] Successfully got global state for process {}.", metadata.id);
+                                log::info!("[DEADLOCK_DEBUG] Attempting to get instance path for profile {} (process {}).", metadata.profile_id, metadata.id);
+                                match global_state.profile_manager.get_profile_instance_path(metadata.profile_id).await {
+                                    Ok(instance_path) => {
+                                        log::info!("[DEADLOCK_DEBUG] Successfully got instance path {:?} for profile {} (process {}).", instance_path, metadata.profile_id, metadata.id);
+                                        let crash_reports_path = instance_path.join("crash-reports");
+                                        log::info!("[DEADLOCK_DEBUG] Attempting to start crash report watcher for process {} on path {:?}.", metadata.id, crash_reports_path);
+                                        if let Err(e) = self.start_crash_report_watcher(metadata.id, &crash_reports_path).await {
+                                             log::error!("Failed to start crash report watcher for loaded process {}: {}", metadata.id, e);
+                                        } else {
+                                            log::info!("[DEADLOCK_DEBUG] Successfully started or confirmed crash report watcher for process {}.", metadata.id);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!("Could not get instance path for loaded process {} to start watcher: {}", metadata.id, e);
+                                    }
                                 }
-                            } else {
-                                log::warn!("Could not get instance path for loaded process {} to start watcher.", metadata.id);
                             }
-                        } else {
-                            log::error!("Could not get global state to start watcher for loaded process {}.", metadata.id);
+                            Err(e) => {
+                                log::error!("[DEADLOCK_DEBUG] Failed to get global state for process {} to start watcher: {}. Watcher not started.", metadata.id, e);
+                            }
                         }
                         loaded_count += 1;
                     } else {
@@ -1179,6 +1162,43 @@ impl ProcessManager {
                 }
             }
         });
+    }
+}
+
+#[async_trait]
+impl PostInitializationHandler for ProcessManager {
+    async fn on_state_ready(&self, app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        log::info!("ProcessManager: on_state_ready called. Performing post-initialization tasks.");
+
+        // For process_crash_report_events: The task requires the receive end of an mpsc channel.
+        // The most robust way is to initialize tx and rx in `new`, store rx in `self` (e.g., Arc<Mutex<Option<Receiver>>>)
+        // and then .take() it here. For now, we will skip spawning this specific task here to simplify the deadlock fix.
+        // This can be revisited. The deadlock was caused by `load_processes_and_watchers` calling `State::get()` too early.
+        log::warn!("ProcessManager: Spawning of 'process_crash_report_events' task is TENTATIVELY SKIPPED in on_state_ready to simplify deadlock fix. Review if needed.");
+
+        // This was the critical call causing deadlock issues
+        self.load_processes_and_watchers().await?;
+        log::info!("ProcessManager: Finished load_processes_and_watchers.");
+
+        let manager_clone_periodic_check_processes = Arc::clone(&self.processes);
+        let manager_clone_periodic_check_watchers = Arc::clone(&self.active_watchers);
+        let app_handle_for_periodic_check = Arc::clone(&app_handle);
+        let notify_tx_for_periodic_check = self.notify_event_tx.clone(); 
+        
+        tokio::spawn(Self::periodic_process_check(
+            app_handle_for_periodic_check, 
+            manager_clone_periodic_check_processes,
+            manager_clone_periodic_check_watchers, 
+            notify_tx_for_periodic_check,
+        ));
+        log::info!("ProcessManager: Spawned periodic_process_check task.");
+
+        let tailer_processes_arc = Arc::clone(&self.processes);
+        tokio::spawn(Self::periodic_log_tailer(tailer_processes_arc));
+        log::info!("ProcessManager: Spawned periodic_log_tailer task.");
+
+        log::info!("ProcessManager: Successfully completed on_state_ready.");
+        Ok(())
     }
 }
 

@@ -16,6 +16,14 @@ pub struct NoriskVersionsConfig {
     pub profiles: Vec<Profile>,
 }
 
+impl Default for NoriskVersionsConfig {
+    fn default() -> Self {
+        Self {
+            profiles: vec![],
+        }
+    }
+}
+
 /// Loads standard profiles from the local `norisk_versions.json` file.
 /// Returns an empty config if the file doesn't exist.
 pub async fn load_local_standard_profiles() -> Result<NoriskVersionsConfig> {
