@@ -230,20 +230,20 @@ impl ProcessManager {
                         log::debug!("Process {} metadata inserted into processes_map_writer.", metadata.id);
                         
                         // Watcher für diesen geladenen, laufenden Prozess starten
-                        log::info!("[DEADLOCK_DEBUG] Attempting to get global state for process {} to start watcher.", metadata.id);
+                        log::info!("Attempting to get global state for process {} to start watcher.", metadata.id);
                         match State::get().await {
                             Ok(global_state) => {
-                                log::info!("[DEADLOCK_DEBUG] Successfully got global state for process {}.", metadata.id);
-                                log::info!("[DEADLOCK_DEBUG] Attempting to get instance path for profile {} (process {}).", metadata.profile_id, metadata.id);
+                                log::info!("Successfully got global state for process {}.", metadata.id);
+                                log::info!("Attempting to get instance path for profile {} (process {}).", metadata.profile_id, metadata.id);
                                 match global_state.profile_manager.get_profile_instance_path(metadata.profile_id).await {
                                     Ok(instance_path) => {
-                                        log::info!("[DEADLOCK_DEBUG] Successfully got instance path {:?} for profile {} (process {}).", instance_path, metadata.profile_id, metadata.id);
+                                        log::info!("Successfully got instance path {:?} for profile {} (process {}).", instance_path, metadata.profile_id, metadata.id);
                                         let crash_reports_path = instance_path.join("crash-reports");
-                                        log::info!("[DEADLOCK_DEBUG] Attempting to start crash report watcher for process {} on path {:?}.", metadata.id, crash_reports_path);
+                                        log::info!("Attempting to start crash report watcher for process {} on path {:?}.", metadata.id, crash_reports_path);
                                         if let Err(e) = self.start_crash_report_watcher(metadata.id, &crash_reports_path).await {
                                              log::error!("Failed to start crash report watcher for loaded process {}: {}", metadata.id, e);
                                         } else {
-                                            log::info!("[DEADLOCK_DEBUG] Successfully started or confirmed crash report watcher for process {}.", metadata.id);
+                                            log::info!("Successfully started or confirmed crash report watcher for process {}.", metadata.id);
                                         }
                                     }
                                     Err(e) => {
@@ -252,7 +252,7 @@ impl ProcessManager {
                                 }
                             }
                             Err(e) => {
-                                log::error!("[DEADLOCK_DEBUG] Failed to get global state for process {} to start watcher: {}. Watcher not started.", metadata.id, e);
+                                log::error!("Failed to get global state for process {} to start watcher: {}. Watcher not started.", metadata.id, e);
                             }
                         }
                         loaded_count += 1;

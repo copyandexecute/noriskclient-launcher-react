@@ -119,16 +119,16 @@ impl State {
     // Get the current state instance
     pub async fn get() -> Result<Arc<Self>> {
         if !LAUNCHER_STATE.initialized() {
-            log::error!("[DEADLOCK_DEBUG] Attempted to get state before initialization. Waiting...");
+            log::error!("Attempted to get state before initialization. Waiting...");
             let mut wait_count = 0;
             while !LAUNCHER_STATE.initialized() {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 wait_count += 1;
                 if wait_count % 10 == 0 { // Log every second
-                    log::warn!("[DEADLOCK_DEBUG] Still waiting for state initialization in State::get() after {} attempts...", wait_count);
+                    log::warn!("Still waiting for state initialization in State::get() after {} attempts...", wait_count);
                 }
             }
-            log::info!("[DEADLOCK_DEBUG] State has been initialized after {} attempts. Proceeding in State::get().", wait_count);
+            log::info!("State has been initialized after {} attempts. Proceeding in State::get().", wait_count);
         }
 
         Ok(Arc::clone(
