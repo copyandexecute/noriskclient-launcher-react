@@ -11,15 +11,15 @@ import {
 } from "../../store/background-effect-store";
 import { cn } from "../../lib/utils";
 import { gsap } from "gsap";
-import { Button } from ".././ui/buttons/Button";
-import { NebulaGrid } from ".././effects/NebulaGrid";
-import { NebulaParticles } from ".././effects/NebulaParticles";
-import { NebulaWaves } from ".././effects/NebulaWaves";
-import { NebulaVoxels } from ".././effects/NebulaVoxels";
-import { NebulaLightning } from ".././effects/NebulaLightning";
-import { NebulaLiquidChrome } from ".././effects/NebulaLiquidChrome";
-import { MatrixRainEffect } from ".././effects/MatrixRainEffect";
-import { EnchantmentParticlesEffect } from ".././effects/EnchantmentParticlesEffect";
+import { Button } from "../ui/buttons/Button";
+import { NebulaGrid } from "../effects/NebulaGrid";
+import { NebulaParticles } from "../effects/NebulaParticles";
+import { NebulaWaves } from "../effects/NebulaWaves";
+import { NebulaVoxels } from "../effects/NebulaVoxels";
+import { NebulaLightning } from "../effects/NebulaLightning";
+import { NebulaLiquidChrome } from "../effects/NebulaLiquidChrome";
+import { MatrixRainEffect } from "../effects/MatrixRainEffect";
+import { EnchantmentParticlesEffect } from "../effects/EnchantmentParticlesEffect";
 
 interface UpdaterStatusPayload {
   message: string;
@@ -50,7 +50,6 @@ export default function Updater() {
   const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const accentColor = useThemeStore((state) => state.accentColor);
-
   const currentEffect = useBackgroundEffectStore(
     (state) => state.currentEffect,
   );
@@ -155,7 +154,6 @@ export default function Updater() {
         );
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
       }
     };
   }, [appWindow]);
@@ -164,19 +162,19 @@ export default function Updater() {
     switch (status) {
       case "checking":
         return (
-          <Icon icon="solar:refresh-bold" className="w-5 h-5 animate-spin" />
+          <Icon icon="solar:refresh-bold" className="w-4 h-4 animate-spin" />
         );
       case "downloading":
-        return <Icon icon="solar:download-bold" className="w-5 h-5" />;
+        return <Icon icon="solar:download-bold" className="w-4 h-4" />;
       case "installing":
-        return <Icon icon="solar:box-bold" className="w-5 h-5" />;
+        return <Icon icon="solar:box-bold" className="w-4 h-4" />;
       case "uptodate":
       case "finished":
-        return <Icon icon="solar:check-circle-bold" className="w-5 h-5" />;
+        return <Icon icon="solar:check-circle-bold" className="w-4 h-4" />;
       case "error":
-        return <Icon icon="solar:danger-triangle-bold" className="w-5 h-5" />;
+        return <Icon icon="solar:danger-triangle-bold" className="w-4 h-4" />;
       default:
-        return <Icon icon="solar:info-circle-bold" className="w-5 h-5" />;
+        return <Icon icon="solar:info-circle-bold" className="w-4 h-4" />;
     }
   };
 
@@ -189,7 +187,8 @@ export default function Updater() {
   };
 
   const renderBackgroundEffect = () => {
-    switch (currentEffect) {
+    const effect = currentEffect || BACKGROUND_EFFECTS.NEBULA_GRID;
+    switch (effect) {
       case BACKGROUND_EFFECTS.NEBULA_PARTICLES:
         return <NebulaParticles opacity={0.1} />;
       case BACKGROUND_EFFECTS.NEBULA_WAVES:
@@ -210,15 +209,17 @@ export default function Updater() {
     }
   };
 
-  if (!isThemeLoaded) {
+  if (!isThemeLoaded || !accentColor || !accentColor.value) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-black">
-        <div className="animate-pulse text-white text-2xl font-minecraft">
+        <div className="animate-pulse text-white text-lg font-minecraft">
           Loading theme...
         </div>
       </div>
     );
   }
+
+  const safeAccentColor = accentColor.value || "#FFFFFF";
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black/80 backdrop-blur-md flex items-center justify-center">
@@ -228,91 +229,81 @@ export default function Updater() {
         ref={containerRef}
         className={cn(
           "relative flex flex-col items-center justify-between text-center",
-          "border-2 border-b-4 shadow-2xl rounded-lg",
-          "w-screen h-screen",
+          "border rounded-none",
+          "w-full h-full",
         )}
         style={{
-          backgroundColor: `${accentColor.value}20`,
-          borderColor: `${accentColor.value}80`,
-          borderBottomColor: accentColor.value,
-          boxShadow: `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`,
+          backgroundColor: `${safeAccentColor}30`,
+          borderColor: `${safeAccentColor}70`,
         }}
       >
-        <span
-          className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
-          style={{ backgroundColor: `${accentColor.value}80` }}
-        />
+        <div className="w-full pt-6" />
 
-        <div className="w-full pt-8" />
-
-        <div className="flex-1 w-full flex flex-col items-center justify-center px-8 gap-12">
+        <div className="flex-1 w-full flex flex-col items-center justify-center px-6 gap-8">
           <div className="flex flex-col items-center">
             <img
               ref={logoRef}
               src="/logo.png"
               alt="NoRiskClient Logo"
-              className="w-40 h-40 object-contain mb-2"
+              className="w-32 h-32 object-contain mb-1"
             />
-            <p className="text-xl font-minecraft text-white/70 lowercase">
+            <p className="text-lg font-minecraft text-white/70 lowercase">
               Updater
             </p>
           </div>
 
-          <div className="flex items-center justify-center mb-6">
+          <div className="flex items-center justify-center mb-4">
             {status === "uptodate" || status === "finished" ? (
               <div
                 className={cn(
-                  "flex items-center justify-center gap-3 py-2 px-6",
-                  "border-2 border-b-4 rounded-md",
+                  "flex items-center justify-center gap-2 py-2 px-4",
+                  "border rounded-md",
                 )}
                 style={{
-                  backgroundColor: `${accentColor.value}30`,
-                  borderColor: `${accentColor.value}80`,
-                  borderBottomColor: accentColor.value,
+                  backgroundColor: `${safeAccentColor}30`,
+                  borderColor: `${safeAccentColor}70`,
                 }}
               >
                 <Icon
                   icon="solar:check-circle-bold"
-                  className="w-6 h-6 text-green-400"
+                  className="w-5 h-5 text-green-400"
                 />
-                <span className="font-minecraft text-2xl text-white">
+                <span className="font-minecraft text-lg text-white">
                   Update Complete
                 </span>
               </div>
             ) : status === "error" ? (
               <div
                 className={cn(
-                  "flex items-center justify-center gap-3 py-2 px-6",
-                  "border-2 border-b-4 rounded-md",
+                  "flex items-center justify-center gap-2 py-2 px-4",
+                  "border rounded-md",
                 )}
                 style={{
                   backgroundColor: "#ef444430",
-                  borderColor: "#ef444480",
-                  borderBottomColor: "#ef4444",
+                  borderColor: "#ef444470",
                 }}
               >
                 <Icon
                   icon="solar:danger-triangle-bold"
-                  className="w-6 h-6 text-red-400"
+                  className="w-5 h-5 text-red-400"
                 />
-                <span className="font-minecraft text-2xl text-white">
+                <span className="font-minecraft text-lg text-white">
                   {statusMessage}
                 </span>
               </div>
             ) : (
               <div
                 className={cn(
-                  "flex items-center justify-center gap-3 py-2 px-6",
-                  "border-2 border-b-4 rounded-md",
+                  "flex items-center justify-center gap-2 py-2 px-4",
+                  "border rounded-md",
                 )}
                 style={{
-                  backgroundColor: `${accentColor.value}30`,
-                  borderColor: `${accentColor.value}80`,
-                  borderBottomColor: accentColor.value,
+                  backgroundColor: `${safeAccentColor}30`,
+                  borderColor: `${safeAccentColor}70`,
                 }}
               >
                 {getStatusIcon()}
-                <span className="font-minecraft text-2xl text-white">
+                <span className="font-minecraft text-lg text-white">
                   {statusMessage}
                 </span>
               </div>
@@ -321,10 +312,10 @@ export default function Updater() {
 
           {progress !== null && (
             <div
-              className="w-3/4 h-3 rounded-md overflow-hidden mb-6 border-2"
+              className="w-3/4 h-2.5 rounded-md overflow-hidden border"
               style={{
-                backgroundColor: `${accentColor.value}15`,
-                borderColor: `${accentColor.value}50`,
+                backgroundColor: `${safeAccentColor}15`,
+                borderColor: `${safeAccentColor}50`,
               }}
             >
               <div
@@ -332,20 +323,20 @@ export default function Updater() {
                 className="h-full rounded-sm"
                 style={{
                   width: `${progress}%`,
-                  backgroundColor: accentColor.value,
+                  backgroundColor: safeAccentColor,
                 }}
               />
             </div>
           )}
         </div>
 
-        <div className="w-full p-8 flex justify-center">
+        <div className="w-full p-6 flex justify-center">
           {status === "error" && (
             <Button
               variant="destructive"
-              size="md"
+              size="sm"
               onClick={handleManualClose}
-              icon={<Icon icon="solar:close-circle-bold" className="w-5 h-5" />}
+              icon={<Icon icon="solar:close-circle-bold" className="w-4 h-4" />}
             >
               Close
             </Button>
