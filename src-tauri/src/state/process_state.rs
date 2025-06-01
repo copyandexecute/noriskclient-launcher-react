@@ -935,13 +935,26 @@ impl ProcessManager {
         let current_size = current_metadata.len();
 
         let mut last_pos_guard = last_pos_mutex.lock().await;
-        let last_pos = *last_pos_guard;
+        let original_last_pos = *last_pos_guard; // Store the original value from the mutex
 
-        let mut read_from_pos = last_pos;
+        let mut read_from_pos = original_last_pos;
+        let mut just_skipped_initial = false;
 
-        if current_size < last_pos {
-            log::info!("Log file {:?} seems to have rotated or shrunk (current: {}, last: {}). Resetting read position to 0.", log_path, current_size, last_pos);
+        if current_size < original_last_pos {
+            log::info!("Log file {:?} seems to have rotated or shrunk (current: {}, last: {}). Resetting read position to 0.", log_path, current_size, original_last_pos);
             read_from_pos = 0;
+            // After rotation, we read the new file from the start.
+        } else if original_last_pos == 0 && current_size > 0 {
+            // If last_pos was 0 (fresh process) and there's content,
+            // set read_from_pos to current_size to skip existing lines.
+            log::info!(
+                "Initial tail for process {} on log {:?}. Setting read position to end of file ({}) to capture only new lines.",
+                process_id,
+                log_path,
+                current_size
+            );
+            read_from_pos = current_size;
+            just_skipped_initial = true;
         }
 
         let mut bytes_actually_read: u64 = 0;
@@ -971,7 +984,7 @@ impl ProcessManager {
                 byte_buffer.clear();
 
                 match reader.read_until(b'\n', &mut byte_buffer).await {
-                    Ok(0) => break,
+                    Ok(0) => break, // EOF
                     Ok(bytes) => {
                         let bytes_u64 = bytes as u64;
                         
@@ -998,10 +1011,10 @@ impl ProcessManager {
 
                         if read_from_pos + bytes_actually_read > current_size {
                             log::warn!(
-                                "Read beyond expected size in log tailer for {:?}. Stopping read.",
+                                "Read beyond expected size in log tailer for {:?}. Correcting bytes_actually_read.",
                                 log_path
                             );
-                            bytes_actually_read = current_size - read_from_pos;
+                            bytes_actually_read = current_size - read_from_pos; // Cap it
                             break;
                         }
                     }
@@ -1010,21 +1023,39 @@ impl ProcessManager {
                         if current_size > read_from_pos {
                              bytes_actually_read = current_size - read_from_pos;
                         } else {
-                            log::warn!("Attempting to advance log position to end of current file size due to read error.");
+                            bytes_actually_read = 0; // No bytes could be read or determined
+                            log::warn!("Attempting to advance log position to end of current file size due to read error and unclear progress.");
                         }
                         break; 
                     }
                 }
             }
         } else {
-            log::trace!(
-                "No new logs found for process {} in {:?}",
-                process_id,
-                log_path
-            );
+            if just_skipped_initial {
+                 log::trace!(
+                    "Skipped reading initial content for process {} in {:?}. Log position will be set to {}.",
+                    process_id,
+                    log_path,
+                    current_size
+                );
+            } else {
+                log::trace!(
+                    "No new logs found for process {} in {:?}",
+                    process_id,
+                    log_path
+                );
+            }
         }
 
-        *last_pos_guard = read_from_pos + bytes_actually_read;
+        // Update the stored last_log_position.
+        if just_skipped_initial {
+            // If we skipped, the new "last position" is the end of the file we skipped to.
+            *last_pos_guard = current_size;
+        } else {
+            // If we read (or attempted to read), the new position is where we started plus what we read.
+            *last_pos_guard = read_from_pos + bytes_actually_read;
+        }
+        
         log::trace!(
             "Updated log position for process {} to {}",
             process_id,
