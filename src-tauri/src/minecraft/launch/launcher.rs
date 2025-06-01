@@ -7,11 +7,14 @@ use crate::minecraft::GameArguments;
 use crate::minecraft::JvmArguments;
 use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
-use log::info;
-use log::warn;
-use std::path::PathBuf;
-use std::process::Command;
+use log::{debug, error, info, warn};
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 use uuid::Uuid;
+use std::collections::HashMap;
+use std::time::Instant;
+use serde_json::Value;
+use tauri::Manager;
 
 pub struct MinecraftLaunchParameters {
     pub main_class: String,
@@ -158,6 +161,45 @@ impl MinecraftLauncher {
             info!("Processed old arguments: {:?}", processed_args);
             processed_args
         })
+    }
+
+    // Helper function to create a loggable string from a Command, redacting sensitive info.
+    fn create_loggable_command_string(command: &std::process::Command) -> String {
+        let mut parts: Vec<String> = Vec::new();
+
+        // Program
+        let program_os_str = command.get_program();
+        let program_str = program_os_str.to_string_lossy();
+        if program_str.contains(' ') || program_str.contains('\"') { // Quote if contains space or quote
+            parts.push(format!("\"{}\"", program_str.replace('\"', "\\\"")));
+        } else {
+            parts.push(program_str.into_owned());
+        }
+
+        // Arguments
+        let mut args_iter = command.get_args().peekable();
+        while let Some(arg_os_str) = args_iter.next() {
+            let mut arg_str = arg_os_str.to_string_lossy().into_owned();
+
+            if arg_str.starts_with("-Dnorisk.token=") {
+                parts.push("-Dnorisk.token=*****".to_string());
+            } else if arg_str == "--accessToken" {
+                parts.push(arg_str); // Push "--accessToken"
+                if args_iter.peek().is_some() {
+                    args_iter.next(); // Consume the actual token value
+                    parts.push("*****".to_string()); // Push the redacted placeholder
+                }
+            } else {
+                // Quote if contains space, is empty, or contains a double quote itself.
+                // The check for double quote in arg_str itself is important to ensure it gets quoted.
+                if arg_str.contains(' ') || arg_str.is_empty() || arg_str.contains('\"') {
+                    parts.push(format!("\"{}\"", arg_str.replace('\"', "\\\""))); // Escape inner quotes
+                } else {
+                    parts.push(arg_str);
+                }
+            }
+        }
+        parts.join(" ")
     }
 
     pub async fn launch(
@@ -370,7 +412,9 @@ impl MinecraftLauncher {
             command.arg(arg);
         }
 
-        info!("Executing command: {:?}", command);
+        // Log the command before execution, with sensitive information redacted.
+        let loggable_command_view = Self::create_loggable_command_string(&command);
+        info!("Executing command: {}", loggable_command_view);
 
         // Extract account information from credentials
         let (account_uuid, account_name) = if let Some(creds) = &self.credentials {
