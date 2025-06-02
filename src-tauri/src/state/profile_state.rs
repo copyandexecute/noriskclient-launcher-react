@@ -1202,13 +1202,30 @@ impl ProfileManager {
     /// This method does NOT check if the profile exists in the manager.
     pub fn calculate_instance_path_for_profile(&self, profile: &Profile) -> Result<PathBuf> {
         log::trace!(
-            "Calculating instance path for profile '{}' (Version: {})",
+            "Calculating instance path for profile '{}' (Raw profile.path: '{}', Version: {})",
             profile.name,
+            profile.path, // Log the raw profile.path string
             profile.game_version
         );
-        // TODO: The path structure might need refinement later (e.g., using profile.path or id)
-        // Currently matches the logic in get_profile_instance_path
-        Ok(default_profile_path().join(&profile.path))
+        
+        let base_path = default_profile_path();
+        let mut final_path = base_path;
+
+        // Explicitly split profile.path by '/' and push each segment
+        // This ensures that segments like "noriskclient" and "new" from "noriskclient/new"
+        // are appended individually. PathBuf::push is OS-aware.
+        for segment in profile.path.split('/') {
+            if !segment.is_empty() { // Avoid creating empty segments if path has "//" or leading/trailing "/"
+                final_path.push(segment);
+            }
+        }
+        
+        log::trace!(
+            "Constructed final path for profile '{}': {:?}",
+            profile.name,
+            final_path
+        );
+        Ok(final_path)
     }
 
     /// Returns the path to the mods directory for a given profile.

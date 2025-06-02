@@ -744,11 +744,10 @@ pub async fn open_profile_folder(
         profile_id
     );
     let state = State::get().await?;
-    let profile = state.profile_manager.get_profile(profile_id).await?;
-
-    // Construct the full path
-    let base_profiles_dir = default_profile_path();
-    let profile_full_path = base_profiles_dir.join(&profile.path);
+    let profile_full_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
 
     // Check if the directory exists (optional but good practice)
     if !profile_full_path.is_dir() {
