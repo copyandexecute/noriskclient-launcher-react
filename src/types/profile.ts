@@ -191,6 +191,7 @@ export interface UpdateProfileParams {
   clear_selected_norisk_pack?: boolean;
   banner?: ProfileBanner | null;
   background?: ProfileBanner | null;
+  norisk_information?: NoriskInformation | null;
 }
 
 export interface CopyProfileParams {

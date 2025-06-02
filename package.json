@@ -24,6 +24,7 @@
     "@types/react-virtualized": "^9.22.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "flagsmith": "^9.2.2",
     "gsap": "^3.12.7",
     "i": "^0.3.7",
     "immer": "^10.1.1",

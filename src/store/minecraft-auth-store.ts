@@ -1,6 +1,28 @@
 import { create } from "zustand";
 import { MinecraftAuthService } from "../services/minecraft-auth-service";
 import type { MinecraftAccount } from "../types/minecraft";
+import flagsmith from 'flagsmith';
+
+// Helper function to identify the user with Flagsmith
+const identifyWithFlagsmith = (account: MinecraftAccount | null) => {
+  if (account && account.id) {
+    flagsmith.identify(account.id)
+      .then(() => {
+        console.log(`[AuthStore] Flagsmith user identified: ${account.id}`);
+      })
+      .catch((error) => {
+        console.error(`[AuthStore] Error identifying Flagsmith user ${account.id}:`, error);
+      });
+  } else {
+    flagsmith.logout()
+      .then(() => {
+        console.log("[AuthStore] Flagsmith user logged out (no active account).");
+      })
+      .catch((error) => {
+        console.error("[AuthStore] Error logging out Flagsmith user:", error);
+      });
+  }
+};
 
 interface MinecraftAuthState {
   accounts: MinecraftAccount[];
@@ -38,12 +60,14 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
         activeAccount,
         isLoading: false,
       });
+      identifyWithFlagsmith(activeAccount);
     } catch (error) {
       console.error("Failed to initialize accounts:", error);
       set({
         error: `Failed to load accounts: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
       });
+      identifyWithFlagsmith(null);
     }
   },
 
@@ -67,6 +91,7 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
           activeAccount,
           isLoading: false,
         });
+        identifyWithFlagsmith(activeAccount);
       } else {
         set({ isLoading: false });
       }
@@ -82,6 +107,7 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
   removeAccount: async (accountId: string) => {
     try {
       set({ isLoading: true, error: null });
+      const wasActive = get().activeAccount?.id === accountId;
 
       await MinecraftAuthService.removeAccount(accountId);
 
@@ -98,6 +124,9 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
         activeAccount,
         isLoading: false,
       });
+      if (wasActive) {
+        identifyWithFlagsmith(activeAccount);
+      }
     } catch (error) {
       console.error("Failed to remove account:", error);
       set({
@@ -125,6 +154,7 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
         activeAccount,
         isLoading: false,
       });
+      identifyWithFlagsmith(activeAccount);
     } catch (error) {
       console.error("Failed to set active account:", error);
       set({

@@ -53,6 +53,7 @@ pub struct UpdateProfileParams {
     selected_norisk_pack_id: Option<String>,
     group: Option<String>,
     clear_selected_norisk_pack: Option<bool>,
+    norisk_information: Option<crate::state::profile_state::NoriskInformation>,
 }
 
 // Neue DTO für den copy_profile Command
@@ -460,6 +461,20 @@ async fn try_update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(),
     if let Some(new_group) = &params.group { // Borrow params.group
         info!("Updating group to: {}", new_group);
         profile.group = Some(new_group.clone());
+    }
+
+    // Handle norisk_information
+    if let Some(norisk_info) = params.norisk_information {
+        info!("Updating norisk_information to: {:?}", norisk_info);
+        profile.norisk_information = Some(norisk_info);
+    } else {
+        // This else block handles the case where `norisk_information` is explicitly `null` in JSON,
+        // which Serde maps to `None` for `Option<NoriskInformation>`.
+        // If you want to distinguish between `null` and `undefined` (field not present),
+        // you might need `Option<Option<NoriskInformation>>` or a custom deserializer.
+        // For now, if it's `None` (either not sent or sent as null), we keep the existing value.
+        // If you want `null` to clear it, you would do: `profile.norisk_information = None;`
+        info!("norisk_information not provided or explicitly null, keeping existing: {:?}", profile.norisk_information);
     }
 
     state.profile_manager.update_profile(id, profile).await?;

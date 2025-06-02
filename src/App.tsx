@@ -27,6 +27,9 @@ import {
 } from "./services/launcher-config-service";
 import { useGlobalDragAndDrop } from './hooks/useGlobalDragAndDrop';
 
+import flagsmith from 'flagsmith';
+import { FlagsmithProvider } from 'flagsmith/react';
+
 export type ProfilesTabContext = {
   currentGroupingCriterion: string;
   onGroupingChange: (newCriterion: string) => void;
@@ -41,6 +44,8 @@ export function App() {
 
   const [currentGroupingCriterion, setCurrentGroupingCriterion] =
     useState<string>("none");
+
+  const FLAGSMITH_ENVIRONMENT_ID = "eNSibjDaDW2nNJQvJnjj9y"; // User confirmed this is set
 
   useEffect(() => {
     const root = document.documentElement;
@@ -156,15 +161,23 @@ export function App() {
   useGlobalDragAndDrop();
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden">
-      <ThemeInitializer />
-      <ScrollbarProvider />
-      <GlobalToaster />
-      <GlobalCrashReportModal />
-      <AppLayout activeTab={activeTab} onNavChange={handleNavChange}>
-        <Outlet context={profilesTabContext} />
-      </AppLayout>
-    </div>
+    <FlagsmithProvider
+      options={{
+        environmentID: FLAGSMITH_ENVIRONMENT_ID,
+        api: 'https://flagsmith-staging.norisk.gg/api/v1/',
+      }}
+      flagsmith={flagsmith}
+    >
+      <div className="flex flex-col h-screen w-screen overflow-hidden">
+        <ThemeInitializer />
+        <ScrollbarProvider />
+        <GlobalToaster />
+        <GlobalCrashReportModal />
+        <AppLayout activeTab={activeTab} onNavChange={handleNavChange}>
+          <Outlet context={profilesTabContext} />
+        </AppLayout>
+      </div>
+    </FlagsmithProvider>
   );
 }
 

@@ -17,6 +17,8 @@ import { useThemeStore } from "../../store/useThemeStore";
 import { toast } from "react-hot-toast";
 import { Card } from "../ui/Card";
 import { cn } from "../../lib/utils";
+import { useFlags } from 'flagsmith/react';
+import { DesignerSettingsTab } from './settings/DesignerSettingsTab';
 
 interface ProfileSettingsProps {
   profile: Profile;
@@ -28,7 +30,10 @@ type SettingsTab =
   | "installation"
   | "java"
   | "window"
-  | "export_options";
+  | "export_options"
+  | "designer";
+
+const DESIGNER_FEATURE_FLAG_NAME = "show_keep_local_assets";
 
 export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const { updateProfile, deleteProfile } = useProfileStore();
@@ -43,6 +48,9 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
   );
+
+  const flags = useFlags([DESIGNER_FEATURE_FLAG_NAME]);
+  const showDesignerTab = flags[DESIGNER_FEATURE_FLAG_NAME]?.enabled === true;
 
   useEffect(() => {
     ProfileService.getSystemRamMb()
@@ -89,6 +97,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           editedProfile.selected_norisk_pack_id || null || undefined,
         group: editedProfile.group,
         description: editedProfile.description,
+        norisk_information: editedProfile.norisk_information,
       });
 
       toast.success("Profile saved successfully!");
@@ -129,13 +138,26 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     }
   };
 
-  const tabConfig = [
+  const baseTabConfig = [
     { id: "general", label: "General", icon: "solar:settings-bold" },
     { id: "installation", label: "Installation", icon: "solar:download-bold" },
     { id: "java", label: "Java", icon: "solar:code-bold" },
     { id: "window", label: "Window", icon: "solar:widget-bold" },
     { id: "export_options", label: "Export", icon: "solar:export-bold" },
   ];
+
+  const tabConfig = showDesignerTab
+    ? [
+        ...baseTabConfig,
+        { id: "designer", label: "Designer", icon: "solar:palette-bold" },
+      ]
+    : baseTabConfig;
+
+  useEffect(() => {
+    if (activeTab === "designer" && !showDesignerTab) {
+      setActiveTab("general");
+    }
+  }, [activeTab, showDesignerTab]);
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -174,6 +196,16 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
         );
       case "export_options":
         return <ExportSettingsTab profile={profile} onClose={onClose} />;
+      case "designer":
+        if (showDesignerTab) {
+          return (
+            <DesignerSettingsTab
+              editedProfile={editedProfile}
+              updateProfile={updateProfileData}
+            />
+          );
+        }
+        return null;
       default:
         return null;
     }
