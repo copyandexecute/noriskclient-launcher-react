@@ -418,6 +418,12 @@ impl JavaDownloadService {
         version: &u32,
         force_x86_64: bool,
     ) -> Result<PathBuf> {
+        debug!(
+            "Attempting to find Java binary for distribution: {}, version: {}, force_x86_64: {}",
+            distribution.get_name(),
+            version,
+            force_x86_64
+        );
         let arch_suffix = if force_x86_64 { "_x86_64" } else { "" };
         let runtime_path = self.base_path.join(format!(
             "{}_{}{}",
@@ -450,6 +456,7 @@ impl JavaDownloadService {
 
         // Try all possible paths
         for java_binary in java_binary_paths {
+            debug!("Checking for Java binary at: {:?}", java_binary);
             if java_binary.exists() {
                 // Check if the binary has execution permissions on linux and macOS
                 #[cfg(unix)]
@@ -466,10 +473,16 @@ impl JavaDownloadService {
                     }
                 }
 
+                debug!("Found Java binary at: {:?}", java_binary);
                 return Ok(java_binary);
             }
         }
 
+        debug!(
+            "Java binary not found in standard locations for distribution: {}, version: {}. Attempting recursive search.",
+            distribution.get_name(),
+            version
+        );
         // If we couldn't find a binary in the expected locations, let's scan the directory recursively
         self.find_java_binary_recursive(&runtime_path).await
     }
@@ -480,10 +493,12 @@ impl JavaDownloadService {
             OperatingSystem::WINDOWS => "javaw.exe",
             _ => "java",
         };
+        debug!("Starting recursive search for '{}' in directory: {:?}", binary_name, dir);
 
         let mut dirs_to_search = vec![dir.clone()];
 
         while let Some(current_dir) = dirs_to_search.pop() {
+            debug!("Recursively searching in: {:?}", current_dir);
             if let Ok(mut entries) = fs::read_dir(&current_dir).await {
                 while let Ok(Some(entry)) = entries.next_entry().await {
                     let path = entry.path();
@@ -491,6 +506,7 @@ impl JavaDownloadService {
                     if path.is_dir() {
                         dirs_to_search.push(path);
                     } else if path.file_name().and_then(|n| n.to_str()) == Some(binary_name) {
+                        debug!("Found Java binary recursively at: {:?}", path);
                         // Found the Java binary
                         #[cfg(unix)]
                         {
@@ -508,6 +524,10 @@ impl JavaDownloadService {
             }
         }
 
+        error!(
+            "Failed to find Java binary ('{}') recursively in directory: {:?}",
+            binary_name, dir
+        );
         Err(AppError::JavaDownload(
             "Failed to find Java binary".to_string(),
         ))
