@@ -177,7 +177,7 @@ export function ProfileCard({
               return `Profile '${newName}' cloned successfully!`;
             },
             error: (err) =>
-              `Failed to clone profile: ${err instanceof Error ? err.message : String(err)}`,
+              `Failed to clone profile: ${err instanceof Error ? err.message : String(err.message)}`,
           })
           .finally(() => {
             setIsCloning(false);

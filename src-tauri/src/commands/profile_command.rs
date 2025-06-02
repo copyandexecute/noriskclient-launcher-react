@@ -20,7 +20,7 @@ use crate::utils::{
     datapack_utils, path_utils, profile_utils, resourcepack_utils, shaderpack_utils,
 };
 use chrono::Utc;
-use log::{error, info, warn};
+use log::{error, info, warn, trace};
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use sanitize_filename::sanitize;
 use serde::{Deserialize, Serialize};
@@ -1267,7 +1267,10 @@ pub async fn copy_profile(params: CopyProfileParams) -> Result<Uuid, CommandErro
         .map_err(|e| CommandError::from(AppError::Io(e)))?;
 
     // 7. Berechne die vollständigen Pfade für Quell- und Zielverzeichnisse
-    let source_full_path = base_profiles_dir.join(&source_profile.path);
+    let source_full_path = state
+        .profile_manager
+        .calculate_instance_path_for_profile(&source_profile)?;
+    // The calculate_instance_path_for_profile function has its own trace logging
 
     // 8. Kopiere die Dateien basierend auf den Parametern
     let files_copied = if let Some(include_files) = &params.include_files {
