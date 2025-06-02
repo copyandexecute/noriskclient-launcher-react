@@ -24,6 +24,7 @@ interface ProfileContextMenuProps {
   onDuplicate: () => void;
   onOpenFolder: () => void;
   onExport: () => void;
+  onOpenSettings: () => void;
 }
 
 export const ProfileContextMenu = forwardRef<
@@ -40,6 +41,7 @@ export const ProfileContextMenu = forwardRef<
     onDuplicate,
     onOpenFolder,
     onExport,
+    onOpenSettings,
   },
   ref: ForwardedRef<HTMLDivElement>,
 ) {
@@ -134,66 +136,102 @@ export const ProfileContextMenu = forwardRef<
 
       <ul className="py-1">
         {!profile.is_standard_version && (
-          <li
-            className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
-            onClick={() => {
-              console.log(
-                "[ContextMenu] Delete item clicked - will call handleAction",
-              );
-              handleAction(() => onDelete(profile.id, profile.name));
-            }}
-          >
-            <Icon
-              icon="solar:trash-bin-trash-bold"
-              className="w-5 h-5 text-red-400"
-            />
-            <span className="font-minecraft text-xl lowercase text-red-400">
-              Delete Profile
-            </span>
-          </li>
+          <>
+            <li
+              className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log("[ContextMenu] Settings item clicked");
+                handleAction(onOpenSettings);
+              }}
+            >
+              <Icon icon="solar:settings-bold" className="w-5 h-5 text-white" />
+              <span className="font-minecraft-ten text-base text-white/80">
+                Settings
+              </span>
+            </li>
+            <li className="px-4 py-1">
+              <div
+                className="h-px"
+                style={{ backgroundColor: accentColor.value + "40" }}
+              />
+            </li>
+          </>
         )}
         <li
           className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             console.log("[ContextMenu] Duplicate item clicked");
             handleAction(onDuplicate);
           }}
         >
-          <Icon icon="solar:copy-bold" className="w-5 h-5 text-blue-400" />
-          <span className="font-minecraft text-xl lowercase text-blue-400">
+          <Icon icon="solar:copy-bold" className="w-5 h-5 text-white" />
+          <span className="font-minecraft-ten text-base text-white/80">
             Duplicate Profile
           </span>
         </li>
         <li
           className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             console.log("[ContextMenu] Open Folder item clicked");
             handleAction(onOpenFolder);
           }}
         >
           <Icon
             icon="solar:folder-with-files-bold"
-            className="w-5 h-5 text-green-400"
+            className="w-5 h-5 text-white"
           />
-          <span className="font-minecraft text-xl lowercase text-green-400">
+          <span className="font-minecraft-ten text-base text-white/80">
             Open Profile Folder
           </span>
         </li>
         <li
           className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             console.log("[ContextMenu] Export item clicked");
             handleAction(onExport);
           }}
         >
           <Icon
             icon="solar:export-bold"
-            className="w-5 h-5 text-yellow-400"
+            className="w-5 h-5 text-white"
           />
-          <span className="font-minecraft text-xl lowercase text-yellow-400">
+          <span className="font-minecraft-ten text-base text-white/80">
             Export Profile
           </span>
         </li>
+
+        {!profile.is_standard_version && (
+          <>
+            <li className="px-4 py-1">
+              <div
+                className="h-px"
+                style={{ backgroundColor: accentColor.value + "40" }}
+              />
+            </li>
+            <li
+              className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log(
+                  "[ContextMenu] Delete item clicked - will call handleAction",
+                );
+                handleAction(() => onDelete(profile.id, profile.name));
+              }}
+            >
+              <Icon
+                icon="solar:trash-bin-trash-bold"
+                className="w-5 h-5 text-red-400"
+              />
+              <span className="font-minecraft-ten text-base text-white/80">
+                Delete Profile
+              </span>
+            </li>
+          </>
+        )}
       </ul>
       {confirmDialog}
     </div>

@@ -155,7 +155,7 @@ export function ProfilesTab() {
       setShowDetailView(false);
       setSelectedProfile(null);
     }
-  }, [params.profileId, profiles, loading, setSelectedProfile, navigate]);
+  }, [params.profileId, profiles, loading, setSelectedProfile, navigate, showDetailView, selectedProfile]);
 
   useEffect(() => {
     if (isBackgroundAnimationEnabled) {
@@ -275,13 +275,8 @@ export function ProfilesTab() {
     }
     setSelectedProfile(profile);
     setShowSettings(true);
-    setShowDetailView(false);
-    navigate(`/profiles/${profile.id}`, { replace: true });
-    console.log(
-      "[ProfilesTab] Navigated to /profiles/" +
-        profile.id +
-        " for edit settings.",
-    );
+
+    console.log("[ProfilesTab] Profile settings modal opened. Underlying view/URL remains unchanged by this action.");
   };
 
   const handleViewProfile = (profile: Profile) => {
@@ -464,7 +459,6 @@ export function ProfilesTab() {
                 selectedProfile,
               );
               if (selectedProfile && !selectedProfile.is_standard_version) {
-                setShowDetailView(false);
                 handleEditProfile(selectedProfile);
               }
             }}
@@ -567,18 +561,10 @@ export function ProfilesTab() {
                 params.profileId,
               );
               setShowSettings(false);
-              setSelectedProfile(null);
-              fetchProfiles();
-              if (params.profileId) {
-                navigate("/profiles");
-                console.log(
-                  "[ProfilesTab] Navigated to /profiles after closing settings from /profiles/:id.",
-                );
-              } else {
-                console.log(
-                  "[ProfilesTab] Settings closed, but not on a specific profile URL. No navigation needed from onClose.",
-                );
-              }
+              console.log(
+                "[ProfilesTab] ProfileSettings closed. Staying on current view for URL:",
+                location.pathname,
+              );
             }}
           />
         )}

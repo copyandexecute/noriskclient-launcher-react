@@ -277,6 +277,10 @@ export function ProfileCard({
   };
 
   const handleDivClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (contextMenuVisible) {
+      return;
+    }
+
     const target = e.target as HTMLElement;
     const isInteractiveElementClick =
       target.closest("button") ||
@@ -445,6 +449,7 @@ export function ProfileCard({
         onDuplicate={handleDuplicateFromContextMenu}
         onOpenFolder={handleOpenFolder}
         onExport={handleExportFromContextMenu}
+        onOpenSettings={onEdit}
       />
     </>
   );
