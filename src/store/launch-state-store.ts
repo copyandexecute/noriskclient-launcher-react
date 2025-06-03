@@ -13,6 +13,8 @@ interface ProfileLaunchState {
   launchProgress: number;
   error: string | null;
   logHistory: string[];
+  isButtonLaunching: boolean;
+  buttonStatusMessage: string | null;
 }
 
 interface LaunchStateStore {
@@ -28,6 +30,10 @@ interface LaunchStateStore {
   addLogEntry: (profileId: string, log: string) => void;
   getProfileState: (profileId: string) => ProfileLaunchState;
   resetLaunchState: (profileId: string) => void;
+  setButtonLaunchingState: (profileId: string, isLaunching: boolean) => void;
+  setButtonStatusMessage: (profileId: string, message: string | null) => void;
+  initiateButtonLaunch: (profileId: string) => void;
+  finalizeButtonLaunch: (profileId: string, errorMsg?: string | null) => void;
 }
 
 const DEFAULT_PROFILE_STATE: ProfileLaunchState = {
@@ -36,6 +42,8 @@ const DEFAULT_PROFILE_STATE: ProfileLaunchState = {
   launchProgress: 0,
   error: null,
   logHistory: [],
+  isButtonLaunching: false,
+  buttonStatusMessage: null,
 };
 
 export const useLaunchStateStore = create<LaunchStateStore>((set, get) => ({
@@ -101,6 +109,8 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => ({
             ...currentProfile,
             launchState: LaunchState.ERROR,
             error,
+            isButtonLaunching: false,
+            buttonStatusMessage: error,
           },
         },
       };
@@ -145,11 +155,97 @@ export const useLaunchStateStore = create<LaunchStateStore>((set, get) => ({
               currentStep: "",
               launchProgress: 0,
               error: null,
+              isButtonLaunching: false,
+              buttonStatusMessage: null,
             },
           },
         };
       }
       return state;
+    });
+  },
+
+  setButtonLaunchingState: (profileId: string, isLaunching: boolean) => {
+    set((state) => {
+      if (!state.profiles[profileId]) {
+        state.initializeProfile(profileId);
+      }
+      const currentProfile = state.profiles[profileId] || { ...DEFAULT_PROFILE_STATE };
+      return {
+        ...state,
+        profiles: {
+          ...state.profiles,
+          [profileId]: {
+            ...currentProfile,
+            isButtonLaunching: isLaunching,
+          },
+        },
+      };
+    });
+  },
+
+  setButtonStatusMessage: (profileId: string, message: string | null) => {
+    set((state) => {
+      if (!state.profiles[profileId]) {
+        state.initializeProfile(profileId);
+      }
+      const currentProfile = state.profiles[profileId] || { ...DEFAULT_PROFILE_STATE };
+      return {
+        ...state,
+        profiles: {
+          ...state.profiles,
+          [profileId]: {
+            ...currentProfile,
+            buttonStatusMessage: message,
+          },
+        },
+      };
+    });
+  },
+
+  initiateButtonLaunch: (profileId: string) => {
+    set((state) => {
+      if (!state.profiles[profileId]) {
+        state.initializeProfile(profileId);
+      }
+      const currentProfile = state.profiles[profileId] || { ...DEFAULT_PROFILE_STATE };
+      return {
+        ...state,
+        profiles: {
+          ...state.profiles,
+          [profileId]: {
+            ...currentProfile,
+            isButtonLaunching: true,
+            buttonStatusMessage: "Starte Profil...",
+            error: null,
+            launchState: LaunchState.LAUNCHING,
+          },
+        },
+      };
+    });
+  },
+
+  finalizeButtonLaunch: (profileId: string, errorMsg?: string | null) => {
+    set((state) => {
+      if (!state.profiles[profileId]) {
+        state.initializeProfile(profileId);
+      }
+      const currentProfile = state.profiles[profileId] || { ...DEFAULT_PROFILE_STATE };
+      const isError = typeof errorMsg === 'string' && errorMsg.length > 0;
+
+      return {
+        ...state,
+        profiles: {
+          ...state.profiles,
+          [profileId]: {
+            ...currentProfile,
+            isButtonLaunching: false,
+            buttonStatusMessage: isError ? errorMsg : null,
+            error: isError ? errorMsg : currentProfile.error,
+            launchState: isError ? LaunchState.ERROR : LaunchState.IDLE,
+          },
+        },
+      };
     });
   },
 }));

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { Button } from "./Button";
 import { toast } from "react-hot-toast";
-import { listen } from "@tauri-apps/api/event";
-import { EventPayload, EventType } from "../../../types/events";
+import { listen, Event as TauriEvent } from "@tauri-apps/api/event";
+import { EventPayload as FrontendEventPayload, EventType as FrontendEventType } from "../../../types/events";
 import * as ProcessService from "../../../services/process-service";
 import * as ProfileService from "../../../services/profile-service";
+import { useLaunchStateStore, LaunchState } from "../../../store/launch-state-store";
 
 interface LaunchButtonProps {
   id: string;
@@ -16,13 +17,10 @@ interface LaunchButtonProps {
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
   disabled?: boolean;
-  onStatusChange?: (isLaunching: boolean) => void;
   quickPlaySingleplayer?: string;
   quickPlayMultiplayer?: string;
   isIconOnly?: boolean;
   forceDisplaySpinner?: boolean;
-  onInternalLaunchStateChange?: (isLaunching: boolean) => void;
-  onEventMessage?: (message: string | null) => void;
 }
 
 export function LaunchButton({
@@ -34,136 +32,129 @@ export function LaunchButton({
   size = "md",
   className,
   disabled = false,
-  onStatusChange,
   quickPlaySingleplayer,
   quickPlayMultiplayer,
   isIconOnly = false,
   forceDisplaySpinner = false,
-  onInternalLaunchStateChange,
-  onEventMessage,
 }: LaunchButtonProps) {
-  const [isLaunching, setIsLaunching] = useState(false);
   const [isButtonDisabledBriefly, setIsButtonDisabledBriefly] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const {
+    getProfileState,
+    initiateButtonLaunch,
+    finalizeButtonLaunch,
+    setButtonStatusMessage,
+    setLaunchError,
+    initializeProfile,
+  } = useLaunchStateStore();
+
+  const { isButtonLaunching, buttonStatusMessage: storeButtonStatusMessage, launchState } = getProfileState(id);
+
   useEffect(() => {
-    let isActive = true;
-    if (id) {
+    initializeProfile(id);
+
+    const currentStoreState = getProfileState(id);
+    if (!currentStoreState.isButtonLaunching) {
       ProfileService.isProfileLaunching(id)
-        .then((currentlyLaunching) => {
-          if (isActive) {
-            setIsLaunching(currentlyLaunching);
+        .then((currentlyPhysicallyLaunching) => {
+          if (currentlyPhysicallyLaunching) {
+            console.log(
+              `[LaunchButton ${id}] Initial check: Backend says profile is launching. Updating store.`,
+            );
+            initiateButtonLaunch(id);
+            setButtonStatusMessage(id, "Launching...");
           }
         })
         .catch((err) => {
-          if (isActive) {
-            console.error(
-              `[LaunchButton ${id}] Error checking initial launch state:`, 
-              err
-            );
-            setIsLaunching(false); 
-          }
+          console.error(
+            `[LaunchButton ${id}] Error checking initial physical launch state:`,
+            err,
+          );
         });
     }
-    return () => {
-      isActive = false;
-    };
-  }, [id]);
+  }, [id, initializeProfile, getProfileState, initiateButtonLaunch, setButtonStatusMessage]);
 
   useEffect(() => {
-    if (onStatusChange) {
-      onStatusChange(isLaunching);
-    }
-    if (onInternalLaunchStateChange) {
-      onInternalLaunchStateChange(isLaunching);
-    }
-  }, [isLaunching, onStatusChange, onInternalLaunchStateChange]);
-
-  useEffect(() => {
-    console.log(`[LaunchButton ${id}] Setting up state_event listener.`);
+    console.log(`[LaunchButton ${id}] Setting up state_event listener. Current isButtonLaunching: ${isButtonLaunching}`);
     let isMounted = true;
 
-    const handleStateEvent = (event: any) => {
+    const handleStateEvent = (event: TauriEvent<FrontendEventPayload>) => {
       if (!isMounted) return;
-      const payload = event.payload as EventPayload;
+      const payload = event.payload;
 
       if (payload.target_id === id) {
-        if (payload.message && onEventMessage) {
-          onEventMessage(payload.message);
-        }
-
-        if (payload.event_type === EventType.LaunchSuccessful) {
+        if (payload.event_type === FrontendEventType.LaunchSuccessful) {
           console.log(`[LaunchButton ${id}] Event: LaunchSuccessful`);
           toast.success(`Profile '${name}' launched successfully!`);
+          finalizeButtonLaunch(id);
+          setButtonStatusMessage(id, "Launched!");
+          setTimeout(() => setButtonStatusMessage(id, null), 3000);
           stopPolling();
-          resetButtonState();
-          if (onEventMessage) onEventMessage(null);
-        } else if (payload.event_type === EventType.Error) {
+        } else if (payload.event_type === FrontendEventType.Error) {
           const errorMessage =
             payload.message || "An unknown error occurred during launch.";
           console.error(
             `[LaunchButton ${id}] Event: Error - ${errorMessage}`,
           );
           toast.error(errorMessage);
+          setLaunchError(id, errorMessage);
           stopPolling();
-          resetButtonState();
-          if (!payload.message && onEventMessage) onEventMessage(null);
+        } else if (payload.message) {
+          setButtonStatusMessage(id, payload.message);
         }
       }
     };
 
-    const unlistenPromise = listen<EventPayload>(
-      "state_event",
-      handleStateEvent,
-    );
+    const unlistenPromise = listen<FrontendEventPayload>("state_event", handleStateEvent);
 
-    const cleanup = async () => {
-      console.log(
-        `[LaunchButton ${id}] Cleaning up state_event listener.`,
-      );
+    const cleanupListener = async () => {
+      if (!isMounted) return;
       isMounted = false;
+      console.log(`[LaunchButton ${id}] Cleaning up state_event listener.`);
       try {
-        const unlisten = await unlistenPromise;
-        unlisten();
+        const unlistenFunc = await unlistenPromise;
+        unlistenFunc();
       } catch (error) {
-        console.error(
-          `[LaunchButton ${id}] Error during state_event listener cleanup:`,
-          error,
-        );
+        console.error(`[LaunchButton ${id}] Error during state_event listener cleanup:`, error);
       }
     };
 
     return () => {
-      cleanup();
+      cleanupListener();
     };
-  }, [id, name, onEventMessage]);
+  }, [id, name, finalizeButtonLaunch, setButtonStatusMessage, setLaunchError, getProfileState]);
 
   useEffect(() => {
     if (!id) return;
 
-    if (isLaunching) {
-      console.log(
-        `[LaunchButton ${id}] Starting polling for is_profile_launching.`,
-      );
+    if (isButtonLaunching) {
+      console.log(`[LaunchButton ${id}] Starting polling for is_profile_launching (global state is true).`);
       pollingIntervalRef.current = setInterval(async () => {
         try {
-          const isStillLaunchingBackend =
-            await ProfileService.isProfileLaunching(id);
-          if (!isStillLaunchingBackend) {
+          const isStillPhysicallyLaunching = await ProfileService.isProfileLaunching(id);
+          const currentProfileState = getProfileState(id);
+
+          if (!isStillPhysicallyLaunching && currentProfileState.isButtonLaunching) {
             console.log(
-              `[LaunchButton ${id}] Polling: Backend reports profile is NOT launching. Resetting UI.`,
+              `[LaunchButton ${id}] Polling: Backend reports profile is NOT launching, but store state IS launching. Resetting store state.`,
             );
+            if (currentProfileState.error) {
+                finalizeButtonLaunch(id, currentProfileState.error);
+            } else {
+                finalizeButtonLaunch(id);
+            }
             stopPolling();
-            resetButtonState();
+          } else if (!isStillPhysicallyLaunching && !currentProfileState.isButtonLaunching) {
+            stopPolling();
           }
         } catch (err: any) {
-          console.error(
-            `[LaunchButton ${id}] Error during is_profile_launching polling:`,
-            err,
-          );
+          console.error(`[LaunchButton ${id}] Error during is_profile_launching polling:`, err);
           toast.error(`Polling error: ${err.message || "Unknown error"}`);
+          if (getProfileState(id).isButtonLaunching) {
+            setLaunchError(id, `Polling failed: ${err.message || "Unknown error"}`);
+          }
           stopPolling();
-          resetButtonState();
         }
       }, 2000);
     } else {
@@ -171,72 +162,67 @@ export function LaunchButton({
     }
 
     return () => stopPolling();
-  }, [id, isLaunching]);
+  }, [id, isButtonLaunching, getProfileState, finalizeButtonLaunch, setLaunchError]);
 
   const stopPolling = () => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
-      console.log(
-        `[LaunchButton ${id}] Polling for is_profile_launching stopped.`,
-      );
+      console.log(`[LaunchButton ${id}] Polling for is_profile_launching stopped.`);
     }
   };
 
-  const resetButtonState = () => {
+  const temporarilyDisableButton = () => {
     setIsButtonDisabledBriefly(true);
     setTimeout(() => {
-      setIsLaunching(false);
       setIsButtonDisabledBriefly(false);
-    }, 300);
+    }, 500);
   };
 
   const handlePlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!id) return;
+    if (!id || isButtonDisabledBriefly) return;
 
-    if (isLaunching) {
+    temporarilyDisableButton();
+    const currentProfileState = getProfileState(id);
+
+    if (currentProfileState.isButtonLaunching) {
       try {
+        setButtonStatusMessage(id, "Attempting to abort...");
         await ProcessService.abort(id);
         toast.success("Launch cancellation requested.");
+        finalizeButtonLaunch(id);
       } catch (error) {
         console.error("Failed to request launch cancellation:", error);
-        const message =
-          error instanceof Error ? error.message : "Failed to cancel launch";
+        const message = error instanceof Error ? error.message : "Failed to cancel launch";
         toast.error(`Cancellation request failed: ${message}`);
-      } finally {
-        console.log(
-          `[LaunchButton ${id}] User clicked CANCEL. Resetting UI immediately.`,
-        );
-        stopPolling();
-        resetButtonState();
+        setLaunchError(id, `Abort failed: ${message}`);
       }
       return;
     }
 
-    console.log(
-      `[LaunchButton ${id}] Initiating new launch. Resetting states.`,
-    );
-    setIsLaunching(true);
+    console.log(`[LaunchButton ${id}] Initiating new launch via store.`);
+    initiateButtonLaunch(id);
 
     try {
       await ProcessService.launch(id, quickPlaySingleplayer, quickPlayMultiplayer);
-      
       if (quickPlaySingleplayer || quickPlayMultiplayer) {
-        console.warn("Quick play options are not yet implemented in the backend");
+        console.warn("[LaunchButton] Quick play options are used, ensure backend supports them.");
       }
     } catch (error) {
       console.error("Failed to initiate launch:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to launch";
+      const errorMessage = error instanceof Error ? error.message : "Failed to launch";
       toast.error(`Launch initiation failed: ${errorMessage}`);
-      stopPolling();
-      resetButtonState();
+      setLaunchError(id, `Launch failed: ${errorMessage}`);
     }
   };
 
+  const actualIsLaunching = forceDisplaySpinner || isButtonLaunching;
+  const currentButtonText = actualIsLaunching ? cancelText : buttonText;
+  const buttonVariant = actualIsLaunching ? "destructive" : variant;
+
   if (isIconOnly) {
-    const iconToShow = forceDisplaySpinner || isLaunching ? (
+    const iconToShow = actualIsLaunching ? (
       <Icon icon="eos-icons:loading" width="60%" height="60%" />
     ) : (
       <Icon icon="solar:play-bold" width="60%" height="60%" />
@@ -249,13 +235,13 @@ export function LaunchButton({
           (disabled || isButtonDisabledBriefly) ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
         } ${className || ""}`}
         role="button"
-        aria-label={forceDisplaySpinner || isLaunching ? `Cancel launch for ${name}` : `Launch ${name}`}
+        aria-label={actualIsLaunching ? `Cancel launch for ${name}` : `Launch ${name}`}
         aria-disabled={disabled || isButtonDisabledBriefly}
         tabIndex={disabled || isButtonDisabledBriefly ? -1 : 0}
         onKeyDown={(e) => {
           if (!disabled && !isButtonDisabledBriefly && (e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault();
-            handlePlay(e as any); 
+            handlePlay(e as any);
           }
         }}
       >
@@ -267,12 +253,12 @@ export function LaunchButton({
   return (
     <Button
       onClick={handlePlay}
-      variant={isLaunching ? "destructive" : variant}
+      variant={buttonVariant}
       size={size}
       className={className}
       disabled={disabled || isButtonDisabledBriefly}
       icon={
-        forceDisplaySpinner || isLaunching ? (
+        actualIsLaunching ? (
           <Icon
             icon="eos-icons:loading"
             className="w-5 h-5 text-white"
@@ -282,7 +268,7 @@ export function LaunchButton({
         )
       }
     >
-      {isLaunching ? cancelText : buttonText}
+      {currentButtonText}
     </Button>
   );
 } 

@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { ProfileIcon } from "./ProfileIcon";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { cn } from "../../lib/utils";
+import { useLaunchStateStore } from "../../store/launch-state-store";
 
 interface ProfileCardProps {
   profile: Profile;
@@ -43,11 +44,6 @@ export function ProfileCard({
 
   const [isCloning, setIsCloning] = useState(false);
   const [isCardHovered, setIsCardHovered] = useState(false);
-  const [shouldShowSpinnerForThisProfile, setShouldShowSpinnerForThisProfile] =
-    useState(false);
-  const [detailedLaunchMessage, setDetailedLaunchMessage] = useState<
-    string | null
-  >(null);
   const [resolvedBackgroundImageUrl, setResolvedBackgroundImageUrl] = useState<
     string | null
   >(null);
@@ -62,13 +58,12 @@ export function ProfileCard({
     y: 0,
   });
 
-  const handleLaunchButtonStateChange = (isLaunchingFromButton: boolean) => {
-    setShouldShowSpinnerForThisProfile(isLaunchingFromButton);
-  };
+  const { getProfileState, initializeProfile } = useLaunchStateStore();
+  const { isButtonLaunching, buttonStatusMessage } = getProfileState(profile.id);
 
-  const handleLaunchEventMessage = (message: string | null) => {
-    setDetailedLaunchMessage(message);
-  };
+  useEffect(() => {
+    initializeProfile(profile.id);
+  }, [profile.id, initializeProfile]);
 
   const handleSettingsClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -79,12 +74,6 @@ export function ProfileCard({
       }, 150);
     }
   };
-
-  useEffect(() => {
-    if (!shouldShowSpinnerForThisProfile) {
-      setDetailedLaunchMessage(null);
-    }
-  }, [shouldShowSpinnerForThisProfile]);
 
   useEffect(() => {
     const resolveBackgroundImage = async () => {
@@ -349,7 +338,7 @@ export function ProfileCard({
                 iconClassName="w-10 h-10"
               />
               {!isCloning &&
-                (shouldShowSpinnerForThisProfile || isCardHovered) && (
+                (isButtonLaunching || isCardHovered) && (
                   <div
                     className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity duration-150 cursor-pointer"
                     onClick={
@@ -379,11 +368,7 @@ export function ProfileCard({
                         name={profile.name}
                         isIconOnly={true}
                         disabled={isCloning}
-                        forceDisplaySpinner={shouldShowSpinnerForThisProfile}
-                        onInternalLaunchStateChange={
-                          handleLaunchButtonStateChange
-                        }
-                        onEventMessage={handleLaunchEventMessage}
+                        forceDisplaySpinner={isButtonLaunching}
                         className="text-white"
                       />
                     ) : (
@@ -408,16 +393,16 @@ export function ProfileCard({
                 title={
                   isCloning
                     ? "Cloning profile..."
-                    : shouldShowSpinnerForThisProfile
-                      ? detailedLaunchMessage || "Starting..."
+                    : isButtonLaunching
+                      ? buttonStatusMessage || "Starting..."
                       : `${profile.loader || "Vanilla"} - ${profile.game_version}`
                 }
               >
                 {isCloning ? (
                   <span className="opacity-70">Cloning profile...</span>
-                ) : shouldShowSpinnerForThisProfile ? (
+                ) : isButtonLaunching ? (
                   <span className="opacity-70">
-                    {detailedLaunchMessage || "Starting..."}
+                    {buttonStatusMessage || "Starting..."}
                   </span>
                 ) : (
                   <>

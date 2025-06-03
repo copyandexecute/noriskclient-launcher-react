@@ -30,7 +30,7 @@ interface Version {
   profileId?: string;
 }
 
-interface LaunchButtonProps {
+interface MainLaunchButtonProps {
   versions?: Version[];
   defaultVersion?: string;
   className?: string;
@@ -50,16 +50,9 @@ export function MainLaunchButton({
   selectedVersionLabel,
   mainButtonWidth,
   mainButtonHeight,
-}: LaunchButtonProps) {
-  const [isLaunching, setIsLaunching] = useState(false);
-  const { accentColor } = useThemeStore();
-  const [detailedStatusMessage, setDetailedStatusMessage] = useState<
-    string | null
-  >(null);
-  const [transientStatus, setTransientStatus] = useState<{
-    message: string;
-    color: string;
-  } | null>(null);
+}: MainLaunchButtonProps) {
+  // Local state for transient success message styling (can be further integrated if needed)
+  const [transientSuccessActive, setTransientSuccessActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { selectedVersion, setSelectedVersion, openModal } =
@@ -70,48 +63,46 @@ export function MainLaunchButton({
     getProfileState,
     setLaunchError,
     resetLaunchState,
+    initiateButtonLaunch,
+    finalizeButtonLaunch,
+    setButtonStatusMessage,
   } = useLaunchStateStore();
 
+  // Get profile-specific launch state, including button state
   const profileState = getProfileState(selectedVersion);
-  const { launchProgress, currentStep, error, logHistory, launchState } =
-    profileState;
+  const {
+    launchProgress,
+    currentStep,
+    error,
+    logHistory,
+    launchState,
+    isButtonLaunching,
+    buttonStatusMessage,
+  } = profileState;
 
   useEffect(() => {
-    // Get the current selected version from the store
     const currentStoreVersion = selectedVersion;
-
-    // Check if the version currently in the store is valid against the list of versions passed as props
     const storeVersionIsValidInProps = versions?.some(v => v.id === currentStoreVersion);
 
-    if (defaultVersion) { // A defaultVersion is provided via props
-      // Case 1: The version in store is no longer valid (e.g., profile deleted)
-      // OR Case 2: The defaultVersion prop has changed and the store version doesn't match it yet.
+    if (defaultVersion) {
       if (!storeVersionIsValidInProps || currentStoreVersion !== defaultVersion) {
-        // Attempt to set the store version to the defaultVersion prop,
-        // but first ensure this defaultVersion prop itself is valid within the current `versions` list.
         const defaultVersionPropIsValidInProps = versions?.some(v => v.id === defaultVersion);
-
         if (defaultVersionPropIsValidInProps) {
           setSelectedVersion(defaultVersion);
         } else if (versions && versions.length > 0) {
-          // Fallback: If the defaultVersion prop is somehow invalid, use the first available version from props.
           setSelectedVersion(versions[0].id);
         } else {
-          // Fallback: No versions available at all.
           setSelectedVersion("");
         }
       }
-      // If storeVersionIsValidInProps is true AND currentStoreVersion === defaultVersion, do nothing (already synchronized).
-    } else { // No defaultVersion prop is provided
-      // If the store version is invalid and no default is given, try to pick the first available version.
+    } else {
       if (!storeVersionIsValidInProps) {
         if (versions && versions.length > 0) {
           setSelectedVersion(versions[0].id);
         } else {
-          setSelectedVersion(""); // No versions available.
+          setSelectedVersion("");
         }
       }
-      // If storeVersionIsValidInProps is true, and no defaultVersion prop, leave store version as is.
     }
   }, [defaultVersion, versions, selectedVersion, setSelectedVersion]);
 
@@ -122,7 +113,6 @@ export function MainLaunchButton({
     let unlistenStart: (() => void) | undefined;
     let unlistenDetailedStateEvent: (() => void) | undefined;
 
-    // Listener for game actually starting (e.g., reaching main menu)
     const setupGameLifecycleListeners = async () => {
       unlistenStart = await listen("event", (event: TauriEvent<any>) => {
         const payload = event.payload as any;
@@ -133,13 +123,13 @@ export function MainLaunchButton({
           console.log(
             "[LaunchButton] Game started (minecraft_output) event, resetting UI if still launching.",
           );
-          if (isLaunching) setIsLaunching(false);
-          setDetailedStatusMessage(null);
+          if (isButtonLaunching) {
+            finalizeButtonLaunch(selectedVersion);
+          }
         }
       });
     };
 
-    // Listener for detailed status messages while launching
     const setupDetailedListener = async () => {
       console.log(
         `[LaunchButton] Setting up detailed status listener for ${selectedVersion}`,
@@ -155,20 +145,16 @@ export function MainLaunchButton({
               console.log(
                 `[LaunchButton] LaunchSuccessful event for ${selectedVersion}`,
               );
-              setIsLaunching(false);
-              setDetailedStatusMessage(null);
-              setTransientStatus({
-                message: "ERFOLGREICH GESTARTET!",
-                color: "text-green-400",
-              });
-              setTimeout(() => setTransientStatus(null), 3000);
+              finalizeButtonLaunch(selectedVersion);
+              setButtonStatusMessage(selectedVersion, "ERFOLGREICH GESTARTET!");
+              setTransientSuccessActive(true);
+              setTimeout(() => {
+                setButtonStatusMessage(selectedVersion, null);
+                setTransientSuccessActive(false);
+              }, 3000);
               if (pollingIntervalRef.current) {
                 clearInterval(pollingIntervalRef.current);
                 pollingIntervalRef.current = null;
-                console.log(
-                  "[LaunchButton] Polling stopped due to LaunchSuccessful event for",
-                  selectedVersion,
-                );
               }
             } else if (eventTypeFromPayload === FrontendEventType.Error) {
               console.log(
@@ -177,15 +163,10 @@ export function MainLaunchButton({
               const eventErrorMsg =
                 eventMessage || "Fehler während des Startvorgangs.";
               toast.error(`Fehler: ${eventErrorMsg}`);
-              if (selectedVersion) {
-                setLaunchError(selectedVersion, eventErrorMsg);
-              }
-              setIsLaunching(false);
-              setTransientStatus(null);
+              setLaunchError(selectedVersion, eventErrorMsg);
             } else {
-              // Handle other detailed messages (progress, steps, etc.) for the selectedVersion
               if (eventMessage) {
-                setDetailedStatusMessage(eventMessage);
+                setButtonStatusMessage(selectedVersion, eventMessage);
               }
             }
           }
@@ -194,23 +175,21 @@ export function MainLaunchButton({
     };
 
     setupGameLifecycleListeners();
-    if (isLaunching) {
+    if (isButtonLaunching) {
       setupDetailedListener();
-      // Initial message, will be overwritten by detailed events
-      if (!detailedStatusMessage)
-        setDetailedStatusMessage("Initializing launch...");
+      if (!buttonStatusMessage)
+        setButtonStatusMessage(selectedVersion, "Initializing launch...");
     } else {
-      setDetailedStatusMessage(null);
-      if (unlistenDetailedStateEvent) unlistenDetailedStateEvent(); // Clean up if not launching
+      if (unlistenDetailedStateEvent) unlistenDetailedStateEvent();
     }
 
     return () => {
       if (unlistenStart) unlistenStart();
       if (unlistenDetailedStateEvent) unlistenDetailedStateEvent();
     };
-  }, [selectedVersion, isLaunching]); // isLaunching dependency manages detailed listener
+  }, [selectedVersion, isButtonLaunching, getProfileState, finalizeButtonLaunch, setButtonStatusMessage, setLaunchError]);
 
-  // Effect for Polling 'is_profile_launching' status (Svelte-like approach)
+  // Effect for Polling 'is_profile_launching' status
   useEffect(() => {
     const clearPolling = () => {
       if (pollingIntervalRef.current) {
@@ -220,52 +199,44 @@ export function MainLaunchButton({
       }
     };
 
-    if (isLaunching && selectedVersion) {
+    if (isButtonLaunching && selectedVersion) {
       console.log(
         "[LaunchButton] Starting polling for launcher task finished for",
         selectedVersion,
       );
       pollingIntervalRef.current = setInterval(async () => {
         try {
-          const isStillLaunching = await invoke<boolean>(
+          const isStillPhysicallyLaunching = await invoke<boolean>(
             "is_profile_launching",
             { profileId: selectedVersion },
           );
-          const launcherTaskFinished = !isStillLaunching;
+          const launcherTaskFinished = !isStillPhysicallyLaunching;
 
           if (launcherTaskFinished) {
             console.log(
               "[LaunchButton] Polling determined launcher task finished for",
               selectedVersion,
-              ". Resetting UI.",
             );
-            // If a LaunchSuccessful event is reliably emitted, this part might become redundant
-            // for setting success. For now, keep it as a fallback or general cleanup.
-            setIsLaunching(false);
             clearPolling();
 
-            const currentProfileState = getProfileState(selectedVersion);
+            const currentProfileStateAfterPoll = getProfileState(selectedVersion);
             if (
-              currentProfileState.launchState === LaunchState.ERROR ||
-              currentProfileState.error
+              currentProfileStateAfterPoll.launchState === LaunchState.ERROR ||
+              currentProfileStateAfterPoll.error
             ) {
               console.log(
-                "[LaunchButton] Polling: Launch task finished, but an error was detected.",
+                "[LaunchButton] Polling: Launch task finished, but an error was detected in store.",
               );
-              const errorMsg =
-                currentProfileState.error || "Ein Fehler ist aufgetreten.";
-              setDetailedStatusMessage(errorMsg);
-              setTransientStatus(null);
+              if (currentProfileStateAfterPoll.isButtonLaunching) {
+                 finalizeButtonLaunch(selectedVersion, currentProfileStateAfterPoll.error || "Unbekannter Fehler nach Abschluss.");
+              }
             } else {
-              // The LaunchSuccessful event should ideally handle this.
-              // If that event is missed for some reason, this polling logic might still show success.
-              // To prevent double messaging, we might remove this 'else' block if LaunchSuccessful is robust.
               console.log(
-                "[LaunchButton] Polling: Launch task finished successfully (fallback). Consider relying on LaunchSuccessful event.",
+                "[LaunchButton] Polling: Launch task finished successfully.",
               );
-              // setDetailedStatusMessage(null);
-              // setTransientStatus({ message: "ERFOLGREICH GESTARTET! (Poll)", color: "text-green-400" });
-              // setTimeout(() => setTransientStatus(null), 3000);
+              if (currentProfileStateAfterPoll.isButtonLaunching) {
+                finalizeButtonLaunch(selectedVersion);
+              }
             }
           }
         } catch (err: any) {
@@ -278,46 +249,39 @@ export function MainLaunchButton({
             err.toString() ||
             "Fehler beim Prüfen des Profilstatus.";
           toast.error(`Polling-Fehler: ${pollErrorMsg}`);
-          setIsLaunching(false);
-          setDetailedStatusMessage(pollErrorMsg);
-          setTransientStatus(null);
+          finalizeButtonLaunch(selectedVersion, pollErrorMsg);
           clearPolling();
         }
       }, 1500);
     } else {
-      clearPolling(); // Stop polling if not launching or no version selected
+      clearPolling();
     }
 
-    return clearPolling; // Cleanup on unmount or when dependencies change
-  }, [selectedVersion, isLaunching]);
+    return clearPolling;
+  }, [selectedVersion, isButtonLaunching, finalizeButtonLaunch, getProfileState, setButtonStatusMessage]);
 
   // Effect for initializing profile state (less frequent updates)
   useEffect(() => {
     if (selectedVersion) {
       initializeProfile(selectedVersion);
-      // Check initial running state (could be simplified or integrated with polling start)
-      ProcessService.isMinecraftRunning(selectedVersion)
-        .then((isRunning) => {
-          if (isRunning && !isLaunching) {
-            // Potentially set isLaunching to true if MC is already running and we want STOP button
-            // console.log("[LaunchButton] Game already running on init, setting UI to STOP mode");
-            // setIsLaunching(true);
-          } else if (!isRunning && isLaunching) {
-            // This case is now handled by the new polling logic if isLaunching was true
-          }
-        })
-        .catch(() => {
-          if (isLaunching) setIsLaunching(false); // If check fails while launching, assume not running
-        });
+      const currentProfile = getProfileState(selectedVersion);
+      if (currentProfile.isButtonLaunching) {
+        console.log("[LaunchButton] Init: MC not running, but button state is launching. Polling will handle.");
+      }
     }
-  }, [selectedVersion, initializeProfile]);
+  }, [selectedVersion, initializeProfile, getProfileState, finalizeButtonLaunch]);
 
   const handleLaunch = async () => {
     if (!selectedVersion) return;
 
-    if (isLaunching) {
+    const currentProfile = getProfileState(selectedVersion);
+
+    if (currentProfile.isButtonLaunching) {
       try {
+        setButtonStatusMessage(selectedVersion, "Attempting to abort...");
         await ProcessService.abort(selectedVersion);
+        toast.success("Launch process aborted.");
+        finalizeButtonLaunch(selectedVersion);
       } catch (err: any) {
         console.error("Failed to abort launch:", err);
         const abortErrorMsg =
@@ -325,20 +289,12 @@ export function MainLaunchButton({
             ? err
             : err.message || err.toString() || "Fehler beim Abbrechen.";
         toast.error(`Abbruch fehlgeschlagen: ${abortErrorMsg}`);
-      } finally {
-        setIsLaunching(false);
-        setDetailedStatusMessage(null);
-        setTransientStatus(null);
+        finalizeButtonLaunch(selectedVersion, abortErrorMsg);
       }
       return;
     }
 
-    setIsLaunching(true);
-    setDetailedStatusMessage("Starte Profil...");
-    setTransientStatus(null);
-    if (selectedVersion) {
-      resetLaunchState(selectedVersion);
-    }
+    initiateButtonLaunch(selectedVersion);
 
     try {
       await ProcessService.launch(selectedVersion);
@@ -349,18 +305,13 @@ export function MainLaunchButton({
           ? err
           : err.message || err.toString() || "Unbekannter Fehler beim Start.";
       toast.error(`Start fehlgeschlagen: ${launchErrorMsg}`);
-      if (selectedVersion) {
-        setLaunchError(selectedVersion, launchErrorMsg);
-      }
-      setIsLaunching(false);
-      setDetailedStatusMessage(launchErrorMsg);
-      setTransientStatus(null);
+      setLaunchError(selectedVersion, launchErrorMsg);
     }
   };
 
   const handleVersionChange = (version: string) => {
-    if (isLaunching) return;
-    setDetailedStatusMessage(null);
+    if (isButtonLaunching) return;
+    setButtonStatusMessage(selectedVersion, null);
     if (onVersionChange) {
       onVersionChange(version);
     }
@@ -368,55 +319,51 @@ export function MainLaunchButton({
 
   const handleOpenModal = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isLaunching) return;
+    if (isButtonLaunching) return;
     openModal();
   };
 
   const getMainButtonIcon = () => {
-    if (isLaunching) {
+    if (isButtonLaunching) {
       return <Icon icon="solar:stop-bold" width="24" height="24" />;
     }
     return <Icon icon="solar:play-bold" width="24" height="24" />;
   };
 
   const renderLaunchButtonContent = () => {
-    const actionText = isLaunching ? "STOP" : "LAUNCH";
+    const actionText = isButtonLaunching ? "STOP" : "LAUNCH";
 
     let statusSubText: string | null | undefined = null;
-    let statusColorClass = "opacity-85"; // Default for selectedVersionLabel or progress
+    let statusColorClass = "opacity-85";
 
-    if (transientStatus) {
-      statusSubText = transientStatus.message;
-      statusColorClass = transientStatus.color || "text-green-400"; // Fallback for transient
-    } else if (isLaunching) {
-      statusSubText = detailedStatusMessage || currentStep || "Launching...";
-      // Potentially different color for active launching status vs. idle version label
-      // For now, keep opacity-85, but could be e.g., "text-blue-300 opacity-90"
-      statusColorClass =
-        detailedStatusMessage || currentStep
-          ? "opacity-90 text-white"
-          : "opacity-75";
+    if (transientSuccessActive && buttonStatusMessage === "ERFOLGREICH GESTARTET!") {
+      statusSubText = buttonStatusMessage;
+      statusColorClass = "text-green-400";
+    } else if (isButtonLaunching) {
+      statusSubText = buttonStatusMessage || currentStep || "Launching...";
+      statusColorClass = buttonStatusMessage || currentStep ? "opacity-90 text-white" : "opacity-75";
+    } else if (buttonStatusMessage && launchState === LaunchState.ERROR) {
+      statusSubText = buttonStatusMessage;
+      statusColorClass = "text-red-400";
+    } else if (buttonStatusMessage) {
+      statusSubText = buttonStatusMessage;
+      statusColorClass = "opacity-85";
     }
+
+    const displaySubText = statusSubText || selectedVersionLabel;
 
     return (
       <div className="w-full flex flex-col items-center justify-center leading-none -mt-4">
         <span className="text-5xl text-center lowercase">{actionText}</span>
-
-        {/* Conditional rendering for sub-text */}
-        {(statusSubText || selectedVersionLabel) && (
+        {displaySubText && (
           <span
             className={cn(
               "text-xs font-minecraft-ten tracking-normal -mt-1 text-center",
-              statusSubText ? statusColorClass : "opacity-85", // Apply dynamic or default color/opacity
+              statusColorClass,
             )}
-            // If statusSubText is very long, we might need to handle overflow or use title attribute
-            title={
-              typeof statusSubText === "string"
-                ? statusSubText
-                : selectedVersionLabel
-            }
+            title={typeof displaySubText === 'string' ? displaySubText : undefined}
           >
-            {statusSubText ? statusSubText : selectedVersionLabel}
+            {displaySubText}
           </span>
         )}
       </div>
@@ -424,11 +371,10 @@ export function MainLaunchButton({
   };
 
   const getButtonVariant = () => {
-    if (isLaunching) {
+    const currentProfile = getProfileState(selectedVersion);
+    if (currentProfile.isButtonLaunching) {
       return "destructive";
     }
-    // Removed the condition that kept the button red on profileState.error
-    // Now, if not isLaunching, it will always be default color.
     return "3d";
   };
 
@@ -441,7 +387,7 @@ export function MainLaunchButton({
         <div className="flex items-center relative">
           <Button
             onClick={handleLaunch}
-            disabled={!selectedVersion}
+            disabled={!selectedVersion || (versions && versions.length === 0 && !selectedVersion)}
             size="xl"
             icon={undefined}
             variant={getButtonVariant()}
@@ -453,7 +399,7 @@ export function MainLaunchButton({
 
           <IconButton
             onClick={handleOpenModal}
-            disabled={isLaunching || !versions || versions.length === 0}
+            disabled={isButtonLaunching || !versions || versions.length === 0}
             size="xl"
             className={cn("rounded-l-none border-l-0", mainButtonHeight)}
             icon={
