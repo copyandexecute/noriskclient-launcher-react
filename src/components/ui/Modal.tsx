@@ -36,6 +36,7 @@ export function Modal({
   const contentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const mouseDownTargetRef = useRef<EventTarget | null>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
   const isBackgroundAnimationEnabled = useThemeStore(
     (state) => state.isBackgroundAnimationEnabled,
@@ -55,6 +56,19 @@ export function Modal({
     };
   }, []);
 
+  useEffect(() => {
+    const recordMouseDownTarget = (event: MouseEvent) => {
+      mouseDownTargetRef.current = event.target;
+    };
+
+    document.addEventListener('mousedown', recordMouseDownTarget, true);
+
+    return () => {
+      document.removeEventListener('mousedown', recordMouseDownTarget, true);
+      mouseDownTargetRef.current = null;
+    };
+  }, []);
+
   const handleClose = () => {
     if (isClosing) return;
     setIsClosing(true);
@@ -62,7 +76,12 @@ export function Modal({
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (closeOnClickOutside && e.target === modalRef.current && !isClosing) {
+    if (
+      closeOnClickOutside &&
+      e.target === modalRef.current &&
+      mouseDownTargetRef.current === modalRef.current &&
+      !isClosing
+    ) {
       e.stopPropagation();
       handleClose();
     }
