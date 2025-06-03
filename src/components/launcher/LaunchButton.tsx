@@ -41,7 +41,7 @@ interface LaunchButtonProps {
   mainButtonHeight?: string;
 }
 
-export function LaunchButton({
+export function MainLaunchButton({
   defaultVersion,
   className,
   onVersionChange,

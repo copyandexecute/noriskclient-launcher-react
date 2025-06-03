@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { SkinViewer } from './SkinViewer';
-import { LaunchButton } from './LaunchButton';
+import { MainLaunchButton } from './LaunchButton';
 import { useThemeStore } from '../../store/useThemeStore';
 import { MinecraftSkinService } from '../../services/minecraft-skin-service';
 import type { GetStarlightSkinRenderPayload } from '../../types/localSkin';
@@ -119,7 +119,7 @@ export function PlayerActionsDisplay({
 
         <div className="absolute bottom-8 left-0 right-0 flex justify-center px-4">
           <div className="max-w-xs sm:max-w-sm">
-            <LaunchButton
+            <MainLaunchButton
               defaultVersion={launchButtonDefaultVersion}
               onVersionChange={onLaunchVersionChange}
               versions={launchButtonVersions}
