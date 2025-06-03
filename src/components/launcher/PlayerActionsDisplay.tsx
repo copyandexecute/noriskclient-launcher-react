@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
 import { SkinViewer } from './SkinViewer';
-import { MainLaunchButton } from './LaunchButton';
+import { MainLaunchButton } from './MainLaunchButton';
 import { useThemeStore } from '../../store/useThemeStore';
 import { MinecraftSkinService } from '../../services/minecraft-skin-service';
 import type { GetStarlightSkinRenderPayload } from '../../types/localSkin';
