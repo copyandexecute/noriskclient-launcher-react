@@ -149,7 +149,7 @@ export function NewsSection({ className }: NewsSectionProps) {
           return (
             <div key={post.id} className="news-item w-full flex flex-col">
               <p
-                className="font-minecraft text-base text-white/70 truncate"
+                className="font-minecraft text-2xl text-white/70 truncate"
                 title={displayTitle}
               >
                 {displayTitle.toLowerCase()}

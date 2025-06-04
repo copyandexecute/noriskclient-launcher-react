@@ -106,7 +106,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
         ref={buttonRef}
         onClick={toggleAccordion}
         className={cn(
-          "w-full px-3 py-2.5 text-left font-minecraft text-gray-200 flex justify-between items-center focus:outline-none transition-colors lowercase text-lg",
+          "w-full px-3 py-2.5 text-left font-minecraft text-gray-200 flex justify-between items-center focus:outline-none transition-colors lowercase text-2xl",
           isOpen && "border-b", 
           "hover:bg-white/5",
           "relative z-10"
@@ -188,7 +188,7 @@ const FilterOption = ({
       ref={buttonRef}
       onClick={handleClick}
       className={cn(
-        "w-full flex items-center justify-between p-1.5 text-base font-minecraft transition-colors duration-200 cursor-pointer rounded-md mb-1.5 border",
+        "w-full flex items-center justify-between p-1.5 text-xl font-minecraft transition-colors duration-200 cursor-pointer rounded-md mb-1.5 border",
         !isSelected && "text-gray-300 hover:brightness-[1.15]" // Default text color for unselected, and hover effect
       )}
       style={{

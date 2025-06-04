@@ -239,7 +239,7 @@ export function SettingsTab() {
               Launcher Settings
             </h3>
           </div>
-          <p className="text-xl text-white/70 font-minecraft mt-2">
+          <p className="text-base text-white/70 font-minecraft-ten mt-2">
             Configure basic launcher settings
           </p>
         </div>
@@ -435,7 +435,7 @@ export function SettingsTab() {
               Accent Color
             </h3>
           </div>
-          <p className="text-xl text-white/70 font-minecraft mt-2">
+          <p className="text-base text-white/70 font-minecraft-ten mt-2">
             Choose your preferred accent color for the launcher
           </p>
         </div>
@@ -483,7 +483,7 @@ export function SettingsTab() {
               Custom Colors
             </h4>
           </div>
-          <p className="text-sm text-white/40 font-minecraft">
+          <p className="text-sm text-white/40 font-minecraft-ten">
             Custom color selection is currently disabled
           </p>
         </div>
@@ -500,7 +500,7 @@ export function SettingsTab() {
               Visual Quality
             </h3>
           </div>
-          <p className="text-xl text-white/70 font-minecraft mt-2">
+          <p className="text-base text-white/70 font-minecraft-ten mt-2">
             Adjust visual quality for all effects
           </p>
         </div>
@@ -538,7 +538,7 @@ export function SettingsTab() {
         </div>
 
         <div className="mt-6 p-4 rounded-lg border border-[#ffffff20]">
-          <p className="text-sm text-white/70 font-minecraft">
+          <p className="text-sm text-white/70 font-minecraft-ten">
             {qualityLevel === "low" &&
               "Low quality reduces particle count and detail for better performance."}
             {qualityLevel === "medium" &&
@@ -578,7 +578,7 @@ export function SettingsTab() {
               Background Effect
             </h3>
           </div>
-          <p className="text-xl text-white/70 font-minecraft mt-2">
+          <p className="text-base text-white/70 font-minecraft-ten mt-2">
             Choose a background effect for the launcher
           </p>
         </div>
