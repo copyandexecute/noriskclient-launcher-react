@@ -1320,7 +1320,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
               return `Profile '${newName}' cloned successfully!`; // Toast for cloning success
             },
             error: (err) =>
-              `Failed to clone profile: ${err instanceof Error ? err.message : String(err)}`,
+              `Failed to clone profile: ${err instanceof Error ? err.message : String(err.message)}`,
           });
         }
       } catch (err) {
