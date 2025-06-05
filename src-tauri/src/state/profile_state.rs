@@ -278,22 +278,38 @@ impl ProfileManager {
 
     // CRUD Operationen
     pub async fn create_profile(&self, profile: Profile) -> Result<Uuid> {
-        info!("Creating profile with path: {:?}", profile.path);
+        // The 'profile.path' field is expected to be a relative path/name for the profile directory
+        // e.g., "My Profile Name" or "some_group/My Profile Name"
+        info!(
+            "Attempting to create profile named '{}' with relative path identifier: {:?}",
+            profile.name, profile.path
+        );
 
-        let profiles_dir = self.profiles_path.parent().unwrap_or(&self.profiles_path);
-        info!("Ensuring profiles directory exists: {:?}", profiles_dir);
-        fs::create_dir_all(profiles_dir).await?;
+        // Calculate the absolute path for the new profile's instance directory
+        let new_profile_instance_path = self.calculate_instance_path_for_profile(&profile)?;
+        
+        info!(
+            "Calculated absolute profile instance directory: {:?}",
+            new_profile_instance_path
+        );
 
-        let profile_dir = PathBuf::from(&profile.path);
-        info!("Creating profile directory: {:?}", profile_dir);
-        fs::create_dir_all(&profile_dir).await?;
+        // Create the specific instance directory for this new profile.
+        // This will also create any necessary parent directories, including the one
+        // where profiles.json (self.profiles_path) will be stored, due to the nature of create_dir_all.
+        info!(
+            "Creating profile instance directory at: {:?}",
+            new_profile_instance_path
+        );
+        fs::create_dir_all(&new_profile_instance_path).await?; // Use the calculated full path
 
         let id = profile.id;
         {
             let mut profiles = self.profiles.write().await;
+            // The 'profile' object with its relative 'path' is stored.
+            // Other functions will use calculate_instance_path_for_profile to resolve it.
             profiles.insert(id, profile);
         }
-        info!("Saving profiles to: {:?}", self.profiles_path);
+        info!("Saving profiles metadata to: {:?}", self.profiles_path);
         self.save_profiles().await?;
         Ok(id)
     }
