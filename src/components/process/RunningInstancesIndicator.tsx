@@ -14,7 +14,6 @@ import { Dropdown } from "../ui/./dropdown/Dropdown";
 import { DropdownHeader } from "../ui/./dropdown/DropdownHeader";
 import { DropdownFooter } from "../ui/./dropdown/DropdownFooter";
 import { useThemeStore } from "../../store/useThemeStore";
-import { gsap } from "gsap";
 
 interface RunningInstancesIndicatorProps {
   className?: string;
@@ -34,44 +33,11 @@ export function RunningInstancesIndicator({
   );
   const buttonRef = useRef<HTMLDivElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
-  const notificationRef = useRef<HTMLDivElement>(null);
-  const prevInstanceCount = useRef<number>(0);
 
   const fetchProcesses = useCallback(async () => {
     setError(null);
     try {
       const fetchedProcesses = await ProcessService.getRunningProcesses();
-
-      if (
-        fetchedProcesses.length > prevInstanceCount.current &&
-        prevInstanceCount.current > 0
-      ) {
-        if (notificationRef.current) {
-          gsap.fromTo(
-            notificationRef.current,
-            { scale: 0, opacity: 0 },
-            {
-              scale: 1,
-              opacity: 1,
-              duration: 0.3,
-              ease: "back.out(1.7)",
-            },
-          );
-
-          setTimeout(() => {
-            if (notificationRef.current) {
-              gsap.to(notificationRef.current, {
-                scale: 0,
-                opacity: 0,
-                duration: 0.2,
-                ease: "power2.in",
-              });
-            }
-          }, 3000);
-        }
-      }
-
-      prevInstanceCount.current = fetchedProcesses.length;
       setProcesses(fetchedProcesses);
     } catch (err) {
       setError("Failed to fetch processes");
@@ -177,24 +143,6 @@ export function RunningInstancesIndicator({
               ? "No instances"
               : `${instanceCount} Instance${instanceCount !== 1 ? "s" : ""}`}
         </Button>
-
-        <div
-          ref={notificationRef}
-          className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded-md shadow-lg opacity-0 scale-0 pointer-events-none"
-          style={{
-            boxShadow:
-              "0 4px 6px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.2)",
-            zIndex: 100,
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Icon icon="solar:bell-bold" className="w-4 h-4" />
-            <span className="text-sm font-minecraft">
-              New instance started!
-            </span>
-          </div>
-          <div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-green-500"></div>
-        </div>
       </div>
 
       <Dropdown
