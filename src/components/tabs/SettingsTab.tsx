@@ -179,36 +179,17 @@ export function SettingsTab() {
     }
   }, [tempConfig, config, autoSaveConfig]);
 
-  // Track slider values locally without saving immediately
-  const [concurrentDownloads, setConcurrentDownloads] = useState(3);
-  const [concurrentIoLimit, setConcurrentIoLimit] = useState(10);
-
-  // Initialize local state from config when it loads
-  useEffect(() => {
-    if (tempConfig) {
-      setConcurrentDownloads(tempConfig.concurrent_downloads || 3);
-      setConcurrentIoLimit(tempConfig.concurrent_io_limit || 10);
-    }
-  }, [tempConfig]);
-
   // Update local state without saving
   const handleConcurrentDownloadsChange = (value: number) => {
-    setConcurrentDownloads(value);
+    if (tempConfig) {
+      setTempConfig({ ...tempConfig, concurrent_downloads: value });
+    }
   };
 
   const handleConcurrentIoLimitChange = (value: number) => {
-    setConcurrentIoLimit(value);
-  };
-
-  // Save only when sliding ends
-  const handleConcurrentDownloadsChangeEnd = (value: number) => {
-    if (!tempConfig) return;
-    setTempConfig({ ...tempConfig, concurrent_downloads: value });
-  };
-
-  const handleConcurrentIoLimitChangeEnd = (value: number) => {
-    if (!tempConfig) return;
-    setTempConfig({ ...tempConfig, concurrent_io_limit: value });
+    if (tempConfig) {
+      setTempConfig({ ...tempConfig, concurrent_io_limit: value });
+    }
   };
 
   const resetChanges = () => {
@@ -372,9 +353,8 @@ export function SettingsTab() {
             </div>
             <div className="w-full px-2">
               <RangeSlider
-                value={concurrentDownloads}
+                value={tempConfig.concurrent_downloads || 3}
                 onChange={handleConcurrentDownloadsChange}
-                onChangeEnd={handleConcurrentDownloadsChangeEnd}
                 min={1}
                 max={10}
                 step={1}
@@ -405,9 +385,8 @@ export function SettingsTab() {
             </div>
             <div className="w-full px-2">
               <RangeSlider
-                value={concurrentIoLimit}
+                value={tempConfig.concurrent_io_limit || 10}
                 onChange={handleConcurrentIoLimitChange}
-                onChangeEnd={handleConcurrentIoLimitChangeEnd}
                 min={1}
                 max={20}
                 step={1}
