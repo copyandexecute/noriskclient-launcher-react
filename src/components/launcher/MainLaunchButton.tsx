@@ -358,7 +358,7 @@ export function MainLaunchButton({
         {displaySubText && (
           <span
             className={cn(
-              "text-xs font-minecraft-ten tracking-normal -mt-1 text-center",
+              "text-xs font-minecraft-ten tracking-normal -mt-1 text-center normal-case",
               statusColorClass,
             )}
             title={typeof displaySubText === 'string' ? displaySubText : undefined}
