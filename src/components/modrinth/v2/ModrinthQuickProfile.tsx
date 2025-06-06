@@ -85,7 +85,7 @@ export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
         </h3>
       </div>
 
-      <p className="text-xs sm:text-sm text-gray-400 text-center">
+      <p className="text-xs font-minecraft-ten sm:text-sm text-gray-400 text-center">
         {isActuallyCopying
           ? `Copying settings from '${storeProfiles.find((p) => p.id === selectedSourceProfileId)?.name || "selected profile"}'. Enter a name for the new copy.`
           : "Enter a name for the new profile. Optionally, copy settings from an existing profile."}
@@ -145,7 +145,7 @@ export const ModrinthQuickProfile: React.FC<ModrinthQuickProfileProps> = ({
         <div className="space-y-1 pt-2 animated-fade-in">
           <label
             htmlFor="sourceProfileSelect"
-            className="block text-xs font-medium text-gray-400"
+            className="block text-xs font-medium font-minecraft-ten text-gray-400"
           >
             Source Profile to Copy
           </label>
