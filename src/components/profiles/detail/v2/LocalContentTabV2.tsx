@@ -57,11 +57,11 @@ const LOCAL_CONTENT_TAB_ICONS_TO_PRELOAD = [
   "solar:menu-dots-bold",
   "solar:sort-from_top_to_bottom-bold-duotone", // Placeholder for sort
   "solar:refresh-square-bold-duotone", // Refresh button in list item (not used yet)
-  "solar:cloud-download-bold-duotone", // For Update Available button
+  "solar:download-minimalistic-bold", // For Update Available button
   "solar:refresh-bold", // For Check for Updates loading spinner / general loading
   "solar:add-circle-bold-duotone", // For Add Content button
   "solar:refresh-outline", // For primary refresh button normal state
-  "solar:double-alt-arrow-up-bold-duotone", // For Update All button
+  "solar:download-minimalistic-bold", // For Update All button
   "solar:alt-arrow-down-bold", // For version dropdown button
 ];
 
