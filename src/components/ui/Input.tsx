@@ -150,6 +150,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               )}
               onFocus={handleFocus}
               onBlur={handleBlur}
+              spellCheck={false}
+              autoComplete="off"
               {...props}
             />
 

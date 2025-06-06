@@ -142,11 +142,11 @@ export function GeneralSettingsTab({
         },
       });
 
-      toast.success("Profile duplicated successfully!");
+      toast.success("Profile cloned successfully!");
     } catch (err) {
-      console.error("Failed to duplicate profile:", err);
+      console.error("Failed to clone profile:", err);
       toast.error(
-        `Failed to duplicate profile: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to clone profile: ${err instanceof Error ? err.message : String(err.message)}`,
       );
     } finally {
       setLoading(false);

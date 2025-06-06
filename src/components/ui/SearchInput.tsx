@@ -252,6 +252,8 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
             )}
             onFocus={handleFocus}
             onBlur={handleBlur}
+            spellCheck={false}
+            autoComplete="off"
           />
 
           {value && !disabled && (
@@ -317,6 +319,8 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
                     "bg-transparent border-none outline-none text-white font-minecraft placeholder:text-white/50 lowercase truncate",
                     sizeStyles[size].text,
                   )}
+                  spellCheck={false}
+                  autoComplete="off"
                 />
               </div>
 

@@ -143,7 +143,7 @@ export function ProfileCard({
     try {
       const newName = await confirm({
         title: "clone profile",
-        inputLabel: "profile name",
+        inputLabel: "Profile name",
         inputPlaceholder: "Enter profile name",
         inputInitialValue: `${profile.name} (Copy)`,
         inputRequired: true,

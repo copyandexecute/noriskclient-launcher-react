@@ -168,7 +168,7 @@ export const ProfileContextMenu = forwardRef<
         >
           <Icon icon="solar:copy-bold" className="w-5 h-5 text-white" />
           <span className="font-minecraft-ten text-base text-white/80">
-            Duplicate Profile
+            Clone Profile
           </span>
         </li>
         <li

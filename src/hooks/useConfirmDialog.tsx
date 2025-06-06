@@ -135,7 +135,7 @@ export function useConfirmDialog() {
       {options.type === "input" && (
         <div className="space-y-4">
           {options.inputLabel && (
-            <Label className="text-3xl">{options.inputLabel}</Label>
+            <p className="text-lg font-minecraft-ten">{options.inputLabel}</p>
           )}
           <Input
             value={inputValue}
