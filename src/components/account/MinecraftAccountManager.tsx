@@ -74,7 +74,7 @@ export function MinecraftAccountManager({
                 icon="solar:spinner-bold"
                 className="w-5 h-5 animate-spin mx-auto text-white/70"
               />
-              <p className="mt-1 text-white/70 text-sm">Loading accounts...</p>
+              <p className="mt-1 text-white/70 text-sm font-minecraft-ten">Loading accounts...</p>
             </div>
           ) : accounts.length === 0 ? (
             <div className="py-4 px-3 text-center">
@@ -82,8 +82,8 @@ export function MinecraftAccountManager({
                 icon="solar:user-cross-bold"
                 className="w-6 h-6 mx-auto text-white/50 mb-1"
               />
-              <p className="text-white/70 text-sm">No accounts found</p>
-              <p className="mt-1 text-white/50 text-xs">
+              <p className="text-white/70 text-sm font-minecraft-ten">No accounts found</p>
+              <p className="mt-1 text-white/50 text-[0.6em] font-minecraft-ten">
                 Add a Minecraft account to get started
               </p>
             </div>
