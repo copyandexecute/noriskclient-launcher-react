@@ -383,7 +383,7 @@ export function ProfileCard({
 
             <div className="flex-grow min-w-0 mr-auto pr-2 max-w-[calc(100%-80px)]">
               <h3
-                className="font-minecraft-ten text-white text-lg whitespace-nowrap overflow-hidden text-ellipsis max-w-full"
+                className="font-minecraft-ten text-white text-lg whitespace-nowrap overflow-hidden text-ellipsis max-w-full normal-case"
                 title={profile.name}
               >
                 {profile.name}
