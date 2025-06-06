@@ -159,6 +159,7 @@ export function LocalContentTabV2<T extends LocalContentItem>({
     checkForContentUpdates,
     handleUpdateContentItem,
     handleUpdateAllAvailableContent,
+    handleSwitchContentVersion,
   } = useLocalContentManager<T>({
     // Hook uses the generic type T
     profile,
@@ -285,70 +286,6 @@ export function LocalContentTabV2<T extends LocalContentItem>({
       }
     },
     [profile, onRefreshRequired],
-  );
-
-  // New method to handle version switching
-  const handleSwitchContentVersion = useCallback(
-    async (item: T, newVersion: ModrinthVersion) => {
-      if (!profile || !item.modrinth_info) {
-        toast.error("Cannot switch version: Missing profile or Modrinth info.");
-        setOpenVersionDropdownId(null);
-        return;
-      }
-
-      const currentProjectId = item.modrinth_info.project_id;
-      let currentInstalledVersionId: string | undefined = undefined;
-
-      // Type-safe access to version ID for Modrinth info (if any)
-      if (item.modrinth_info) {
-        // Ensure modrinth_info exists before trying to access its properties
-        if (
-          "id" in item.modrinth_info &&
-          typeof item.modrinth_info.id === "string"
-        ) {
-          currentInstalledVersionId = item.modrinth_info.id;
-        } else if (
-          "version_id" in item.modrinth_info &&
-          typeof item.modrinth_info.version_id === "string"
-        ) {
-          currentInstalledVersionId = item.modrinth_info.version_id;
-        }
-      }
-
-      // For Mods, we need to ensure project_id and version_id from modrinth_info are present if that's how we found it
-      // However, the backend will now primarily rely on current_item_details.id for mods.
-      // For assets, the individual fields like filename, path_str, etc. from current_item_details will be used.
-
-      const payload: SwitchContentVersionPayload = {
-        profile_id: profile.id,
-        content_type: contentType as BackendContentType,
-        current_item_details: {
-          ...item, // Spread the existing item
-          path_str: item.path, // Ensure path_str is populated from item.path for consistency with backend struct if item.path is the primary one used in LocalContentItem (hook)
-          // If item already has path_str correctly from ProfileLocalContentItem, this might be redundant or ensure it's correct.
-        },
-        new_modrinth_version_details: newVersion,
-      };
-
-      // Quick check to ensure item.path_str is what we expect if item.path is the source
-      // This console.log is for debugging the mapping, can be removed later.
-      console.log("Frontend item for payload:", payload.current_item_details);
-
-      const promise = ContentService.switchContentVersion(payload);
-
-      toast.promise(promise, {
-        loading: `Switching to ${newVersion.name}...`,
-        success: () => {
-          onRefreshRequired?.();
-          fetchData(true); // Refresh data from the hook as well
-          return `${getDisplayFileName(item)} switched to ${newVersion.name}.`;
-        },
-        error: (err) => `Failed to switch version: ${err.message.toString()}`,
-      });
-
-      setOpenVersionDropdownId(null); // Close dropdown after initiating
-    },
-    [profile, contentType, onRefreshRequired, fetchData, getDisplayFileName],
   );
 
   // Update default onAddContent to use the new dialog and service call
@@ -808,12 +745,13 @@ export function LocalContentTabV2<T extends LocalContentItem>({
                                           // No specific background for individual items unless it's the current one, which is handled by font-bold
                                         }
                                       }
-                                      onClick={() =>
+                                      onClick={() => {
                                         handleSwitchContentVersion(
                                           item,
                                           version,
-                                        )
-                                      }
+                                        );
+                                        setOpenVersionDropdownId(null);
+                                      }}
                                     >
                                       {version.name} ({version.version_number})
                                     </div>

@@ -4,10 +4,10 @@ import { toast } from 'react-hot-toast';
 import type { Profile, LocalContentItem as ProfileLocalContentItem, GenericModrinthInfo as ProfileGenericModrinthInfo, LoadItemsParams } from '../types/profile';
 import type { ModrinthVersion, ModrinthBulkUpdateRequestBody, ModrinthHashAlgorithm, ResourcePackModrinthInfo, ShaderPackModrinthInfo, DataPackModrinthInfo } from '../types/modrinth';
 import { ContentType as NrContentType } from '../types/content';
-import type { ToggleContentPayload, UninstallContentPayload } from '../types/content';
+import type { ToggleContentPayload, UninstallContentPayload, SwitchContentVersionPayload } from '../types/content';
 import { ModrinthService } from '../services/modrinth-service';
 import { getLocalContent } from '../services/profile-service';
-import { toggleContentFromProfile, uninstallContentFromProfile } from '../services/content-service';
+import { toggleContentFromProfile, uninstallContentFromProfile, switchContentVersion } from '../services/content-service';
 import { revealItemInDir, openPath } from '@tauri-apps/plugin-opener';
 
 // Base type for content items managed by this hook - maps to ProfileLocalContentItem
@@ -75,8 +75,9 @@ interface UseLocalContentManagerReturn<T extends LocalContentItem> {
   handleOpenItemFolder: (item: T) => void;
 
   checkForContentUpdates: (currentProfile?: Profile, currentItems?: T[]) => Promise<void>;
-  handleUpdateContentItem: (item: T, updateVersion: ModrinthVersion, preventRefetch?: boolean, suppressOwnToast?: boolean) => Promise<void>;
+  handleUpdateContentItem: (item: T, updateVersion: ModrinthVersion, suppressOwnToast?: boolean) => Promise<void>;
   handleUpdateAllAvailableContent: () => Promise<void>;
+  handleSwitchContentVersion: (item: T, newVersion: ModrinthVersion) => Promise<void>;
 }
 
 // Helper to map LocalContentType (UI string) to NrContentType (backend enum string)
@@ -977,6 +978,11 @@ export function useLocalContentManager<T extends LocalContentItem>({
               const errorMsg = err?.message || (typeof err === 'string' ? err : "An unknown error occurred during the update.");
               return `Failed to update ${displayName}: ${errorMsg}`;
             }
+          },
+          {
+            success: {
+              duration: 700,
+            },
           }
         );
       }
@@ -1036,7 +1042,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
       if (totalCount > 1) {
         const message = `Finished: ${succeededCount} succeeded, ${failedCount} failed.`;
         if (succeededCount > 0) {
-          toast.success(message, { id: toastId, duration: 2000 });
+          toast.success(message, { id: toastId, duration: 700 });
         } else {
           toast.error(message, { id: toastId, duration: 2000 });
         }
@@ -1045,7 +1051,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
         toast.dismiss(toastId);
       }
     } else if (succeededCount > 0) {
-      toast.success(`Successfully updated all ${succeededCount} ${contentType}(s).`, { id: toastId });
+      toast.success(`Successfully updated all ${succeededCount} ${contentType}(s).`, { id: toastId, duration: 700 });
     } else {
       toast.dismiss(toastId);
     }
@@ -1057,6 +1063,65 @@ export function useLocalContentManager<T extends LocalContentItem>({
         // A manual refresh will catch any brand new updates.
     }
   }, [profile, items, contentUpdates, contentType, getDisplayFileName, handleUpdateContentItem]);
+
+  const handleSwitchContentVersion = useCallback(async (item: T, newVersion: ModrinthVersion) => {
+    if (!profile) {
+      toast.error("Cannot switch version: Missing profile.");
+      return;
+    }
+    
+    const payload: SwitchContentVersionPayload = {
+      profile_id: profile.id,
+      content_type: mapUiContentTypeToBackend(contentType),
+      current_item_details: {
+        ...item,
+        path_str: item.path,
+      },
+      new_modrinth_version_details: newVersion,
+    };
+
+    const promiseAction = async () => {
+      await switchContentVersion(payload);
+
+      const primaryFile = newVersion.files.find(f => f.primary) || newVersion.files[0];
+      if (!primaryFile) throw new Error("Switched version details are missing a primary file.");
+
+      const newSha1 = primaryFile.hashes?.sha1 || null;
+      const newFilename = primaryFile.filename;
+      const oldPath = item.path;
+      const pathSeparator = oldPath.includes('/') ? '/' : '\\';
+      const dirPath = oldPath.substring(0, oldPath.lastIndexOf(pathSeparator));
+      const newPath = `${dirPath}${pathSeparator}${newFilename}`;
+
+      const updatedItem: T = {
+        ...item,
+        filename: newFilename,
+        path: newPath,
+        path_str: newPath,
+        is_disabled: false,
+        sha1_hash: newSha1,
+        fallback_version: newVersion.version_number,
+        modrinth_info: { ...(item.modrinth_info || {}), project_id: newVersion.project_id, version_id: newVersion.id, name: newVersion.name, version_number: newVersion.version_number, download_url: primaryFile.url },
+      };
+
+      setItems(prevItems => prevItems.map(i => i.filename === item.filename ? updatedItem : i));
+    };
+
+    await toast.promise(
+      promiseAction(),
+      {
+        loading: `Switching to ${newVersion.name}...`,
+        success: `Switched ${getDisplayFileName(item)} to ${newVersion.name}.`,
+        error: (err) => `Failed to switch version: ${err.message.toString()}`,
+      },
+      {
+        success: {
+          duration: 700,
+        },
+      },
+    );
+
+  }, [profile, contentType, getDisplayFileName]);
 
   useEffect(() => {
     // Check for updates only after the initial full loading process for the current profile is complete,
@@ -1113,5 +1178,6 @@ export function useLocalContentManager<T extends LocalContentItem>({
     checkForContentUpdates,
     handleUpdateContentItem,
     handleUpdateAllAvailableContent,
+    handleSwitchContentVersion,
   };
 } 
