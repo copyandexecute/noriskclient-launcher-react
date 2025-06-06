@@ -1755,7 +1755,7 @@ export function ModrinthSearchV2({
             <span className="text-xs text-gray-400">Profile ID: {newProfileId}</span>
           </div>
         ),
-        { id: toastId, duration: 6000 }
+        { id: toastId, duration: 1000 }
       );
 
       try {

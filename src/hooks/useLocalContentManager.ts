@@ -75,7 +75,7 @@ interface UseLocalContentManagerReturn<T extends LocalContentItem> {
   handleOpenItemFolder: (item: T) => void;
 
   checkForContentUpdates: (currentProfile?: Profile, currentItems?: T[]) => Promise<void>;
-  handleUpdateContentItem: (item: T, updateVersion: ModrinthVersion, preventRefetch?: boolean) => Promise<void>;
+  handleUpdateContentItem: (item: T, updateVersion: ModrinthVersion, preventRefetch?: boolean, suppressOwnToast?: boolean) => Promise<void>;
   handleUpdateAllAvailableContent: () => Promise<void>;
 }
 
@@ -850,7 +850,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
     }
   }, [profile, items, contentType]);
 
-  const handleUpdateContentItem = useCallback(async (item: T, updateVersion: ModrinthVersion, preventRefetch: boolean = false) => {
+  const handleUpdateContentItem = useCallback(async (item: T, updateVersion: ModrinthVersion, preventRefetch: boolean = false, suppressOwnToast: boolean = false) => {
     // 1. Initial checks
     if (!profile) {
       toast.error("Profile missing, cannot update.");
@@ -896,8 +896,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
         case 'DataPack': command = "update_datapack_from_modrinth"; break;
         case 'Mod':
           if (item.source_type === "custom" || item.norisk_info) {
-            toast.error(`Automatic updates for this type of mod (${getDisplayFileName(item)}) are not supported.`);
-            return; 
+            throw new Error(`Automatic updates for this type of mod (${getDisplayFileName(item)}) are not supported.`);
           }
           toast.error(`Unsupported mod update scenario for ${getDisplayFileName(item)}. Please check item details.`);
           return;
@@ -936,20 +935,27 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
     // 4. Execute with toast.promise and cleanup
     try {
-      await toast.promise(
-        promiseAction(),
-        {
-          loading: `Updating ${getDisplayFileName(item)} to ${updateVersion.version_number}...`,
-          success: `Successfully updated ${getDisplayFileName(item)} to ${updateVersion.version_number}!`,
-          error: (err: any) => {
-            console.error(`Failed to update ${contentType} for ${getDisplayFileName(item)}:`, err);
-            const displayName = getDisplayFileName(item);
-            const errorMsg = err?.message || (typeof err === 'string' ? err : "An unknown error occurred during the update.");
-            return `Failed to update ${displayName}: ${errorMsg}`;
+      if (suppressOwnToast) {
+        await promiseAction();
+      } else {
+        await toast.promise(
+          promiseAction(),
+          {
+            loading: `Updating ${getDisplayFileName(item)} to ${updateVersion.version_number}...`,
+            success: `Successfully updated ${getDisplayFileName(item)} to ${updateVersion.version_number}!`,
+            error: (err: any) => {
+              console.error(`Failed to update ${contentType} for ${getDisplayFileName(item)}:`, err);
+              const displayName = getDisplayFileName(item);
+              const errorMsg = err?.message || (typeof err === 'string' ? err : "An unknown error occurred during the update.");
+              return `Failed to update ${displayName}: ${errorMsg}`;
+            }
           }
-        }
-      );
+        );
+      }
     } catch (err) {
+      if (suppressOwnToast) {
+        throw err;
+      }
       // This catch is for issues if toast.promise itself or the promise chain has an unhandled rejection
       // not already processed by the 'error' callback of toast.promise.
       console.error(`Outer catch during update process for ${getDisplayFileName(item)}:`, err);
@@ -965,38 +971,62 @@ export function useLocalContentManager<T extends LocalContentItem>({
 
   const handleUpdateAllAvailableContent = useCallback(async () => {
     if (Object.keys(contentUpdates).length === 0 || !profile) return;
-    setIsUpdatingAll(true);
-    setContentUpdateError(null);
-    let SucceededCount = 0;
-    let errorCount = 0;
+    
     const itemsToUpdateWithDetails: {item: T, version: ModrinthVersion}[] = [];
     for (const item of items) { 
       if (item.sha1_hash && contentUpdates[item.sha1_hash]) {
         itemsToUpdateWithDetails.push({ item, version: contentUpdates[item.sha1_hash]! });
       }
     }
+
     if (itemsToUpdateWithDetails.length === 0) {
-        setIsUpdatingAll(false);
         return;
     }
-    toast.loading(`Updating ${itemsToUpdateWithDetails.length} ${contentType}(s)...`, { id: 'batch-update-toast' });
+    
+    setIsUpdatingAll(true);
+    setContentUpdateError(null);
+    let succeededCount = 0;
+    const totalCount = itemsToUpdateWithDetails.length;
+    
+    const toastId = toast.loading(`Updating 0/${totalCount} ${contentType}s...`);
+    
     for (const { item, version } of itemsToUpdateWithDetails) {
       try {
-        await handleUpdateContentItem(item, version, true); 
-        SucceededCount++;
-      } catch { errorCount++; }
+        await handleUpdateContentItem(item, version, true, true); // preventRefetch, suppressOwnToast
+        succeededCount++;
+        toast.loading(`Updating ${succeededCount}/${totalCount} ${contentType}s...`, { id: toastId });
+      } catch(err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        toast.error(`Failed to update ${getDisplayFileName(item)}: ${errorMsg}`);
+      }
     }
+    
     setIsUpdatingAll(false);
-    if (errorCount > 0) {
-        toast.error(`Finished batch update: ${SucceededCount} succeeded, ${errorCount} failed.`, { id: 'batch-update-toast' });
+    
+    const failedCount = totalCount - succeededCount;
+    if (failedCount > 0) {
+      if (totalCount > 1) {
+        const message = `Finished: ${succeededCount} succeeded, ${failedCount} failed.`;
+        if (succeededCount > 0) {
+          toast.success(message, { id: toastId, duration: 2000 });
+        } else {
+          toast.error(message, { id: toastId, duration: 2000 });
+        }
+      } else {
+        // Single item failed, just dismiss the loading toast, individual error was shown
+        toast.dismiss(toastId);
+      }
+    } else if (succeededCount > 0) {
+      toast.success(`Successfully updated all ${succeededCount} ${contentType}(s).`, { id: toastId });
     } else {
-        toast.success(`Successfully updated ${SucceededCount} ${contentType}(s).`, { id: 'batch-update-toast' });
+      toast.dismiss(toastId);
     }
-    if (SucceededCount > 0) {
-        await fetchData(true); // Full refresh
+    
+    if (succeededCount > 0) {
+        await fetchData(true); // Full refresh after all updates
         await checkForContentUpdates(profile, items); 
     }
-  }, [profile, items, contentUpdates, contentType, handleUpdateContentItem, checkForContentUpdates, fetchData]);
+  }, [profile, items, contentUpdates, contentType, getDisplayFileName, handleUpdateContentItem, fetchData, checkForContentUpdates]);
 
   useEffect(() => {
     // Check for updates only after the initial full loading process for the current profile is complete,
