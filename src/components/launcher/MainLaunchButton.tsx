@@ -146,7 +146,7 @@ export function MainLaunchButton({
                 `[LaunchButton] LaunchSuccessful event for ${selectedVersion}`,
               );
               finalizeButtonLaunch(selectedVersion);
-              setButtonStatusMessage(selectedVersion, "ERFOLGREICH GESTARTET!");
+              setButtonStatusMessage(selectedVersion, "STARTING!");
               setTransientSuccessActive(true);
               setTimeout(() => {
                 setButtonStatusMessage(selectedVersion, null);
@@ -336,7 +336,7 @@ export function MainLaunchButton({
     let statusSubText: string | null | undefined = null;
     let statusColorClass = "opacity-85";
 
-    if (transientSuccessActive && buttonStatusMessage === "ERFOLGREICH GESTARTET!") {
+    if (transientSuccessActive && buttonStatusMessage === "STARTING!") {
       statusSubText = buttonStatusMessage;
       statusColorClass = "text-green-400";
     } else if (isButtonLaunching) {
