@@ -186,7 +186,7 @@ export function ProfileCard({
       message: `Are you sure you want to delete profile "${profile.name}"? This action cannot be undone.`,
       confirmText: "DELETE",
       cancelText: "CANCEL",
-      type: "warning",
+      type: "danger",
       fullscreen: true,
     });
 

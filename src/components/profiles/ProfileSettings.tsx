@@ -123,7 +123,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
           },
           error: (err) => {
             const errorMessage =
-              err instanceof Error ? err.message : String(err);
+              err instanceof Error ? err.message : String(err.message);
             return `Failed to delete profile: ${errorMessage}`;
           },
         })
