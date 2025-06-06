@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { MinecraftAuthService } from "../services/minecraft-auth-service";
 import type { MinecraftAccount } from "../types/minecraft";
 import flagsmith from 'flagsmith';
+import { toast } from "react-hot-toast";
 
 // Helper function to identify the user with Flagsmith
 const identifyWithFlagsmith = (account: MinecraftAccount | null) => {
@@ -72,35 +73,73 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
   },
 
   addAccount: async () => {
-    try {
-      set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null });
 
+    const fullProcessPromise = (async () => {
+      // Step 1: Login
       const newAccount = await MinecraftAuthService.beginLogin();
-
-      if (newAccount) {
-        const accounts = await MinecraftAuthService.getAccounts();
-        const activeAccount = await MinecraftAuthService.getActiveAccount();
-
-        const updatedAccounts = accounts.map((account) => ({
-          ...account,
-          active: activeAccount ? account.id === activeAccount.id : false,
-        }));
-
-        set({
-          accounts: updatedAccounts,
-          activeAccount,
-          isLoading: false,
-        });
-        identifyWithFlagsmith(activeAccount);
-      } else {
-        set({ isLoading: false });
+      if (!newAccount) {
+        // This will be caught by toast.promise and the try/catch block
+        throw new Error("Login cancelled by user.");
       }
-    } catch (error) {
-      console.error("Failed to add account:", error);
+
+      // Step 2: Get all data needed for the state update
+      const accounts = await MinecraftAuthService.getAccounts();
+      const activeAccount = await MinecraftAuthService.getActiveAccount();
+
+      identifyWithFlagsmith(activeAccount);
+
+      // Return a payload with all data needed for the success toast and the final state update
+      return { newAccount, accounts, activeAccount };
+    })();
+
+    toast.promise(
+      fullProcessPromise,
+      {
+        loading: "Please sign in via your browser...",
+        success: ({ newAccount }) =>
+          `Account '${newAccount.username}' added successfully.`,
+        error: (err) => err.message,
+      },
+      {
+        loading: {
+          duration: 50000,
+        },
+        success: {
+          duration: 1500,
+        },
+        error: {
+          duration: 1500,
+        },
+      },
+    );
+
+    try {
+      const { accounts, activeAccount } = await fullProcessPromise;
+
+      // Now, after the toast has finished, update the state in one go.
+      const updatedAccounts = accounts.map((account) => ({
+        ...account,
+        active: activeAccount ? account.id === activeAccount.id : false,
+      }));
+
       set({
-        error: `Failed to add account: ${error instanceof Error ? error.message : String(error)}`,
-        isLoading: false,
+        accounts: updatedAccounts,
+        activeAccount,
+        error: null,
       });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      // The toast handles displaying the error. We just log it and set state if it's a critical error.
+      if (!errorMessage.includes("cancelled by user")) {
+        console.error("Failed to add account:", error);
+        set({ error: `Failed to add account: ${errorMessage}` });
+      } else {
+        console.log("Account add cancelled by user.");
+      }
+    } finally {
+      set({ isLoading: false });
     }
   },
 
