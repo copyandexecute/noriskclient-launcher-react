@@ -850,7 +850,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
     }
   }, [profile, items, contentType]);
 
-  const handleUpdateContentItem = useCallback(async (item: T, updateVersion: ModrinthVersion, preventRefetch: boolean = false, suppressOwnToast: boolean = false) => {
+  const handleUpdateContentItem = useCallback(async (item: T, updateVersion: ModrinthVersion, suppressOwnToast: boolean = false) => {
     // 1. Initial checks
     if (!profile) {
       toast.error("Profile missing, cannot update.");
@@ -919,17 +919,45 @@ export function useLocalContentManager<T extends LocalContentItem>({
     const promiseAction = async () => {
       await invoke(command, payload); // Core operation
 
-      // Post-invoke success actions:
-      if (item.sha1_hash && !isModUpdateById) { 
-        setContentUpdates(prevUpdates => {
-          const newUpdates = { ...prevUpdates };
-          delete newUpdates[item.sha1_hash!];
-          return newUpdates;
-        });
-      }
+      // After successful invoke, create the updated item for the frontend state.
+      const primaryFile = updateVersion.files.find(f => f.primary) || updateVersion.files[0];
+      if (!primaryFile) throw new Error("Updated version details are missing a primary file.");
+
+      const newSha1 = primaryFile.hashes?.sha1 || null;
+      const newFilename = primaryFile.filename;
+      const oldPath = item.path;
+      const pathSeparator = oldPath.includes('/') ? '/' : '\\';
+      const dirPath = oldPath.substring(0, oldPath.lastIndexOf(pathSeparator));
+      const newPath = `${dirPath}${pathSeparator}${newFilename}`;
+
+      const updatedItem: T = {
+          ...item, // Start with the old item to preserve path etc.
+          filename: newFilename,
+          path: newPath,
+          path_str: newPath,
+          is_disabled: false,
+          sha1_hash: newSha1,
+          fallback_version: updateVersion.version_number,
+          modrinth_info: {
+              ...(item.modrinth_info || {}),
+              project_id: updateVersion.project_id,
+              version_id: updateVersion.id,
+              name: updateVersion.name,
+              version_number: updateVersion.version_number,
+              download_url: primaryFile.url,
+          },
+      };
+
+      // Update the main items list with the new item data
+      setItems(prevItems => prevItems.map(i => i.filename === item.filename ? updatedItem : i));
       
-      if (!preventRefetch) {
-        await fetchData(true); // Refreshes the entire list
+      // Remove the update notification
+      if (item.sha1_hash) {
+          setContentUpdates(prev => {
+              const newUpdates = { ...prev };
+              delete newUpdates[item.sha1_hash!];
+              return newUpdates;
+          });
       }
     };
 
@@ -967,7 +995,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
         return newSet;
       });
     }
-  }, [profile, contentType, getDisplayFileName, fetchData, setItemsBeingUpdated, setContentUpdateError, setContentUpdates]);
+  }, [profile, contentType, getDisplayFileName, setItemsBeingUpdated, setContentUpdateError, setContentUpdates]);
 
   const handleUpdateAllAvailableContent = useCallback(async () => {
     if (Object.keys(contentUpdates).length === 0 || !profile) return;
@@ -992,7 +1020,7 @@ export function useLocalContentManager<T extends LocalContentItem>({
     
     for (const { item, version } of itemsToUpdateWithDetails) {
       try {
-        await handleUpdateContentItem(item, version, true, true); // preventRefetch, suppressOwnToast
+        await handleUpdateContentItem(item, version, true); // suppressOwnToast
         succeededCount++;
         toast.loading(`Updating ${succeededCount}/${totalCount} ${contentType}s...`, { id: toastId });
       } catch(err) {
@@ -1023,10 +1051,12 @@ export function useLocalContentManager<T extends LocalContentItem>({
     }
     
     if (succeededCount > 0) {
-        await fetchData(true); // Full refresh after all updates
-        await checkForContentUpdates(profile, items); 
+        // The state has been updated in-place for each item.
+        // We don't need to re-check for updates immediately, as this could use stale data
+        // and cause the "Update All" button to reappear incorrectly.
+        // A manual refresh will catch any brand new updates.
     }
-  }, [profile, items, contentUpdates, contentType, getDisplayFileName, handleUpdateContentItem, fetchData, checkForContentUpdates]);
+  }, [profile, items, contentUpdates, contentType, getDisplayFileName, handleUpdateContentItem]);
 
   useEffect(() => {
     // Check for updates only after the initial full loading process for the current profile is complete,
