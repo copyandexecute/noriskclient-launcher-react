@@ -49,6 +49,7 @@ import type { ContentInstallStatus, ContentCheckRequest, BatchCheckContentParams
 
 import { useProfileStore } from '../../../store/profile-store'; // Hinzufügen des ProfileStore Imports
 import { Virtuoso } from 'react-virtuoso'; // Import Virtuoso
+import { useNavigate } from 'react-router-dom';
 
 // Remove any other stray imports of uninstallContentFromProfile below this point
 
@@ -90,6 +91,7 @@ export function ModrinthSearchV2({
   initialProjectType, // Added new prop
   allowedProjectTypes, // Destructure new prop
 }: ModrinthSearchV2Props) {
+  const navigate = useNavigate();
   const searchResultsAreaRef = useRef<HTMLDivElement>(null); // Ref for the scrollable area
   const [searchTerm, setSearchTerm] = useState('');
   const [projectType, setProjectType] = useState<ModrinthProjectType>(() => {
@@ -1685,17 +1687,22 @@ export function ModrinthSearchV2({
             {/* TODO: Maybe add a button to switch to this profile or open its settings */}
           </div>
         ),
-        { id: toastId, duration: 6000 }
+        { id: toastId, duration: 1000 }
       );
 
       try {
-        const updatedProfiles = await ProfileService.listProfiles();
-        setInternalProfiles(updatedProfiles);
-        useProfileStore.getState().fetchProfiles();
+        // Wait for the profile list to be updated in the global store
+        await useProfileStore.getState().fetchProfiles();
+        const updatedProfiles = useProfileStore.getState().profiles;
+        setInternalProfiles(updatedProfiles); // Sync local state
+
+        // Now it's safe to navigate
+        navigate(`/profiles/${newProfileId}`);
       } catch (profileError) {
         console.error("Failed to refresh profiles list internally:", profileError);
+        toast.error("Profile installed, but failed to navigate automatically.");
       }
-      
+
       // Conditionally call onInstallSuccess
       if (project.project_type !== 'modpack' && onInstallSuccess) {
         onInstallSuccess();
@@ -1752,11 +1759,16 @@ export function ModrinthSearchV2({
       );
 
       try {
-        const updatedProfiles = await ProfileService.listProfiles();
-        setInternalProfiles(updatedProfiles);
-        useProfileStore.getState().fetchProfiles();
+        // Wait for the profile list to be updated in the global store
+        await useProfileStore.getState().fetchProfiles();
+        const updatedProfiles = useProfileStore.getState().profiles;
+        setInternalProfiles(updatedProfiles); // Sync local state
+
+        // Now it's safe to navigate
+        navigate(`/profiles/${newProfileId}`);
       } catch (profileError) {
         console.error("Failed to refresh profiles list internally:", profileError);
+        toast.error("Profile installed, but failed to navigate automatically.");
       }
 
       // Conditionally call onInstallSuccess
