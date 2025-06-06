@@ -144,19 +144,17 @@ export function ProfileScreenshotModal({
               title="Copy Image"
               onClick={handleCopyImage}
               disabled={isCopyingImage}
-              displayVariant="themed-surface"
-              variant="ghost"
+              variant="flat"
               size="sm"
-              className="rounded-md"
+              className="rounded-md w-9 h-9 flex items-center justify-center"
             />
             <IconButton
               icon={<Icon icon="solar:folder-with-files-bold-duotone" />}
               title="Open Screenshot Location"
               onClick={handleOpenFolder}
-              displayVariant="themed-surface"
-              variant="ghost"
+              variant="flat"
               size="sm"
-              className="rounded-md"
+              className="rounded-md w-9 h-9 flex items-center justify-center"
             />
             <IconButton
               icon={isDeleting ? <Icon icon="eos-icons:loading" /> : <Icon icon="solar:trash-bin-trash-bold-duotone" />}
@@ -165,6 +163,7 @@ export function ProfileScreenshotModal({
               disabled={isDeleting}
               variant="destructive"
               size="sm"
+              className="w-9 h-9 flex items-center justify-center"
             />
           </div>
         )}
