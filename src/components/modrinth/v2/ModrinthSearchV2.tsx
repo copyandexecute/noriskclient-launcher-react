@@ -70,7 +70,7 @@ export interface ModrinthSearchV2Props {
   allowedProjectTypes?: ModrinthProjectType[]; // New prop for allowed project types
 }
 
-const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['mod', 'modpack', 'resourcepack', 'shader', 'datapack'];
+const ALL_MODRINTH_PROJECT_TYPES: ModrinthProjectType[] = ['modpack', 'mod', 'resourcepack', 'shader', 'datapack'];
 
 // Define the order for known headers, others will be alphabetical
 const PREFERRED_HEADER_ORDER = ["resolutions", "performance impact", "features", "categories"];
