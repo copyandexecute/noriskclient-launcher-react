@@ -213,7 +213,7 @@ export const ProfileContextMenu = forwardRef<
               />
             </li>
             <li
-              className="px-4 py-2.5 flex items-center gap-3 hover:bg-white/10 cursor-pointer transition-colors duration-150"
+              className="px-4 py-2.5 flex items-center gap-3 hover:bg-red-500/20 cursor-pointer transition-colors duration-150"
               onClick={(e) => {
                 e.stopPropagation();
                 console.log(
@@ -226,7 +226,7 @@ export const ProfileContextMenu = forwardRef<
                 icon="solar:trash-bin-trash-bold"
                 className="w-5 h-5 text-red-400"
               />
-              <span className="font-minecraft-ten text-base text-white/80">
+              <span className="font-minecraft-ten text-base text-red-400">
                 Delete Profile
               </span>
             </li>

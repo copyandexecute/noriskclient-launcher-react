@@ -80,7 +80,7 @@ export function StatusMessage({
       )}
     >
       <Icon icon={styles.icon} className="w-6 h-6 mr-3 flex-shrink-0 mt-1" />
-      <div className="text-xl font-minecraft">{message}</div>
+      <div className="text-base font-minecraft-ten">{message}</div>
     </div>
   );
 }
