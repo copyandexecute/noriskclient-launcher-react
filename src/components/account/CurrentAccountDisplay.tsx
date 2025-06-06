@@ -152,7 +152,7 @@ export function CurrentAccountDisplay({
         </div>
 
         <div className="flex items-center gap-1 min-w-0">
-          <span className="text-sm text-white font-minecraft uppercase">
+          <span className="text-xl text-white font-minecraft lowercase">
             Add Account
           </span>
         </div>
