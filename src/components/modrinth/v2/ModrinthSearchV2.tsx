@@ -1645,28 +1645,31 @@ export function ModrinthSearchV2({
       return;
     }
     setInstallingModpackAsProfile(prev => ({ ...prev, [project.project_id]: true })); // Start loading
-    const toastId = toast.loading(`Fetching latest version for ${project.title}...`);
+    const toastId = toast.loading(`Fetching versions for ${project.title}...`);
 
     try {
-      let latestVersion: ModrinthVersion | null = null;
-      if (project.latest_version) {
-        const versions = await ModrinthService.getModVersions(project.project_id);
-        latestVersion = versions.find(v => v.version_number === project.latest_version || v.id === project.latest_version) || versions[0];
-        if (!latestVersion && versions.length > 0) {
-          latestVersion = versions.sort((a,b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime())[0];
-        }
+      const allVersions = await ModrinthService.getModVersions(project.project_id);
+
+      if (!allVersions || allVersions.length === 0) {
+        throw new Error("No versions found for this modpack.");
       }
+
+      // Sort all versions by date published, newest first
+      const sortedVersions = allVersions.sort((a, b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime());
+
+      // Try to find the latest 'release' version
+      let latestVersion = sortedVersions.find(v => v.version_type === 'release');
+
+      // If no release version is found, fall back to the absolute latest version
       if (!latestVersion) {
-        const allVersions = await ModrinthService.getModVersions(project.project_id);
-        if (allVersions && allVersions.length > 0) {
-          latestVersion = allVersions.sort((a, b) => new Date(b.date_published).getTime() - new Date(a.date_published).getTime())[0];
-        } else { throw new Error("No versions found for this modpack."); }
+        latestVersion = sortedVersions[0];
       }
+
       if (!latestVersion || !latestVersion.files || latestVersion.files.length === 0) { throw new Error("Latest version has no files."); }
       const primaryFile = latestVersion.files.find(f => f.primary) || latestVersion.files[0];
       if (!primaryFile) { throw new Error("No primary file found for the latest version."); }
 
-      toast.loading(`Installing ${project.title} as new profile...`, { id: toastId });
+      toast.loading(`Installing ${project.title} (v${latestVersion.version_number}) as new profile...`, { id: toastId });
       const newProfileId = await ModrinthService.downloadAndInstallModpack(
         project.project_id,
         latestVersion.id,
