@@ -3369,6 +3369,7 @@ dependencies = [
  "fs4",
  "fs_extra",
  "futures",
+ "futures-lite",
  "hex",
  "image",
  "jsonwebtoken",

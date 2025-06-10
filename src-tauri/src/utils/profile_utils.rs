@@ -20,9 +20,11 @@ use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 use tempfile;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt as TokioAsyncWriteExt};
+
 use uuid::Uuid;
 use std::collections::HashMap;
+use futures_lite::io::AsyncWriteExt;
 
 /// Represents the type of content to be installed
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -171,7 +173,7 @@ async fn download_content(
         .await
         .map_err(|e| AppError::Io(e))?;
 
-    file.write_all(&bytes).await.map_err(|e| AppError::Io(e))?;
+    TokioAsyncWriteExt::write_all(&mut file, &bytes).await.map_err(|e| AppError::Io(e))?;
 
     info!("Successfully downloaded content to {}", file_path.display());
 
@@ -912,7 +914,7 @@ pub async fn list_log_files(profile_id: Uuid) -> Result<Vec<PathBuf>> {
 /// Exports a profile to a `.noriskpack` file
 ///
 /// This creates a zip archive with the .noriskpack extension that contains:
-/// - The profile data as JSON (sanitized to remove user-specific data)
+/// - The profile data as JSON (sanitized to remove user-specific data)  
 /// - An "overrides" folder containing any files specified in `include_files`
 ///
 /// @param profile_id: UUID of the profile to export
@@ -926,91 +928,42 @@ pub async fn export_profile_to_noriskpack(
 ) -> Result<PathBuf> {
     info!("Exporting profile {} to .noriskpack", profile_id);
 
-    // Get the profile
+    // Get the profile and acquire semaphore for I/O limiting
     let state = crate::state::state_manager::State::get().await?;
+    let _permit = state.io_semaphore.acquire().await;
     let profile = state.profile_manager.get_profile(profile_id).await?;
+
+    // Single traversal strategy like Modrinth
+    let mut all_files = Vec::new();
+    let profile_instance_path = state
+        .profile_manager
+        .get_profile_instance_path(profile_id)
+        .await?;
+    
+    // 1. Collect ALL files in profile once (like Modrinth)
+    collect_all_files_recursive(&profile_instance_path, &mut all_files).await?;
+    
+    // 2. Filter with string matching (like Modrinth's included_candidates_set check)
+    if let Some(ref include_paths) = include_files {
+        let include_paths_str: Vec<String> = include_paths.iter()
+            .filter_map(|p| p.strip_prefix(&profile_instance_path).ok())
+            .map(|rel_path| rel_path.to_string_lossy().replace('\\', "/"))
+            .collect();
+        
+        all_files.retain(|file_path| {
+            if let Ok(rel_path) = file_path.strip_prefix(&profile_instance_path) {
+                let rel_path_str = rel_path.to_string_lossy().replace('\\', "/");
+                include_paths_str.iter().any(|include_str| rel_path_str.starts_with(include_str))
+            } else {
+                false
+            }
+        });
+    } else {
+        all_files.clear(); // No include_files = no files to export
+    }
 
     // Create a sanitized copy of the profile for export
     let export_profile = sanitize_profile_for_export(&profile);
-
-    // Create a temporary directory for the export structure
-    let temp_dir = tempfile::tempdir()
-        .map_err(|e| AppError::Other(format!("Failed to create temporary directory: {}", e)))?;
-    let temp_path = temp_dir.path();
-    debug!(
-        "Created temporary directory for export: {}",
-        temp_path.display()
-    );
-
-    // Create the overrides directory
-    let overrides_dir = temp_path.join("overrides");
-    fs::create_dir_all(&overrides_dir)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-
-    // Write the profile data to a JSON file
-    let profile_json_path = temp_path.join("profile.json");
-    let profile_json = serde_json::to_string_pretty(&export_profile)?;
-    let mut profile_file = fs::File::create(&profile_json_path)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-    profile_file
-        .write_all(profile_json.as_bytes())
-        .await
-        .map_err(|e| AppError::Io(e))?;
-
-    // Copy files to the overrides directory if specified
-    if let Some(files) = include_files {
-        for file_path in files {
-            if !file_path.exists() {
-                debug!("Skipping non-existent file: {}", file_path.display());
-                continue;
-            }
-
-            // Get source path and relative path within the profile
-            let profile_instance_path = state
-                .profile_manager
-                .get_profile_instance_path(profile_id)
-                .await?;
-
-            // Only process files that are within the profile instance path
-            if let Ok(rel_path) = file_path.strip_prefix(&profile_instance_path) {
-                let target_path = overrides_dir.join(rel_path);
-
-                // Create parent directories if needed
-                if let Some(parent) = target_path.parent() {
-                    fs::create_dir_all(parent)
-                        .await
-                        .map_err(|e| AppError::Io(e))?;
-                }
-
-                if file_path.is_dir() {
-                    // Copy directory recursively
-                    copy_dir_recursively(&file_path, &target_path).await?;
-                    debug!(
-                        "Copied directory {} to {}",
-                        file_path.display(),
-                        target_path.display()
-                    );
-                } else {
-                    // Copy file
-                    fs::copy(&file_path, &target_path)
-                        .await
-                        .map_err(|e| AppError::Io(e))?;
-                    debug!(
-                        "Copied file {} to {}",
-                        file_path.display(),
-                        target_path.display()
-                    );
-                }
-            } else {
-                debug!(
-                    "Skipping file outside profile path: {}",
-                    file_path.display()
-                );
-            }
-        }
-    }
 
     // Determine the output file path
     let output_file = match output_path {
@@ -1032,9 +985,6 @@ pub async fn export_profile_to_noriskpack(
         }
     };
 
-    // Create the zip file
-    info!("Creating .noriskpack archive at: {}", output_file.display());
-
     // Ensure parent directory exists
     if let Some(parent) = output_file.parent() {
         if !parent.exists() {
@@ -1044,8 +994,61 @@ pub async fn export_profile_to_noriskpack(
         }
     }
 
-    // Create the zip file
-    create_zip_archive(temp_path, &output_file).await?;
+    info!("Creating .noriskpack archive at: {}", output_file.display());
+
+    // Create zip file and writer - write directly to target file
+    let mut file = fs::File::create(&output_file)
+        .await
+        .map_err(|e| AppError::Io(e))?;
+    let mut writer = ZipFileWriter::with_tokio(&mut file);
+
+    // Write the profile data to JSON directly into zip
+    let profile_json = serde_json::to_vec_pretty(&export_profile)?;
+    let profile_builder = ZipEntryBuilder::new("profile.json".into(), Compression::Deflate);
+    writer
+        .write_entry_whole(profile_builder, &profile_json)
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to write profile.json to zip: {}", e)))?;
+
+    // Add files to overrides with STREAMING (zero-copy like the example)
+    for file_path in all_files {
+        if let Ok(rel_path) = file_path.strip_prefix(&profile_instance_path) {
+            let rel_path_str = rel_path.to_string_lossy().replace('\\', "/");
+            let zip_path = format!("overrides/{}", rel_path_str);
+
+            info!("Processing file: {}", file_path.display());
+
+            // STREAMING approach - no memory buffering
+            let mut source_file = fs::File::open(&file_path)
+                .await
+                .map_err(|e| AppError::Io(e))?;
+
+            let file_builder = ZipEntryBuilder::new(zip_path.into(), Compression::Deflate);
+            let mut entry_writer = writer
+                .write_entry_stream(file_builder)
+                .await
+                .map_err(|e| AppError::Other(format!("Failed to create zip entry stream: {}", e)))?;
+
+            // Stream file content in chunks (using EntryStreamWriter's native API)
+            let mut buffer = [0u8; 8192];
+            loop {
+                let n = source_file.read(&mut buffer).await.map_err(|e| AppError::Io(e))?;
+                if n == 0 { break; }
+                entry_writer.write_all(&buffer[..n]).await.map_err(|e| AppError::Other(format!("Failed to write chunk: {}", e)))?;
+            }
+
+            entry_writer
+                .close()
+                .await
+                .map_err(|e| AppError::Other(format!("Failed to close zip entry: {}", e)))?;
+        }
+    }
+
+    // Close the zip writer
+    writer
+        .close()
+        .await
+        .map_err(|e| AppError::Other(format!("Failed to finalize zip file: {}", e)))?;
 
     info!(
         "Successfully exported profile to: {}",
@@ -1072,133 +1075,25 @@ fn sanitize_profile_for_export(profile: &Profile) -> Profile {
     export_profile
 }
 
-/// Recursively copies a directory
-pub fn copy_dir_recursively<'a>(src: &'a Path, dst: &'a Path) -> BoxFuture<'a, Result<()>> {
-    Box::pin(async move {
-        if !dst.exists() {
-            fs::create_dir_all(dst).await.map_err(|e| AppError::Io(e))?;
-        }
-
-        let mut entries = fs::read_dir(src).await.map_err(|e| AppError::Io(e))?;
-
-        while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
-            let entry_path = entry.path();
-            let file_name = entry.file_name();
-            let target_path = dst.join(file_name);
-
-            if entry_path.is_dir() {
-                copy_dir_recursively(&entry_path, &target_path).await?;
-            } else {
-                fs::copy(&entry_path, &target_path)
-                    .await
-                    .map_err(|e| AppError::Io(e))?;
-            }
-        }
-
-        Ok(())
-    })
-}
-
-/// Creates a zip archive from a directory
-async fn create_zip_archive(src_dir: &Path, dst_file: &Path) -> Result<()> {
-    debug!(
-        "Creating zip archive at {:?} from directory {:?}",
-        dst_file, src_dir
-    );
-
-    // Create the destination file
-    let file = fs::File::create(dst_file)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-    let mut writer = ZipFileWriter::with_tokio(file);
-
-    // Add all files from the src_dir recursively, but maintain proper relative paths
-    // Only files inside the src_dir should be included
-    add_dir_to_zip(&mut writer, src_dir, src_dir).await?;
-
-    // Close the zip file
-    writer
-        .close()
-        .await
-        .map_err(|e| AppError::Other(format!("Failed to finalize zip file: {}", e)))?;
-
-    debug!("Successfully created zip archive at {:?}", dst_file);
-    Ok(())
-}
-
-/// Helper function to recursively add a directory to a zip archive
-fn add_dir_to_zip<'a>(
-    writer: &'a mut ZipFileWriter<fs::File>,
-    root_dir: &'a Path,
-    current_dir: &'a Path,
+/// Collect all files recursively (like Modrinth's add_all_recursive_folder_paths)
+fn collect_all_files_recursive<'a>(
+    dir_path: &'a Path,
+    file_list: &'a mut Vec<PathBuf>,
 ) -> BoxFuture<'a, Result<()>> {
     Box::pin(async move {
-        let mut entries = fs::read_dir(current_dir)
+        let mut entries = fs::read_dir(dir_path)
             .await
             .map_err(|e| AppError::Io(e))?;
 
         while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
-            let path = entry.path(); // Absolute path of the current file/directory
-
-            // Create relative path from root_dir - this ensures proper directory structure in the zip
-            // And normalize path separators to forward slashes for zip compatibility.
-            let rel_path_str = path
-                .strip_prefix(root_dir)
-                .map_err(|e| {
-                    AppError::Other(format!(
-                        "Path prefix error stripping {:?} from {:?}: {}",
-                        root_dir, path, e
-                    ))
-                })?
-                .to_string_lossy()
-                .to_string()
-                .replace('\\', "/"); // Normalize to forward slashes
-
+            let path = entry.path();
+            
             if path.is_dir() {
-                // For directories, ensure the entry name ends with a forward slash.
-                let dir_entry_name = if rel_path_str.is_empty() {
-                    // Should not happen if root_dir itself is not added directly with empty name
-                    // Potentially skip adding the root dir itself as an explicit entry if it's meant to be implicit
-                    // Or handle as needed, e.g., if zipping contents *of* root_dir, rel_path_str might be empty for root_dir's direct children's parent dir entry
-                    // For now, if rel_path_str is empty for a dir, it implies we are at the root_dir itself, which shouldn't be added as named entry.
-                    // We only add named entries for children.
-                    String::new() // Placeholder, logic below skips if empty
-                } else if rel_path_str.ends_with('/') {
-                    rel_path_str.clone()
-                } else {
-                    format!("{}/", rel_path_str)
-                };
-
-                if !dir_entry_name.is_empty() {
-                    // Only add non-empty directory names
-                    let dir_builder =
-                        ZipEntryBuilder::new(dir_entry_name.into(), Compression::Stored);
-                    writer
-                        .write_entry_whole(dir_builder, &[])
-                        .await
-                        .map_err(|e| {
-                            AppError::Other(format!("Failed to add directory to zip: {}", e))
-                        })?;
-                }
-
-                // Then recursively add its contents
-                add_dir_to_zip(writer, root_dir, &path).await?; // Pass original absolute path for recursion
+                // Recurse into directories
+                collect_all_files_recursive(&path, file_list).await?;
             } else {
-                // For files, read the content and add it
-                let file_data = fs::read(&path).await.map_err(|e| AppError::Io(e))?;
-                // Ensure rel_path_str is not empty for a file (should always be the case if not zipping root_dir itself as an entry)
-                if rel_path_str.is_empty() {
-                    return Err(AppError::Other(format!(
-                        "Attempted to add file with empty relative path: {:?}",
-                        path
-                    )));
-                }
-                let file_builder = ZipEntryBuilder::new(rel_path_str.into(), Compression::Deflate);
-
-                writer
-                    .write_entry_whole(file_builder, &file_data)
-                    .await
-                    .map_err(|e| AppError::Other(format!("Failed to add file to zip: {}", e)))?;
+                // Add files to the list
+                file_list.push(path);
             }
         }
 
