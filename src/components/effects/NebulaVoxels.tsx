@@ -42,6 +42,14 @@ export function NebulaVoxels({
   const cubesRef = useRef<Cube[]>([]);
   const isWindowFocused = useWindowFocus();
   
+  // Animation timing state management
+  const pausedTimeRef = useRef<number>(0);
+  const totalPausedDurationRef = useRef<number>(0);
+  const lastPauseStartRef = useRef<number>(0);
+  const animationStartTimeRef = useRef<number>(0);
+  const staticFrameRenderedRef = useRef<boolean>(false);
+  const pausedCubeStatesRef = useRef<Cube[]>([]);
+  
   // Animation should only run if both window is focused AND background animations are enabled
   const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
@@ -209,43 +217,105 @@ export function NebulaVoxels({
         animationFrameIdRef.current = requestAnimationFrame(renderCubes);
       }
 
+      // Initialize animation start time on first run
+      if (animationStartTimeRef.current === 0) {
+        animationStartTimeRef.current = timestamp;
+        lastFrameTimeRef.current = timestamp;
+      }
+
       if (!visibleRef.current) return;
       
-      // If animations are disabled, render static cubes and stop
+      // If animations are disabled, pause timing and render static frame only once
       if (!shouldAnimate) {
-        const { width, height } = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, width, height);
-        
-        // Create/maintain static cubes if they don't exist
-        if (cubesRef.current.length === 0) {
-          for (let i = 0; i < Math.floor(adjustedCubeCount * 0.7); i++) {
-            cubesRef.current.push({
-              x: Math.random() * width,
-              y: Math.random() * height,
-              z: Math.random() * 200 - 100,
-              size: Math.random() * 20 + 8,
-              rotationX: Math.random() * Math.PI * 2,
-              rotationY: Math.random() * Math.PI * 2,
-              rotationZ: Math.random() * Math.PI * 2,
-              speedX: 0,
-              speedY: 0,
-              speedZ: 0,
-              opacity: Math.random() * 0.4 + 0.2,
-            });
-          }
+        // Record pause start time if not already paused
+        if (lastPauseStartRef.current === 0) {
+          lastPauseStartRef.current = timestamp;
+          // Store current animation time when pausing
+          const currentAnimationTime = timestamp - animationStartTimeRef.current - totalPausedDurationRef.current;
+          pausedTimeRef.current = currentAnimationTime;
+          // Deep copy current cube states for static frame
+          pausedCubeStatesRef.current = JSON.parse(JSON.stringify(cubesRef.current));
         }
         
-        // Render static cubes
-        const sortedCubes = [...cubesRef.current].sort((a, b) => a.z - b.z);
-        sortedCubes.forEach(drawCube);
-        
+        if (!staticFrameRenderedRef.current) {
+          const { width, height } = canvas.getBoundingClientRect();
+          ctx.clearRect(0, 0, width, height);
+          
+          // Create/maintain static cubes if they don't exist
+          if (pausedCubeStatesRef.current.length === 0) {
+            pausedCubeStatesRef.current = [];
+            for (let i = 0; i < Math.floor(adjustedCubeCount * 0.7); i++) {
+              pausedCubeStatesRef.current.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                z: Math.random() * 200 - 100,
+                size: Math.random() * 20 + 8,
+                rotationX: Math.random() * Math.PI * 2,
+                rotationY: Math.random() * Math.PI * 2,
+                rotationZ: Math.random() * Math.PI * 2,
+                speedX: 0,
+                speedY: 0,
+                speedZ: 0,
+                opacity: Math.random() * 0.4 + 0.2,
+              });
+            }
+          }
+          
+          // Render static cubes showing paused animation state
+          const sortedCubes = [...pausedCubeStatesRef.current].sort((a, b) => a.z - b.z);
+          sortedCubes.forEach(drawCube);
+          
+          staticFrameRenderedRef.current = true;
+        }
         return;
       }
 
-      const elapsed = timestamp - lastFrameTimeRef.current;
-      if (elapsed < frameInterval) return;
+      // Reset static frame flag and handle resume when animations are enabled again
+      if (staticFrameRenderedRef.current) {
+        staticFrameRenderedRef.current = false;
+        
+        // Calculate total paused duration and reset pause tracking
+        if (lastPauseStartRef.current > 0) {
+          const pauseDuration = timestamp - lastPauseStartRef.current;
+          totalPausedDurationRef.current += pauseDuration;
+          lastPauseStartRef.current = 0;
+          
+          // Restore cube states from pause and adjust lastFrameTime
+          if (pausedCubeStatesRef.current.length > 0) {
+            cubesRef.current = JSON.parse(JSON.stringify(pausedCubeStatesRef.current));
+          }
+          lastFrameTimeRef.current = timestamp;
+        }
+      }
 
-      lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
+      // Ensure cubes are initialized for normal animation
+      if (cubesRef.current.length === 0) {
+        const { width, height } = canvas.getBoundingClientRect();
+        for (let i = 0; i < adjustedCubeCount; i++) {
+          cubesRef.current.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            z: Math.random() * 500 - 250,
+            size: Math.random() * 30 + 10,
+            rotationX: Math.random() * Math.PI * 2,
+            rotationY: Math.random() * Math.PI * 2,
+            rotationZ: Math.random() * Math.PI * 2,
+            speedX: (Math.random() - 0.5) * 0.01 * adjustedSpeed,
+            speedY: (Math.random() - 0.5) * 0.01 * adjustedSpeed,
+            speedZ: (Math.random() - 0.5) * 0.01 * adjustedSpeed,
+            opacity: Math.random() * 0.5 + 0.1,
+          });
+        }
+      }
+
+      // Calculate effective animation time (excluding paused periods)
+      const effectiveTimestamp = timestamp - totalPausedDurationRef.current;
+      const elapsed = effectiveTimestamp - lastFrameTimeRef.current;
+      
+      // Temporarily remove frameInterval check to debug
+      // if (elapsed < frameInterval) return;
+
+      lastFrameTimeRef.current = effectiveTimestamp;
 
       const { width, height } = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, width, height);
@@ -260,10 +330,8 @@ export function NebulaVoxels({
     window.addEventListener("resize", resize);
     resize();
     
-    // Start animation only if should animate
-    if (shouldAnimate) {
-      animationFrameIdRef.current = requestAnimationFrame(renderCubes);
-    }
+    // Start animation or render static frame
+    animationFrameIdRef.current = requestAnimationFrame(renderCubes);
 
     return () => {
       observer.disconnect();
