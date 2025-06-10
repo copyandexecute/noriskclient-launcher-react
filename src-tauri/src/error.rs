@@ -55,6 +55,9 @@ pub enum AppError {
     #[error("NeoForge error: {0}")]
     NeoForgeError(String),
 
+    #[error("Semaphore acquire error: {0}")]
+    Semaphore(#[from] tokio::sync::AcquireError),
+
     #[error("Profile not found: {0}")]
     ProfileNotFound(Uuid),
 

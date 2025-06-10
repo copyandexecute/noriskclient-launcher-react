@@ -642,57 +642,93 @@ pub fn get_norisk_mod_cache_path(
     Ok(mod_cache_dir.join(filename))
 }
 
-/// Recursively copies a directory from a source to a destination.
+/// Helper function to recursively collect file copy operations.
+async fn collect_copy_operations(
+    src: &Path,
+    dst: &Path,
+    ops: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<()> {
+    if !src.exists() {
+        return Ok(());
+    }
+
+    if src.is_dir() {
+        fs::create_dir_all(dst).await.map_err(AppError::Io)?;
+        let mut entries = fs::read_dir(src).await.map_err(AppError::Io)?;
+        while let Some(entry) = entries.next_entry().await.map_err(AppError::Io)? {
+            let entry_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            Box::pin(collect_copy_operations(&entry_path, &dst_path, ops)).await?;
+        }
+    } else if src.is_file() {
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent).await.map_err(AppError::Io)?;
+        }
+        ops.push((src.to_path_buf(), dst.to_path_buf()));
+    }
+    Ok(())
+}
+
+/// Recursively copies a directory from a source to a destination, using a semaphore for parallelism.
 /// If the destination directory does not exist, it will be created.
 ///
 /// # Arguments
 ///
 /// * `src` - The source directory path.
 /// * `dst` - The destination directory path.
+/// * `semaphore` - Semaphore to limit concurrent I/O operations.
 ///
 /// # Returns
 ///
 /// A `Result` indicating success or failure.
-pub async fn copy_dir_recursively(src: &Path, dst: &Path) -> Result<()> {
+pub async fn copy_dir_recursively(
+    src: &Path,
+    dst: &Path,
+    semaphore: Arc<Semaphore>,
+) -> Result<()> {
     info!(
-        "Recursively copying from {} to {}",
+        "Recursively copying from {} to {} with parallelism",
         src.display(),
         dst.display()
     );
 
-    // Create destination directory
-    fs::create_dir_all(dst).await.map_err(AppError::Io)?;
+    let mut ops = Vec::new();
+    collect_copy_operations(src, dst, &mut ops).await?;
 
-    let mut entries = fs::read_dir(src).await.map_err(AppError::Io)?;
+    info!(
+        "Collected {} file copy operations. Starting parallel copy.",
+        ops.len()
+    );
 
-    while let Some(entry) = entries.next_entry().await.map_err(AppError::Io)? {
-        let entry_path = entry.path();
-        let file_name = entry_path.file_name().ok_or_else(|| {
-            AppError::Other(format!(
-                "Could not get file name for {}",
-                entry_path.display()
-            ))
-        })?;
-        let dst_path = dst.join(file_name);
+    let mut copy_futures = Vec::new();
+    for (source_file, dest_file) in ops {
+        let sem_clone = semaphore.clone();
+        let fut = async move {
+            let _permit = sem_clone.acquire_owned().await.map_err(|e| {
+                AppError::Other(format!("Semaphore acquire error: {}", e))
+            })?;
 
-        let file_type = entry.file_type().await.map_err(AppError::Io)?;
-
-        if file_type.is_dir() {
-            // Recursively copy subdirectory
-            Box::pin(copy_dir_recursively(&entry_path, &dst_path)).await?;
-        } else {
-            // Copy file
-            fs::copy(&entry_path, &dst_path).await.map_err(|e| {
+            fs::copy(&source_file, &dest_file).await.map_err(|e| {
                 error!(
-                    "Failed to copy file from {} to {}: {}",
-                    entry_path.display(),
-                    dst_path.display(),
+                    "Failed to copy file {} to {}: {}",
+                    source_file.display(),
+                    dest_file.display(),
                     e
                 );
                 AppError::Io(e)
             })?;
-        }
+            Ok::<(), AppError>(())
+        };
+        copy_futures.push(fut);
     }
+
+    try_join_all(copy_futures).await?;
+
+    info!(
+        "Parallel copy from {} to {} completed.",
+        src.display(),
+        dst.display()
+    );
 
     Ok(())
 }

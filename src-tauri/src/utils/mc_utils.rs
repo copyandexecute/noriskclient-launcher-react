@@ -24,6 +24,8 @@ use tokio::io::{AsyncReadExt as _, BufReader};
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 use uuid::Uuid;
+use tokio::sync::Semaphore;
+use futures::future::try_join_all;
  // Zusätzlicher Import für Url
 
 // --- New Helper Imports for Skin Fetching ---
@@ -629,7 +631,6 @@ pub async fn copy_initial_data_from_default_minecraft(
 
     info!("[{}] Profile is a standard version with an empty directory. Proceeding with data import.", profile_id);
 
-
     let state = match State::get().await {
         Ok(s) => Some(s),
         Err(e) => {
@@ -685,78 +686,72 @@ pub async fn copy_initial_data_from_default_minecraft(
         "optionsof.txt",
         "servers.dat",
     ];
-    let total_items = items_to_copy.len() as f64;
-    let mut items_processed = 0.0;
 
-    for item_name in &items_to_copy {
+    let state_arc = State::get().await?;
+    let semaphore = state_arc.io_semaphore.clone();
+    let total_items = items_to_copy.len();
+    let progress_counter = Arc::new(tokio::sync::Mutex::new(0));
+
+    let mut top_level_futures = Vec::new();
+
+    for item_name in items_to_copy {
         let src_path = default_mc_dir.join(item_name);
         let dest_path = profile_dir.join(item_name);
+        let sem_clone = semaphore.clone();
+        let state_clone = state.clone();
+        let progress_counter_clone = progress_counter.clone();
 
-        items_processed += 1.0;
-        let progress = 0.1 + (items_processed / total_items) * 0.9;
+        let fut = async move {
+            if !fs::try_exists(&src_path).await? {
+                warn!(
+                    "[{}] Source item '{}' does not exist, skipping.",
+                    profile_id,
+                    src_path.display()
+                );
+                return Ok(());
+            }
 
-        if !fs::try_exists(&src_path).await? {
-            warn!(
-                "[{}] Source item '{}' does not exist, skipping.",
-                profile_id,
-                src_path.display()
-            );
-            continue;
-        }
+            let metadata = fs::metadata(&src_path).await?;
+            if metadata.is_dir() {
+                // This function handles its own parallelism, just await it
+                path_utils::copy_dir_recursively(&src_path, &dest_path, sem_clone).await?;
+            } else {
+                // For single files, use a permit
+                let _permit = sem_clone.acquire().await?;
+                fs::copy(&src_path, &dest_path).await?;
+            }
 
-        info!(
-            "[{}] Copying '{}' to '{}'",
-            profile_id,
-            src_path.display(),
-            dest_path.display()
+            // Progress reporting
+            let mut num = progress_counter_clone.lock().await;
+            *num += 1;
+            if let Some(s) = &state_clone {
+                let progress = 0.1 + (*num as f64 / total_items as f64) * 0.9;
+                let message = format!("({}/{}) Importing user data...", *num, total_items);
+                emit_copy_progress(s, profile_id, &message, progress, None)
+                    .await?;
+            }
+
+            Ok::<(), AppError>(())
+        };
+        top_level_futures.push(fut);
+    }
+
+    if let Err(e) = try_join_all(top_level_futures).await {
+        error!(
+            "[{}] An error occurred during the parallel data import: {}",
+            profile_id, e
         );
         if let Some(s) = &state {
-            emit_copy_progress(s, profile_id, &format!("Copying '{}'...", item_name), progress, None)
-                .await?;
+            emit_copy_progress(
+                s,
+                profile_id,
+                "Error during data import.",
+                1.0,
+                Some(e.to_string()),
+            )
+            .await?;
         }
-
-        let metadata = fs::metadata(&src_path).await?;
-
-        if metadata.is_dir() {
-            if let Err(e) = path_utils::copy_dir_recursively(&src_path, &dest_path).await {
-                error!(
-                    "[{}] Failed to copy directory '{}': {}",
-                    profile_id,
-                    src_path.display(),
-                    e
-                );
-                if let Some(s) = &state {
-                    emit_copy_progress(
-                        s,
-                        profile_id,
-                        &format!("Failed to copy '{}'", item_name),
-                        progress,
-                        Some(e.to_string()),
-                    )
-                    .await?;
-                }
-            }
-        } else {
-            // It's a file
-            if let Err(e) = fs::copy(&src_path, &dest_path).await {
-                error!(
-                    "[{}] Failed to copy file '{}': {}",
-                    profile_id,
-                    src_path.display(),
-                    e
-                );
-                if let Some(s) = &state {
-                    emit_copy_progress(
-                        s,
-                        profile_id,
-                        &format!("Failed to copy '{}'", item_name),
-                        progress,
-                        Some(e.to_string()),
-                    )
-                    .await?;
-                }
-            }
-        }
+        return Err(e);
     }
 
     info!("[{}] Initial data copy finished.", profile_id);
