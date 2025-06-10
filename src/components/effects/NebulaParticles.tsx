@@ -39,6 +39,15 @@ export function NebulaParticles({
   const particlesRef = useRef<Particle[]>([]);
   const isWindowFocused = useWindowFocus();
   
+  // Animation timing state management
+  const pausedTimeRef = useRef<number>(0);
+  const totalPausedDurationRef = useRef<number>(0);
+  const lastPauseStartRef = useRef<number>(0);
+  const animationStartTimeRef = useRef<number>(0);
+  const staticFrameRenderedRef = useRef<boolean>(false);
+  const pausedParticleStatesRef = useRef<Particle[]>([]);
+  const justResumedRef = useRef<boolean>(false);
+  
   // Animation should only run if both window is focused AND background animations are enabled
   const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
@@ -162,42 +171,118 @@ export function NebulaParticles({
         animationFrameIdRef.current = requestAnimationFrame(renderParticles);
       }
 
+      // Initialize animation start time on first run
+      if (animationStartTimeRef.current === 0) {
+        animationStartTimeRef.current = timestamp;
+        lastFrameTimeRef.current = timestamp;
+      }
+
       if (!visibleRef.current) return;
       
-      // If animations are disabled, render static particles and stop
+      // If animations are disabled, pause timing and render static frame only once
       if (!shouldAnimate) {
-        const { width, height } = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, width, height);
-        
-        // Create/maintain static particles if they don't exist
-        if (particlesRef.current.length === 0) {
-          for (let i = 0; i < Math.floor(adjustedParticleCount * 0.5); i++) {
-            particlesRef.current.push({
-              x: Math.random() * width,
-              y: Math.random() * height,
-              size: Math.random() * 4 + 1,
-              speedX: 0,
-              speedY: 0,
-              opacity: Math.random() * 0.5 + 0.3,
-              life: 20,
-              maxLife: 999999,
-            });
-          }
+        // Record pause start time if not already paused
+        if (lastPauseStartRef.current === 0) {
+          lastPauseStartRef.current = timestamp;
+          // Store current animation time when pausing
+          const currentAnimationTime = timestamp - animationStartTimeRef.current - totalPausedDurationRef.current;
+          pausedTimeRef.current = currentAnimationTime;
+          // Deep copy current particle states for static frame
+          pausedParticleStatesRef.current = JSON.parse(JSON.stringify(particlesRef.current));
         }
         
-        // Render static particles
-        particlesRef.current.forEach((p) => {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.opacity * opacity})`;
-          ctx.fill();
-        });
-        
+        if (!staticFrameRenderedRef.current) {
+          const { width, height } = canvas.getBoundingClientRect();
+          ctx.clearRect(0, 0, width, height);
+          
+          // Create/maintain static particles if they don't exist
+          if (pausedParticleStatesRef.current.length === 0) {
+            pausedParticleStatesRef.current = [];
+            for (let i = 0; i < Math.floor(adjustedParticleCount * 0.5); i++) {
+              pausedParticleStatesRef.current.push({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                size: Math.random() * 4 + 1,
+                speedX: 0,
+                speedY: 0,
+                opacity: Math.random() * 0.5 + 0.3,
+                life: 20,
+                maxLife: 999999,
+              });
+            }
+          }
+          
+          // Render static particles showing paused animation state
+          pausedParticleStatesRef.current.forEach((p) => {
+            const fadeIn = Math.min(1, p.life / 20);
+            const fadeOut = Math.max(0, 1 - p.life / p.maxLife);
+            const particleOpacity = p.opacity * fadeIn * fadeOut * opacity;
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${particleOpacity})`;
+            ctx.fill();
+
+            if (qualityLevel !== "low") {
+              const glowSize = p.size * (qualityLevel === "high" ? 2 : 1.5);
+              const gradient = ctx.createRadialGradient(
+                p.x,
+                p.y,
+                0,
+                p.x,
+                p.y,
+                glowSize,
+              );
+              gradient.addColorStop(
+                0,
+                `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${particleOpacity * 0.5})`,
+              );
+              gradient.addColorStop(1, `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0)`);
+
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
+              ctx.fillStyle = gradient;
+              ctx.fill();
+            }
+          });
+          
+          staticFrameRenderedRef.current = true;
+        }
         return;
       }
 
+      // Reset static frame flag and handle resume when animations are enabled again
+      if (staticFrameRenderedRef.current) {
+        // Calculate total paused duration and reset pause tracking BEFORE resetting flag
+        if (lastPauseStartRef.current > 0) {
+          const pauseDuration = timestamp - lastPauseStartRef.current;
+          totalPausedDurationRef.current += pauseDuration;
+          lastPauseStartRef.current = 0;
+          lastFrameTimeRef.current = timestamp;
+          justResumedRef.current = true; // Mark that we just resumed
+          
+          // Restore particle states from pause
+          if (pausedParticleStatesRef.current.length > 0) {
+            particlesRef.current = JSON.parse(JSON.stringify(pausedParticleStatesRef.current));
+          }
+        }
+        
+        staticFrameRenderedRef.current = false;
+      }
+
+      // Ensure particles are initialized for normal animation
+      if (particlesRef.current.length === 0) {
+        initParticles();
+      }
+
       const elapsed = timestamp - lastFrameTimeRef.current;
-      if (elapsed < frameInterval) return;
+      // Skip frame interval check on first frame after resume to prevent flicker
+      if (!justResumedRef.current && elapsed < frameInterval) return;
+
+      // Reset the just resumed flag after first frame
+      if (justResumedRef.current) {
+        justResumedRef.current = false;
+      }
 
       lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
 
@@ -243,10 +328,8 @@ export function NebulaParticles({
     window.addEventListener("resize", resize);
     resize();
     
-    // Start animation only if should animate
-    if (shouldAnimate) {
-      animationFrameIdRef.current = requestAnimationFrame(renderParticles);
-    }
+    // Start animation or render static frame
+    animationFrameIdRef.current = requestAnimationFrame(renderParticles);
 
     return () => {
       observer.disconnect();
