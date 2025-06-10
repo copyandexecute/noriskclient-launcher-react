@@ -216,7 +216,7 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      accentColor: ACCENT_COLORS.cyan,
+      accentColor: ACCENT_COLORS.blue,
       isBackgroundAnimationEnabled: false,
       isDetailViewSidebarOnLeft: true,
       profileGroupingCriterion: "none",
