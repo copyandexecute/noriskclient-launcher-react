@@ -49,6 +49,15 @@ export function EnchantmentParticlesEffect({
   const isWindowFocused = useWindowFocus();
   const shouldRender = forceEnable || isBackgroundAnimationEnabled;
   
+  // Animation timing state management
+  const pausedTimeRef = useRef<number>(0);
+  const totalPausedDurationRef = useRef<number>(0);
+  const lastPauseStartRef = useRef<number>(0);
+  const animationStartTimeRef = useRef<number>(0);
+  const staticFrameRenderedRef = useRef<boolean>(false);
+  const pausedParticleStatesRef = useRef<Particle[]>([]);
+  const justResumedRef = useRef<boolean>(false);
+  
   // Animation should only run if both window is focused AND background animations are enabled (or forced)
   const shouldAnimate = isWindowFocused && shouldRender;
 
@@ -183,43 +192,102 @@ export function EnchantmentParticlesEffect({
         animationFrameRef.current = requestAnimationFrame(animate);
       }
 
+      // Initialize animation start time on first run
+      if (animationStartTimeRef.current === 0) {
+        animationStartTimeRef.current = timestamp;
+        lastFrameTimeRef.current = timestamp;
+      }
+
       // Don't render if element is not visible
       if (!visibleRef.current) return;
       
-      // If animations are disabled, render static frame with some particles and stop
+      // If animations are disabled, pause timing and render static frame only once
       if (!shouldAnimate) {
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        context.fillStyle = `rgba(0, 0, 0, ${opacity / 2})`;
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Create/maintain static particles if they don't exist
-        if (particlesRef.current.length === 0) {
-          for (let i = 0; i < Math.floor(adjustedParticleCount * 0.3); i++) {
-            createParticle(
-              Math.random() * canvas.width,
-              Math.random() * canvas.height,
-              false // No random velocity for static particles
-            );
-            // Set high lifetime for static display
-            particlesRef.current[i].life = 20;
-            particlesRef.current[i].maxLife = 999999;
-          }
+        // Record pause start time if not already paused
+        if (lastPauseStartRef.current === 0) {
+          lastPauseStartRef.current = timestamp;
+          // Store current animation time when pausing
+          const currentAnimationTime = timestamp - animationStartTimeRef.current - totalPausedDurationRef.current;
+          pausedTimeRef.current = currentAnimationTime;
+          // Deep copy current particle states for static frame
+          pausedParticleStatesRef.current = JSON.parse(JSON.stringify(particlesRef.current));
         }
         
-        // Render static particles
-        particlesRef.current.forEach((particle) => {
-          context.font = `${particle.size}px "Times New Roman", serif`;
-          context.fillStyle = hexToRgba(accentColor.value, particle.alpha * opacity);
-          context.textAlign = "center";
-          context.textBaseline = "middle";
-          context.fillText(particle.character, particle.x, particle.y);
-        });
-        
+        if (!staticFrameRenderedRef.current) {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.fillStyle = `rgba(0, 0, 0, ${opacity / 2})`;
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Create/maintain static particles if they don't exist
+          if (pausedParticleStatesRef.current.length === 0) {
+            pausedParticleStatesRef.current = [];
+            for (let i = 0; i < Math.floor(adjustedParticleCount * 0.3); i++) {
+              const char = enchantmentChars[Math.floor(Math.random() * enchantmentChars.length)];
+              pausedParticleStatesRef.current.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                vx: 0,
+                vy: 0,
+                size: Math.random() * 12 + 8,
+                alpha: Math.random() * 0.6 + 0.2,
+                color: hexToRgba(accentColor.value, 1),
+                life: 20,
+                maxLife: 999999,
+                character: char,
+              });
+            }
+          }
+          
+          // Render static particles showing paused animation state
+          pausedParticleStatesRef.current.forEach((particle) => {
+            const fadeInFactor = Math.min(1, particle.life / 20);
+            const fadeOutFactor = Math.max(0, 1 - (particle.life - (particle.maxLife - 20)) / 20);
+            const currentAlpha = particle.alpha * fadeInFactor * fadeOutFactor;
+
+            context.font = `${particle.size}px "Times New Roman", serif`;
+            context.fillStyle = hexToRgba(accentColor.value, currentAlpha * opacity);
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText(particle.character, particle.x, particle.y);
+          });
+          
+          staticFrameRenderedRef.current = true;
+        }
         return;
       }
 
+      // Reset static frame flag and handle resume when animations are enabled again
+      if (staticFrameRenderedRef.current) {
+        // Calculate total paused duration and reset pause tracking BEFORE resetting flag
+        if (lastPauseStartRef.current > 0) {
+          const pauseDuration = timestamp - lastPauseStartRef.current;
+          totalPausedDurationRef.current += pauseDuration;
+          lastPauseStartRef.current = 0;
+          lastFrameTimeRef.current = timestamp;
+          justResumedRef.current = true; // Mark that we just resumed
+          
+          // Restore particle states from pause
+          if (pausedParticleStatesRef.current.length > 0) {
+            particlesRef.current = JSON.parse(JSON.stringify(pausedParticleStatesRef.current));
+          }
+        }
+        
+        staticFrameRenderedRef.current = false;
+      }
+
+      // Ensure particles are initialized for normal animation
+      if (particlesRef.current.length === 0) {
+        initParticles();
+      }
+
       const elapsed = timestamp - lastFrameTimeRef.current;
-      if (elapsed < frameInterval) return;
+      // Skip frame interval check on first frame after resume to prevent flicker
+      if (!justResumedRef.current && elapsed < frameInterval) return;
+
+      // Reset the just resumed flag after first frame
+      if (justResumedRef.current) {
+        justResumedRef.current = false;
+      }
 
       lastFrameTimeRef.current = timestamp - (elapsed % frameInterval);
 
@@ -267,6 +335,7 @@ export function EnchantmentParticlesEffect({
     canvas.addEventListener("mousemove", handleMouseMove);
     canvas.addEventListener("mouseleave", handleMouseLeave);
 
+    // Start animation or render static frame
     animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
@@ -289,60 +358,7 @@ export function EnchantmentParticlesEffect({
     shouldAnimate,
   ]);
 
-  // Separate effect to render static frame when animations are disabled
-  useEffect(() => {
-    if (!shouldRender || shouldAnimate) return;
-    
-    const canvas = canvasRef.current;
-    const context = canvas?.getContext("2d");
-    if (!canvas || !context) return;
 
-    const qualityMultiplier =
-      qualityLevel === "low" ? 0.3 : qualityLevel === "high" ? 0.8 : 0.5;
-    const adjustedParticleCount = Math.floor(particleCount * qualityMultiplier);
-
-    const enchantmentChars = [
-      "⍑", "⌇", "⎓", "⊣", "⊢", "⋮", "⫎", "⟒", "⟓", "⍊",
-      "⌰", "⏃", "⏚", "⌿", "⍀", "⌇", "⏁", "⎍", "⎐", "⍙",
-      "⍡", "⊬", "⋮", "⟊", "⟋",
-    ];
-
-    const createStaticParticle = (x: number, y: number) => {
-      const char = enchantmentChars[Math.floor(Math.random() * enchantmentChars.length)];
-      return {
-        x,
-        y,
-        vx: 0,
-        vy: 0,
-        size: Math.random() * 12 + 8,
-        alpha: Math.random() * 0.6 + 0.2,
-        color: hexToRgba(accentColor.value, 1),
-        life: 20,
-        maxLife: 999999,
-        character: char,
-      };
-    };
-
-    // Clear and render static frame
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = `rgba(0, 0, 0, ${opacity / 2})`;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Create and render static particles
-    const staticParticleCount = Math.floor(adjustedParticleCount * 0.3);
-    for (let i = 0; i < staticParticleCount; i++) {
-      const particle = createStaticParticle(
-        Math.random() * canvas.width,
-        Math.random() * canvas.height
-      );
-      
-      context.font = `${particle.size}px "Times New Roman", serif`;
-      context.fillStyle = hexToRgba(accentColor.value, particle.alpha * opacity);
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.fillText(particle.character, particle.x, particle.y);
-    }
-  }, [shouldRender, shouldAnimate, accentColor.value, opacity, particleCount, qualityLevel]);
 
   if (!shouldRender) {
     return (
