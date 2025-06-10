@@ -641,3 +641,58 @@ pub fn get_norisk_mod_cache_path(
     // Gib den vollständigen Pfad zur .jar-Datei zurück
     Ok(mod_cache_dir.join(filename))
 }
+
+/// Recursively copies a directory from a source to a destination.
+/// If the destination directory does not exist, it will be created.
+///
+/// # Arguments
+///
+/// * `src` - The source directory path.
+/// * `dst` - The destination directory path.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
+pub async fn copy_dir_recursively(src: &Path, dst: &Path) -> Result<()> {
+    info!(
+        "Recursively copying from {} to {}",
+        src.display(),
+        dst.display()
+    );
+
+    // Create destination directory
+    fs::create_dir_all(dst).await.map_err(AppError::Io)?;
+
+    let mut entries = fs::read_dir(src).await.map_err(AppError::Io)?;
+
+    while let Some(entry) = entries.next_entry().await.map_err(AppError::Io)? {
+        let entry_path = entry.path();
+        let file_name = entry_path.file_name().ok_or_else(|| {
+            AppError::Other(format!(
+                "Could not get file name for {}",
+                entry_path.display()
+            ))
+        })?;
+        let dst_path = dst.join(file_name);
+
+        let file_type = entry.file_type().await.map_err(AppError::Io)?;
+
+        if file_type.is_dir() {
+            // Recursively copy subdirectory
+            Box::pin(copy_dir_recursively(&entry_path, &dst_path)).await?;
+        } else {
+            // Copy file
+            fs::copy(&entry_path, &dst_path).await.map_err(|e| {
+                error!(
+                    "Failed to copy file from {} to {}: {}",
+                    entry_path.display(),
+                    dst_path.display(),
+                    e
+                );
+                AppError::Io(e)
+            })?;
+        }
+    }
+
+    Ok(())
+}

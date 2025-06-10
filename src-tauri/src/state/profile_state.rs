@@ -133,12 +133,18 @@ pub struct Profile {
     pub norisk_information: Option<NoriskInformation>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NoriskInformation {
     #[serde(default)]
     pub keep_local_assets: bool,
     #[serde(default)]
     pub is_experimental: bool,
+    #[serde(default = "default_true")]
+    pub copy_initial_mc_data: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Deserialize, Serialize, Hash)]

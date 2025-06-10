@@ -21,6 +21,7 @@ use rand::Rng;
 use super::minecraft_auth::Credentials;
 use super::modloader::ModloaderFactory;
 use crate::minecraft::downloads::MinecraftLoggingDownloadService;
+use crate::utils::mc_utils;
 
 async fn emit_progress_event(
     state: &State,
@@ -250,6 +251,21 @@ pub async fn install_minecraft_version(
         .profile_manager
         .calculate_instance_path_for_profile(profile)?;
     std::fs::create_dir_all(&game_directory)?;
+
+    // --- NEW: Copy initial data from default Minecraft installation ---
+    info!("\nChecking for user data to import...");
+    if let Err(e) =
+        mc_utils::copy_initial_data_from_default_minecraft(profile, &game_directory).await
+    {
+        // We will only log a warning because this is not a critical step for launching the game.
+        // The installation can proceed even if this fails.
+        warn!(
+            "Failed to import user data (non-critical error): {}",
+            e
+        );
+    }
+    info!("User data import check complete.");
+    // --- END NEW ---
 
     // Emit libraries download event
     let libraries_event_id = emit_progress_event(

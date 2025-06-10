@@ -203,7 +203,7 @@ export function ProfileCard({
       loading: `Opening folder for '${profile.name}'...`,
       success: `Successfully opened folder for '${profile.name}'!`,
       error: (err) => {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err.message);
         if (
           message.toLowerCase().includes("not found") ||
           message.toLowerCase().includes("does not exist")

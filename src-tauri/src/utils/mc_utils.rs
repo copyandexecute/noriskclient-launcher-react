@@ -36,6 +36,8 @@ use crate::minecraft::dto::minecraft_profile::{
 }; // Assuming these are public
 use crate::minecraft::dto::skin_payloads::SkinModelVariant; // Added import for new Enum
 use base64::{decode as base64_decode_str, encode as base64_encode_bytes};
+use crate::utils::path_utils;
+use std::path::Path;
 
 // --- End New Helper Imports ---
 
@@ -557,6 +559,213 @@ async fn emit_reuse_progress(
         })
         .await?;
     Ok(event_id)
+}
+
+/// Helper function to emit progress events for the initial data copy
+async fn emit_copy_progress(
+    state: &State,
+    profile_id: Uuid,
+    message: &str,
+    progress: f64,
+    error: Option<String>,
+) -> Result<()> {
+    state
+        .emit_event(EventPayload {
+            event_id: Uuid::new_v4(), // Each progress update is a unique event for simplicity here
+            event_type: EventType::CopyingInitialData,
+            target_id: Some(profile_id),
+            message: message.to_string(),
+            progress: Some(progress),
+            error,
+        })
+        .await?;
+    Ok(())
+}
+
+/// Copies initial user data (saves, options, etc.) from the default .minecraft directory
+/// to a new profile's directory.
+/// This runs only if the profile is a standard version and its directory is empty.
+pub async fn copy_initial_data_from_default_minecraft(
+    profile: &crate::state::profile_state::Profile,
+    profile_dir: &PathBuf,
+) -> Result<()> {
+    let profile_id = profile.id;
+    info!(
+        "[{}] Checking if initial data should be imported for profile '{}'...",
+        profile_id, profile.name
+    );
+
+    // Condition 1: Check the copy_initial_mc_data flag.
+    let should_copy = profile
+        .norisk_information
+        .as_ref()
+        .map_or(true, |info| info.copy_initial_mc_data);
+    if !should_copy {
+        info!(
+            "[{}] Profile has copy_initial_mc_data set to false. Skipping initial data import.",
+            profile_id
+        );
+        return Ok(());
+    }
+
+    // Condition 2: Only copy for standard versions.
+    if !profile.is_standard_version {
+        info!(
+            "[{}] Profile is not a standard version. Skipping initial data import.",
+            profile_id
+        );
+        return Ok(());
+    }
+
+    // Condition 3: Only copy into an empty directory.
+    // A non-existent directory is also considered empty.
+    if profile_dir.exists() {
+        let mut entries = fs::read_dir(profile_dir).await?;
+        if entries.next_entry().await?.is_some() {
+            info!("[{}] Profile directory is not empty. Skipping initial data import.", profile_id);
+            return Ok(());
+        }
+    }
+
+    info!("[{}] Profile is a standard version with an empty directory. Proceeding with data import.", profile_id);
+
+
+    let state = match State::get().await {
+        Ok(s) => Some(s),
+        Err(e) => {
+            warn!(
+                "[MC Utils] Couldn't get state for events during initial data copy: {}",
+                e
+            );
+            None
+        }
+    };
+
+    if let Some(s) = &state {
+        emit_copy_progress(
+            s,
+            profile_id,
+            "Checking for user data to import...",
+            0.05,
+            None,
+        )
+        .await?;
+    }
+
+    let default_mc_dir = get_default_minecraft_dir();
+    if !default_mc_dir.exists() {
+        info!(
+            "[{}] Default Minecraft directory not found. Skipping initial data copy.",
+            profile_id
+        );
+        if let Some(s) = &state {
+            emit_copy_progress(s, profile_id, "Default Minecraft installation not found.", 1.0, None)
+                .await?;
+        }
+        return Ok(());
+    }
+
+    info!(
+        "[{}] Found default Minecraft directory at '{}'. Starting copy process.",
+        profile_id,
+        default_mc_dir.display()
+    );
+    if let Some(s) = &state {
+        emit_copy_progress(s, profile_id, "Found existing installation, copying files...", 0.1, None)
+            .await?;
+    }
+
+    let items_to_copy = [
+        "saves",
+        "config",
+        "screenshots",
+        "shaderpacks",
+        "resourcepacks",
+        "options.txt",
+        "optionsof.txt",
+        "servers.dat",
+    ];
+    let total_items = items_to_copy.len() as f64;
+    let mut items_processed = 0.0;
+
+    for item_name in &items_to_copy {
+        let src_path = default_mc_dir.join(item_name);
+        let dest_path = profile_dir.join(item_name);
+
+        items_processed += 1.0;
+        let progress = 0.1 + (items_processed / total_items) * 0.9;
+
+        if !fs::try_exists(&src_path).await? {
+            warn!(
+                "[{}] Source item '{}' does not exist, skipping.",
+                profile_id,
+                src_path.display()
+            );
+            continue;
+        }
+
+        info!(
+            "[{}] Copying '{}' to '{}'",
+            profile_id,
+            src_path.display(),
+            dest_path.display()
+        );
+        if let Some(s) = &state {
+            emit_copy_progress(s, profile_id, &format!("Copying '{}'...", item_name), progress, None)
+                .await?;
+        }
+
+        let metadata = fs::metadata(&src_path).await?;
+
+        if metadata.is_dir() {
+            if let Err(e) = path_utils::copy_dir_recursively(&src_path, &dest_path).await {
+                error!(
+                    "[{}] Failed to copy directory '{}': {}",
+                    profile_id,
+                    src_path.display(),
+                    e
+                );
+                if let Some(s) = &state {
+                    emit_copy_progress(
+                        s,
+                        profile_id,
+                        &format!("Failed to copy '{}'", item_name),
+                        progress,
+                        Some(e.to_string()),
+                    )
+                    .await?;
+                }
+            }
+        } else {
+            // It's a file
+            if let Err(e) = fs::copy(&src_path, &dest_path).await {
+                error!(
+                    "[{}] Failed to copy file '{}': {}",
+                    profile_id,
+                    src_path.display(),
+                    e
+                );
+                if let Some(s) = &state {
+                    emit_copy_progress(
+                        s,
+                        profile_id,
+                        &format!("Failed to copy '{}'", item_name),
+                        progress,
+                        Some(e.to_string()),
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
+    info!("[{}] Initial data copy finished.", profile_id);
+    if let Some(s) = &state {
+        emit_copy_progress(s, profile_id, "User data import complete.", 1.0, None)
+            .await?;
+    }
+
+    Ok(())
 }
 
 // --- New Function to Get Profile Worlds ---
@@ -1264,3 +1473,5 @@ pub fn extract_skin_info_from_profile(
     );
     Ok((skin_url, skin_variant, profile_name))
 }
+
+
