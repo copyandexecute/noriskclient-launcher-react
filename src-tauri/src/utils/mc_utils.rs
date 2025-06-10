@@ -685,6 +685,8 @@ pub async fn copy_initial_data_from_default_minecraft(
         "options.txt",
         "optionsof.txt",
         "servers.dat",
+        "command_history.txt",
+        "replay_recordings",
     ];
 
     let state_arc = State::get().await?;
