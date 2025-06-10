@@ -3,6 +3,8 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { Mesh, Program, Renderer, Triangle } from "ogl";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface LiquidChromeProps extends React.HTMLAttributes<HTMLDivElement> {
   baseColor?: [number, number, number];
@@ -26,6 +28,18 @@ export function LiquidChrome({
   const rendererRef = useRef<Renderer | null>(null);
   const animationIdRef = useRef<number>(0);
   const [isVisible, setIsVisible] = useState(true);
+  const isWindowFocused = useWindowFocus();
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+  const staticFrameRenderedRef = useRef<boolean>(false);
+  
+  // Animation timing state management
+  const pausedTimeRef = useRef<number>(0);
+  const totalPausedDurationRef = useRef<number>(0);
+  const lastPauseStartRef = useRef<number>(0);
+  const animationStartTimeRef = useRef<number>(0);
+  
+  // Animation should only run if both window is focused AND background animations are enabled
+  const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -167,25 +181,72 @@ export function LiquidChrome({
     const frameInterval = 1000 / targetFps;
 
     function update(t: number) {
+      // Initialize animation start time on first run
+      if (animationStartTimeRef.current === 0) {
+        animationStartTimeRef.current = t;
+      }
+
+      // Don't render if element is not visible
       if (!isVisible) {
-        animationIdRef.current = requestAnimationFrame(update);
+        if (shouldAnimate) {
+          animationIdRef.current = requestAnimationFrame(update);
+        }
         return;
+      }
+      
+      // If animations are disabled, pause timing and render static frame
+      if (!shouldAnimate) {
+        // Record pause start time if not already paused
+        if (lastPauseStartRef.current === 0) {
+          lastPauseStartRef.current = t;
+          // Store current animation time when pausing
+          const currentAnimationTime = t - animationStartTimeRef.current - totalPausedDurationRef.current;
+          pausedTimeRef.current = currentAnimationTime;
+        }
+        
+        if (!staticFrameRenderedRef.current) {
+          // Use the paused animation time for static frame
+          program.uniforms.uTime.value = pausedTimeRef.current * 0.001 * speed;
+          renderer.render({ scene: mesh });
+          staticFrameRenderedRef.current = true;
+        }
+        return; // Stop here, no further animation frames
+      }
+
+      // Reset static frame flag and handle resume when animations are enabled again
+      if (staticFrameRenderedRef.current) {
+        staticFrameRenderedRef.current = false;
+        
+        // Calculate total paused duration and reset pause tracking
+        if (lastPauseStartRef.current > 0) {
+          const pauseDuration = t - lastPauseStartRef.current;
+          totalPausedDurationRef.current += pauseDuration;
+          lastPauseStartRef.current = 0;
+        }
       }
 
       const elapsed = t - lastFrameTime;
       if (elapsed < frameInterval) {
-        animationIdRef.current = requestAnimationFrame(update);
+        if (shouldAnimate) {
+          animationIdRef.current = requestAnimationFrame(update);
+        }
         return;
       }
 
       lastFrameTime = t - (elapsed % frameInterval);
 
-      program.uniforms.uTime.value = t * 0.001 * speed;
+      // Calculate effective animation time (excluding paused periods)
+      const effectiveTime = t - animationStartTimeRef.current - totalPausedDurationRef.current;
+      program.uniforms.uTime.value = effectiveTime * 0.001 * speed;
       renderer.render({ scene: mesh });
 
-      animationIdRef.current = requestAnimationFrame(update);
+      // Only continue animation if should animate
+      if (shouldAnimate) {
+        animationIdRef.current = requestAnimationFrame(update);
+      }
     }
 
+    // Always start with one update call to handle both animated and static rendering
     animationIdRef.current = requestAnimationFrame(update);
 
     container.appendChild(gl.canvas);
@@ -220,6 +281,7 @@ export function LiquidChrome({
     frequencyY,
     interactive,
     isVisible,
+    shouldAnimate,
   ]);
 
   return (

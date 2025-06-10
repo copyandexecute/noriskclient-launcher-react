@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
 
 interface NebulaWavesProps {
   opacity?: number;
@@ -19,8 +20,13 @@ export function NebulaWaves({
 }: NebulaWavesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const { qualityLevel } = useQualitySettingsStore();
   const [isVisible, setIsVisible] = useState(true);
+  const isWindowFocused = useWindowFocus();
+  
+  // Animation should only run if both window is focused AND background animations are enabled
+  const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -73,14 +79,51 @@ export function NebulaWaves({
     };
 
     const renderWaves = (timestamp: number) => {
+      // Don't render if element is not visible
       if (!isVisible) {
-        animationFrameId = requestAnimationFrame(renderWaves);
+        if (shouldAnimate) {
+          animationFrameId = requestAnimationFrame(renderWaves);
+        }
+        return;
+      }
+      
+      // If animations are disabled, render static frame and stop
+      if (!shouldAnimate) {
+        const { width, height } = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, width, height);
+        
+        // Render static waves
+        const baseAmplitude = height / 6;
+        const step = Math.max(5, Math.floor(width / 100));
+        
+        for (let i = 0; i < waveCount; i++) {
+          const amplitude = baseAmplitude * (1 - i * 0.2);
+          const frequency = 0.005 + i * 0.002;
+          const yOffset = height * 0.5 + i * 20;
+
+          ctx.beginPath();
+          const waveOpacity = opacity * (1 - i * 0.2);
+          ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${waveOpacity})`;
+          ctx.lineWidth = 2 - i * 0.5;
+
+          for (let x = 0; x <= width; x += step) {
+            const y = Math.sin(x * frequency) * amplitude + yOffset;
+            if (x === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        }
         return;
       }
 
       const elapsed = timestamp - lastFrameTime;
       if (elapsed < frameInterval) {
-        animationFrameId = requestAnimationFrame(renderWaves);
+        if (shouldAnimate) {
+          animationFrameId = requestAnimationFrame(renderWaves);
+        }
         return;
       }
 
@@ -119,19 +162,27 @@ export function NebulaWaves({
       }
 
       time += adjustedSpeed;
-      animationFrameId = requestAnimationFrame(renderWaves);
+      
+      // Only continue animation if should animate
+      if (shouldAnimate) {
+        animationFrameId = requestAnimationFrame(renderWaves);
+      }
     };
 
     window.addEventListener("resize", resize);
     resize();
-    animationFrameId = requestAnimationFrame(renderWaves);
+    
+    // Start animation only if should animate
+    if (shouldAnimate) {
+      animationFrameId = requestAnimationFrame(renderWaves);
+    }
 
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, opacity, speed, qualityLevel, isVisible]);
+  }, [accentColor.value, opacity, speed, qualityLevel, isVisible, shouldAnimate]);
 
   return (
     <canvas

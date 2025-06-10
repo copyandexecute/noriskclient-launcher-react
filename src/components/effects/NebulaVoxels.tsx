@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
 
 interface Cube {
   x: number;
@@ -33,11 +34,16 @@ export function NebulaVoxels({
 }: NebulaVoxelsProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const { qualityLevel } = useQualitySettingsStore();
   const visibleRef = useRef<boolean>(true);
   const animationFrameIdRef = useRef<number>();
   const lastFrameTimeRef = useRef<number>(0);
   const cubesRef = useRef<Cube[]>([]);
+  const isWindowFocused = useWindowFocus();
+  
+  // Animation should only run if both window is focused AND background animations are enabled
+  const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -198,9 +204,43 @@ export function NebulaVoxels({
     };
 
     const renderCubes = (timestamp: number) => {
-      animationFrameIdRef.current = requestAnimationFrame(renderCubes);
+      // Only continue animation if should animate
+      if (shouldAnimate) {
+        animationFrameIdRef.current = requestAnimationFrame(renderCubes);
+      }
 
       if (!visibleRef.current) return;
+      
+      // If animations are disabled, render static cubes and stop
+      if (!shouldAnimate) {
+        const { width, height } = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, width, height);
+        
+        // Create/maintain static cubes if they don't exist
+        if (cubesRef.current.length === 0) {
+          for (let i = 0; i < Math.floor(adjustedCubeCount * 0.7); i++) {
+            cubesRef.current.push({
+              x: Math.random() * width,
+              y: Math.random() * height,
+              z: Math.random() * 200 - 100,
+              size: Math.random() * 20 + 8,
+              rotationX: Math.random() * Math.PI * 2,
+              rotationY: Math.random() * Math.PI * 2,
+              rotationZ: Math.random() * Math.PI * 2,
+              speedX: 0,
+              speedY: 0,
+              speedZ: 0,
+              opacity: Math.random() * 0.4 + 0.2,
+            });
+          }
+        }
+        
+        // Render static cubes
+        const sortedCubes = [...cubesRef.current].sort((a, b) => a.z - b.z);
+        sortedCubes.forEach(drawCube);
+        
+        return;
+      }
 
       const elapsed = timestamp - lastFrameTimeRef.current;
       if (elapsed < frameInterval) return;
@@ -219,7 +259,11 @@ export function NebulaVoxels({
 
     window.addEventListener("resize", resize);
     resize();
-    animationFrameIdRef.current = requestAnimationFrame(renderCubes);
+    
+    // Start animation only if should animate
+    if (shouldAnimate) {
+      animationFrameIdRef.current = requestAnimationFrame(renderCubes);
+    }
 
     return () => {
       observer.disconnect();
@@ -229,7 +273,7 @@ export function NebulaVoxels({
         cancelAnimationFrame(animationFrameIdRef.current);
       }
     };
-  }, [accentColor.value, cubeCount, opacity, speed, qualityLevel]);
+  }, [accentColor.value, cubeCount, opacity, speed, qualityLevel, shouldAnimate]);
 
   return (
     <canvas

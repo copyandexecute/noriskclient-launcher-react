@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useThemeStore } from "../../store/useThemeStore";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
 
 interface RetroGridEffectProps {
   className?: string;
@@ -23,7 +24,12 @@ export function RetroGridEffect({
   isAnimationEnabled = true,
 }: RetroGridEffectProps) {
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
+  const isWindowFocused = useWindowFocus();
   const gridLineColor = customGridLineColor || `${accentColor.value}80`;
+  
+  // Animation should only run if both window is focused AND background animations are enabled (or explicitly enabled)
+  const shouldAnimate = isWindowFocused && (isAnimationEnabled && isBackgroundAnimationEnabled);
 
   let effectiveGridBackgroundColor;
   if (gridBackgroundColor !== undefined) {
@@ -55,7 +61,7 @@ export function RetroGridEffect({
     ...baseGridStyles,
     transform: "rotateX(140deg)",
     bottom: "-10%",
-    animation: isAnimationEnabled ? "moveGrid 10s linear infinite" : "none",
+    animation: shouldAnimate ? "moveGrid 10s linear infinite" : "none",
     WebkitMaskImage:
       "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
     maskImage: "linear-gradient(to top, rgba(0,0,0,1) 10%, rgba(0,0,0,0) 60%)",
@@ -65,7 +71,7 @@ export function RetroGridEffect({
     ...baseGridStyles,
     transform: "rotateX(-140deg)",
     top: "-10%",
-    animation: isAnimationEnabled
+    animation: shouldAnimate
       ? "moveGridReverse 10s linear infinite"
       : "none",
     WebkitMaskImage:

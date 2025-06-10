@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
 
 interface NebulaGridProps {
   opacity?: number;
@@ -19,7 +20,12 @@ export function NebulaGrid({
 }: NebulaGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const { qualityLevel } = useQualitySettingsStore();
+  const isWindowFocused = useWindowFocus();
+  
+  // Animation should only run if both window is focused AND background animations are enabled
+  const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,6 +72,51 @@ export function NebulaGrid({
       const { width, height } = canvas.getBoundingClientRect();
 
       ctx.clearRect(0, 0, width, height);
+      
+      // If animations are disabled, render static grid and stop
+      if (!shouldAnimate) {
+        const cellSize = adjustedGridSize;
+        const cols = Math.ceil(width / cellSize) + 1;
+        const rows = Math.ceil(height / cellSize) + 1;
+
+        // Static grid without movement
+        for (let y = 0; y < rows; y++) {
+          const posY = y * cellSize;
+          ctx.beginPath();
+          ctx.moveTo(0, posY);
+          ctx.lineTo(width, posY);
+          const lineOpacity = opacity * 0.5;
+          ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineOpacity})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        for (let x = 0; x < cols; x++) {
+          const posX = x * cellSize;
+          ctx.beginPath();
+          ctx.moveTo(posX, 0);
+          ctx.lineTo(posX, height);
+          const lineOpacity = opacity * 0.5;
+          ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${lineOpacity})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // Static dots
+        for (let x = 0; x < cols; x++) {
+          for (let y = 0; y < rows; y++) {
+            const posX = x * cellSize;
+            const posY = y * cellSize;
+            const dotOpacity = opacity * 0.7;
+
+            ctx.beginPath();
+            ctx.arc(posX, posY, 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${dotOpacity})`;
+            ctx.fill();
+          }
+        }
+        return;
+      }
 
       const cellSize = adjustedGridSize;
       const cols = Math.ceil(width / cellSize) + 1;
@@ -122,18 +173,25 @@ export function NebulaGrid({
 
       time += 1;
 
-      animationFrameId = requestAnimationFrame(renderGrid);
+      // Only continue animation if should animate
+      if (shouldAnimate) {
+        animationFrameId = requestAnimationFrame(renderGrid);
+      }
     };
 
     window.addEventListener("resize", resize);
     resize();
-    renderGrid();
+    
+    // Start animation only if should animate
+    if (shouldAnimate) {
+      renderGrid();
+    }
 
     return () => {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [accentColor.value, opacity, speed, gridSize, qualityLevel]);
+  }, [accentColor.value, opacity, speed, gridSize, qualityLevel, shouldAnimate]);
 
   return (
     <canvas

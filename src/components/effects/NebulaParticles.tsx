@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useThemeStore } from "../../store/useThemeStore";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
 
 interface Particle {
   x: number;
@@ -30,11 +31,16 @@ export function NebulaParticles({
 }: NebulaParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore((state) => state.isBackgroundAnimationEnabled);
   const { qualityLevel } = useQualitySettingsStore();
   const visibleRef = useRef<boolean>(true);
   const animationFrameIdRef = useRef<number>();
   const lastFrameTimeRef = useRef<number>(0);
   const particlesRef = useRef<Particle[]>([]);
+  const isWindowFocused = useWindowFocus();
+  
+  // Animation should only run if both window is focused AND background animations are enabled
+  const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -151,9 +157,44 @@ export function NebulaParticles({
     };
 
     const renderParticles = (timestamp: number) => {
-      animationFrameIdRef.current = requestAnimationFrame(renderParticles);
+      // Only continue animation if should animate
+      if (shouldAnimate) {
+        animationFrameIdRef.current = requestAnimationFrame(renderParticles);
+      }
 
       if (!visibleRef.current) return;
+      
+      // If animations are disabled, render static particles and stop
+      if (!shouldAnimate) {
+        const { width, height } = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, width, height);
+        
+        // Create/maintain static particles if they don't exist
+        if (particlesRef.current.length === 0) {
+          for (let i = 0; i < Math.floor(adjustedParticleCount * 0.5); i++) {
+            particlesRef.current.push({
+              x: Math.random() * width,
+              y: Math.random() * height,
+              size: Math.random() * 4 + 1,
+              speedX: 0,
+              speedY: 0,
+              opacity: Math.random() * 0.5 + 0.3,
+              life: 20,
+              maxLife: 999999,
+            });
+          }
+        }
+        
+        // Render static particles
+        particlesRef.current.forEach((p) => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.opacity * opacity})`;
+          ctx.fill();
+        });
+        
+        return;
+      }
 
       const elapsed = timestamp - lastFrameTimeRef.current;
       if (elapsed < frameInterval) return;
@@ -201,7 +242,11 @@ export function NebulaParticles({
 
     window.addEventListener("resize", resize);
     resize();
-    animationFrameIdRef.current = requestAnimationFrame(renderParticles);
+    
+    // Start animation only if should animate
+    if (shouldAnimate) {
+      animationFrameIdRef.current = requestAnimationFrame(renderParticles);
+    }
 
     return () => {
       observer.disconnect();
@@ -211,7 +256,7 @@ export function NebulaParticles({
         cancelAnimationFrame(animationFrameIdRef.current);
       }
     };
-  }, [accentColor.value, particleCount, opacity, speed, qualityLevel]);
+  }, [accentColor.value, particleCount, opacity, speed, qualityLevel, shouldAnimate]);
 
   return (
     <canvas

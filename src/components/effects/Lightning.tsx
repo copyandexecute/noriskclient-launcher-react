@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { useQualitySettingsStore } from "../../store/quality-settings-store";
+import { useWindowFocus } from "../../hooks/useWindowFocus";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface LightningProps {
   hue?: number;
@@ -21,6 +23,12 @@ export function Lightning({
 }: LightningProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { qualityLevel } = useQualitySettingsStore();
+  const isWindowFocused = useWindowFocus();
+  const { isBackgroundAnimationEnabled } = useThemeStore();
+  const animationFrameRef = useRef<number>();
+  
+  // Animation should only run if both window is focused AND background animations are enabled
+  const shouldAnimate = isWindowFocused && isBackgroundAnimationEnabled;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -208,12 +216,23 @@ export function Lightning({
       gl.uniform1f(uIntensityLocation, adjustedIntensity);
       gl.uniform1f(uSizeLocation, size);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
-      requestAnimationFrame(render);
+      
+      // Only continue animation if window is focused AND background animations are enabled
+      if (shouldAnimate) {
+        animationFrameRef.current = requestAnimationFrame(render);
+      }
     };
-    requestAnimationFrame(render);
+
+    // Start animation only if window is focused AND background animations are enabled
+    if (shouldAnimate) {
+      animationFrameRef.current = requestAnimationFrame(render);
+    }
 
     return () => {
       window.removeEventListener("resize", resizeCanvas);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       if (program) {
         gl.deleteProgram(program);
       }
@@ -227,7 +246,16 @@ export function Lightning({
         gl.deleteBuffer(vertexBuffer);
       }
     };
-  }, [hue, xOffset, speed, intensity, size, qualityLevel]);
+  }, [hue, xOffset, speed, intensity, size, qualityLevel, shouldAnimate]);
+
+  // Handle window focus changes and animation settings for animation control
+  useEffect(() => {
+    // When window loses focus OR background animations are disabled, stop the animation
+    if (!shouldAnimate && animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = undefined;
+    }
+  }, [shouldAnimate]);
 
   return (
     <canvas ref={canvasRef} className={`w-full h-full relative ${className}`} />
