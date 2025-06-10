@@ -13,6 +13,14 @@ use uuid::Uuid;
 const CONFIG_FILENAME: &str = "launcher_config.json";
 const CONFIG_CURRENT_VERSION: u32 = 1;
 
+/// Game initialization hooks
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct Hooks {
+    pub pre_launch: Option<String>,
+    pub wrapper: Option<String>,
+    pub post_exit: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LauncherConfig {
     #[serde(default = "default_config_version")]
@@ -36,6 +44,8 @@ pub struct LauncherConfig {
     pub concurrent_io_limit: usize,
     #[serde(default)]
     pub last_played_profile: Option<Uuid>,
+    #[serde(default)]
+    pub hooks: Hooks,
 }
 
 fn default_config_version() -> u32 {
@@ -75,6 +85,7 @@ impl Default for LauncherConfig {
             open_logs_after_starting: default_open_logs_after_starting(),
             concurrent_io_limit: default_concurrent_io_limit(),
             last_played_profile: None,
+            hooks: Hooks::default(),
         }
     }
 }
@@ -164,6 +175,8 @@ impl ConfigManager {
         self.config.read().await.is_experimental
     }
 
+
+
     pub async fn set_config(&self, new_config: LauncherConfig) -> Result<()> {
         let should_save = {
             let mut config = self.config.write().await;
@@ -179,6 +192,7 @@ impl ConfigManager {
                 && current.open_logs_after_starting == new_config.open_logs_after_starting
                 && current.concurrent_io_limit == new_config.concurrent_io_limit
                 && current.last_played_profile == new_config.last_played_profile
+                && current.hooks == new_config.hooks
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -241,6 +255,12 @@ impl ConfigManager {
                         current.last_played_profile, new_config.last_played_profile
                     );
                 }
+                if current.hooks != new_config.hooks {
+                    info!(
+                        "Changing hooks: {:?} -> {:?}",
+                        current.hooks, new_config.hooks
+                    );
+                }
 
                 // Update config while preserving version
                 *config = LauncherConfig {
@@ -254,6 +274,7 @@ impl ConfigManager {
                     open_logs_after_starting: new_config.open_logs_after_starting,
                     concurrent_io_limit: new_config.concurrent_io_limit,
                     last_played_profile: new_config.last_played_profile,
+                    hooks: new_config.hooks,
                 };
 
                 true

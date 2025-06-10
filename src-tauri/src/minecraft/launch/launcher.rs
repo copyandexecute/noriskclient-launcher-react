@@ -215,8 +215,20 @@ impl MinecraftLauncher {
         // let profile = state.profile_manager.get_profile(params.profile_id).await?;
         // let settings = &profile.settings;
 
-        // 2. Java-Befehl initialisieren
-        let mut command = Command::new(&self.java_path);
+        // 2. Java-Befehl initialisieren (mit wrapper support)
+        let launcher_config = state.config_manager.get_config().await;
+        let mut command = match launcher_config.hooks.wrapper {
+            Some(wrapper) => {
+                info!("Using wrapper command: {}", wrapper);
+                // Exactly like Modrinth: use the whole wrapper string as command and add java path as arg
+                {
+                    let mut it = Command::new(wrapper);
+                    it.arg(&self.java_path);
+                    it
+                }
+            }
+            None => Command::new(&self.java_path),
+        };
         command.current_dir(&self.game_directory);
 
         // Define paths

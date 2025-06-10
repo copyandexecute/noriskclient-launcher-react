@@ -712,13 +712,49 @@ pub async fn install_minecraft_version(
         launch_params = launch_params.with_additional_jvm_args(jvm_args);
     }
 
+    // --- Execute pre-launch hooks ---
+    let launcher_config = state.config_manager.get_config().await;
+    if let Some(hook) = &launcher_config.hooks.pre_launch {
+        info!("Executing pre-launch hook: {}", hook);
+        let hook_event_id = emit_progress_event(
+            &state,
+            EventType::LaunchingMinecraft,
+            profile.id,
+            "Executing pre-launch hook...",
+            0.0,
+            None,
+        )
+        .await?;
+
+        let mut cmd = hook.split(' ');
+        if let Some(command) = cmd.next() {
+            let result = std::process::Command::new(command)
+                .args(cmd.collect::<Vec<&str>>())
+                .current_dir(&game_directory)
+                .spawn()
+                .map_err(|e| AppError::Io(e))?
+                .wait()
+                .map_err(|e| AppError::Io(e))?;
+
+            if !result.success() {
+                let error_msg = format!(
+                    "Pre-launch hook failed with exit code: {}",
+                    result.code().unwrap_or(-1)
+                );
+                error!("{}", error_msg);
+                return Err(AppError::Other(error_msg));
+            }
+        }
+        info!("Pre-launch hook executed successfully");
+    }
+
     // --- Launch Minecraft ---
     // Emit launch event
     let launch_event_id = emit_progress_event(
         &state,
         EventType::LaunchingMinecraft,
         profile.id,
-        "Minecraft wird gestartet...",
+        "Starting Minecraft...",
         0.0,
         None,
     )

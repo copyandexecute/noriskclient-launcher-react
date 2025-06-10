@@ -636,6 +636,9 @@ impl ProcessManager {
                 } else {
                     log::info!("Successfully saved processes state after removing {} via monitor task.", process_id);
                 }
+
+                // Execute post-exit hook if process was successful
+                Self::execute_post_exit_hook_if_needed(success, &state, process_id, &removed_process_metadata).await;
             } else {
                  log::error!("Monitor task for process {} could not get state to stop watcher or save processes.", process_id);
             }
@@ -1153,6 +1156,75 @@ impl ProcessManager {
     /// Checks if a profile has an ongoing launch process
     pub fn has_launching_process(&self, profile_id: Uuid) -> bool {
         self.launching_processes.contains_key(&profile_id)
+    }
+
+    // Helper function to execute post-exit hook with flatter structure
+    async fn execute_post_exit_hook_if_needed(
+        success: bool,
+        state: &State,
+        process_id: Uuid,
+        removed_process_metadata: &Option<Process>,
+    ) {
+        // Early return if process was not successful
+        if !success {
+            return;
+        }
+
+        let launcher_config = state.config_manager.get_config().await;
+        let hook = match &launcher_config.hooks.post_exit {
+            Some(h) => h,
+            None => return, // No hook configured
+        };
+
+        log::info!("Executing post-exit hook for process {}: {}", process_id, hook);
+
+        let removed_process = match removed_process_metadata {
+            Some(p) => p,
+            None => {
+                log::warn!("No process metadata available for post-exit hook for process {}", process_id);
+                return;
+            }
+        };
+
+        let profile = match state.profile_manager.get_profile(removed_process.metadata.profile_id).await {
+            Ok(p) => p,
+            Err(e) => {
+                log::error!("Could not get profile for post-exit hook for process {}: {}", process_id, e);
+                return;
+            }
+        };
+
+        let game_directory = match state.profile_manager.calculate_instance_path_for_profile(&profile) {
+            Ok(dir) => dir,
+            Err(_) => {
+                log::error!("Could not determine game directory for post-exit hook for process {}", process_id);
+                return;
+            }
+        };
+
+        // Execute hook without waiting for completion (fire and forget)
+        let hook_command = hook.clone();
+        let game_dir_clone = game_directory.clone();
+        tokio::spawn(async move {
+            let mut cmd = hook_command.split(' ');
+            let command = match cmd.next() {
+                Some(c) => c,
+                None => return,
+            };
+
+            match std::process::Command::new(command)
+                .args(cmd.collect::<Vec<&str>>())
+                .current_dir(&game_dir_clone)
+                .spawn()
+            {
+                Ok(_) => {
+                    log::info!("Post-exit hook spawned successfully for process {}", process_id);
+                }
+                Err(e) => {
+                    log::error!("Failed to spawn post-exit hook for process {}: {}", process_id, e);
+                }
+            }
+        });
     }
 
     // Private helper to schedule the auto-opening of the log window

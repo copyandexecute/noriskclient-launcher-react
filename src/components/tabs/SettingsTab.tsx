@@ -30,7 +30,7 @@ export function SettingsTab() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"general" | "appearance">(
+  const [activeTab, setActiveTab] = useState<"general" | "appearance" | "advanced">(
     "general",
   );
   const [showFullscreenPreview, setShowFullscreenPreview] = useState<boolean>(false);
@@ -122,9 +122,18 @@ export function SettingsTab() {
     setError(null);
     try {
       const loadedConfig = await ConfigService.getLauncherConfig();
-      setConfig(loadedConfig);
-      setTempConfig({ ...loadedConfig });
-      console.log("Loaded launcher config:", loadedConfig);
+      // Ensure hooks object exists with default values
+      const configWithHooks = {
+        ...loadedConfig,
+        hooks: loadedConfig.hooks || {
+          pre_launch: null,
+          wrapper: null,
+          post_exit: null,
+        },
+      };
+      setConfig(configWithHooks);
+      setTempConfig({ ...configWithHooks });
+      console.log("Loaded launcher config:", configWithHooks);
     } catch (err) {
       console.error("Failed to load launcher config:", err);
       setError(err instanceof Error ? err.message : String(err));
@@ -590,6 +599,147 @@ export function SettingsTab() {
     </div>
   );
 
+  const renderAdvancedTab = () => (
+    <div className="space-y-6">
+      <Card variant="flat" className="p-6">
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Icon icon="solar:code-bold" className="w-6 h-6 text-white" />
+            <h3 className="text-3xl font-minecraft text-white lowercase">
+              Game Hooks
+            </h3>
+          </div>
+          <p className="text-base text-white/70 font-minecraft-ten mt-2">
+            Configure custom commands to run before, during, and after game launch
+          </p>
+        </div>
+
+        <div className="space-y-6 mt-6">
+          <div className="p-4 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon icon="solar:play-circle-bold" className="w-5 h-5 text-white" />
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Pre-Launch Hook
+              </h5>
+            </div>
+            <p className="text-sm text-white/60 font-minecraft-ten mb-4">
+              Command to run before Minecraft starts. If this command fails, the launch will be aborted.
+            </p>
+            <input
+              type="text"
+              value={tempConfig?.hooks?.pre_launch || ""}
+              onChange={(e) => {
+                if (tempConfig) {
+                  setTempConfig({
+                    ...tempConfig,
+                    hooks: {
+                      ...tempConfig.hooks,
+                      pre_launch: e.target.value || null,
+                    },
+                  });
+                }
+              }}
+              placeholder='Example: echo "Starting Minecraft..."'
+              className="w-full p-3 rounded-md bg-black/40 border border-[#ffffff20] text-white placeholder-white/40 font-minecraft-ten focus:outline-none focus:ring-2 focus:ring-white/30"
+              disabled={saving}
+            />
+          </div>
+
+          <div className="p-4 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon icon="solar:shield-bold" className="w-5 h-5 text-white" />
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Wrapper Hook
+              </h5>
+            </div>
+            <p className="text-sm text-white/60 font-minecraft-ten mb-4">
+              Wrapper command to run Java through (e.g., sandboxing tools). The Java path will be passed as an argument.
+            </p>
+            <input
+              type="text"
+              value={tempConfig?.hooks?.wrapper || ""}
+              onChange={(e) => {
+                if (tempConfig) {
+                  setTempConfig({
+                    ...tempConfig,
+                    hooks: {
+                      ...tempConfig.hooks,
+                      wrapper: e.target.value || null,
+                    },
+                  });
+                }
+              }}
+              placeholder="Example: firejail or gamemoderun"
+              className="w-full p-3 rounded-md bg-black/40 border border-[#ffffff20] text-white placeholder-white/40 font-minecraft-ten focus:outline-none focus:ring-2 focus:ring-white/30"
+              disabled={saving}
+            />
+          </div>
+
+          <div className="p-4 rounded-lg border border-[#ffffff20] hover:bg-black/30 transition-colors">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon icon="solar:stop-circle-bold" className="w-5 h-5 text-white" />
+              <h5 className="font-minecraft text-2xl lowercase text-white">
+                Post-Exit Hook
+              </h5>
+            </div>
+            <p className="text-sm text-white/60 font-minecraft-ten mb-4">
+              Command to run after Minecraft exits successfully. Runs in the background without blocking.
+            </p>
+            <input
+              type="text"
+              value={tempConfig?.hooks?.post_exit || ""}
+              onChange={(e) => {
+                if (tempConfig) {
+                  setTempConfig({
+                    ...tempConfig,
+                    hooks: {
+                      ...tempConfig.hooks,
+                      post_exit: e.target.value || null,
+                    },
+                  });
+                }
+              }}
+              placeholder='Example: echo "Minecraft closed"'
+              className="w-full p-3 rounded-md bg-black/40 border border-[#ffffff20] text-white placeholder-white/40 font-minecraft-ten focus:outline-none focus:ring-2 focus:ring-white/30"
+              disabled={saving}
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 p-4 rounded-lg border border-orange-500/30 bg-orange-900/20">
+          <div className="flex items-start gap-3">
+            <Icon icon="solar:danger-triangle-bold" className="w-6 h-6 text-orange-400 flex-shrink-0 mt-1" />
+            <div>
+              <h4 className="text-xl font-minecraft text-orange-300 mb-2 lowercase">
+                Warning
+              </h4>
+              <p className="text-sm text-orange-200/80 font-minecraft-ten">
+                These hooks execute system commands with full permissions. Only use commands you trust and understand.
+                Invalid commands may prevent Minecraft from launching or cause security issues.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 p-4 rounded-lg border border-[#ffffff20] bg-black/10">
+          <div className="flex items-start gap-3">
+            <Icon icon="solar:info-circle-bold" className="w-6 h-6 text-blue-400 flex-shrink-0 mt-1" />
+            <div>
+              <h4 className="text-xl font-minecraft text-blue-300 mb-2 lowercase">
+                Examples
+              </h4>
+              <div className="space-y-2 text-sm text-blue-200/80 font-minecraft-ten">
+                <p><strong>Pre-Launch:</strong> <code>echo "Starting game..."</code></p>
+                <p><strong>Wrapper:</strong> <code>firejail</code> or <code>gamemoderun</code></p>
+                <p><strong>Post-Exit:</strong> <code>notify-send "Game finished"</code></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+
   const renderTabContent = () => {
     if (loading) {
       return (
@@ -651,6 +801,8 @@ export function SettingsTab() {
         return renderGeneralTab();
       case "appearance":
         return renderAppearanceTab();
+      case "advanced":
+        return renderAdvancedTab();
       default:
         return null;
     }
@@ -692,6 +844,20 @@ export function SettingsTab() {
               }
             >
               appearance
+            </Button>
+            <Button
+              variant={activeTab === "advanced" ? "flat" : "ghost"}
+              size="md"
+              onClick={() => setActiveTab("advanced")}
+              className="h-[42px]"
+              icon={
+                <Icon
+                  icon="solar:code-bold"
+                  className="w-5 h-5 text-white"
+                />
+              }
+            >
+              advanced
             </Button>
             {settingsActions}
           </div>
