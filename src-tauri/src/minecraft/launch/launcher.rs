@@ -447,6 +447,10 @@ impl MinecraftLauncher {
                 None => (None, None, None, None),
             };
 
+        // Get post-exit hook from config at launch time (not at exit time)
+        let launcher_config = state.config_manager.get_config().await;
+        let post_exit_hook = launcher_config.hooks.post_exit.clone();
+
         // Start the process using ProcessManager with additional metadata
         process_manager
             .start_process(
@@ -459,6 +463,7 @@ impl MinecraftLauncher {
                 profile_loader_version,
                 profile_norisk_pack,
                 profile_name,
+                post_exit_hook,
             )
             .await?;
 

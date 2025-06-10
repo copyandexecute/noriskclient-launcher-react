@@ -57,6 +57,7 @@ pub struct ProcessMetadata {
     pub modloader_version: Option<String>,
     pub norisk_pack: Option<String>,
     pub profile_name: Option<String>,
+    pub post_exit_hook: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -391,6 +392,7 @@ impl ProcessManager {
         modloader_version: Option<String>,
         norisk_pack: Option<String>,
         profile_name: Option<String>,
+        post_exit_hook: Option<String>,
     ) -> Result<Uuid> {
         log::info!("Attempting to start process for profile {}", profile_id);
 
@@ -440,6 +442,7 @@ impl ProcessManager {
             modloader_version,
             norisk_pack,
             profile_name: profile_name.clone(),
+            post_exit_hook,
         };
 
         log::info!(
@@ -1170,10 +1173,13 @@ impl ProcessManager {
             return;
         }
 
-        let launcher_config = state.config_manager.get_config().await;
-        let hook = match &launcher_config.hooks.post_exit {
-            Some(h) => h,
-            None => return, // No hook configured
+        // Get hook from process metadata (captured at start time) instead of current config
+        let hook = match removed_process_metadata {
+            Some(process) => match &process.metadata.post_exit_hook {
+                Some(h) => h,
+                None => return, // No hook was configured when process started
+            },
+            None => return, // No process metadata available
         };
 
         log::info!("Executing post-exit hook for process {}: {}", process_id, hook);
