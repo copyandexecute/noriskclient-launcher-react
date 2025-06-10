@@ -289,6 +289,8 @@ export function ExportSettingsTab({
                 "shaderpacks",
                 "options.txt",
                 "NoRiskClientLauncher",
+                "config",
+                "custom_mods",
               ]}
               selectChildrenWithParent={true}
               defaultRootCollapsed={false}

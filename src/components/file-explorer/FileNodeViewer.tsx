@@ -238,38 +238,51 @@ export const FileNodeViewer: React.FC<FileNodeViewerProps> = ({
               } else {
                 newSelected.add(node.path);
               }
-              if (node.is_dir) {
-                newExpanded.add(node.path);
-              }
-              break; 
+              break;
             }
           }
         }
+
         if (node.is_dir && node.children) {
-          node.children.forEach(applyPreSelectionRecursive);
+          if (!nodeMatchedByPreselect || !selectChildrenWithParent) {
+            node.children.forEach(applyPreSelectionRecursive);
+          }
         }
       };
-      
+
       if (!hideRootNode && rootNode.path && !defaultRootCollapsed) {
         newExpanded.add(rootNode.path);
       }
-      
-      // Apply pre-selection to the visible part of the tree
-      const nodesForPreselection = hideRootNode ? (rootNode.children || []) : [rootNode];
+
+      const nodesForPreselection = hideRootNode
+        ? rootNode.children || []
+        : [rootNode];
       nodesForPreselection.forEach(applyPreSelectionRecursive);
-      
-      // Check if newSelected actually changed from the prop selectedFiles
-      if (newSelected.size !== selectedFiles.size || ![...newSelected].every(path => selectedFiles.has(path))) {
+
+      if (
+        newSelected.size !== selectedFiles.size ||
+        ![...newSelected].every((path) => selectedFiles.has(path))
+      ) {
         fireSelectionChange = true;
       }
-      
+
       setExpandedNodes(newExpanded);
       if (fireSelectionChange) {
-          onSelectionChange(newSelected);
+        onSelectionChange(newSelected);
       }
       setInitialSetupDone(true);
     }
-  }, [rootNode, preSelectPaths, selectChildrenWithParent, defaultRootCollapsed, hideRootNode, addNodeAndChildren, onSelectionChange, initialSetupDone]);
+  }, [
+    rootNode,
+    preSelectPaths,
+    selectChildrenWithParent,
+    defaultRootCollapsed,
+    hideRootNode,
+    addNodeAndChildren,
+    onSelectionChange,
+    initialSetupDone,
+    selectedFiles,
+  ]);
 
 
   const handleToggleExpand = useCallback((path: string, event?: React.MouseEvent) => {
