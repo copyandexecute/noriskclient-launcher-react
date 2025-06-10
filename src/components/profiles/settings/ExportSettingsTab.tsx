@@ -143,7 +143,7 @@ export function ExportSettingsTab({
       },
       error: (err) => {
         setIsExporting(false); // Ensure isExporting is reset on error
-        const message = err instanceof Error ? err.message : String(err);
+        const message = err instanceof Error ? err.message : String(err.message);
         // console.error is still good for detailed logs in developer console
         console.error("Failed to export profile:", err);
         return `Failed to export profile: ${message}`;
