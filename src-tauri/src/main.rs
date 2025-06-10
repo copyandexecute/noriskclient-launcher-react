@@ -154,8 +154,8 @@ async fn main() {
                     "show" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
-                            let _ = window.set_focus();
                             let _ = window.unminimize();
+                            let _ = window.set_focus();
                         }
                     }
                     "quit" => {
@@ -172,12 +172,17 @@ async fn main() {
                         // Beim Klick auf das Tray-Icon das Fenster anzeigen/verstecken
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            let is_minimized = window.is_minimized().unwrap_or(false);
+                            
+                            if is_visible && !is_minimized {
+                                // Fenster ist sichtbar und nicht minimiert -> verstecken
                                 let _ = window.hide();
                             } else {
+                                // Fenster ist versteckt oder minimiert -> anzeigen
                                 let _ = window.show();
-                                let _ = window.set_focus();
                                 let _ = window.unminimize();
+                                let _ = window.set_focus();
                             }
                         }
                     }
@@ -189,8 +194,8 @@ async fn main() {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
-                            let _ = window.set_focus();
                             let _ = window.unminimize();
+                            let _ = window.set_focus();
                         }
                     }
                     _ => {}
