@@ -18,4 +18,5 @@ export interface LauncherConfig {
   open_logs_after_starting: boolean;
   concurrent_io_limit: number; // usize
   hooks: Hooks;
+  hide_on_process_start: boolean;
 } 

@@ -504,6 +504,27 @@ impl ProcessManager {
             );
         }
 
+        // Hide main window if configured to do so
+        if let Ok(global_state) = State::get().await {
+            let launcher_config = global_state.config_manager.get_config().await;
+            if launcher_config.hide_on_process_start {
+                log::info!("Hiding main window as configured (hide_on_process_start = true)");
+                if let Some(main_window) = self.app_handle.get_webview_window("main") {
+                    if let Err(e) = main_window.hide() {
+                        log::error!("Failed to hide main window: {}", e);
+                    } else {
+                        log::info!("Successfully hid main window");
+                    }
+                } else {
+                    log::warn!("Main window not found, could not hide it");
+                }
+            } else {
+                log::debug!("Main window hiding disabled (hide_on_process_start = false)");
+            }
+        } else {
+            log::error!("Could not get global state to check hide_on_process_start setting");
+        }
+
         self.schedule_auto_open_log_window(process_id);
 
         let processes_arc_clone = Arc::clone(&self.processes);

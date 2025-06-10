@@ -46,6 +46,8 @@ pub struct LauncherConfig {
     pub last_played_profile: Option<Uuid>,
     #[serde(default)]
     pub hooks: Hooks,
+    #[serde(default = "default_hide_on_process_start")]
+    pub hide_on_process_start: bool,
 }
 
 fn default_config_version() -> u32 {
@@ -72,6 +74,10 @@ fn default_concurrent_io_limit() -> usize {
     10 // Default based on CONCURRENT_IO_LIMIT in state_manager.rs
 }
 
+fn default_hide_on_process_start() -> bool {
+    false
+}
+
 impl Default for LauncherConfig {
     fn default() -> Self {
         Self {
@@ -86,6 +92,7 @@ impl Default for LauncherConfig {
             concurrent_io_limit: default_concurrent_io_limit(),
             last_played_profile: None,
             hooks: Hooks::default(),
+            hide_on_process_start: default_hide_on_process_start(),
         }
     }
 }
@@ -193,6 +200,7 @@ impl ConfigManager {
                 && current.concurrent_io_limit == new_config.concurrent_io_limit
                 && current.last_played_profile == new_config.last_played_profile
                 && current.hooks == new_config.hooks
+                && current.hide_on_process_start == new_config.hide_on_process_start
             {
                 debug!("No config changes detected, skipping save");
                 false
@@ -261,6 +269,12 @@ impl ConfigManager {
                         current.hooks, new_config.hooks
                     );
                 }
+                if current.hide_on_process_start != new_config.hide_on_process_start {
+                    info!(
+                        "Changing hide on process start: {} -> {}",
+                        current.hide_on_process_start, new_config.hide_on_process_start
+                    );
+                }
 
                 // Update config while preserving version
                 *config = LauncherConfig {
@@ -275,6 +289,7 @@ impl ConfigManager {
                     concurrent_io_limit: new_config.concurrent_io_limit,
                     last_played_profile: new_config.last_played_profile,
                     hooks: new_config.hooks,
+                    hide_on_process_start: new_config.hide_on_process_start,
                 };
 
                 true
