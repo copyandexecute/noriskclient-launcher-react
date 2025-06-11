@@ -6,8 +6,9 @@ import { useProfileStore } from "../../store/profile-store";
 import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
 import { VirtuosoGrid } from "react-virtuoso";
-import React from "react";
+import React, { useState } from "react";
 import { toast } from "react-hot-toast";
+import { ExportProfileModal } from "../profiles/ExportProfileModal";
 
 interface ProfileSelectionModalProps {
   onVersionChange: (versionId: string) => void;
@@ -21,6 +22,10 @@ export function ProfileSelectionModal({
   const { setSelectedVersion, isModalOpen, closeModal } =
     useVersionSelectionStore();
   const { profiles, loading: profilesLoading, error: profilesError, fetchProfiles, deleteProfile } = useProfileStore();
+  
+  // Export modal state
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [profileToExport, setProfileToExport] = useState<Profile | null>(null);
 
   const handleVersionSelect = (versionId: string) => {
     setSelectedVersion(versionId);
@@ -44,6 +49,12 @@ export function ProfileSelectionModal({
     } catch (error) {
       console.error("Error during profile deletion in modal:", error);
     }
+  };
+
+  const handleShouldExportProfile = (profile: Profile) => {
+    console.log("Export requested for profile:", profile.name);
+    setProfileToExport(profile);
+    setIsExportModalOpen(true);
   };
 
   if (!isModalOpen) return null;
@@ -109,7 +120,7 @@ export function ProfileSelectionModal({
                   onEdit={() => { console.log("Edit clicked in modal for", profile.name); }}
                   onProfileCloned={fetchProfiles}
                   onDelete={handleDeleteProfile}
-                  onShouldExport={() => { console.log("Export in modal for", profile.name); }}
+                  onShouldExport={handleShouldExportProfile}
                   interactionMode="settings"
                   onSettingsNavigation={closeModal}
                 />
@@ -118,6 +129,18 @@ export function ProfileSelectionModal({
           />
         )}
       </div>
+      
+      {/* Export Profile Modal */}
+      {profileToExport && (
+        <ExportProfileModal
+          profile={profileToExport}
+          isOpen={isExportModalOpen}
+          onClose={() => {
+            setIsExportModalOpen(false);
+            setProfileToExport(null);
+          }}
+        />
+      )}
     </Modal>
   );
 }
