@@ -86,7 +86,7 @@ impl Default for LauncherConfig {
             auto_check_updates: true,
             concurrent_downloads: default_concurrent_downloads(),
             enable_discord_presence: default_discord_presence(),
-            check_beta_channel: true,
+            check_beta_channel: false,
             profile_grouping_criterion: default_profile_grouping_criterion(),
             open_logs_after_starting: default_open_logs_after_starting(),
             concurrent_io_limit: default_concurrent_io_limit(),
