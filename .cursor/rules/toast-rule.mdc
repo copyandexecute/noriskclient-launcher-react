@@ -74,7 +74,10 @@ import { toast } from 'react-hot-toast';
     toast.promise(myPromise, {
       loading: 'Wird geladen...',
       success: (data) => `Erfolgreich: ${data}`, // data ist der resolve-Wert des Promises
-      error: (err) => `Fehler: ${err.toString()}`, // err ist der reject-Wert
+      error: (err) => {
+        const message = err instanceof Error ? err.message : String(err.message);
+        return `Failed: ${message}`;
+      },
     });
     ```
 
