@@ -585,7 +585,9 @@ pub async fn unequip_cape(
 ///
 /// Downloads the template to the user's download directory and opens the folder
 #[tauri::command]
-pub async fn download_template_and_open_explorer(app_handle: tauri::AppHandle) -> Result<(), CommandError> {
+pub async fn download_template_and_open_explorer(
+    app_handle: tauri::AppHandle,
+) -> Result<(), CommandError> {
     debug!("Command called: download_template_and_open_explorer");
 
     // Get the state manager
@@ -604,24 +606,26 @@ pub async fn download_template_and_open_explorer(app_handle: tauri::AppHandle) -
     debug!("Template URL: {}", template_url);
 
     // Get user's download directory
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| CommandError::from(AppError::Io(std::io::Error::new(
+    let user_dirs = directories::UserDirs::new().ok_or_else(|| {
+        CommandError::from(AppError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "Failed to get user directories"
-        ))))?;
-    
-    let downloads_dir = user_dirs.download_dir()
-        .ok_or_else(|| CommandError::from(AppError::Io(std::io::Error::new(
+            "Failed to get user directories",
+        )))
+    })?;
+
+    let downloads_dir = user_dirs.download_dir().ok_or_else(|| {
+        CommandError::from(AppError::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "Failed to get downloads directory"
-        ))))?;
-    
+            "Failed to get downloads directory",
+        )))
+    })?;
+
     debug!("Downloads directory: {:?}", downloads_dir);
 
     // Create the output file path
     let file_path = downloads_dir.join("nrc_cape_template.png");
     let file_path_str = file_path.to_string_lossy().to_string();
-    
+
     // Download the template using reqwest
     let response = crate::config::HTTP_CLIENT
         .get(template_url)
@@ -629,17 +633,20 @@ pub async fn download_template_and_open_explorer(app_handle: tauri::AppHandle) -
         .await
         .map_err(|e| {
             error!("Error downloading template: {:?}", e);
-            CommandError::from(AppError::RequestError(format!("Error downloading template: {}", e)))
+            CommandError::from(AppError::RequestError(format!(
+                "Error downloading template: {}",
+                e
+            )))
         })?;
-    
+
     // Read response bytes
-    let template_bytes = response
-        .bytes()
-        .await
-        .map_err(|e| {
-            error!("Error reading template bytes: {:?}", e);
-            CommandError::from(AppError::RequestError(format!("Error reading template bytes: {}", e)))
-        })?;
+    let template_bytes = response.bytes().await.map_err(|e| {
+        error!("Error reading template bytes: {:?}", e);
+        CommandError::from(AppError::RequestError(format!(
+            "Error reading template bytes: {}",
+            e
+        )))
+    })?;
 
     // Save the template to the file using tokio's async file operations
     tokio::fs::write(&file_path, &template_bytes)
@@ -652,13 +659,16 @@ pub async fn download_template_and_open_explorer(app_handle: tauri::AppHandle) -
     debug!("Template downloaded to: {:?}", file_path);
 
     // Use the Tauri opener plugin to reveal the file in the explorer
-    app_handle.opener().reveal_item_in_dir(file_path_str).map_err(|e| {
-        error!("Error revealing file in directory: {:?}", e);
-        CommandError::from(AppError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Error revealing file in directory: {}", e)
-        )))
-    })?;
+    app_handle
+        .opener()
+        .reveal_item_in_dir(file_path_str)
+        .map_err(|e| {
+            error!("Error revealing file in directory: {:?}", e);
+            CommandError::from(AppError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Error revealing file in directory: {}", e),
+            )))
+        })?;
 
     debug!("File revealed in directory");
     debug!("Command completed: download_template_and_open_explorer");

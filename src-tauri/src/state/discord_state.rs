@@ -2,12 +2,12 @@ use crate::error::{AppError, Result};
 use crate::state; // Need this for State and ProcessState access
 use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
 use log::{debug, error, info, warn};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager; // Keep for app_handle.state()
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
-use std::sync::atomic::AtomicBool;
 
 // Discord application ID for NoRiskClient
 const DISCORD_APP_ID: &str = "775352010345021450"; // Replace with actual Discord application ID

@@ -635,7 +635,10 @@ pub async fn add_skin_locally(
             let mut corrected_path_string = filepath_data.path.clone();
             if cfg!(windows) {
                 // Example: /C:/Users/username -> C:/Users/username
-                if corrected_path_string.starts_with("/") && corrected_path_string.len() > 2 && corrected_path_string.chars().nth(2) == Some(':') {
+                if corrected_path_string.starts_with("/")
+                    && corrected_path_string.len() > 2
+                    && corrected_path_string.chars().nth(2) == Some(':')
+                {
                     corrected_path_string.remove(0);
                 }
             }

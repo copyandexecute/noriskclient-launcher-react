@@ -148,7 +148,10 @@ impl NoRiskApi {
         let base_url = Self::get_api_base(is_experimental);
         let url = format!("{}/{}", base_url, endpoint);
 
-        debug!("[NoRisk API] Making DELETE request to endpoint: {}", endpoint);
+        debug!(
+            "[NoRisk API] Making DELETE request to endpoint: {}",
+            endpoint
+        );
         debug!("[NoRisk API] Full URL: {}", url);
 
         let mut request = HTTP_CLIENT
@@ -183,10 +186,7 @@ impl NoRiskApi {
         debug!("[NoRisk API] Reading response body as text");
         response.text().await.map_err(|e| {
             error!("[NoRisk API] Failed to read response text: {}", e);
-            AppError::ParseError(format!(
-                "Failed to read NoRisk API response text: {}",
-                e
-            ))
+            AppError::ParseError(format!("Failed to read NoRisk API response text: {}", e))
         })
     }
 
@@ -367,7 +367,10 @@ impl NoRiskApi {
         let endpoint = "core/crashlog";
         let url = format!("{}/{}", base_url, endpoint);
 
-        debug!("[NoRisk API] Submitting crash log to endpoint: {}", endpoint);
+        debug!(
+            "[NoRisk API] Submitting crash log to endpoint: {}",
+            endpoint
+        );
         debug!("[NoRisk API] Full URL: {}", url);
         debug!("[NoRisk API] With request UUID: {}", request_uuid);
         debug!("[NoRisk API] Crash log data: {:?}", crash_log_data);
@@ -381,14 +384,14 @@ impl NoRiskApi {
             .await
             .map_err(|e| {
                 error!("[NoRisk API] Crash log submission request failed: {}", e);
-                AppError::RequestError(format!(
-                    "Failed to send crash log to NoRisk API: {}",
-                    e
-                ))
+                AppError::RequestError(format!("Failed to send crash log to NoRisk API: {}", e))
             })?;
 
         let status = response.status();
-        debug!("[NoRisk API] Crash log submission response status: {}", status);
+        debug!(
+            "[NoRisk API] Crash log submission response status: {}",
+            status
+        );
 
         if !status.is_success() {
             let error_body = response

@@ -3,7 +3,10 @@ use crate::integrations::modrinth;
 use crate::state::profile_state::Profile;
 use crate::state::state_manager::State;
 use crate::utils::hash_utils;
-use crate::utils::profile_utils::{LocalContentLoader, LoadItemsParams, ContentType, GenericModrinthInfo};
+use crate::utils::profile_utils::{
+    ContentType, GenericModrinthInfo, LoadItemsParams, LocalContentLoader,
+};
+use futures::future::join_all;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -11,7 +14,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::Semaphore;
-use futures::future::join_all;
 
 /// Represents a resourcepack found in the profile directory
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -78,16 +80,18 @@ pub async fn get_resourcepacks_for_profile(
                     sha1_hash: item.sha1_hash,
                     file_size: item.file_size,
                     is_disabled: item.is_disabled,
-                    modrinth_info: item.modrinth_info.map(|generic_info: GenericModrinthInfo| ResourcePackModrinthInfo {
-                        project_id: generic_info.project_id,
-                        version_id: generic_info.version_id,
-                        name: generic_info.name,
-                        version_number: generic_info.version_number,
-                        download_url: generic_info.download_url.unwrap_or_default(),
+                    modrinth_info: item.modrinth_info.map(|generic_info: GenericModrinthInfo| {
+                        ResourcePackModrinthInfo {
+                            project_id: generic_info.project_id,
+                            version_id: generic_info.version_id,
+                            name: generic_info.name,
+                            version_number: generic_info.version_number,
+                            download_url: generic_info.download_url.unwrap_or_default(),
+                        }
                     }),
                 })
                 .collect();
-            
+
             info!(
                 "Successfully converted {} LocalContentItems to ResourcePackInfo for profile {}",
                 resource_pack_infos.len(),
@@ -98,7 +102,8 @@ pub async fn get_resourcepacks_for_profile(
         Err(e) => {
             log::error!(
                 "Failed to load resourcepacks using LocalContentLoader for profile {}: {}",
-                profile.id, e
+                profile.id,
+                e
             );
             Err(e)
         }

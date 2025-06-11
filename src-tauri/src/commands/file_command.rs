@@ -2,26 +2,29 @@ use crate::error::{AppError, CommandError};
 use crate::integrations::norisk_packs::NoriskModEntryDefinition;
 use crate::utils::file_utils;
 use crate::utils::path_utils;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::ImageEncoder;
 use log::{debug, error, info, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs;
-use serde::{Deserialize, Serialize};
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use std::num::NonZeroU32;
 
 // Imports for image processing
-use image::{
-    DynamicImage,
-    ImageFormat,
-    GenericImageView, // For getting dimensions from DynamicImage
-    codecs::{png::PngEncoder, jpeg::JpegEncoder},
-    ColorType,
-};
 use fast_image_resize::images::Image as FirImage;
-use fast_image_resize::{IntoImageView, Resizer, ResizeAlg, FilterType, PixelType as FirPixelType, CpuExtensions, ImageView as FirImageViewTrait};
+use fast_image_resize::{
+    CpuExtensions, FilterType, ImageView as FirImageViewTrait, IntoImageView,
+    PixelType as FirPixelType, ResizeAlg, Resizer,
+};
+use image::{
+    codecs::{jpeg::JpegEncoder, png::PngEncoder},
+    ColorType,
+    DynamicImage,
+    GenericImageView, // For getting dimensions from DynamicImage
+    ImageFormat,
+};
 use std::io::Cursor; // For writing encoded image to a byte vector
 
 /// Sets a file as enabled or disabled by adding or removing the .disabled extension
@@ -35,7 +38,10 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
 
     // Determine the true base name by stripping .disabled if it exists on the input filename
     let true_base_name = if input_filename.ends_with(".disabled") {
-        input_filename.strip_suffix(".disabled").unwrap_or(input_filename).to_string()
+        input_filename
+            .strip_suffix(".disabled")
+            .unwrap_or(input_filename)
+            .to_string()
     } else {
         input_filename.to_string()
     };
@@ -60,7 +66,10 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
     } else if path_if_disabled.exists() {
         current_path = path_if_disabled.clone();
         is_file_actually_disabled = true;
-        debug!("Found file in its disabled form: {}", current_path.display());
+        debug!(
+            "Found file in its disabled form: {}",
+            current_path.display()
+        );
     } else {
         let error_message = format!(
             "File not found: Neither '{}' nor '{}' exists.",
@@ -70,7 +79,7 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
         log::error!("{}", error_message);
         return Err(CommandError::from(AppError::Other(error_message)));
     }
-    
+
     // Check if the file is already in the desired state.
     // `enabled` is the target state (true for enabled, false for disabled).
     // `is_file_actually_disabled` is the current state (true if it ends with .disabled).
@@ -94,7 +103,7 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
     } else {
         path_if_disabled // Target state is disabled, so use the path_if_disabled form
     };
-    
+
     // This check is mostly a safeguard; the logic above should prevent current_path == new_path.
     if current_path == new_path {
         warn!(
@@ -112,12 +121,15 @@ pub async fn set_file_enabled(file_path: String, enabled: bool) -> Result<(), Co
     );
 
     // Rename the file
-    fs::rename(&current_path, &new_path)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to rename file from '{}' to '{}': {}", current_path.display(), new_path.display(), e);
-            CommandError::from(AppError::Io(e))
-        })?;
+    fs::rename(&current_path, &new_path).await.map_err(|e| {
+        log::error!(
+            "Failed to rename file from '{}' to '{}': {}",
+            current_path.display(),
+            new_path.display(),
+            e
+        );
+        CommandError::from(AppError::Io(e))
+    })?;
 
     info!(
         "Successfully set file based on input '{}' (now at '{}') to enabled={}",
@@ -140,7 +152,9 @@ pub async fn delete_file(file_path: String) -> Result<(), CommandError> {
     let input_file_name = input_file_name_cow.as_ref();
 
     let effective_base_file_name = if input_file_name.ends_with(".disabled") {
-        input_file_name.strip_suffix(".disabled").unwrap_or(input_file_name)
+        input_file_name
+            .strip_suffix(".disabled")
+            .unwrap_or(input_file_name)
     } else {
         input_file_name
     };
@@ -158,7 +172,10 @@ pub async fn delete_file(file_path: String) -> Result<(), CommandError> {
 
     if path_enabled_version.exists() {
         actual_path_to_delete = path_enabled_version;
-        debug!("Found file to delete (enabled form): {}", actual_path_to_delete.display());
+        debug!(
+            "Found file to delete (enabled form): {}",
+            actual_path_to_delete.display()
+        );
     } else if path_disabled_version.exists() {
         actual_path_to_delete = path_disabled_version;
         debug!(
@@ -169,36 +186,46 @@ pub async fn delete_file(file_path: String) -> Result<(), CommandError> {
         let error_message = format!(
             "File not found for deletion: Neither '{}' nor '{}' exists.",
             parent_dir.join(effective_base_file_name).display(),
-            parent_dir.join(format!("{}.disabled", effective_base_file_name)).display()
+            parent_dir
+                .join(format!("{}.disabled", effective_base_file_name))
+                .display()
         );
         log::error!("{}", error_message);
         return Err(CommandError::from(AppError::Other(error_message)));
     }
 
     // Check if it's a file or directory
-    let metadata = fs::metadata(&actual_path_to_delete)
-        .await
-        .map_err(|e| {
-            log::error!("Failed to get metadata for {}: {}", actual_path_to_delete.display(), e);
-            CommandError::from(AppError::Io(e))
-        })?;
+    let metadata = fs::metadata(&actual_path_to_delete).await.map_err(|e| {
+        log::error!(
+            "Failed to get metadata for {}: {}",
+            actual_path_to_delete.display(),
+            e
+        );
+        CommandError::from(AppError::Io(e))
+    })?;
 
     if metadata.is_dir() {
         debug!("Deleting directory: {}", actual_path_to_delete.display());
         fs::remove_dir_all(&actual_path_to_delete)
             .await
             .map_err(|e| {
-                log::error!("Failed to delete directory {}: {}", actual_path_to_delete.display(), e);
+                log::error!(
+                    "Failed to delete directory {}: {}",
+                    actual_path_to_delete.display(),
+                    e
+                );
                 CommandError::from(AppError::Io(e))
             })?;
     } else {
         debug!("Deleting file: {}", actual_path_to_delete.display());
-        fs::remove_file(&actual_path_to_delete)
-            .await
-            .map_err(|e| {
-                log::error!("Failed to delete file {}: {}", actual_path_to_delete.display(), e);
-                CommandError::from(AppError::Io(e))
-            })?;
+        fs::remove_file(&actual_path_to_delete).await.map_err(|e| {
+            log::error!(
+                "Failed to delete file {}: {}",
+                actual_path_to_delete.display(),
+                e
+            );
+            CommandError::from(AppError::Io(e))
+        })?;
     }
 
     info!("Successfully deleted: {}", actual_path_to_delete.display());
@@ -492,15 +519,14 @@ pub async fn get_image_preview(
             return Err(CommandError::from(AppError::Io(e)));
         }
     };
-    
+
     // Load image using the 'image' crate for broad format support and metadata
     let img: DynamicImage = match image::load_from_memory(&image_bytes) {
         Ok(img) => img,
         Err(e) => {
             let error_msg = format!(
                 "Failed to decode image from memory (path: '{}'): {}",
-                payload.path,
-                e
+                payload.path, e
             );
             error!("{}", error_msg);
             return Err(CommandError::from(AppError::Other(error_msg)));
@@ -511,39 +537,78 @@ pub async fn get_image_preview(
     let original_height = img.height();
 
     // Manually construct FirImageView from DynamicImage parts
-    let (image_buffer_vec, fir_pixel_type, original_width_nz, original_height_nz) =
-        match &img { // Match on reference to DynamicImage
-            DynamicImage::ImageRgba8(rgba_img_buf) => (
-                rgba_img_buf.to_vec(), // Get owned Vec<u8>
-                FirPixelType::U8x4,
-                NonZeroU32::new(rgba_img_buf.width()).ok_or_else(|| CommandError::from(AppError::Other("Width cannot be zero for RGBA8".to_string())))?,
-                NonZeroU32::new(rgba_img_buf.height()).ok_or_else(|| CommandError::from(AppError::Other("Height cannot be zero for RGBA8".to_string())))?,
-            ),
-            DynamicImage::ImageRgb8(rgb_img_buf) => (
-                rgb_img_buf.to_vec(),
-                FirPixelType::U8x3,
-                NonZeroU32::new(rgb_img_buf.width()).ok_or_else(|| CommandError::from(AppError::Other("Width cannot be zero for RGB8".to_string())))?,
-                NonZeroU32::new(rgb_img_buf.height()).ok_or_else(|| CommandError::from(AppError::Other("Height cannot be zero for RGB8".to_string())))?,
-            ),
-            DynamicImage::ImageLuma8(luma_img_buf) => (
-                luma_img_buf.to_vec(),
-                FirPixelType::U8,
-                NonZeroU32::new(luma_img_buf.width()).ok_or_else(|| CommandError::from(AppError::Other("Width cannot be zero for Luma8".to_string())))?,
-                NonZeroU32::new(luma_img_buf.height()).ok_or_else(|| CommandError::from(AppError::Other("Height cannot be zero for Luma8".to_string())))?,
-            ),
-            DynamicImage::ImageLumaA8(luma_alpha_img_buf) => (
-                luma_alpha_img_buf.to_vec(),
-                FirPixelType::U8x2,
-                NonZeroU32::new(luma_alpha_img_buf.width()).ok_or_else(|| CommandError::from(AppError::Other("Width cannot be zero for LumaA8".to_string())))?,
-                NonZeroU32::new(luma_alpha_img_buf.height()).ok_or_else(|| CommandError::from(AppError::Other("Height cannot be zero for LumaA8".to_string())))?,
-            ),
-            _ => { // Fallback for other formats: convert to RGBA8
-                let rgba_img_buf = img.to_rgba8(); // This creates an owned ImageBuffer
-                let w = NonZeroU32::new(rgba_img_buf.width()).ok_or_else(|| CommandError::from(AppError::Other("Width cannot be zero for fallback RGBA8".to_string())))?;
-                let h = NonZeroU32::new(rgba_img_buf.height()).ok_or_else(|| CommandError::from(AppError::Other("Height cannot be zero for fallback RGBA8".to_string())))?;
-                (rgba_img_buf.into_raw(), FirPixelType::U8x4, w, h)
-            }
-        };
+    let (image_buffer_vec, fir_pixel_type, original_width_nz, original_height_nz) = match &img {
+        // Match on reference to DynamicImage
+        DynamicImage::ImageRgba8(rgba_img_buf) => (
+            rgba_img_buf.to_vec(), // Get owned Vec<u8>
+            FirPixelType::U8x4,
+            NonZeroU32::new(rgba_img_buf.width()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Width cannot be zero for RGBA8".to_string(),
+                ))
+            })?,
+            NonZeroU32::new(rgba_img_buf.height()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Height cannot be zero for RGBA8".to_string(),
+                ))
+            })?,
+        ),
+        DynamicImage::ImageRgb8(rgb_img_buf) => (
+            rgb_img_buf.to_vec(),
+            FirPixelType::U8x3,
+            NonZeroU32::new(rgb_img_buf.width()).ok_or_else(|| {
+                CommandError::from(AppError::Other("Width cannot be zero for RGB8".to_string()))
+            })?,
+            NonZeroU32::new(rgb_img_buf.height()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Height cannot be zero for RGB8".to_string(),
+                ))
+            })?,
+        ),
+        DynamicImage::ImageLuma8(luma_img_buf) => (
+            luma_img_buf.to_vec(),
+            FirPixelType::U8,
+            NonZeroU32::new(luma_img_buf.width()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Width cannot be zero for Luma8".to_string(),
+                ))
+            })?,
+            NonZeroU32::new(luma_img_buf.height()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Height cannot be zero for Luma8".to_string(),
+                ))
+            })?,
+        ),
+        DynamicImage::ImageLumaA8(luma_alpha_img_buf) => (
+            luma_alpha_img_buf.to_vec(),
+            FirPixelType::U8x2,
+            NonZeroU32::new(luma_alpha_img_buf.width()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Width cannot be zero for LumaA8".to_string(),
+                ))
+            })?,
+            NonZeroU32::new(luma_alpha_img_buf.height()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Height cannot be zero for LumaA8".to_string(),
+                ))
+            })?,
+        ),
+        _ => {
+            // Fallback for other formats: convert to RGBA8
+            let rgba_img_buf = img.to_rgba8(); // This creates an owned ImageBuffer
+            let w = NonZeroU32::new(rgba_img_buf.width()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Width cannot be zero for fallback RGBA8".to_string(),
+                ))
+            })?;
+            let h = NonZeroU32::new(rgba_img_buf.height()).ok_or_else(|| {
+                CommandError::from(AppError::Other(
+                    "Height cannot be zero for fallback RGBA8".to_string(),
+                ))
+            })?;
+            (rgba_img_buf.into_raw(), FirPixelType::U8x4, w, h)
+        }
+    };
 
     let src_fir_view = fast_image_resize::images::Image::from_vec_u8(
         original_width_nz.get(),
@@ -551,40 +616,42 @@ pub async fn get_image_preview(
         image_buffer_vec, // Pass a slice of the owned Vec
         fir_pixel_type,
     )
-    .map_err(|e| CommandError::from(AppError::Other(format!("Failed to create source ImageView: {}", e))))?;
+    .map_err(|e| {
+        CommandError::from(AppError::Other(format!(
+            "Failed to create source ImageView: {}",
+            e
+        )))
+    })?;
 
     // Determine target dimensions for preview
     let target_w = payload.width.unwrap_or(200); // Default preview width
     let target_h = payload.height.unwrap_or(200); // Default preview height
 
     // Create destination image for fast_image_resize
-    let mut dst_fir_image = FirImage::new(
-        target_w,
-        target_h,
-        src_fir_view.pixel_type(),
-    );
+    let mut dst_fir_image = FirImage::new(target_w, target_h, src_fir_view.pixel_type());
 
     // Create a resizer
     let mut resizer = Resizer::new();
     // Optional: Configure CPU extensions if needed, though default should be fine.
-    // resizer.set_cpu_extensions(CpuExtensions::Sse4_1); 
-    
+    // resizer.set_cpu_extensions(CpuExtensions::Sse4_1);
+
     // Select resize algorithm - Lanczos3 offers good quality
     // For higher performance with slightly less quality, one could use Bilinear or even Box.
     // E.g., ResizeAlg::Bilinear or ResizeAlg::Convolution(FilterType::Box)
     let algorithm = ResizeAlg::Convolution(FilterType::Lanczos3);
-    
+
     let resize_options = fast_image_resize::ResizeOptions::default(); // Create an owned instance
-    match resizer.resize(&src_fir_view, &mut dst_fir_image, Some(&resize_options)) { // Pass a reference to it
-      Ok(_) => {},
-      Err(e) => {
-        let error_msg = format!(
-            "Failed to resize image from '{}' using fast_image_resize: {}",
-            payload.path, e
-        );
-        error!("{}", error_msg);
-        return Err(CommandError::from(AppError::Other(error_msg)));
-      }
+    match resizer.resize(&src_fir_view, &mut dst_fir_image, Some(&resize_options)) {
+        // Pass a reference to it
+        Ok(_) => {}
+        Err(e) => {
+            let error_msg = format!(
+                "Failed to resize image from '{}' using fast_image_resize: {}",
+                payload.path, e
+            );
+            error!("{}", error_msg);
+            return Err(CommandError::from(AppError::Other(error_msg)));
+        }
     }
 
     let preview_width = dst_fir_image.width();
@@ -595,7 +662,7 @@ pub async fn get_image_preview(
     let cursor = Cursor::new(&mut encoded_image_bytes);
 
     // Use original image's color type for encoding the resized buffer.
-    // Note: fast_image_resize might change pixel type (e.g. to U8x4 for RGBA). 
+    // Note: fast_image_resize might change pixel type (e.g. to U8x4 for RGBA).
     // We should use the dst_fir_image.pixel_type() and map it to image::ColorType.
     let output_color_type = match dst_fir_image.pixel_type() {
         FirPixelType::U8 => ColorType::L8,
@@ -608,7 +675,10 @@ pub async fn get_image_preview(
         FirPixelType::U16x4 => ColorType::Rgba16,
         // Add other mappings as necessary if you support more pixel types
         _ => {
-            let error_msg = format!("Unsupported pixel type after resize: {:?}", dst_fir_image.pixel_type());
+            let error_msg = format!(
+                "Unsupported pixel type after resize: {:?}",
+                dst_fir_image.pixel_type()
+            );
             error!("{}", error_msg);
             return Err(CommandError::from(AppError::Other(error_msg)));
         }
@@ -621,16 +691,31 @@ pub async fn get_image_preview(
         ImageFormat::Jpeg => {
             let quality = payload.quality.unwrap_or(75).clamp(1, 100); // Default quality 75 for JPEG
             let encoder = JpegEncoder::new_with_quality(cursor, quality);
-            if let Err(e) = encoder.write_image(dst_fir_image.buffer(), preview_width, preview_height, output_color_type.into()) {
-                let error_msg = format!("Failed to encode JPEG preview for '{}': {}", payload.path, e);
+            if let Err(e) = encoder.write_image(
+                dst_fir_image.buffer(),
+                preview_width,
+                preview_height,
+                output_color_type.into(),
+            ) {
+                let error_msg = format!(
+                    "Failed to encode JPEG preview for '{}': {}",
+                    payload.path, e
+                );
                 error!("{}", error_msg);
                 return Err(CommandError::from(AppError::Other(error_msg)));
             }
         }
-        ImageFormat::Png | _ => { // Default to PNG for other formats or if guessing failed
+        ImageFormat::Png | _ => {
+            // Default to PNG for other formats or if guessing failed
             let encoder = PngEncoder::new(cursor);
-            if let Err(e) = encoder.write_image(dst_fir_image.buffer(), preview_width, preview_height, output_color_type.into()) {
-                let error_msg = format!("Failed to encode PNG preview for '{}': {}", payload.path, e);
+            if let Err(e) = encoder.write_image(
+                dst_fir_image.buffer(),
+                preview_width,
+                preview_height,
+                output_color_type.into(),
+            ) {
+                let error_msg =
+                    format!("Failed to encode PNG preview for '{}': {}", payload.path, e);
                 error!("{}", error_msg);
                 return Err(CommandError::from(AppError::Other(error_msg)));
             }

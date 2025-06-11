@@ -18,9 +18,7 @@ pub struct NoriskVersionsConfig {
 
 impl Default for NoriskVersionsConfig {
     fn default() -> Self {
-        Self {
-            profiles: vec![],
-        }
+        Self { profiles: vec![] }
     }
 }
 

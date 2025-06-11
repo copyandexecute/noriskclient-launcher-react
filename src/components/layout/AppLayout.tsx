@@ -25,6 +25,7 @@ import { RetroGridEffect } from "../effects/RetroGridEffect";
 import PlainBackground from "../effects/PlainBackground";
 import * as ConfigService from "../../services/launcher-config-service";
 import { SocialsModal } from "../modals/SocialsModal";
+import { exit, relaunch } from '@tauri-apps/plugin-process';
 
 const navItems = [
   { id: "play", icon: "solar:play-bold", label: "Play" },
@@ -142,7 +143,7 @@ export function AppLayout({
 
           if (closeRef.current) {
             closeRef.current.addEventListener("click", () =>
-              currentWindow.close(),
+              exit(0),
             );
           }
         } else {

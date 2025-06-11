@@ -99,26 +99,37 @@ impl MinecraftApiService {
         );
         debug!("Username lookup URL: {}", username_lookup_url);
 
-        let response = reqwest::get(&username_lookup_url)
-            .await
-            .map_err(|e| {
-                debug!("Failed to call Mojang API for username lookup: {:?}", e);
-                AppError::MinecraftApi(e)
-            })?;
+        let response = reqwest::get(&username_lookup_url).await.map_err(|e| {
+            debug!("Failed to call Mojang API for username lookup: {:?}", e);
+            AppError::MinecraftApi(e)
+        })?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_else(|_| format!("HTTP Error {}", status));
-            debug!("Mojang API username lookup failed with status {}: {}", status, error_text);
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| format!("HTTP Error {}", status));
+            debug!(
+                "Mojang API username lookup failed with status {}: {}",
+                status, error_text
+            );
             return Err(AppError::Other(format!(
                 "Failed to find player by name '{}': {}",
                 name_or_uuid_query,
-                if status == 404 { "Player not found".to_string() } else { error_text }
+                if status == 404 {
+                    "Player not found".to_string()
+                } else {
+                    error_text
+                }
             )));
         }
 
         let player_data = response.json::<Value>().await.map_err(|e| {
-            debug!("Failed to parse Mojang API response for username lookup: {:?}", e);
+            debug!(
+                "Failed to parse Mojang API response for username lookup: {:?}",
+                e
+            );
             AppError::MinecraftApi(e)
         })?;
 
@@ -126,7 +137,10 @@ impl MinecraftApiService {
             debug!("Successfully resolved username to UUID: {}", uuid_str);
             self.get_user_profile(uuid_str).await
         } else {
-            debug!("Could not extract UUID from Mojang API response. Response: {:?}", player_data);
+            debug!(
+                "Could not extract UUID from Mojang API response. Response: {:?}",
+                player_data
+            );
             Err(AppError::Other(format!(
                 "Could not find UUID for player name: {}",
                 name_or_uuid_query

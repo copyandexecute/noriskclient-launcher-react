@@ -10,11 +10,11 @@ pub mod resourcepack_utils; // ResourcePack-Utils für das Scannen und Verwalten
 pub mod server_ping; // Server-Ping-Modul für die Kommunikation mit Minecraft-Servern
 pub mod shaderpack_utils; // ShaderPack-Utils für das Scannen und Verwalten von ShaderPacks
 pub mod system_info; // <-- Hinzufügen
-pub mod world_utils;
-pub mod updater_utils; // <-- Hinzugefügt
+pub mod updater_utils;
+pub mod world_utils; // <-- Hinzugefügt
 
 // Füge hier ggf. andere Util-Module hinzu
 // pub mod network_utils;
 // pub mod string_utils;
 
- // Mache server_ping verfügbar
+// Mache server_ping verfügbar

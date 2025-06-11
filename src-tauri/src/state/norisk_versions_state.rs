@@ -184,7 +184,7 @@ impl PostInitializationHandler for NoriskVersionManager {
             );
             NoriskVersionsConfig::default()
         });
-        
+
         let mut config_guard = self.config.write().await;
         *config_guard = loaded_config;
         drop(config_guard);

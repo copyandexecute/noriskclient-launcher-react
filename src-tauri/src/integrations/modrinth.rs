@@ -133,19 +133,19 @@ pub struct ModrinthProject {
     pub team: String,                      // The ID of the team that has ownership of this project
     pub organization: Option<String>,      // Added: Can be null
     pub title: String,
-    pub description: String, // Short description
-    pub body: String,        // Long description
-    pub body_url: Option<String>, // Ensured Option: Can be null
-    pub published: String,        // ISO 8601
-    pub updated: String,          // ISO 8601
-    pub approved: Option<String>, // ISO 8601
-    pub queued: Option<String>,   // Added: Can be null
-    pub status: String,           // e.g., "approved"
+    pub description: String,              // Short description
+    pub body: String,                     // Long description
+    pub body_url: Option<String>,         // Ensured Option: Can be null
+    pub published: String,                // ISO 8601
+    pub updated: String,                  // ISO 8601
+    pub approved: Option<String>,         // ISO 8601
+    pub queued: Option<String>,           // Added: Can be null
+    pub status: String,                   // e.g., "approved"
     pub requested_status: Option<String>, // Ensured Option: Can be null
     pub moderator_message: Option<ModrinthModeratorMessage>,
-    pub license: ModrinthLicense, 
-    pub client_side: String,      // "required", "optional", "unsupported", "unknown"
-    pub server_side: String,      // "required", "optional", "unsupported", "unknown"
+    pub license: ModrinthLicense,
+    pub client_side: String, // "required", "optional", "unsupported", "unknown"
+    pub server_side: String, // "required", "optional", "unsupported", "unknown"
     pub downloads: u64,
     pub followers: u64,
     pub categories: Vec<String>,
@@ -160,8 +160,8 @@ pub struct ModrinthProject {
     pub source_url: Option<String>,
     pub wiki_url: Option<String>,
     pub discord_url: Option<String>,
-    pub donation_urls: Option<Vec<ModrinthDonationUrl>>, 
-    pub gallery: Vec<ModrinthGalleryImage>,              
+    pub donation_urls: Option<Vec<ModrinthDonationUrl>>,
+    pub gallery: Vec<ModrinthGalleryImage>,
     #[serde(default)]
     pub game_versions: Option<Vec<String>>,
     #[serde(default)]
@@ -204,10 +204,10 @@ pub struct ModrinthGalleryImage {
 // --- Structures for Tags/Categories ---
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModrinthCategory {
-    pub icon: String,            // SVG icon content
-    pub name: String,            // Name of the category (e.g., "adventure")
-    pub project_type: String,    // Project type this category applies to (e.g., "mod")
-    pub header: String,          // Header for grouping (e.g., "gameplay")
+    pub icon: String,         // SVG icon content
+    pub name: String,         // Name of the category (e.g., "adventure")
+    pub project_type: String, // Project type this category applies to (e.g., "mod")
+    pub header: String,       // Header for grouping (e.g., "gameplay")
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -219,10 +219,10 @@ pub struct ModrinthLoader {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ModrinthGameVersion {
-    pub version: String,       // The name/number of the game version (e.g., "1.18.1")
-    pub version_type: String,  // Type: "release", "snapshot", "alpha", "beta"
-    pub date: String,          // ISO 8601 date string
-    pub major: bool,           // Whether it's a major version
+    pub version: String,      // The name/number of the game version (e.g., "1.18.1")
+    pub version_type: String, // Type: "release", "snapshot", "alpha", "beta"
+    pub date: String,         // ISO 8601 date string
+    pub major: bool,          // Whether it's a major version
 }
 // --- End Structures for Tags/Categories ---
 
@@ -349,7 +349,10 @@ pub async fn search_projects(
         for cat_value in cats {
             if !cat_value.is_empty() {
                 let category_facet = format!("categories:{}", cat_value.to_lowercase()); // Assuming categories are best lowercased
-                log::debug!("Modrinth search - Adding category facet: {}", category_facet);
+                log::debug!(
+                    "Modrinth search - Adding category facet: {}",
+                    category_facet
+                );
                 facets.push(category_facet);
             }
         }
@@ -359,7 +362,10 @@ pub async fn search_projects(
     if let Some(cs_filter_val) = client_side_filter {
         if !cs_filter_val.is_empty() {
             let client_facet = format!("client_side:{}", cs_filter_val);
-            log::debug!("Modrinth search - Adding client_side facet: {}", client_facet);
+            log::debug!(
+                "Modrinth search - Adding client_side facet: {}",
+                client_facet
+            );
             facets.push(client_facet);
         }
     }
@@ -368,7 +374,10 @@ pub async fn search_projects(
     if let Some(ss_filter_val) = server_side_filter {
         if !ss_filter_val.is_empty() {
             let server_facet = format!("server_side:{}", ss_filter_val);
-            log::debug!("Modrinth search - Adding server_side facet: {}", server_facet);
+            log::debug!(
+                "Modrinth search - Adding server_side facet: {}",
+                server_facet
+            );
             facets.push(server_facet);
         }
     }
@@ -1031,15 +1040,18 @@ pub async fn get_multiple_projects(ids: Vec<String>) -> Result<Vec<ModrinthProje
     );
 
     // Now parse the original, full text
-    let projects = serde_json::from_str::<Vec<ModrinthProject>>(&response_body_text).map_err(|e| {
-        let error_message = format!(
-            "Failed to parse Modrinth bulk projects response: {}. Body (logged version): {}",
-            e,
-            logged_response_body_display
-        );
-        log::error!("JSON Parsing Error in get_multiple_projects: {}", error_message); // Added explicit error log
-        AppError::RequestError(error_message)
-    })?;
+    let projects =
+        serde_json::from_str::<Vec<ModrinthProject>>(&response_body_text).map_err(|e| {
+            let error_message = format!(
+                "Failed to parse Modrinth bulk projects response: {}. Body (logged version): {}",
+                e, logged_response_body_display
+            );
+            log::error!(
+                "JSON Parsing Error in get_multiple_projects: {}",
+                error_message
+            ); // Added explicit error log
+            AppError::RequestError(error_message)
+        })?;
 
     log::info!(
         "Successfully retrieved details for {} projects.",
@@ -1068,7 +1080,12 @@ pub async fn get_modrinth_categories() -> Result<Vec<ModrinthCategory>> {
         )
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch categories failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API request to fetch categories failed: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -1090,7 +1107,12 @@ pub async fn get_modrinth_categories() -> Result<Vec<ModrinthCategory>> {
     let categories = response
         .json::<Vec<ModrinthCategory>>()
         .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth categories response: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Failed to parse Modrinth categories response: {}",
+                e
+            ))
+        })?;
 
     log::info!("Successfully fetched {} categories.", categories.len());
     Ok(categories)
@@ -1115,7 +1137,12 @@ pub async fn get_modrinth_loaders() -> Result<Vec<ModrinthLoader>> {
         )
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch loaders failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API request to fetch loaders failed: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -1134,10 +1161,9 @@ pub async fn get_modrinth_loaders() -> Result<Vec<ModrinthLoader>> {
         )));
     }
 
-    let loaders = response
-        .json::<Vec<ModrinthLoader>>()
-        .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth loaders response: {}", e)))?;
+    let loaders = response.json::<Vec<ModrinthLoader>>().await.map_err(|e| {
+        AppError::Other(format!("Failed to parse Modrinth loaders response: {}", e))
+    })?;
 
     log::info!("Successfully fetched {} loaders.", loaders.len());
     Ok(loaders)
@@ -1162,14 +1188,18 @@ pub async fn get_modrinth_game_versions() -> Result<Vec<ModrinthGameVersion>> {
         )
         .send()
         .await
-        .map_err(|e| AppError::Other(format!("Modrinth API request to fetch game versions failed: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Modrinth API request to fetch game versions failed: {}",
+                e
+            ))
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
-        let error_text = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "Failed to read error body from game versions endpoint".to_string());
+        let error_text = response.text().await.unwrap_or_else(|_| {
+            "Failed to read error body from game versions endpoint".to_string()
+        });
         log::error!(
             "Modrinth API error fetching game versions (Status: {}): {}",
             status,
@@ -1184,8 +1214,16 @@ pub async fn get_modrinth_game_versions() -> Result<Vec<ModrinthGameVersion>> {
     let game_versions = response
         .json::<Vec<ModrinthGameVersion>>()
         .await
-        .map_err(|e| AppError::Other(format!("Failed to parse Modrinth game versions response: {}", e)))?;
+        .map_err(|e| {
+            AppError::Other(format!(
+                "Failed to parse Modrinth game versions response: {}",
+                e
+            ))
+        })?;
 
-    log::info!("Successfully fetched {} game versions.", game_versions.len());
+    log::info!(
+        "Successfully fetched {} game versions.",
+        game_versions.len()
+    );
     Ok(game_versions)
 }

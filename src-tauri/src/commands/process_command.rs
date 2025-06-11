@@ -66,11 +66,17 @@ pub async fn open_log_window<R: tauri::Runtime>(
     }
 
     let is_live = is_live_logs.unwrap_or(false);
-    
+
     let window = tauri::WebviewWindowBuilder::new(
         &app,
         &window_label,
-        tauri::WebviewUrl::App(format!("log-window.html?processId={}&isLiveLogs={}", process_id, is_live).into()),
+        tauri::WebviewUrl::App(
+            format!(
+                "log-window.html?processId={}&isLiveLogs={}",
+                process_id, is_live
+            )
+            .into(),
+        ),
     )
     .title(format!("Minecraft Logs ({})", process_id))
     .inner_size(1200.0, 800.0)

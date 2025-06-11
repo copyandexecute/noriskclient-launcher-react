@@ -1,18 +1,23 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, CommandError};
 use crate::integrations::modrinth::ModrinthVersion;
 use crate::integrations::mrpack;
 use crate::integrations::norisk_packs::NoriskModpacksConfig;
-use crate::integrations::norisk_versions::{NoriskVersionsConfig};
+use crate::integrations::norisk_versions::NoriskVersionsConfig;
 use crate::minecraft::installer;
+use crate::state::event_state::{EventPayload, EventType};
 use crate::state::profile_state::{
-    default_profile_path, CustomModInfo, ModLoader, Profile, ProfileSettings,
-    ProfileState,
+    default_profile_path, CustomModInfo, ModLoader, Profile, ProfileSettings, ProfileState,
 };
 use crate::state::state_manager::State;
 use crate::utils::datapack_utils::DataPackInfo;
 use crate::utils::mc_utils::{self, WorldInfo};
 use crate::utils::path_utils::find_unique_profile_segment;
-use crate::utils::profile_utils::{CheckContentParams, ContentInstallStatus, ScreenshotInfo, LocalContentItem, GenericModrinthInfo, ContentType as ProfileUtilContentType, LoadItemsParams as ProfileUtilLoadItemsParams, LocalContentLoader as ProfileUtilLocalContentLoader};
+use crate::utils::profile_utils::{
+    CheckContentParams, ContentInstallStatus, ContentType as ProfileUtilContentType,
+    GenericModrinthInfo, LoadItemsParams as ProfileUtilLoadItemsParams, LocalContentItem,
+    LocalContentLoader as ProfileUtilLocalContentLoader, ScreenshotInfo,
+};
 use crate::utils::resourcepack_utils::ResourcePackInfo;
 use crate::utils::shaderpack_utils::ShaderPackInfo;
 use crate::utils::world_utils;
@@ -20,8 +25,7 @@ use crate::utils::{
     datapack_utils, path_utils, profile_utils, resourcepack_utils, shaderpack_utils,
 };
 use chrono::Utc;
-use log::{error, info, warn, trace};
-use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use log::{error, info, trace, warn};
 use sanitize_filename::sanitize;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -31,7 +35,6 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::fs as TokioFs;
 use uuid::Uuid;
-use crate::state::event_state::{EventPayload, EventType};
 
 // DTOs für Command-Parameter
 #[derive(Deserialize)]
@@ -212,7 +215,10 @@ pub async fn launch_profile(
             let mut current_config = state.config_manager.get_config().await;
             current_config.last_played_profile = Some(id); // id here is the standard_profile.id
             if let Err(e) = state.config_manager.set_config(current_config).await {
-                warn!("Failed to update last_played_profile in config for standard version: {}", e);
+                warn!(
+                    "Failed to update last_played_profile in config for standard version: {}",
+                    e
+                );
             }
 
             // Return the converted profile without saving it
@@ -301,15 +307,15 @@ pub async fn launch_profile(
                         "Error installing/launching Minecraft for profile {}: {}",
                         profile_id, error_message
                     );
-                    
+
                     // Emit an error event to the frontend
                     let event_payload = EventPayload {
                         event_id: uuid::Uuid::new_v4(), // A new UUID for this specific error event
                         event_type: EventType::Error,   // Use the existing Error type
                         target_id: Some(profile_id),
                         message: error_message.clone(), // The error message for the 'message' field
-                        progress: None,                 // Progress is not relevant for a final error
-                        error: Some(error_message),     // The error message for the 'error' field
+                        progress: None, // Progress is not relevant for a final error
+                        error: Some(error_message), // The error message for the 'error' field
                     };
 
                     if let Err(emit_err) = state.emit_event(event_payload).await {
@@ -406,7 +412,10 @@ pub async fn get_profile(id: Uuid) -> Result<Profile, CommandError> {
 
 #[tauri::command]
 pub async fn update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(), CommandError> {
-    info!("[CMD] update_profile called for ID: {} with params: {:?}", id, params);
+    info!(
+        "[CMD] update_profile called for ID: {} with params: {:?}",
+        id, params
+    );
     match try_update_profile(id, params).await {
         Ok(_) => {
             info!("[CMD] update_profile successful for ID: {}", id);
@@ -421,27 +430,35 @@ pub async fn update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(),
 
 // Helper function to contain the actual logic and allow for ? operator
 async fn try_update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(), CommandError> {
-    info!("[CMD] try_update_profile for ID: {}. Received params: {:?}", id, params);
+    info!(
+        "[CMD] try_update_profile for ID: {}. Received params: {:?}",
+        id, params
+    );
     let state = State::get().await?;
     let mut profile = state.profile_manager.get_profile(id).await?;
 
-    if let Some(name) = &params.name { // Borrow params.name
+    if let Some(name) = &params.name {
+        // Borrow params.name
         info!("Updating profile name to: {}", name);
         profile.name = name.clone();
     }
-    if let Some(game_version) = &params.game_version { // Borrow params.game_version
+    if let Some(game_version) = &params.game_version {
+        // Borrow params.game_version
         info!("Updating game_version to: {}", game_version);
         profile.game_version = game_version.clone();
     }
-    if let Some(loader_str) = &params.loader { // Borrow params.loader
+    if let Some(loader_str) = &params.loader {
+        // Borrow params.loader
         info!("Updating loader to: {}", loader_str);
         profile.loader = ModLoader::from_str(loader_str)?;
     }
-    if let Some(loader_version) = &params.loader_version { // Borrow params.loader_version
+    if let Some(loader_version) = &params.loader_version {
+        // Borrow params.loader_version
         info!("Updating loader_version to: {}", loader_version);
         profile.loader_version = Some(loader_version.clone());
     }
-    if let Some(settings) = params.settings { // settings can be moved if it's Clone or Copy, or borrowed if not
+    if let Some(settings) = params.settings {
+        // settings can be moved if it's Clone or Copy, or borrowed if not
         info!("Updating settings: {:?}", settings);
         profile.settings = settings; // Assuming ProfileSettings is Clone or params.settings is not used after this
     }
@@ -451,14 +468,18 @@ async fn try_update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(),
         info!("Clearing selected_norisk_pack_id for profile {}", id);
         profile.selected_norisk_pack_id = None;
     } else if let Some(pack_id) = &params.selected_norisk_pack_id {
-        info!("Updating selected_norisk_pack_id to: {} for profile {}", pack_id, id);
+        info!(
+            "Updating selected_norisk_pack_id to: {} for profile {}",
+            pack_id, id
+        );
         profile.selected_norisk_pack_id = Some(pack_id.clone());
     } else {
         info!("selected_norisk_pack_id not explicitly changed or cleared for profile {}. Current: {:?}", id, profile.selected_norisk_pack_id);
         // No change to selected_norisk_pack_id if neither clear is true nor a new value is provided
     }
 
-    if let Some(new_group) = &params.group { // Borrow params.group
+    if let Some(new_group) = &params.group {
+        // Borrow params.group
         info!("Updating group to: {}", new_group);
         profile.group = Some(new_group.clone());
     }
@@ -474,7 +495,10 @@ async fn try_update_profile(id: Uuid, params: UpdateProfileParams) -> Result<(),
         // you might need `Option<Option<NoriskInformation>>` or a custom deserializer.
         // For now, if it's `None` (either not sent or sent as null), we keep the existing value.
         // If you want `null` to clear it, you would do: `profile.norisk_information = None;`
-        info!("norisk_information not provided or explicitly null, keeping existing: {:?}", profile.norisk_information);
+        info!(
+            "norisk_information not provided or explicitly null, keeping existing: {:?}",
+            profile.norisk_information
+        );
     }
 
     state.profile_manager.update_profile(id, profile).await?;
@@ -1036,12 +1060,12 @@ pub async fn get_local_resourcepacks(
 
     // Use the utility function to get all resourcepacks
     let resourcepacks = resourcepack_utils::get_resourcepacks_for_profile(
-        &profile, 
+        &profile,
         calculate_hashes,
         fetch_modrinth_data,
     )
-        .await
-        .map_err(|e| CommandError::from(e))?;
+    .await
+    .map_err(|e| CommandError::from(e))?;
 
     Ok(resourcepacks)
 }
@@ -1843,11 +1867,11 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
     for profile in standard_profiles.iter() {
         unique_profiles_map.insert(profile.id, profile.clone());
     }
-    for profile in user_profiles.iter() { // User profiles overwrite standard if same ID
+    for profile in user_profiles.iter() {
+        // User profiles overwrite standard if same ID
         unique_profiles_map.insert(profile.id, profile.clone());
     }
     let all_profiles_final: Vec<Profile> = unique_profiles_map.values().cloned().collect();
-
 
     // 4. Handle `last_played_profile_id`
     let mut launcher_config = state.config_manager.get_config().await;
@@ -1858,9 +1882,12 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
     if let Some(id_to_check) = effective_last_played_id {
         let exists = all_profiles_final.iter().any(|p| p.id == id_to_check);
         if !exists {
-            info!("Last played profile ID {} no longer exists. Marking for reset.", id_to_check);
+            info!(
+                "Last played profile ID {} no longer exists. Marking for reset.",
+                id_to_check
+            );
             effective_last_played_id = None; // Mark for reset logic below
-            // The actual launcher_config.last_played_profile will be updated if a new default is found or it's set to None
+                                             // The actual launcher_config.last_played_profile will be updated if a new default is found or it's set to None
         }
     }
 
@@ -1878,7 +1905,10 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
         // Check if the determined new_default_id is different from what's in the original config.
         // This ensures we only write to config if there's an actual change.
         if launcher_config.last_played_profile != new_default_id {
-            info!("Updating last_played_profile in config to: {:?}", new_default_id);
+            info!(
+                "Updating last_played_profile in config to: {:?}",
+                new_default_id
+            );
             launcher_config.last_played_profile = new_default_id;
             config_needs_update = true;
         }
@@ -1902,13 +1932,13 @@ pub async fn get_all_profiles_and_last_played() -> Result<AllProfilesAndLastPlay
     })
 }
 
-// --- DTO for GetLocalContent --- 
+// --- DTO for GetLocalContent ---
 // This DTO is no longer needed as we will use LoadItemsParams directly
 /*
 #[derive(Deserialize, Debug)]
 pub struct GetLocalContentParams {
     profile_id: Uuid,
-    content_type: String, 
+    content_type: String,
     calculate_hashes: bool,
     fetch_modrinth_data: bool,
 }
@@ -1929,7 +1959,8 @@ pub async fn get_local_content(
     // No need to map content_type string to enum, it's already the enum.
     // The loader_params creation is also simplified as params is already the correct type.
 
-    match ProfileUtilLocalContentLoader::load_items(params.clone()).await { // .clone() if params is used later, or pass directly
+    match ProfileUtilLocalContentLoader::load_items(params.clone()).await {
+        // .clone() if params is used later, or pass directly
         Ok(items) => {
             info!(
                 "Successfully loaded {} items of type '{:?}' for profile {}",

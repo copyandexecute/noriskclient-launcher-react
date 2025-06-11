@@ -10,8 +10,8 @@ pub mod neo_forge_meta;
 pub mod norisk_meta;
 pub mod piston_meta;
 pub mod quilt_meta;
-pub mod version_manifest;
 pub mod skin_payloads;
+pub mod version_manifest;
 
 pub use java_distribution::*;
 pub use version_manifest::VersionManifest;

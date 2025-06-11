@@ -216,8 +216,8 @@ impl CapeApi {
         query_params.insert("uuid", request_uuid.to_string());
 
         debug!(
-            "[Cape API get_player_capes] Authorization token (first/last 8 chars): {}...{}", 
-            &norisk_token[..std::cmp::min(8, norisk_token.len())], 
+            "[Cape API get_player_capes] Authorization token (first/last 8 chars): {}...{}",
+            &norisk_token[..std::cmp::min(8, norisk_token.len())],
             &norisk_token[std::cmp::max(0, norisk_token.len().saturating_sub(8))..]
         );
         debug!(
@@ -233,15 +233,24 @@ impl CapeApi {
             .await
             .map_err(|e| {
                 error!("[Cape API get_player_capes] Request failed: {}", e);
-                AppError::RequestError(format!("Failed to send request to Cape API for get_player_capes: {}", e))
+                AppError::RequestError(format!(
+                    "Failed to send request to Cape API for get_player_capes: {}",
+                    e
+                ))
             })?;
 
         let status = response.status();
         debug!("[Cape API get_player_capes] Response status: {}", status);
 
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_else(|_| "Failed to read error body".to_string());
-            error!("[Cape API get_player_capes] Error response: Status {}, Body: {}", status, error_body);
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error body".to_string());
+            error!(
+                "[Cape API get_player_capes] Error response: Status {}, Body: {}",
+                status, error_body
+            );
             return Err(AppError::RequestError(format!(
                 "Cape API (get_player_capes) returned error status: {}. Details: {}",
                 status, error_body
@@ -250,8 +259,14 @@ impl CapeApi {
 
         debug!("[Cape API get_player_capes] Parsing response body as JSON");
         response.json::<Vec<CosmeticCape>>().await.map_err(|e| {
-            error!("[Cape API get_player_capes] Failed to parse response: {}", e);
-            AppError::ParseError(format!("Failed to parse Cape API response for get_player_capes: {}", e))
+            error!(
+                "[Cape API get_player_capes] Failed to parse response: {}",
+                e
+            );
+            AppError::ParseError(format!(
+                "Failed to parse Cape API response for get_player_capes: {}",
+                e
+            ))
         })
     }
 

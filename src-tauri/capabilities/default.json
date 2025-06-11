@@ -24,6 +24,8 @@
     "clipboard-manager:allow-write-image",
     "dialog:allow-open",
     "updater:default",
-    "fs:default"
+    "fs:default",
+    "process:default",
+    "process:default"
   ]
 }

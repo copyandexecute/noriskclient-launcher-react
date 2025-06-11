@@ -51,28 +51,28 @@ use commands::minecraft_command::{
 };
 use commands::profile_command::{
     abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
-    check_world_lock_status, copy_profile, copy_world, create_profile, delete_custom_mod,
-    delete_mod_from_profile, delete_profile, delete_world, export_profile, get_custom_mods,
+    batch_check_content_installed, check_world_lock_status, copy_profile, copy_world,
+    create_profile, delete_custom_mod, delete_mod_from_profile, delete_profile, delete_world,
+    export_profile, get_all_profiles_and_last_played, get_custom_mods, get_local_content,
     get_local_datapacks, get_local_resourcepacks, get_local_shaderpacks, get_log_file_content,
     get_norisk_packs, get_norisk_packs_resolved, get_profile, get_profile_directory_structure,
     get_profile_latest_log_content, get_profile_log_files, get_servers_for_profile,
     get_standard_profiles, get_system_ram_mb, get_worlds_for_profile, import_local_mods,
-    import_profile_from_file, is_content_installed, is_profile_launching, launch_profile,
-    list_profile_screenshots, list_profiles, open_profile_folder, open_profile_latest_log,
-    refresh_norisk_packs, refresh_standard_versions, search_profiles, set_custom_mod_enabled,
-    set_norisk_mod_status, set_profile_mod_enabled, update_datapack_from_modrinth,
-    update_modrinth_mod_version, update_profile, update_resourcepack_from_modrinth,
-    update_shaderpack_from_modrinth, batch_check_content_installed,
-    get_all_profiles_and_last_played, get_local_content, import_profile,
+    import_profile, import_profile_from_file, is_content_installed, is_profile_launching,
+    launch_profile, list_profile_screenshots, list_profiles, open_profile_folder,
+    open_profile_latest_log, refresh_norisk_packs, refresh_standard_versions, search_profiles,
+    set_custom_mod_enabled, set_norisk_mod_status, set_profile_mod_enabled,
+    update_datapack_from_modrinth, update_modrinth_mod_version, update_profile,
+    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth,
 };
 
 // Use statements for registered commands only
 use commands::modrinth_commands::{
     check_modrinth_updates, download_and_install_modrinth_modpack,
-    get_all_modrinth_versions_for_contexts, get_modrinth_mod_versions,
-    get_modrinth_project_details, search_modrinth_mods, search_modrinth_projects,
-    get_modrinth_categories_command, get_modrinth_loaders_command, get_modrinth_game_versions_command,
-    get_modrinth_versions_by_hashes,
+    get_all_modrinth_versions_for_contexts, get_modrinth_categories_command,
+    get_modrinth_game_versions_command, get_modrinth_loaders_command, get_modrinth_mod_versions,
+    get_modrinth_project_details, get_modrinth_versions_by_hashes, search_modrinth_mods,
+    search_modrinth_projects,
 };
 
 use commands::file_command::{
@@ -101,11 +101,15 @@ use commands::nrc_commands::get_news_and_changelogs_command;
 
 // Import Content commands
 use commands::content_command::{
-    install_content_to_profile, install_local_content_to_profile, switch_content_version, toggle_content_from_profile, uninstall_content_from_profile
+    install_content_to_profile, install_local_content_to_profile, switch_content_version,
+    toggle_content_from_profile, uninstall_content_from_profile,
 };
 
 // Import Java commands
-use commands::java_command::{detect_java_installations_command, find_best_java_for_minecraft_command, get_java_info_command, invalidate_java_cache_command, validate_java_path_command};
+use commands::java_command::{
+    detect_java_installations_command, find_best_java_for_minecraft_command, get_java_info_command,
+    invalidate_java_cache_command, validate_java_path_command,
+};
 
 #[tokio::main]
 async fn main() {
@@ -116,6 +120,7 @@ async fn main() {
     info!("Starting NoRiskClient Launcher...");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {

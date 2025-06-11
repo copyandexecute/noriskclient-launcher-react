@@ -17,11 +17,11 @@ use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 use tokio::fs;
 use tokio::fs::File;
+use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
-use tokio::io::AsyncReadExt;
-use uuid::Uuid;
 use tokio_util::compat::FuturesAsyncReadCompatExt;
+use uuid::Uuid;
 
 /// Represents the overall structure of a modrinth.index.json file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -369,7 +369,10 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
     }
 
     let initial_file_for_listing = File::open(pack_path).await.map_err(|e| {
-        error!("Failed to open mrpack file for listing {:?}: {}", pack_path, e);
+        error!(
+            "Failed to open mrpack file for listing {:?}: {}",
+            pack_path, e
+        );
         AppError::Io(e)
     })?;
     let mut initial_buf_reader = BufReader::new(initial_file_for_listing);
@@ -391,12 +394,15 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
     for index in 0..num_entries {
         let entry_filename_str;
         let is_entry_dir;
-        let entry_uncompressed_size; 
+        let entry_uncompressed_size;
         {
             let entry = match zip_lister.file().entries().get(index) {
                 Some(e) => e,
                 None => {
-                    error!("Failed to get zip entry metadata for index {} during listing", index);
+                    error!(
+                        "Failed to get zip entry metadata for index {} during listing",
+                        index
+                    );
                     continue;
                 }
             };
@@ -454,21 +460,23 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                     std::path::Component::Prefix(_) => None, // Should not appear in relative paths
                 })
                 .collect::<PathBuf>();
-            
+
             // If sanitization results in an empty path (e.g., path was only ".." or similar), skip it.
             if sanitized_relative_path.as_os_str().is_empty() {
-                 warn!("Skipping empty sanitized relative path for override entry: {} (original relative: {})", entry_filename_str, path_after_prefix);
+                warn!("Skipping empty sanitized relative path for override entry: {} (original relative: {})", entry_filename_str, path_after_prefix);
                 continue;
             }
 
             let final_dest_path = {
                 let relative_path_str = sanitized_relative_path.to_string_lossy();
                 // Check for both / and \ to be platform-agnostic for path separators within the string
-                if relative_path_str.starts_with("mods/") || relative_path_str.starts_with("mods\\") {
+                if relative_path_str.starts_with("mods/") || relative_path_str.starts_with("mods\\")
+                {
                     // Construct the new path by taking the part of the string *after* "mods"
                     // e.g., if relative_path_str is "mods/foo.jar", then &relative_path_str["mods".len()..] is "/foo.jar"
                     // We then prepend "custom_mods"
-                    let new_relative_path = format!("custom_mods{}", &relative_path_str["mods".len()..]);
+                    let new_relative_path =
+                        format!("custom_mods{}", &relative_path_str["mods".len()..]);
                     target_dir.join(new_relative_path)
                 } else {
                     // If sanitized_relative_path is used again after this block, ensure it's cloned if needed.
@@ -476,25 +484,41 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
                     target_dir.join(sanitized_relative_path)
                 }
             };
-            
+
             let task_pack_path = pack_path.to_path_buf();
             let task_io_semaphore = io_semaphore.clone();
             let task_final_dest_path = final_dest_path.clone();
-            let original_entry_index = index; 
+            let original_entry_index = index;
 
             if is_entry_dir {
                 extraction_tasks.push(tokio::spawn(async move {
                     let _permit = task_io_semaphore.acquire().await.map_err(|e| {
-                        error!("Failed to acquire semaphore permit for creating dir {}: {}", task_final_dest_path.display(), e);
-                        AppError::Other(format!("Semaphore error for dir {}: {}", task_final_dest_path.display(),e))
+                        error!(
+                            "Failed to acquire semaphore permit for creating dir {}: {}",
+                            task_final_dest_path.display(),
+                            e
+                        );
+                        AppError::Other(format!(
+                            "Semaphore error for dir {}: {}",
+                            task_final_dest_path.display(),
+                            e
+                        ))
                     })?;
 
                     if !task_final_dest_path.exists() {
-                        debug!("Creating directory (from override task): {:?}", task_final_dest_path);
-                        fs::create_dir_all(&task_final_dest_path).await.map_err(|e| {
-                            error!("Failed to create directory {:?} in task: {}", task_final_dest_path, e);
-                            AppError::Io(e)
-                        })?;
+                        debug!(
+                            "Creating directory (from override task): {:?}",
+                            task_final_dest_path
+                        );
+                        fs::create_dir_all(&task_final_dest_path)
+                            .await
+                            .map_err(|e| {
+                                error!(
+                                    "Failed to create directory {:?} in task: {}",
+                                    task_final_dest_path, e
+                                );
+                                AppError::Io(e)
+                            })?;
                     }
                     Ok::<(), AppError>(())
                 }));
@@ -506,52 +530,97 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
 
                 extraction_tasks.push(tokio::spawn(async move {
                     let _permit = task_io_semaphore.acquire().await.map_err(|e| {
-                         error!("Failed to acquire semaphore permit for '{}': {}", task_final_dest_path.display(), e);
-                         AppError::Other(format!("Semaphore error for '{}': {}",task_final_dest_path.display(), e))
+                        error!(
+                            "Failed to acquire semaphore permit for '{}': {}",
+                            task_final_dest_path.display(),
+                            e
+                        );
+                        AppError::Other(format!(
+                            "Semaphore error for '{}': {}",
+                            task_final_dest_path.display(),
+                            e
+                        ))
                     })?;
 
                     if let Some(parent) = task_final_dest_path.parent() {
-                        if !parent.exists() { 
+                        if !parent.exists() {
                             fs::create_dir_all(parent).await.map_err(|e| {
-                                error!("Task: Failed to create parent directory {:?} for override: {}", parent, e);
+                                error!(
+                                    "Task: Failed to create parent directory {:?} for override: {}",
+                                    parent, e
+                                );
                                 AppError::Io(e)
                             })?;
                         }
                     }
 
-                    let task_file = File::open(&task_pack_path).await.map_err(|e|{
-                        error!("Task: Failed to open mrpack file {:?}: {}", task_pack_path, e);
+                    let task_file = File::open(&task_pack_path).await.map_err(|e| {
+                        error!(
+                            "Task: Failed to open mrpack file {:?}: {}",
+                            task_pack_path, e
+                        );
                         AppError::Io(e)
                     })?;
                     let mut task_buf_reader = BufReader::new(task_file);
-                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader).await.map_err(|e|{
-                        error!("Task: Failed to read mrpack as ZIP for '{}': {}", task_final_dest_path.display(), e);
-                        AppError::Other(format!("Task: ZIP read error for {}: {}", task_final_dest_path.display(), e))
-                    })?;
-                    
-                    let entry_reader_futures = task_zip_reader.reader_without_entry(original_entry_index).await.map_err(|e| {
-                        error!(
-                            "Task: Failed to get entry reader for '{}' (index {}): {}",
-                            task_final_dest_path.display(), original_entry_index, e
-                        );
-                        AppError::Other(format!("Task: Entry reader error for {}: {}", task_final_dest_path.display(), e))
-                    })?;
+                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Task: Failed to read mrpack as ZIP for '{}': {}",
+                                task_final_dest_path.display(),
+                                e
+                            );
+                            AppError::Other(format!(
+                                "Task: ZIP read error for {}: {}",
+                                task_final_dest_path.display(),
+                                e
+                            ))
+                        })?;
+
+                    let entry_reader_futures = task_zip_reader
+                        .reader_without_entry(original_entry_index)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Task: Failed to get entry reader for '{}' (index {}): {}",
+                                task_final_dest_path.display(),
+                                original_entry_index,
+                                e
+                            );
+                            AppError::Other(format!(
+                                "Task: Entry reader error for {}: {}",
+                                task_final_dest_path.display(),
+                                e
+                            ))
+                        })?;
                     let mut entry_reader_tokio = entry_reader_futures.compat();
 
-                    let mut file_writer = fs::File::create(&task_final_dest_path).await.map_err(|e| {
-                        error!("Task: Failed to create destination file {:?} for override: {}", task_final_dest_path, e);
-                        AppError::Io(e)
-                    })?;
+                    let mut file_writer =
+                        fs::File::create(&task_final_dest_path).await.map_err(|e| {
+                            error!(
+                                "Task: Failed to create destination file {:?} for override: {}",
+                                task_final_dest_path, e
+                            );
+                            AppError::Io(e)
+                        })?;
 
-                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
-                        error!(
-                            "Task: Failed to stream content for '{}' to {:?}: {}",
-                            task_final_dest_path.display(), task_final_dest_path, e
-                        );
-                        AppError::Io(e)
-                    })?;
-                    
-                    debug!("Task: Successfully streamed {} bytes for override: {}", bytes_copied, task_final_dest_path.display());
+                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Task: Failed to stream content for '{}' to {:?}: {}",
+                                task_final_dest_path.display(),
+                                task_final_dest_path,
+                                e
+                            );
+                            AppError::Io(e)
+                        })?;
+
+                    debug!(
+                        "Task: Successfully streamed {} bytes for override: {}",
+                        bytes_copied,
+                        task_final_dest_path.display()
+                    );
                     Ok::<(), AppError>(())
                 }));
             }
@@ -561,11 +630,14 @@ pub async fn extract_mrpack_overrides(pack_path: &Path, profile: &Profile) -> Re
     // Wait for all extraction tasks to complete
     let results = try_join_all(extraction_tasks).await.map_err(|e| {
         error!("Error joining override extraction tasks: {}", e);
-        AppError::Other(format!("One or more override extraction tasks panicked: {}", e))
+        AppError::Other(format!(
+            "One or more override extraction tasks panicked: {}",
+            e
+        ))
     })?;
 
     for result in results {
-        result?; 
+        result?;
     }
 
     info!(

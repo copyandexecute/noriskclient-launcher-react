@@ -1,15 +1,15 @@
-use crate::config::{HTTP_CLIENT, LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::config::{ProjectDirsExt, HTTP_CLIENT, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::state::event_state::{EventPayload, EventType};
 use crate::utils::hash_utils::calculate_sha1_from_bytes;
 use log::{debug, error, warn};
 use reqwest;
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs as tokio_fs;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
-use serde::Deserialize;
 
 const STARLIGHT_API_BASE: &str = "https://starlightskins.lunareclipse.studio";
 
@@ -43,10 +43,7 @@ impl StarlightApiService {
         let cache_dir = LAUNCHER_DIRECTORY.meta_dir().join("starlight_cache");
         if !cache_dir.exists() {
             std::fs::create_dir_all(&cache_dir).map_err(|e| {
-                AppError::Other(format!(
-                    "Failed to create Starlight cache directory: {}",
-                    e
-                ))
+                AppError::Other(format!("Failed to create Starlight cache directory: {}", e))
             })?;
         }
         Ok(Self { cache_dir })
@@ -61,10 +58,7 @@ impl StarlightApiService {
     ) -> Result<Vec<u8>> {
         let base_url = format!(
             "{}/render/{}/{}/{}",
-            STARLIGHT_API_BASE,
-            render_type,
-            player_name,
-            render_view
+            STARLIGHT_API_BASE, render_type, player_name, render_view
         );
 
         let mut query_params = Vec::new();
@@ -80,12 +74,12 @@ impl StarlightApiService {
         if !query_params.is_empty() {
             request_builder = request_builder.query(&query_params);
         }
-        
+
         let request = request_builder.build().map_err(|e| {
             error!("Failed to build Starlight API request: {}", e);
             AppError::Other(format!("Failed to build Starlight API request: {}", e))
         })?;
-        
+
         let final_url = request.url().to_string(); // Get URL from the built request for logging
 
         debug!(
@@ -249,17 +243,18 @@ impl StarlightApiService {
                 );
 
                 if let Ok(state) = crate::state::State::get().await {
-                    let skin_type_msg = if base64_skin_data.is_some() { "custom skin" } else { "default skin" };
+                    let skin_type_msg = if base64_skin_data.is_some() {
+                        "custom skin"
+                    } else {
+                        "default skin"
+                    };
                     let payload = EventPayload {
                         event_id: Uuid::new_v4(),
                         event_type: EventType::StarlightSkinUpdated,
                         target_id: None,
                         message: format!(
                             "Skin for player {} (type: {}, view: {}, {}) was updated.",
-                            player_name,
-                            render_type,
-                            render_view,
-                            skin_type_msg
+                            player_name, render_type, render_view, skin_type_msg
                         ),
                         progress: None,
                         error: None,
@@ -336,7 +331,7 @@ impl StarlightApiService {
                 let render_type_clone = render_type.to_string();
                 let render_view_clone = render_view.to_string();
                 // base64_skin_data is None in this branch, so cloning it as None is fine for background_skin_update signature.
-                let base64_skin_data_clone = base64_skin_data.clone(); 
+                let base64_skin_data_clone = base64_skin_data.clone();
 
                 tokio::spawn(async move {
                     Self::background_skin_update(

@@ -5,18 +5,18 @@ use crate::state::State;
 use crate::utils::system_info::{Architecture, OperatingSystem, ARCHITECTURE, OS};
 use async_zip::tokio::read::seek::ZipFileReader;
 use flate2::read::GzDecoder;
+use futures::future::try_join_all;
 use log::{debug, error, info};
 use reqwest;
-use tokio_util::compat::FuturesAsyncReadCompatExt;
+use std::fs::File;
 use std::io::Cursor;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tar::Archive;
 use tokio::fs;
 use tokio::io::{AsyncWriteExt, BufReader};
-use futures::future::try_join_all;
-use std::fs::File;
-use std::sync::Arc;
-use std::sync::Mutex;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
 
 const JAVA_DIR: &str = "java";
 const DEFAULT_CONCURRENT_EXTRACTIONS: usize = 4;
@@ -179,7 +179,10 @@ impl JavaDownloadService {
         archive_path: &PathBuf,
         target_dir: &PathBuf,
     ) -> Result<()> {
-        info!("Extracting Java archive: {:?} to {:?}", archive_path, target_dir);
+        info!(
+            "Extracting Java archive: {:?} to {:?}",
+            archive_path, target_dir
+        );
 
         match OS {
             OperatingSystem::WINDOWS => {
@@ -188,7 +191,10 @@ impl JavaDownloadService {
 
                 // Initial open for listing entries and determining root_dir
                 let file_for_listing = tokio::fs::File::open(archive_path).await.map_err(|e| {
-                    error!("Failed to open Java ZIP for listing {:?}: {}", archive_path, e);
+                    error!(
+                        "Failed to open Java ZIP for listing {:?}: {}",
+                        archive_path, e
+                    );
                     AppError::JavaDownload(format!("ZIP Open error for listing: {}", e))
                 })?;
                 let mut buf_reader_listing = BufReader::new(file_for_listing);
@@ -211,13 +217,16 @@ impl JavaDownloadService {
                         (idx, filename, is_dir, uncompressed_size)
                     })
                     .collect::<Vec<_>>();
-                
+
                 // Determine the common root directory from the collected metadata
                 let mut root_dir_prefix: Option<String> = None;
                 for (_, path_str, is_dir, _) in &entries_meta {
                     if *is_dir && path_str.chars().filter(|&c| c == '/').count() == 1 {
                         root_dir_prefix = Some(path_str.clone());
-                        debug!("Detected Java archive root directory: {:?}", root_dir_prefix);
+                        debug!(
+                            "Detected Java archive root directory: {:?}",
+                            root_dir_prefix
+                        );
                         break;
                     }
                 }
@@ -227,7 +236,8 @@ impl JavaDownloadService {
 
                 let mut extraction_tasks = Vec::new();
 
-                for (original_entry_index, full_path_str, is_entry_dir, entry_size) in entries_meta {
+                for (original_entry_index, full_path_str, is_entry_dir, entry_size) in entries_meta
+                {
                     // Calculate the path relative to target_dir, stripping the root_dir_prefix if present
                     let relative_path_str = if let Some(ref root) = root_dir_prefix {
                         if full_path_str.starts_with(root) && full_path_str != *root {
@@ -255,15 +265,28 @@ impl JavaDownloadService {
                     if is_entry_dir {
                         extraction_tasks.push(tokio::spawn(async move {
                             let _permit = task_io_semaphore.acquire().await.map_err(|e| {
-                                error!("Java Task: Failed to acquire semaphore for dir {}: {}", task_final_dest_path.display(), e);
-                                AppError::JavaDownload(format!("Semaphore error for dir {}: {}",task_final_dest_path.display(),e))
+                                error!(
+                                    "Java Task: Failed to acquire semaphore for dir {}: {}",
+                                    task_final_dest_path.display(),
+                                    e
+                                );
+                                AppError::JavaDownload(format!(
+                                    "Semaphore error for dir {}: {}",
+                                    task_final_dest_path.display(),
+                                    e
+                                ))
                             })?;
                             if !task_final_dest_path.exists() {
                                 debug!("Java Task: Creating directory: {:?}", task_final_dest_path);
-                                fs::create_dir_all(&task_final_dest_path).await.map_err(|e|{
-                                     error!("Java Task: Failed to create dir {:?}: {}", task_final_dest_path, e);
-                                     AppError::JavaDownload(format!("Create dir error: {}", e))
-                                })?;
+                                fs::create_dir_all(&task_final_dest_path)
+                                    .await
+                                    .map_err(|e| {
+                                        error!(
+                                            "Java Task: Failed to create dir {:?}: {}",
+                                            task_final_dest_path, e
+                                        );
+                                        AppError::JavaDownload(format!("Create dir error: {}", e))
+                                    })?;
                             }
                             Ok::<(), AppError>(())
                         }));
@@ -274,66 +297,123 @@ impl JavaDownloadService {
                         );
                         extraction_tasks.push(tokio::spawn(async move {
                             let _permit = task_io_semaphore.acquire().await.map_err(|e| {
-                                 error!("Java Task: Failed to acquire semaphore for '{}': {}", task_final_dest_path.display(), e);
-                                 AppError::JavaDownload(format!("Semaphore error for '{}': {}",task_final_dest_path.display(),e))
+                                error!(
+                                    "Java Task: Failed to acquire semaphore for '{}': {}",
+                                    task_final_dest_path.display(),
+                                    e
+                                );
+                                AppError::JavaDownload(format!(
+                                    "Semaphore error for '{}': {}",
+                                    task_final_dest_path.display(),
+                                    e
+                                ))
                             })?;
 
                             if let Some(parent) = task_final_dest_path.parent() {
-                                if !parent.exists() { 
-                                    fs::create_dir_all(parent).await.map_err(|e|{
-                                        error!("Java Task: Failed to create parent for '{}': {}", task_final_dest_path.display(), e);
-                                        AppError::JavaDownload(format!("Create parent error: {}", e))
+                                if !parent.exists() {
+                                    fs::create_dir_all(parent).await.map_err(|e| {
+                                        error!(
+                                            "Java Task: Failed to create parent for '{}': {}",
+                                            task_final_dest_path.display(),
+                                            e
+                                        );
+                                        AppError::JavaDownload(format!(
+                                            "Create parent error: {}",
+                                            e
+                                        ))
                                     })?;
                                 }
                             }
 
-                            let task_file = tokio::fs::File::open(&task_archive_path).await.map_err(|e|{
-                                error!("Java Task: Failed to open archive {:?}: {}", task_archive_path, e);
-                                AppError::JavaDownload(format!("ZIP Open error in task: {}", e))
-                            })?;
+                            let task_file = tokio::fs::File::open(&task_archive_path)
+                                .await
+                                .map_err(|e| {
+                                    error!(
+                                        "Java Task: Failed to open archive {:?}: {}",
+                                        task_archive_path, e
+                                    );
+                                    AppError::JavaDownload(format!("ZIP Open error in task: {}", e))
+                                })?;
                             let mut task_buf_reader = BufReader::new(task_file);
-                            let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader).await.map_err(|e|{
-                                error!("Java Task: Failed to read archive as ZIP for '{}': {}", task_final_dest_path.display(), e);
-                                AppError::JavaDownload(format!("ZIP Read error in task for {}: {}",task_final_dest_path.display(), e))
-                            })?;
-                            
-                            let entry_reader_futures = task_zip_reader.reader_without_entry(original_entry_index).await.map_err(|e| {
-                                error!(
+                            let mut task_zip_reader =
+                                ZipFileReader::with_tokio(&mut task_buf_reader)
+                                    .await
+                                    .map_err(|e| {
+                                        error!(
+                                            "Java Task: Failed to read archive as ZIP for '{}': {}",
+                                            task_final_dest_path.display(),
+                                            e
+                                        );
+                                        AppError::JavaDownload(format!(
+                                            "ZIP Read error in task for {}: {}",
+                                            task_final_dest_path.display(),
+                                            e
+                                        ))
+                                    })?;
+
+                            let entry_reader_futures = task_zip_reader
+                                .reader_without_entry(original_entry_index)
+                                .await
+                                .map_err(|e| {
+                                    error!(
                                     "Java Task: Failed to get entry reader for '{}' (index {}): {}",
                                     task_final_dest_path.display(), original_entry_index, e
                                 );
-                                AppError::JavaDownload(format!("Entry reader error for {}: {}",task_final_dest_path.display(),e))
-                            })?;
+                                    AppError::JavaDownload(format!(
+                                        "Entry reader error for {}: {}",
+                                        task_final_dest_path.display(),
+                                        e
+                                    ))
+                                })?;
                             let mut entry_reader_tokio = entry_reader_futures.compat();
 
-                            let mut file_writer = fs::File::create(&task_final_dest_path).await.map_err(|e|{
-                                error!("Java Task: Failed to create dest file {:?}: {}", task_final_dest_path, e);
-                                AppError::JavaDownload(format!("File create error: {}", e))
-                            })?;
+                            let mut file_writer =
+                                fs::File::create(&task_final_dest_path).await.map_err(|e| {
+                                    error!(
+                                        "Java Task: Failed to create dest file {:?}: {}",
+                                        task_final_dest_path, e
+                                    );
+                                    AppError::JavaDownload(format!("File create error: {}", e))
+                                })?;
 
-                            let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
-                                error!(
-                                    "Java Task: Failed to stream for '{}' to {:?}: {}",
-                                    task_final_dest_path.display(), task_final_dest_path, e
-                                );
-                                AppError::JavaDownload(format!("Streaming copy error: {}", e))
-                            })?;
-                            
-                            debug!("Java Task: Streamed {} bytes for: {}", bytes_copied, task_final_dest_path.display());
+                            let bytes_copied =
+                                tokio::io::copy(&mut entry_reader_tokio, &mut file_writer)
+                                    .await
+                                    .map_err(|e| {
+                                        error!(
+                                            "Java Task: Failed to stream for '{}' to {:?}: {}",
+                                            task_final_dest_path.display(),
+                                            task_final_dest_path,
+                                            e
+                                        );
+                                        AppError::JavaDownload(format!(
+                                            "Streaming copy error: {}",
+                                            e
+                                        ))
+                                    })?;
+
+                            debug!(
+                                "Java Task: Streamed {} bytes for: {}",
+                                bytes_copied,
+                                task_final_dest_path.display()
+                            );
                             Ok::<(), AppError>(())
                         }));
                     }
                 }
 
                 if !extraction_tasks.is_empty() {
-                    info!("Java Task: Waiting for {} extraction tasks to complete...", extraction_tasks.len());
+                    info!(
+                        "Java Task: Waiting for {} extraction tasks to complete...",
+                        extraction_tasks.len()
+                    );
                     let results = try_join_all(extraction_tasks).await.map_err(|e| {
                         error!("Error joining Java extraction tasks: {}", e);
                         AppError::JavaDownload(format!("Java extraction tasks panicked: {}", e))
                     })?;
 
                     for result in results {
-                        result?; 
+                        result?;
                     }
                     info!("Java Task: Successfully extracted all queued Java files.");
                 } else {
@@ -493,7 +573,10 @@ impl JavaDownloadService {
             OperatingSystem::WINDOWS => "javaw.exe",
             _ => "java",
         };
-        debug!("Starting recursive search for '{}' in directory: {:?}", binary_name, dir);
+        debug!(
+            "Starting recursive search for '{}' in directory: {:?}",
+            binary_name, dir
+        );
 
         let mut dirs_to_search = vec![dir.clone()];
 

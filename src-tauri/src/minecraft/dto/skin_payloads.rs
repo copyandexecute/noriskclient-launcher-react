@@ -52,4 +52,4 @@ pub struct AddLocalSkinCommandPayload {
     pub target_skin_name: String,
     pub target_skin_variant: SkinModelVariant,
     pub description: Option<String>,
-} 
+}

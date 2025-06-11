@@ -1,11 +1,11 @@
 use crate::error::Result;
+use crate::state::process_state::ProcessMetadata;
 use dashmap::DashMap;
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::Emitter;
 use uuid::Uuid;
-use crate::state::process_state::ProcessMetadata;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]

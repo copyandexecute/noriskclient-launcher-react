@@ -9,11 +9,10 @@ use crate::utils::{datapack_utils, hash_utils, resourcepack_utils, shaderpack_ut
 use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use chrono;
-use futures::future::{BoxFuture, FutureExt, join_all};
+use futures::future::{join_all, BoxFuture, FutureExt};
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json;
-use tokio::task::JoinHandle;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::Manager;
@@ -21,10 +20,11 @@ use tauri_plugin_opener::OpenerExt;
 use tempfile;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt as TokioAsyncWriteExt};
+use tokio::task::JoinHandle;
 
-use uuid::Uuid;
-use std::collections::HashMap;
 use futures_lite::io::AsyncWriteExt;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// Represents the type of content to be installed
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -173,7 +173,9 @@ async fn download_content(
         .await
         .map_err(|e| AppError::Io(e))?;
 
-    TokioAsyncWriteExt::write_all(&mut file, &bytes).await.map_err(|e| AppError::Io(e))?;
+    TokioAsyncWriteExt::write_all(&mut file, &bytes)
+        .await
+        .map_err(|e| AppError::Io(e))?;
 
     info!("Successfully downloaded content to {}", file_path.display());
 
@@ -193,14 +195,14 @@ async fn get_content_directory(profile: &Profile, content_type: &ContentType) ->
                 .profile_manager
                 .calculate_instance_path_for_profile(profile)?;
             Ok(instance_path.join("mods"))
-        },
+        }
         ContentType::NoRiskMod => {
             // NoRiskMods don't have a physical directory but we return a path for consistency
             let state = State::get().await?;
             let instance_path = state
                 .profile_manager
                 .calculate_instance_path_for_profile(profile)?;
-            Ok(instance_path)  // Just return the instance path as base
+            Ok(instance_path) // Just return the instance path as base
         }
     }
 }
@@ -939,21 +941,24 @@ pub async fn export_profile_to_noriskpack(
         .profile_manager
         .get_profile_instance_path(profile_id)
         .await?;
-    
+
     // 1. Collect ALL files in profile once (like Modrinth)
     collect_all_files_recursive(&profile_instance_path, &mut all_files).await?;
-    
+
     // 2. Filter with string matching (like Modrinth's included_candidates_set check)
     if let Some(ref include_paths) = include_files {
-        let include_paths_str: Vec<String> = include_paths.iter()
+        let include_paths_str: Vec<String> = include_paths
+            .iter()
             .filter_map(|p| p.strip_prefix(&profile_instance_path).ok())
             .map(|rel_path| rel_path.to_string_lossy().replace('\\', "/"))
             .collect();
-        
+
         all_files.retain(|file_path| {
             if let Ok(rel_path) = file_path.strip_prefix(&profile_instance_path) {
                 let rel_path_str = rel_path.to_string_lossy().replace('\\', "/");
-                include_paths_str.iter().any(|include_str| rel_path_str.starts_with(include_str))
+                include_paths_str
+                    .iter()
+                    .any(|include_str| rel_path_str.starts_with(include_str))
             } else {
                 false
             }
@@ -1024,17 +1029,24 @@ pub async fn export_profile_to_noriskpack(
                 .map_err(|e| AppError::Io(e))?;
 
             let file_builder = ZipEntryBuilder::new(zip_path.into(), Compression::Deflate);
-            let mut entry_writer = writer
-                .write_entry_stream(file_builder)
-                .await
-                .map_err(|e| AppError::Other(format!("Failed to create zip entry stream: {}", e)))?;
+            let mut entry_writer = writer.write_entry_stream(file_builder).await.map_err(|e| {
+                AppError::Other(format!("Failed to create zip entry stream: {}", e))
+            })?;
 
             // Stream file content in chunks (using EntryStreamWriter's native API)
             let mut buffer = [0u8; 8192];
             loop {
-                let n = source_file.read(&mut buffer).await.map_err(|e| AppError::Io(e))?;
-                if n == 0 { break; }
-                entry_writer.write_all(&buffer[..n]).await.map_err(|e| AppError::Other(format!("Failed to write chunk: {}", e)))?;
+                let n = source_file
+                    .read(&mut buffer)
+                    .await
+                    .map_err(|e| AppError::Io(e))?;
+                if n == 0 {
+                    break;
+                }
+                entry_writer
+                    .write_all(&buffer[..n])
+                    .await
+                    .map_err(|e| AppError::Other(format!("Failed to write chunk: {}", e)))?;
             }
 
             entry_writer
@@ -1081,13 +1093,11 @@ fn collect_all_files_recursive<'a>(
     file_list: &'a mut Vec<PathBuf>,
 ) -> BoxFuture<'a, Result<()>> {
     Box::pin(async move {
-        let mut entries = fs::read_dir(dir_path)
-            .await
-            .map_err(|e| AppError::Io(e))?;
+        let mut entries = fs::read_dir(dir_path).await.map_err(|e| AppError::Io(e))?;
 
         while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
             let path = entry.path();
-            
+
             if path.is_dir() {
                 // Recurse into directories
                 collect_all_files_recursive(&path, file_list).await?;
@@ -1573,7 +1583,8 @@ async fn process_resourcepack_requests(
     results: &mut Vec<Option<ContentCheckResult>>,
 ) -> Result<()> {
     // Load all resource packs once
-    let packs = match resourcepack_utils::get_resourcepacks_for_profile(profile, true, false).await {
+    let packs = match resourcepack_utils::get_resourcepacks_for_profile(profile, true, false).await
+    {
         Ok(packs) => packs,
         Err(e) => {
             warn!(
@@ -1842,7 +1853,7 @@ async fn process_datapack_requests(
 pub struct GenericModrinthInfo {
     pub project_id: String,
     pub version_id: String,
-    pub name: String,        // Name des Modrinth-Projekts oder der Version
+    pub name: String, // Name des Modrinth-Projekts oder der Version
     pub version_number: String,
     pub download_url: Option<String>,
 }
@@ -1854,13 +1865,13 @@ pub struct LocalContentItem {
     pub sha1_hash: Option<String>,
     pub file_size: u64,
     pub is_disabled: bool,
-    pub is_directory: bool, // Wichtig für Shader
+    pub is_directory: bool,        // Wichtig für Shader
     pub content_type: ContentType, // Um den Typ mitzuführen
     pub modrinth_info: Option<GenericModrinthInfo>,
     pub source_type: Option<String>, // Zur Kennzeichnung von Custom Mods
     pub norisk_info: Option<crate::state::profile_state::NoriskModIdentifier>, // Identifier für NoRiskMods
     pub fallback_version: Option<String>, // Fallback Version aus dem compatibility target
-    pub id: Option<String>, // Added optional ID field
+    pub id: Option<String>,               // Added optional ID field
     pub associated_loader: Option<crate::state::profile_state::ModLoader>, // Added associated_loader
 }
 
@@ -1877,7 +1888,8 @@ pub struct LocalContentLoader; // No longer holds profile_id, becomes a namespac
 impl LocalContentLoader {
     // new() constructor is removed as loader is now stateless regarding profile_id
 
-    pub async fn load_items( // Made static conceptually, no longer uses &self
+    pub async fn load_items(
+        // Made static conceptually, no longer uses &self
         params: LoadItemsParams,
     ) -> Result<Vec<LocalContentItem>> {
         let state = State::get().await?;
@@ -1890,16 +1902,18 @@ impl LocalContentLoader {
         );
 
         let content_dirs = match params.content_type {
-            ContentType::ResourcePack => vec![resourcepack_utils::get_resourcepacks_dir(&profile).await?],
+            ContentType::ResourcePack => {
+                vec![resourcepack_utils::get_resourcepacks_dir(&profile).await?]
+            }
             ContentType::ShaderPack => vec![shaderpack_utils::get_shaderpacks_dir(&profile).await?],
             ContentType::DataPack => vec![datapack_utils::get_datapacks_dir(&profile).await?],
             ContentType::Mod => {
                 // For mods, get both standard and custom mods directories
-                let instance_path = state.profile_manager.calculate_instance_path_for_profile(&profile)?;
-                vec![
-                    instance_path.join("custom_mods")
-                ]
-            },
+                let instance_path = state
+                    .profile_manager
+                    .calculate_instance_path_for_profile(&profile)?;
+                vec![instance_path.join("custom_mods")]
+            }
             ContentType::NoRiskMod => {
                 // For NoRisk mods, we don't actually need a physical directory
                 // since these are managed via the NoRisk pack system
@@ -1916,22 +1930,25 @@ impl LocalContentLoader {
                 // Get the NoRisk pack manager from the state
                 let state = State::get().await?;
                 let config = state.norisk_pack_manager.get_config().await;
-                
+
                 // Get the resolved pack definition
                 match config.get_resolved_pack_definition(pack_id) {
                     Ok(pack_def) => {
                         for norisk_mod in &pack_def.mods {
                             // Extract fallback version from compatibility target at the beginning
-                            let fallback_version = norisk_mod.compatibility
+                            let fallback_version = norisk_mod
+                                .compatibility
                                 .get(&profile.game_version)
-                                .and_then(|game_version_map| game_version_map.get(profile.loader.as_str()))
+                                .and_then(|game_version_map| {
+                                    game_version_map.get(profile.loader.as_str())
+                                })
                                 .map(|loader_target| loader_target.identifier.clone());
-                            
+
                             // Skip this mod if no fallback version is available
                             if fallback_version.is_none() {
                                 continue;
                             }
-                            
+
                             // Create a proper NoriskModIdentifier first so we can reuse it
                             let norisk_mod_identifier =
                                 crate::state::profile_state::NoriskModIdentifier {
@@ -1942,9 +1959,10 @@ impl LocalContentLoader {
                                 };
 
                             // Determine if the mod is enabled/disabled using the identifier
-                            let is_disabled = profile.disabled_norisk_mods_detailed.iter().any(|disabled_mod| {
-                                *disabled_mod == norisk_mod_identifier
-                            });
+                            let is_disabled = profile
+                                .disabled_norisk_mods_detailed
+                                .iter()
+                                .any(|disabled_mod| *disabled_mod == norisk_mod_identifier);
 
                             // Determine source type string
                             let source_type_str = match &norisk_mod.source {
@@ -1973,20 +1991,23 @@ impl LocalContentLoader {
                             } else {
                                 None
                             };
-                            
+
                             // Use the path_utils function to get the mod cache path
                             let path_str = match crate::utils::path_utils::get_norisk_mod_cache_path(
-                                norisk_mod, 
-                                &profile.game_version, 
-                                &profile.loader.as_str()
+                                norisk_mod,
+                                &profile.game_version,
+                                &profile.loader.as_str(),
                             ) {
                                 Ok(path) => path.to_string_lossy().to_string(),
                                 Err(e) => {
-                                    warn!("Could not get cache path for NoRisk mod {}: {}", norisk_mod.id, e);
+                                    warn!(
+                                        "Could not get cache path for NoRisk mod {}: {}",
+                                        norisk_mod.id, e
+                                    );
                                     String::new() // Fallback if path can't be determined
                                 }
                             };
-                            
+
                             // Create LocalContentItem (using the identifier we created earlier)
                             preliminary_items.push(LocalContentItem {
                                 filename: norisk_mod.id.clone(),
@@ -2004,7 +2025,7 @@ impl LocalContentLoader {
                                 associated_loader: None,
                             });
                         }
-                    },
+                    }
                     Err(e) => {
                         warn!("Failed to get NoRisk pack definition: {}", e);
                     }
@@ -2016,9 +2037,15 @@ impl LocalContentLoader {
                 let mut filename = mod_item.file_name_override.clone();
                 if filename.is_none() {
                     match mod_item.source {
-                        crate::state::profile_state::ModSource::Modrinth { ref file_name, .. } => filename = Some(file_name.clone()),
-                        crate::state::profile_state::ModSource::Local { ref file_name, .. } => filename = Some(file_name.clone()),
-                        crate::state::profile_state::ModSource::Url { ref file_name, .. } => filename = file_name.clone(),
+                        crate::state::profile_state::ModSource::Modrinth {
+                            ref file_name, ..
+                        } => filename = Some(file_name.clone()),
+                        crate::state::profile_state::ModSource::Local { ref file_name, .. } => {
+                            filename = Some(file_name.clone())
+                        }
+                        crate::state::profile_state::ModSource::Url { ref file_name, .. } => {
+                            filename = file_name.clone()
+                        }
                         _ => {
                             warn!("Mod {} has no derivable filename. Skipping.", mod_item.id);
                             continue;
@@ -2029,11 +2056,14 @@ impl LocalContentLoader {
                 let actual_filename = match filename {
                     Some(name) => name,
                     None => {
-                        warn!("Mod {} could not determine a filename even after checks. Skipping.", mod_item.id);
+                        warn!(
+                            "Mod {} could not determine a filename even after checks. Skipping.",
+                            mod_item.id
+                        );
                         continue;
                     }
                 };
-                
+
                 // Try to find the mod in any of the content directories
                 let mut found_path = None;
                 for dir in &content_dirs {
@@ -2043,7 +2073,7 @@ impl LocalContentLoader {
                         break;
                     }
                 }
-                
+
                 // Use the first directory as fallback if file not found
                 let path_buf = found_path.unwrap_or_else(|| content_dirs[0].join(&actual_filename));
                 let path_str = path_buf.to_string_lossy().into_owned();
@@ -2051,20 +2081,30 @@ impl LocalContentLoader {
                 let file_size = 0; // Placeholder due to cache logic - will revisit
 
                 let sha1_hash = match mod_item.source {
-                    crate::state::profile_state::ModSource::Modrinth { ref file_hash_sha1, .. } => file_hash_sha1.clone(),
+                    crate::state::profile_state::ModSource::Modrinth {
+                        ref file_hash_sha1, ..
+                    } => file_hash_sha1.clone(),
                     _ => None,
                 };
 
                 let modrinth_info = match mod_item.source {
-                    crate::state::profile_state::ModSource::Modrinth { ref project_id, ref version_id, .. } => {
-                        Some(GenericModrinthInfo {
-                            project_id: project_id.clone(),
-                            version_id: version_id.clone(),
-                            name: mod_item.display_name.clone().unwrap_or_else(|| project_id.clone()), 
-                            version_number: mod_item.version.clone().unwrap_or_else(|| version_id.clone()), 
-                            download_url: None, 
-                        })
-                    }
+                    crate::state::profile_state::ModSource::Modrinth {
+                        ref project_id,
+                        ref version_id,
+                        ..
+                    } => Some(GenericModrinthInfo {
+                        project_id: project_id.clone(),
+                        version_id: version_id.clone(),
+                        name: mod_item
+                            .display_name
+                            .clone()
+                            .unwrap_or_else(|| project_id.clone()),
+                        version_number: mod_item
+                            .version
+                            .clone()
+                            .unwrap_or_else(|| version_id.clone()),
+                        download_url: None,
+                    }),
                     _ => None,
                 };
 
@@ -2085,45 +2125,74 @@ impl LocalContentLoader {
                 });
             }
         }
-        
+
         // Process files directly from content directories for all content types
         for content_dir in &content_dirs {
             if !content_dir.exists() {
-                debug!("Content directory {} does not exist. Skipping.", content_dir.display());
+                debug!(
+                    "Content directory {} does not exist. Skipping.",
+                    content_dir.display()
+                );
                 continue;
             }
 
             let mut entries = match fs::read_dir(&content_dir).await {
                 Ok(entries) => entries,
                 Err(e) => {
-                    warn!("Failed to read directory {}: {}. Skipping.", content_dir.display(), e);
+                    warn!(
+                        "Failed to read directory {}: {}. Skipping.",
+                        content_dir.display(),
+                        e
+                    );
                     continue;
                 }
             };
 
-            let mut items_to_process_with_paths: Vec<(PathBuf, bool)> = Vec::new(); 
+            let mut items_to_process_with_paths: Vec<(PathBuf, bool)> = Vec::new();
 
-            while let Some(entry_result) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
+            while let Some(entry_result) =
+                entries.next_entry().await.map_err(|e| AppError::Io(e))?
+            {
                 let path = entry_result.path();
                 let file_name_os = path.file_name().unwrap_or_default();
                 let file_name_str = file_name_os.to_string_lossy();
-                let is_directory = path.is_dir(); 
+                let is_directory = path.is_dir();
 
-                let is_valid_item = match params.content_type { 
-                    ContentType::ResourcePack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
-                    ContentType::ShaderPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) || is_directory,
-                    ContentType::DataPack => (file_name_str.ends_with(".zip") || file_name_str.ends_with(".zip.disabled")) && !is_directory,
-                    ContentType::Mod => (file_name_str.ends_with(".jar") || file_name_str.ends_with(".jar.disabled")) && !is_directory,
+                let is_valid_item = match params.content_type {
+                    ContentType::ResourcePack => {
+                        (file_name_str.ends_with(".zip")
+                            || file_name_str.ends_with(".zip.disabled"))
+                            && !is_directory
+                    }
+                    ContentType::ShaderPack => {
+                        (file_name_str.ends_with(".zip")
+                            || file_name_str.ends_with(".zip.disabled"))
+                            || is_directory
+                    }
+                    ContentType::DataPack => {
+                        (file_name_str.ends_with(".zip")
+                            || file_name_str.ends_with(".zip.disabled"))
+                            && !is_directory
+                    }
+                    ContentType::Mod => {
+                        (file_name_str.ends_with(".jar")
+                            || file_name_str.ends_with(".jar.disabled"))
+                            && !is_directory
+                    }
                     ContentType::NoRiskMod => false, // We handle NoRisk mods differently, not by scanning directories
                 };
 
                 if is_valid_item {
                     items_to_process_with_paths.push((path.clone(), is_directory));
                 } else {
-                    debug!("Skipping invalid item for {:?}: {}", params.content_type, path.display());
+                    debug!(
+                        "Skipping invalid item for {:?}: {}",
+                        params.content_type,
+                        path.display()
+                    );
                 }
             }
-            
+
             for (path, is_dir_flag) in items_to_process_with_paths {
                 let file_name_os = path.file_name().unwrap_or_default();
                 let file_name_str = file_name_os.to_string_lossy().to_string();
@@ -2131,7 +2200,10 @@ impl LocalContentLoader {
                 let file_size = metadata.len();
                 let is_disabled = file_name_str.ends_with(".disabled");
                 let base_filename = if is_disabled {
-                    file_name_str.strip_suffix(".disabled").unwrap_or(&file_name_str).to_string()
+                    file_name_str
+                        .strip_suffix(".disabled")
+                        .unwrap_or(&file_name_str)
+                        .to_string()
                 } else {
                     file_name_str
                 };
@@ -2139,10 +2211,13 @@ impl LocalContentLoader {
                 // Determine source_type based on parent directory name
                 let source_type = if params.content_type == ContentType::Mod {
                     // Check if this mod is in the custom_mods directory
-                    if path.parent().map(|p| p.file_name())
+                    if path
+                        .parent()
+                        .map(|p| p.file_name())
                         .flatten()
                         .map(|name| name.to_string_lossy().to_string() == "custom_mods")
-                        .unwrap_or(false) {
+                        .unwrap_or(false)
+                    {
                         Some("custom".to_string())
                     } else {
                         None
@@ -2158,7 +2233,7 @@ impl LocalContentLoader {
                     file_size,
                     is_disabled,
                     is_directory: is_dir_flag,
-                    content_type: params.content_type.clone(), 
+                    content_type: params.content_type.clone(),
                     modrinth_info: None,
                     source_type,
                     norisk_info: None,
@@ -2168,56 +2243,77 @@ impl LocalContentLoader {
                 });
             }
         }
-        
-        let mut final_items = preliminary_items; 
+
+        let mut final_items = preliminary_items;
 
         // If the content type is NoRiskMod, sort the items by filename for consistent ordering
         if params.content_type == ContentType::NoRiskMod {
             final_items.sort_by(|a, b| a.filename.cmp(&b.filename));
         }
 
-        if params.calculate_hashes { 
-            let mut hash_tasks: Vec<JoinHandle<(usize, std::result::Result<String, AppError>)>> = Vec::new();
+        if params.calculate_hashes {
+            let mut hash_tasks: Vec<JoinHandle<(usize, std::result::Result<String, AppError>)>> =
+                Vec::new();
             // Collect indices of items that need hashing (files only, or non-Modrinth mods if hash not present)
-            let items_to_hash_indices: Vec<usize> = final_items.iter().enumerate()
+            let items_to_hash_indices: Vec<usize> = final_items
+                .iter()
+                .enumerate()
                 .filter(|(_, item)| {
-                    if item.is_directory { return false; }
+                    if item.is_directory {
+                        return false;
+                    }
                     if item.content_type == ContentType::Mod {
                         // For mods, only hash if sha1_hash is currently None (e.g. local mod, or Modrinth mod missing it)
                         return item.sha1_hash.is_none();
                     }
                     // For other types, always hash if calculate_hashes is true (as sha1_hash starts as None)
-                    true 
+                    true
                 })
                 .map(|(index, _)| index)
                 .collect();
 
             let mut hash_tasks = Vec::new();
-            
+
             // Create a vector of (index, path, filename) to avoid borrowing final_items in the async tasks
-            let hash_items_info: Vec<(usize, String, String)> = items_to_hash_indices.iter()
-                .map(|&idx| (idx, final_items[idx].path_str.clone(), final_items[idx].filename.clone()))
+            let hash_items_info: Vec<(usize, String, String)> = items_to_hash_indices
+                .iter()
+                .map(|&idx| {
+                    (
+                        idx,
+                        final_items[idx].path_str.clone(),
+                        final_items[idx].filename.clone(),
+                    )
+                })
                 .collect();
 
             for (index_in_final_items, path_str, filename) in hash_items_info {
                 let path_buf = PathBuf::from(&path_str);
-                let semaphore_clone = Arc::clone(&state.io_semaphore); 
-                
+                let semaphore_clone = Arc::clone(&state.io_semaphore);
+
                 hash_tasks.push(tokio::spawn(async move {
                     let permit_result = semaphore_clone.acquire_owned().await;
                     if permit_result.is_err() {
                         error!("Failed to acquire semaphore permit for hashing.");
-                        return (index_in_final_items, Err(AppError::Other("Semaphore acquisition failed".to_string())));
+                        return (
+                            index_in_final_items,
+                            Err(AppError::Other("Semaphore acquisition failed".to_string())),
+                        );
                     }
-                    
+
                     // Permit is acquired, proceed with hashing
                     if !path_buf.exists() {
                         // If file doesn't exist, return "0" as hash instead of error
-                        warn!("Path doesn't exist for {}: {}", filename, path_buf.display());
+                        warn!(
+                            "Path doesn't exist for {}: {}",
+                            filename,
+                            path_buf.display()
+                        );
                         return (index_in_final_items, Ok("0".to_string()));
                     }
-                    
-                    let hash_result = hash_utils::calculate_sha1(&path_buf).await.map_err(AppError::Io);
+
+                    let hash_result = hash_utils::calculate_sha1(&path_buf)
+                        .await
+                        .map_err(AppError::Io);
                     // Permit is automatically dropped when it goes out of scope
                     (index_in_final_items, hash_result)
                 }));
@@ -2233,33 +2329,51 @@ impl LocalContentLoader {
                     }
                     Ok((item_idx, Err(e))) => {
                         if let Some(item) = final_items.get(item_idx) {
-                             warn!("Failed to calculate SHA1 for {}: {}", item.filename, e);
+                            warn!("Failed to calculate SHA1 for {}: {}", item.filename, e);
                         } else {
-                            warn!("Failed to calculate SHA1 for item at index {}: {}", item_idx, e);
+                            warn!(
+                                "Failed to calculate SHA1 for item at index {}: {}",
+                                item_idx, e
+                            );
                         }
                     }
-                    Err(e) => { // JoinError
+                    Err(e) => {
+                        // JoinError
                         error!("Hash calculation task panicked: {}", e);
                     }
                 }
             }
         }
 
-        if params.fetch_modrinth_data { // Use params.fetch_modrinth_data
+        if params.fetch_modrinth_data {
+            // Use params.fetch_modrinth_data
             let mut hashes_for_modrinth_lookup: HashMap<String, Vec<usize>> = HashMap::new(); // sha1 -> Vec of indices in final_items
             for (index, item) in final_items.iter().enumerate() {
                 if let Some(hash) = &item.sha1_hash {
-                    if !item.is_directory { // Only fetch for files with hashes
-                        hashes_for_modrinth_lookup.entry(hash.clone()).or_default().push(index);
+                    if !item.is_directory {
+                        // Only fetch for files with hashes
+                        hashes_for_modrinth_lookup
+                            .entry(hash.clone())
+                            .or_default()
+                            .push(index);
                     }
                 }
             }
 
             if !hashes_for_modrinth_lookup.is_empty() {
                 let hashes_vec: Vec<String> = hashes_for_modrinth_lookup.keys().cloned().collect();
-                debug!("Fetching Modrinth info for {} unique hashes (affecting {} items)", hashes_vec.len(), hashes_for_modrinth_lookup.values().map(|v| v.len()).sum::<usize>());
-                
-                match crate::integrations::modrinth::get_versions_by_hashes(hashes_vec, "sha1").await {
+                debug!(
+                    "Fetching Modrinth info for {} unique hashes (affecting {} items)",
+                    hashes_vec.len(),
+                    hashes_for_modrinth_lookup
+                        .values()
+                        .map(|v| v.len())
+                        .sum::<usize>()
+                );
+
+                match crate::integrations::modrinth::get_versions_by_hashes(hashes_vec, "sha1")
+                    .await
+                {
                     Ok(version_map) => {
                         for (hash, modrinth_version) in version_map {
                             if let Some(item_indices) = hashes_for_modrinth_lookup.get(&hash) {
@@ -2267,12 +2381,13 @@ impl LocalContentLoader {
                                     if let Some(item_to_update) = final_items.get_mut(item_idx) {
                                         // Additional check: ensure content type matches Modrinth project type if possible/needed.
                                         // For now, directly assign if a primary file exists.
-                                        let primary_file = modrinth_version.files.iter().find(|f| f.primary);
-                                        
+                                        let primary_file =
+                                            modrinth_version.files.iter().find(|f| f.primary);
+
                                         // TODO: Re-evaluate project type compatibility check.
                                         // The ModrinthVersion struct from get_versions_by_hashes might not include project_type directly.
                                         // This check needs to be re-implemented if project_type is available or fetched separately.
-                                        /* 
+                                        /*
                                         let project_type_compatible = match params.content_type { // Use params.content_type
                                             ContentType::ResourcePack => modrinth_version.project_type == Some(crate::integrations::modrinth::ModrinthProjectType::ResourcePack),
                                             ContentType::ShaderPack => modrinth_version.project_type == Some(crate::integrations::modrinth::ModrinthProjectType::Shader),
@@ -2290,24 +2405,30 @@ impl LocalContentLoader {
                                         */
 
                                         if let Some(file_info) = primary_file {
-                                            item_to_update.modrinth_info = Some(GenericModrinthInfo {
-                                                project_id: modrinth_version.project_id.clone(),
-                                                version_id: modrinth_version.id.clone(),
-                                                name: modrinth_version.name.clone(),
-                                                version_number: modrinth_version.version_number.clone(),
-                                                download_url: Some(file_info.url.clone()),
-                                            });
+                                            item_to_update.modrinth_info =
+                                                Some(GenericModrinthInfo {
+                                                    project_id: modrinth_version.project_id.clone(),
+                                                    version_id: modrinth_version.id.clone(),
+                                                    name: modrinth_version.name.clone(),
+                                                    version_number: modrinth_version
+                                                        .version_number
+                                                        .clone(),
+                                                    download_url: Some(file_info.url.clone()),
+                                                });
                                         } else if !modrinth_version.files.is_empty() {
                                             // Fallback to first file if no primary, but log this
                                             warn!("No primary file for Modrinth version {} (project {}). Using first available file for Modrinth info.", modrinth_version.id, modrinth_version.project_id);
                                             let first_file = &modrinth_version.files[0];
-                                             item_to_update.modrinth_info = Some(GenericModrinthInfo {
-                                                project_id: modrinth_version.project_id.clone(),
-                                                version_id: modrinth_version.id.clone(),
-                                                name: modrinth_version.name.clone(),
-                                                version_number: modrinth_version.version_number.clone(),
-                                                download_url: Some(first_file.url.clone()),
-                                            });
+                                            item_to_update.modrinth_info =
+                                                Some(GenericModrinthInfo {
+                                                    project_id: modrinth_version.project_id.clone(),
+                                                    version_id: modrinth_version.id.clone(),
+                                                    name: modrinth_version.name.clone(),
+                                                    version_number: modrinth_version
+                                                        .version_number
+                                                        .clone(),
+                                                    download_url: Some(first_file.url.clone()),
+                                                });
                                         } else {
                                             debug!("No files found for Modrinth version {} (project {}) to determine download URL.", modrinth_version.id, modrinth_version.project_id);
                                         }
@@ -2322,8 +2443,13 @@ impl LocalContentLoader {
                 }
             }
         }
-        
-        info!("Successfully loaded {} items of type {:?} for profile {}", final_items.len(), params.content_type, params.profile_id);
+
+        info!(
+            "Successfully loaded {} items of type {:?} for profile {}",
+            final_items.len(),
+            params.content_type,
+            params.profile_id
+        );
         Ok(final_items)
     }
 }

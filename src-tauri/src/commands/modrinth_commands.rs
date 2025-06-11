@@ -1,3 +1,4 @@
+use crate::commands::path_commands::UploadProfileImagesPayload;
 use crate::error::{AppError, CommandError};
 use crate::integrations::modrinth::{
     self, get_mod_versions as get_modrinth_versions_api, search_mods, search_projects,
@@ -5,7 +6,6 @@ use crate::integrations::modrinth::{
     ModrinthSearchResponse, ModrinthSortType, ModrinthVersion,
 };
 use crate::integrations::mrpack;
-use crate::commands::path_commands::UploadProfileImagesPayload;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -185,8 +185,12 @@ pub async fn download_and_install_modrinth_modpack(
 
     // If an icon URL was provided, attempt to download and set it for the new profile
     if let Some(url_str) = icon_url {
-        log::info!("Attempting to set profile icon from URL: {} for profile {}", url_str, profile_id_uuid);
-        
+        log::info!(
+            "Attempting to set profile icon from URL: {} for profile {}",
+            url_str,
+            profile_id_uuid
+        );
+
         let icon_payload = UploadProfileImagesPayload {
             path: None,
             profile_id: profile_id_uuid, // This is already a Uuid
@@ -256,14 +260,18 @@ pub async fn check_modrinth_updates(
 
 /// Fetches a list of all categories from Modrinth.
 #[tauri::command]
-pub async fn get_modrinth_categories_command() -> Result<Vec<modrinth::ModrinthCategory>, CommandError> {
+pub async fn get_modrinth_categories_command(
+) -> Result<Vec<modrinth::ModrinthCategory>, CommandError> {
     log::debug!("Received get_modrinth_categories_command");
 
     let categories = modrinth::get_modrinth_categories()
         .await
         .map_err(CommandError::from)?;
 
-    log::info!("Successfully fetched {} categories for frontend", categories.len());
+    log::info!(
+        "Successfully fetched {} categories for frontend",
+        categories.len()
+    );
     Ok(categories)
 }
 
@@ -276,20 +284,27 @@ pub async fn get_modrinth_loaders_command() -> Result<Vec<modrinth::ModrinthLoad
         .await
         .map_err(CommandError::from)?;
 
-    log::info!("Successfully fetched {} loaders for frontend", loaders.len());
+    log::info!(
+        "Successfully fetched {} loaders for frontend",
+        loaders.len()
+    );
     Ok(loaders)
 }
 
 /// Fetches a list of all game versions from Modrinth.
 #[tauri::command]
-pub async fn get_modrinth_game_versions_command() -> Result<Vec<modrinth::ModrinthGameVersion>, CommandError> {
+pub async fn get_modrinth_game_versions_command(
+) -> Result<Vec<modrinth::ModrinthGameVersion>, CommandError> {
     log::debug!("Received get_modrinth_game_versions_command");
 
     let game_versions = modrinth::get_modrinth_game_versions()
         .await
         .map_err(CommandError::from)?;
 
-    log::info!("Successfully fetched {} game versions for frontend", game_versions.len());
+    log::info!(
+        "Successfully fetched {} game versions for frontend",
+        game_versions.len()
+    );
     Ok(game_versions)
 }
 

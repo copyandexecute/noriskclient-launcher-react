@@ -6,10 +6,10 @@ use crate::state::discord_state::DiscordManager;
 use crate::state::event_state::{EventPayload, EventState};
 use crate::state::norisk_packs_state::{default_norisk_packs_path, NoriskPackManager};
 use crate::state::norisk_versions_state::{default_norisk_versions_path, NoriskVersionManager};
+use crate::state::post_init::PostInitializationHandler;
 use crate::state::process_state::{default_processes_path, ProcessManager};
 use crate::state::profile_state::ProfileManager;
 use crate::state::skin_state::{default_skins_path, SkinManager};
-use crate::state::post_init::PostInitializationHandler;
 use std::sync::Arc;
 use tokio::sync::{OnceCell, Semaphore};
 
@@ -67,11 +67,14 @@ impl State {
 
         log::info!("State::init - Global state Arc created. Running post-initialization handlers (Phase 2)...");
 
-        initial_state_arc.config_manager.on_state_ready(app.clone()).await?;
+        initial_state_arc
+            .config_manager
+            .on_state_ready(app.clone())
+            .await?;
         log::info!("State::init - ConfigManager post-initialization complete.");
 
         let loaded_config = initial_state_arc.config_manager.get_config().await;
-        
+
         if initial_state_arc.io_semaphore.available_permits() != loaded_config.concurrent_io_limit {
             log::warn!(
                 "State::init - io_semaphore was initialized with default limit ({}). Actual config limit is {}. Consider refactoring io_semaphore for dynamic updates if this discrepancy is an issue.", 
@@ -80,26 +83,53 @@ impl State {
             );
         }
 
-        initial_state_arc.discord_manager.set_enabled(loaded_config.enable_discord_presence).await?;
-        log::info!("State::init - DiscordManager enabled status set based on loaded config: {}", loaded_config.enable_discord_presence);
+        initial_state_arc
+            .discord_manager
+            .set_enabled(loaded_config.enable_discord_presence)
+            .await?;
+        log::info!(
+            "State::init - DiscordManager enabled status set based on loaded config: {}",
+            loaded_config.enable_discord_presence
+        );
 
-        initial_state_arc.profile_manager.on_state_ready(app.clone()).await?;
+        initial_state_arc
+            .profile_manager
+            .on_state_ready(app.clone())
+            .await?;
         log::info!("State::init - ProfileManager post-initialization complete.");
 
-        initial_state_arc.process_manager.on_state_ready(app.clone()).await?;
+        initial_state_arc
+            .process_manager
+            .on_state_ready(app.clone())
+            .await?;
         log::info!("State::init - ProcessManager post-initialization complete.");
 
-        initial_state_arc.norisk_pack_manager.on_state_ready(app.clone()).await?;
+        initial_state_arc
+            .norisk_pack_manager
+            .on_state_ready(app.clone())
+            .await?;
         log::info!("State::init - NoriskPackManager post-initialization complete.");
 
-        initial_state_arc.norisk_version_manager.on_state_ready(app.clone()).await?;
+        initial_state_arc
+            .norisk_version_manager
+            .on_state_ready(app.clone())
+            .await?;
         log::info!("State::init - NoriskVersionManager post-initialization complete.");
 
-        initial_state_arc.skin_manager.on_state_ready(app.clone()).await?;
+        initial_state_arc
+            .skin_manager
+            .on_state_ready(app.clone())
+            .await?;
         log::info!("State::init - SkinManager post-initialization complete.");
 
-        initial_state_arc.norisk_pack_manager.print_current_config().await;
-        initial_state_arc.norisk_version_manager.print_current_config().await;
+        initial_state_arc
+            .norisk_pack_manager
+            .print_current_config()
+            .await;
+        initial_state_arc
+            .norisk_version_manager
+            .print_current_config()
+            .await;
 
         let final_config = initial_state_arc.config_manager.get_config().await;
         tracing::info!(
@@ -110,8 +140,10 @@ impl State {
             "Launcher Config - Discord Rich Presence: {}",
             final_config.enable_discord_presence
         );
-        
-        log::info!("State::init - Full initialization, including all post-init handlers, complete.");
+
+        log::info!(
+            "State::init - Full initialization, including all post-init handlers, complete."
+        );
 
         Ok(())
     }
@@ -124,11 +156,15 @@ impl State {
             while !LAUNCHER_STATE.initialized() {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 wait_count += 1;
-                if wait_count % 10 == 0 { // Log every second
+                if wait_count % 10 == 0 {
+                    // Log every second
                     log::warn!("Still waiting for state initialization in State::get() after {} attempts...", wait_count);
                 }
             }
-            log::info!("State has been initialized after {} attempts. Proceeding in State::get().", wait_count);
+            log::info!(
+                "State has been initialized after {} attempts. Proceeding in State::get().",
+                wait_count
+            );
         }
 
         Ok(Arc::clone(

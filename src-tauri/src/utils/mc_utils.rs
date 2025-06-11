@@ -4,15 +4,16 @@ use crate::minecraft::dto::piston_meta::AssetIndex;
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::State;
 use async_compression::tokio::bufread::GzipDecoder;
- // Import the Engine trait for encode/decode methods
- // Corrected import
+// Import the Engine trait for encode/decode methods
+// Corrected import
 use fastnbt::from_bytes; // NBT deserialization
- // Access NBT values
- // GZip decompression
+                         // Access NBT values
+                         // GZip decompression
 use log::{debug, error, info, warn};
-use serde::Serialize; // Added Serialize directly
 use serde::Deserialize;
- // To represent NBT Compound
+use serde::Serialize; // Added Serialize directly
+                      // To represent NBT Compound
+use futures::future::try_join_all;
 use std::env;
 use std::io::{Cursor, Read}; // Needed for reading NBT from bytes and decompression
 use std::net::SocketAddr;
@@ -21,24 +22,19 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::fs;
 use tokio::io::{AsyncReadExt as _, BufReader};
+use tokio::sync::Semaphore;
 use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use trust_dns_resolver::TokioAsyncResolver;
 use uuid::Uuid;
-use tokio::sync::Semaphore;
-use futures::future::try_join_all;
- // Zusätzlicher Import für Url
+// Zusätzlicher Import für Url
 
 // --- New Helper Imports for Skin Fetching ---
 use crate::minecraft::dto::minecraft_profile::{
-    MinecraftProfile,
-    TexturesData,
-    TexturesDictionary,
-    TextureInfo,
-    TextureMetadata
+    MinecraftProfile, TextureInfo, TextureMetadata, TexturesData, TexturesDictionary,
 }; // Assuming these are public
 use crate::minecraft::dto::skin_payloads::SkinModelVariant; // Added import for new Enum
-use base64::{decode as base64_decode_str, encode as base64_encode_bytes};
 use crate::utils::path_utils;
+use base64::{decode as base64_decode_str, encode as base64_encode_bytes};
 use std::path::Path;
 
 // --- End New Helper Imports ---
@@ -72,8 +68,8 @@ struct LevelData {
     level_name: Option<String>,
     #[serde(rename = "LastPlayed")]
     last_played: Option<i64>,
-    #[serde(rename = "GameType")] 
-    game_type: Option<i32>, 
+    #[serde(rename = "GameType")]
+    game_type: Option<i32>,
     #[serde(rename = "Difficulty")]
     difficulty: Option<i8>,
     #[serde(rename = "DifficultyLocked")]
@@ -624,12 +620,18 @@ pub async fn copy_initial_data_from_default_minecraft(
     if profile_dir.exists() {
         let mut entries = fs::read_dir(profile_dir).await?;
         if entries.next_entry().await?.is_some() {
-            info!("[{}] Profile directory is not empty. Skipping initial data import.", profile_id);
+            info!(
+                "[{}] Profile directory is not empty. Skipping initial data import.",
+                profile_id
+            );
             return Ok(());
         }
     }
 
-    info!("[{}] Profile is a standard version with an empty directory. Proceeding with data import.", profile_id);
+    info!(
+        "[{}] Profile is a standard version with an empty directory. Proceeding with data import.",
+        profile_id
+    );
 
     let state = match State::get().await {
         Ok(s) => Some(s),
@@ -660,8 +662,14 @@ pub async fn copy_initial_data_from_default_minecraft(
             profile_id
         );
         if let Some(s) = &state {
-            emit_copy_progress(s, profile_id, "Default Minecraft installation not found.", 1.0, None)
-                .await?;
+            emit_copy_progress(
+                s,
+                profile_id,
+                "Default Minecraft installation not found.",
+                1.0,
+                None,
+            )
+            .await?;
         }
         return Ok(());
     }
@@ -672,8 +680,14 @@ pub async fn copy_initial_data_from_default_minecraft(
         default_mc_dir.display()
     );
     if let Some(s) = &state {
-        emit_copy_progress(s, profile_id, "Found existing installation, copying files...", 0.1, None)
-            .await?;
+        emit_copy_progress(
+            s,
+            profile_id,
+            "Found existing installation, copying files...",
+            0.1,
+            None,
+        )
+        .await?;
     }
 
     let items_to_copy = [
@@ -729,8 +743,7 @@ pub async fn copy_initial_data_from_default_minecraft(
             if let Some(s) = &state_clone {
                 let progress = 0.1 + (*num as f64 / total_items as f64) * 0.9;
                 let message = format!("({}/{}) Importing user data...", *num, total_items);
-                emit_copy_progress(s, profile_id, &message, progress, None)
-                    .await?;
+                emit_copy_progress(s, profile_id, &message, progress, None).await?;
             }
 
             Ok::<(), AppError>(())
@@ -758,8 +771,7 @@ pub async fn copy_initial_data_from_default_minecraft(
 
     info!("[{}] Initial data copy finished.", profile_id);
     if let Some(s) = &state {
-        emit_copy_progress(s, profile_id, "User data import complete.", 1.0, None)
-            .await?;
+        emit_copy_progress(s, profile_id, "User data import complete.", 1.0, None).await?;
     }
 
     Ok(())
@@ -864,9 +876,17 @@ pub async fn get_profile_worlds(profile_id: Uuid) -> Result<Vec<WorldInfo>> {
                                                 world_info.last_played = level_dat.data.last_played;
                                                 world_info.game_mode = level_dat.data.game_type;
                                                 world_info.difficulty = level_dat.data.difficulty;
-                                                world_info.difficulty_locked = level_dat.data.difficulty_locked.map(|b| b == 1);
-                                                world_info.is_hardcore = level_dat.data.hardcore.map(|b| b == 1);
-                                                world_info.version_name = level_dat.data.version.as_ref().and_then(|v| v.name.clone());
+                                                world_info.difficulty_locked = level_dat
+                                                    .data
+                                                    .difficulty_locked
+                                                    .map(|b| b == 1);
+                                                world_info.is_hardcore =
+                                                    level_dat.data.hardcore.map(|b| b == 1);
+                                                world_info.version_name = level_dat
+                                                    .data
+                                                    .version
+                                                    .as_ref()
+                                                    .and_then(|v| v.name.clone());
                                             }
                                             Err(e) => {
                                                 warn!(
@@ -1221,7 +1241,7 @@ impl ServerPingInfo {
                 Ok(json) => {
                     let text = extract_text_from_json(&json);
                     (text, Some(json))
-                },
+                }
                 Err(_) => (Some(raw_value.get().to_string()), None),
             }
         } else {
@@ -1258,12 +1278,12 @@ fn extract_text_from_json(value: &serde_json::Value) -> Option<String> {
         serde_json::Value::String(s) => Some(s.clone()),
         serde_json::Value::Object(obj) => {
             let mut result = String::new();
-            
+
             // "text"-Feld extrahieren
             if let Some(serde_json::Value::String(text)) = obj.get("text") {
                 result.push_str(text);
             }
-            
+
             // "extra"-Array durchgehen und rekursiv Text extrahieren
             if let Some(serde_json::Value::Array(extras)) = obj.get("extra") {
                 for extra in extras {
@@ -1272,13 +1292,13 @@ fn extract_text_from_json(value: &serde_json::Value) -> Option<String> {
                     }
                 }
             }
-            
+
             if result.is_empty() {
                 None
             } else {
                 Some(result)
             }
-        },
+        }
         _ => None,
     }
 }
@@ -1286,7 +1306,7 @@ fn extract_text_from_json(value: &serde_json::Value) -> Option<String> {
 // Function to perform the server ping
 pub async fn ping_server_status(address: &str) -> ServerPingInfo {
     info!("[Server Ping] Pinging server address: {}", address);
-    
+
     // Parse the address
     let (host, port) = match parse_minecraft_address(address) {
         Ok((h, p)) => (h, p),
@@ -1294,14 +1314,14 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
             return ServerPingInfo::error(address, format!("Invalid address format: {}", e), None);
         }
     };
-    
+
     // Resolve the server (including SRV records)
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
-    
+
     // SRV Lookup
     let srv_query = format!("_minecraft._tcp.{}", host);
     info!("[Server Ping] Attempting SRV lookup for: {}", srv_query);
-    
+
     let (target_host, target_port) = match resolver.srv_lookup(srv_query.as_str()).await {
         Ok(srv) => {
             if let Some(record) = srv
@@ -1319,7 +1339,7 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
                 info!("[Server Ping] SRV lookup for '{}' returned no records. Using parsed host/port.", srv_query);
                 (host.to_string(), port)
             }
-        },
+        }
         Err(e) => {
             warn!(
                 "[Server Ping] SRV lookup for '{}' failed: {}. Falling back to parsed host/port.",
@@ -1328,35 +1348,35 @@ pub async fn ping_server_status(address: &str) -> ServerPingInfo {
             (host.to_string(), port)
         }
     };
-    
+
     // Resolve IP address
     let ip_lookup = resolver.lookup_ip(target_host.as_str()).await;
     let socket_address = match ip_lookup {
-        Ok(lookup) => {
-            match lookup.iter().next() {
-                Some(ip) => SocketAddr::new(ip, target_port),
-                None => {
-                    return ServerPingInfo::error(
-                        address,
-                        format!("DNS lookup for '{}' returned no IP addresses", target_host),
-                        None
-                    );
-                }
+        Ok(lookup) => match lookup.iter().next() {
+            Some(ip) => SocketAddr::new(ip, target_port),
+            None => {
+                return ServerPingInfo::error(
+                    address,
+                    format!("DNS lookup for '{}' returned no IP addresses", target_host),
+                    None,
+                );
             }
         },
         Err(e) => {
             return ServerPingInfo::error(
                 address,
                 format!("Failed to resolve hostname '{}': {}", target_host, e),
-                None
+                None,
             );
         }
     };
-    
+
     info!("[Server Ping] Resolved to: {}", socket_address);
-    
+
     // Ping the server using our server_ping implementation
-    match super::server_ping::get_server_status(&socket_address, (&target_host, target_port), None).await {
+    match super::server_ping::get_server_status(&socket_address, (&target_host, target_port), None)
+        .await
+    {
         Ok(status) => ServerPingInfo::from_server_status(status),
         Err(e) => ServerPingInfo::error(address, format!("Server ping failed: {}", e), None),
     }
@@ -1406,23 +1426,24 @@ pub fn extract_skin_info_from_profile(
         .iter()
         .find(|p| p.name == "textures")
         .ok_or_else(|| {
-            error!("[MC Utils] Textures property not found in profile {}", profile.name);
+            error!(
+                "[MC Utils] Textures property not found in profile {}",
+                profile.name
+            );
             AppError::Other("Textures property not found in profile".to_string())
         })?;
 
     let decoded_textures_value = base64_decode_str(&textures_prop.value).map_err(|e| {
         error!(
             "[MC Utils] Failed to decode textures base64 for profile {}: {}",
-            profile.name,
-            e
+            profile.name, e
         );
         AppError::Other(format!("Failed to decode textures base64: {}", e))
     })?;
     let textures_json_str = String::from_utf8(decoded_textures_value).map_err(|e| {
         error!(
             "[MC Utils] Failed to convert decoded textures to string for profile {}: {}",
-            profile.name,
-            e
+            profile.name, e
         );
         AppError::Other(format!(
             "Failed to convert decoded textures to string: {}",
@@ -1432,9 +1453,7 @@ pub fn extract_skin_info_from_profile(
     let textures_data: TexturesData = serde_json::from_str(&textures_json_str).map_err(|e| {
         error!(
             "[MC Utils] Failed to parse textures JSON for profile {}: {}\nJSON: {}",
-            profile.name,
-            e,
-            textures_json_str
+            profile.name, e, textures_json_str
         );
         AppError::Other(format!("Failed to parse textures JSON: {}", e))
     })?;
@@ -1442,7 +1461,7 @@ pub fn extract_skin_info_from_profile(
     // Access textures.SKIN correctly
     let skin_texture_info = textures_data
         .textures // This is TexturesDictionary
-        .SKIN     // This is Option<TextureInfo>
+        .SKIN // This is Option<TextureInfo>
         .ok_or_else(|| {
             error!(
                 "[MC Utils] SKIN texture info not found for profile {}",
@@ -1470,5 +1489,3 @@ pub fn extract_skin_info_from_profile(
     );
     Ok((skin_url, skin_variant, profile_name))
 }
-
-

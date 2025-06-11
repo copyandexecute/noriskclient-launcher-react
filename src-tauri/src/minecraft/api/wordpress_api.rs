@@ -4,8 +4,8 @@ use crate::{
 };
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use serde_json;
+use std::collections::HashMap;
 
 pub struct WordPressApi;
 
@@ -43,7 +43,7 @@ impl WordPressApi {
     }
 
     /// Fetch blog posts from WordPress API
-    /// 
+    ///
     /// # Arguments
     ///
     /// * `categories` - Optional comma-separated list of category IDs to filter by
@@ -66,7 +66,7 @@ impl WordPressApi {
         debug!("[WordPress API] Full URL: {}", url);
 
         let mut query_params: HashMap<String, String> = HashMap::new();
-        
+
         if let Some(cats) = categories {
             query_params.insert("categories".to_string(), cats.to_string());
             debug!("[WordPress API] Filtering by categories: {}", cats);
@@ -106,11 +106,11 @@ impl WordPressApi {
 
         // Read the response body as text first for debugging
         let response_text = response.text().await.map_err(|e| {
-            error!("[WordPress API] Failed to read response body as text: {}", e);
-            AppError::RequestError(format!(
-                "Failed to read WordPress API response body: {}",
+            error!(
+                "[WordPress API] Failed to read response body as text: {}",
                 e
-            ))
+            );
+            AppError::RequestError(format!("Failed to read WordPress API response body: {}", e))
         })?;
 
         debug!(
@@ -169,4 +169,4 @@ impl WordPressApi {
         info!("[WordPress API] Fetching changelog posts");
         Self::get_blog_posts(Some("2"), Some(10), Some(1)).await
     }
-} 
+}

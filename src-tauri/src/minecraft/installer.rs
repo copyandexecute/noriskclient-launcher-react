@@ -15,8 +15,8 @@ use crate::state::event_state::{EventPayload, EventType};
 use crate::state::profile_state::{ModLoader, Profile};
 use crate::state::state_manager::State;
 use log::{error, info, warn};
-use uuid::Uuid;
 use rand::Rng;
+use uuid::Uuid;
 
 use super::minecraft_auth::Credentials;
 use super::modloader::ModloaderFactory;
@@ -259,10 +259,7 @@ pub async fn install_minecraft_version(
     {
         // We will only log a warning because this is not a critical step for launching the game.
         // The installation can proceed even if this fails.
-        warn!(
-            "Failed to import user data (non-critical error): {}",
-            e
-        );
+        warn!("Failed to import user data (non-critical error): {}", e);
     }
     info!("User data import check complete.");
     // --- END NEW ---
@@ -375,7 +372,11 @@ pub async fn install_minecraft_version(
     .await?;
 
     // Create and use Minecraft launcher
-    let launcher = MinecraftLauncher::new(java_path.clone(), game_directory.clone(), credentials.clone());
+    let launcher = MinecraftLauncher::new(
+        java_path.clone(),
+        game_directory.clone(),
+        credentials.clone(),
+    );
 
     info!("\nPreparing launch parameters...");
 
@@ -456,44 +457,55 @@ pub async fn install_minecraft_version(
     launch_params = launch_params.with_additional_game_args(final_game_args);
 
     // --- Fetch Norisk Config Once if a pack is selected ---
-    let loaded_norisk_config: Option<NoriskModpacksConfig> =
-        if let Some(pack_id) = &profile.selected_norisk_pack_id {
-            info!(
-                "Fetching Norisk config because pack '{}' is selected. Attempting to refresh first.",
-                pack_id
-            );
-            if let Some(creds) = credentials.as_ref() {
-                match creds.norisk_credentials.get_token_for_mode(is_experimental_mode) {
-                    Ok(norisk_token_value) => {
-                        info!("Attempting to update Norisk pack configuration using obtained token for pack '{}'...", pack_id);
-                        if let Err(update_err) = state.norisk_pack_manager.fetch_and_update_config(&norisk_token_value, is_experimental_mode).await {
-                            warn!(
+    let loaded_norisk_config: Option<NoriskModpacksConfig> = if let Some(pack_id) =
+        &profile.selected_norisk_pack_id
+    {
+        info!(
+            "Fetching Norisk config because pack '{}' is selected. Attempting to refresh first.",
+            pack_id
+        );
+        if let Some(creds) = credentials.as_ref() {
+            match creds
+                .norisk_credentials
+                .get_token_for_mode(is_experimental_mode)
+            {
+                Ok(norisk_token_value) => {
+                    info!("Attempting to update Norisk pack configuration using obtained token for pack '{}'...", pack_id);
+                    if let Err(update_err) = state
+                        .norisk_pack_manager
+                        .fetch_and_update_config(&norisk_token_value, is_experimental_mode)
+                        .await
+                    {
+                        warn!(
                                 "Failed to update Norisk pack '{}' configuration: {}. Will proceed with cached version.",
                                 pack_id, update_err
                             );
-                        } else {
-                            info!("Successfully updated Norisk pack '{}' configuration from API.", pack_id);
-                        }
-                    }
-                    Err(token_err) => {
-                        warn!(
-                            "Could not obtain Norisk token for pack '{}' to update configuration: {}. Will proceed with cached version.",
-                            pack_id, token_err
+                    } else {
+                        info!(
+                            "Successfully updated Norisk pack '{}' configuration from API.",
+                            pack_id
                         );
                     }
                 }
-            } else {
-                error!(
+                Err(token_err) => {
+                    warn!(
+                            "Could not obtain Norisk token for pack '{}' to update configuration: {}. Will proceed with cached version.",
+                            pack_id, token_err
+                        );
+                }
+            }
+        } else {
+            error!(
                     "A Norisk pack ('{}') is selected, but no credentials were provided. Cannot attempt to update pack configuration.",
                     pack_id
                 );
-            }
-            // No need to clone state here, it's still valid in this scope
-            // Always attempt to get the config, which will be the latest if updated, or cached otherwise.
-            Some(state.norisk_pack_manager.get_config().await)
-        } else {
-            None
-        };
+        }
+        // No need to clone state here, it's still valid in this scope
+        // Always attempt to get the config, which will be the latest if updated, or cached otherwise.
+        Some(state.norisk_pack_manager.get_config().await)
+    } else {
+        None
+    };
 
     // --- Step: Ensure profile-defined mods are downloaded/verified in cache ---
     let mods_event_id = emit_progress_event(

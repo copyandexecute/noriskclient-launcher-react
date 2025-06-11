@@ -12,13 +12,13 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
 use std::path::PathBuf;
+use tauri::Manager; // Required for app_handle.get_window() and window.emit()
 use tokio::fs;
 use tokio::fs::File;
 use tokio::io::{AsyncWriteExt, BufReader};
 use tokio_util::compat::FuturesAsyncReadCompatExt;
-use uuid::Uuid; // Added for env! macro
-use tauri::Manager; // Required for app_handle.get_window() and window.emit()
-use url; // Added for URL parsing
+use url;
+use uuid::Uuid; // Added for env! macro // Added for URL parsing
 
 /// Represents the overall structure of the norisk_modpacks.json file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -156,7 +156,10 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
 
     // 1. Open the file and create a reader for profile.json initially
     let profile_json_file = File::open(&pack_path).await.map_err(|e| {
-        error!("Failed to open noriskpack file for profile.json {:?}: {}", pack_path, e);
+        error!(
+            "Failed to open noriskpack file for profile.json {:?}: {}",
+            pack_path, e
+        );
         AppError::Io(e)
     })?;
     let mut profile_json_buf_reader = BufReader::new(profile_json_file);
@@ -166,7 +169,10 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
         .await
         .map_err(|e| {
             error!("Failed to read noriskpack as ZIP for profile.json: {}", e);
-            AppError::Other(format!("Failed to read noriskpack zip for profile.json: {}", e))
+            AppError::Other(format!(
+                "Failed to read noriskpack zip for profile.json: {}",
+                e
+            ))
         })?;
 
     // 3. Find and read profile.json
@@ -279,16 +285,25 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
 
     // Open the zip file again for listing entries for override extraction
     let overrides_file_for_listing = File::open(&pack_path).await.map_err(|e| {
-        error!("Failed to open noriskpack file for overrides listing {:?}: {}", pack_path, e);
+        error!(
+            "Failed to open noriskpack file for overrides listing {:?}: {}",
+            pack_path, e
+        );
         AppError::Io(e)
     })?;
     let mut overrides_buf_reader = BufReader::new(overrides_file_for_listing);
     let mut zip_lister_for_overrides = ZipFileReader::with_tokio(&mut overrides_buf_reader)
         .await
         .map_err(|e| {
-            error!("Failed to read noriskpack as ZIP for overrides listing: {}", e);
-            AppError::Other(format!("Failed to read noriskpack zip for overrides: {}", e))
-        })?;
+        error!(
+            "Failed to read noriskpack as ZIP for overrides listing: {}",
+            e
+        );
+        AppError::Other(format!(
+            "Failed to read noriskpack zip for overrides: {}",
+            e
+        ))
+    })?;
 
     let num_entries = zip_lister_for_overrides.file().entries().len();
     info!(
@@ -301,19 +316,25 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     for index in 0..num_entries {
         let entry_filename_str;
         let is_entry_dir;
-        let entry_uncompressed_size; 
+        let entry_uncompressed_size;
         {
             let entry = match zip_lister_for_overrides.file().entries().get(index) {
                 Some(e) => e,
                 None => {
-                    error!("Failed to get zip entry metadata for index {} during overrides listing", index);
+                    error!(
+                        "Failed to get zip entry metadata for index {} during overrides listing",
+                        index
+                    );
                     continue;
                 }
             };
             entry_filename_str = match entry.filename().as_str() {
                 Ok(s) => s.to_string(),
                 Err(_) => {
-                    error!("Non UTF-8 filename at index {} during overrides listing", index);
+                    error!(
+                        "Non UTF-8 filename at index {} during overrides listing",
+                        index
+                    );
                     continue;
                 }
             };
@@ -321,7 +342,7 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
                 warn!("Overrides: Failed to determine if '{}' is a directory, falling back to path check.", entry_filename_str);
                 entry_filename_str.ends_with('/')
             });
-            entry_uncompressed_size = entry.uncompressed_size(); 
+            entry_uncompressed_size = entry.uncompressed_size();
         }
 
         // Only process the "overrides/" directory for .noriskpack files
@@ -361,9 +382,9 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
                 );
                 continue;
             }
-            
+
             let final_dest_path = target_dir.join(sanitized_relative_path_buf);
-            
+
             let task_pack_path = pack_path.clone(); // PathBuf is cheap to clone
             let task_io_semaphore = io_semaphore.clone();
             let task_final_dest_path = final_dest_path.clone();
@@ -372,15 +393,31 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
             if is_entry_dir {
                 extraction_tasks.push(tokio::spawn(async move {
                     let _permit = task_io_semaphore.acquire().await.map_err(|e| {
-                        error!("Overrides Task: Failed to acquire semaphore for dir {}: {}", task_final_dest_path.display(), e);
-                        AppError::Other(format!("Semaphore error for dir {}: {}",task_final_dest_path.display(),e))
+                        error!(
+                            "Overrides Task: Failed to acquire semaphore for dir {}: {}",
+                            task_final_dest_path.display(),
+                            e
+                        );
+                        AppError::Other(format!(
+                            "Semaphore error for dir {}: {}",
+                            task_final_dest_path.display(),
+                            e
+                        ))
                     })?;
                     if !task_final_dest_path.exists() {
-                        debug!("Overrides Task: Creating directory: {:?}", task_final_dest_path);
-                        fs::create_dir_all(&task_final_dest_path).await.map_err(|e| {
-                            error!("Overrides Task: Failed to create directory {:?}: {}", task_final_dest_path, e);
-                            AppError::Io(e)
-                        })?;
+                        debug!(
+                            "Overrides Task: Creating directory: {:?}",
+                            task_final_dest_path
+                        );
+                        fs::create_dir_all(&task_final_dest_path)
+                            .await
+                            .map_err(|e| {
+                                error!(
+                                    "Overrides Task: Failed to create directory {:?}: {}",
+                                    task_final_dest_path, e
+                                );
+                                AppError::Io(e)
+                            })?;
                     }
                     Ok::<(), AppError>(())
                 }));
@@ -391,52 +428,96 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
                 );
                 extraction_tasks.push(tokio::spawn(async move {
                     let _permit = task_io_semaphore.acquire().await.map_err(|e| {
-                         error!("Overrides Task: Failed to acquire semaphore for '{}': {}", task_final_dest_path.display(), e);
-                         AppError::Other(format!("Semaphore error for '{}': {}",task_final_dest_path.display(),e))
+                        error!(
+                            "Overrides Task: Failed to acquire semaphore for '{}': {}",
+                            task_final_dest_path.display(),
+                            e
+                        );
+                        AppError::Other(format!(
+                            "Semaphore error for '{}': {}",
+                            task_final_dest_path.display(),
+                            e
+                        ))
                     })?;
 
                     if let Some(parent) = task_final_dest_path.parent() {
-                        if !parent.exists() { 
+                        if !parent.exists() {
                             fs::create_dir_all(parent).await.map_err(|e| {
-                                error!("Overrides Task: Failed to create parent for '{}': {}", task_final_dest_path.display(), e);
+                                error!(
+                                    "Overrides Task: Failed to create parent for '{}': {}",
+                                    task_final_dest_path.display(),
+                                    e
+                                );
                                 AppError::Io(e)
                             })?;
                         }
                     }
 
-                    let task_file = File::open(&task_pack_path).await.map_err(|e|{
-                        error!("Overrides Task: Failed to open pack file {:?}: {}", task_pack_path, e);
+                    let task_file = File::open(&task_pack_path).await.map_err(|e| {
+                        error!(
+                            "Overrides Task: Failed to open pack file {:?}: {}",
+                            task_pack_path, e
+                        );
                         AppError::Io(e)
                     })?;
                     let mut task_buf_reader = BufReader::new(task_file);
-                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader).await.map_err(|e|{
-                        error!("Overrides Task: Failed to read pack as ZIP for '{}': {}", task_final_dest_path.display(), e);
-                        AppError::Other(format!("Task: ZIP read error for {}: {}",task_final_dest_path.display(),e))
-                    })?;
-                    
-                    let entry_reader_futures = task_zip_reader.reader_without_entry(original_entry_index).await.map_err(|e| {
-                        error!(
+                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Overrides Task: Failed to read pack as ZIP for '{}': {}",
+                                task_final_dest_path.display(),
+                                e
+                            );
+                            AppError::Other(format!(
+                                "Task: ZIP read error for {}: {}",
+                                task_final_dest_path.display(),
+                                e
+                            ))
+                        })?;
+
+                    let entry_reader_futures = task_zip_reader
+                        .reader_without_entry(original_entry_index)
+                        .await
+                        .map_err(|e| {
+                            error!(
                             "Overrides Task: Failed to get entry reader for '{}' (index {}): {}",
                             task_final_dest_path.display(), original_entry_index, e
                         );
-                        AppError::Other(format!("Task: Entry reader error for {}: {}",task_final_dest_path.display(),e))
-                    })?;
+                            AppError::Other(format!(
+                                "Task: Entry reader error for {}: {}",
+                                task_final_dest_path.display(),
+                                e
+                            ))
+                        })?;
                     let mut entry_reader_tokio = entry_reader_futures.compat();
 
-                    let mut file_writer = fs::File::create(&task_final_dest_path).await.map_err(|e| {
-                        error!("Overrides Task: Failed to create dest file {:?}: {}", task_final_dest_path, e);
-                        AppError::Io(e)
-                    })?;
+                    let mut file_writer =
+                        fs::File::create(&task_final_dest_path).await.map_err(|e| {
+                            error!(
+                                "Overrides Task: Failed to create dest file {:?}: {}",
+                                task_final_dest_path, e
+                            );
+                            AppError::Io(e)
+                        })?;
 
-                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer).await.map_err(|e| {
-                        error!(
-                            "Overrides Task: Failed to stream for '{}' to {:?}: {}",
-                            task_final_dest_path.display(), task_final_dest_path, e
-                        );
-                        AppError::Io(e)
-                    })?;
-                    
-                    debug!("Overrides Task: Streamed {} bytes for: {}", bytes_copied, task_final_dest_path.display());
+                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Overrides Task: Failed to stream for '{}' to {:?}: {}",
+                                task_final_dest_path.display(),
+                                task_final_dest_path,
+                                e
+                            );
+                            AppError::Io(e)
+                        })?;
+
+                    debug!(
+                        "Overrides Task: Streamed {} bytes for: {}",
+                        bytes_copied,
+                        task_final_dest_path.display()
+                    );
                     Ok::<(), AppError>(())
                 }));
             }
@@ -444,18 +525,27 @@ pub async fn import_noriskpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     }
     // Drop the zip lister and its file handle as we are done with it before awaiting tasks.
     drop(zip_lister_for_overrides);
-    drop(overrides_buf_reader); 
+    drop(overrides_buf_reader);
 
     // Wait for all extraction tasks to complete
     if !extraction_tasks.is_empty() {
-        info!("Waiting for {} override extraction tasks to complete...", extraction_tasks.len());
+        info!(
+            "Waiting for {} override extraction tasks to complete...",
+            extraction_tasks.len()
+        );
         let results = try_join_all(extraction_tasks).await.map_err(|e| {
-            error!("Error joining override extraction tasks for noriskpack: {}", e);
-            AppError::Other(format!("Noriskpack override extraction tasks panicked: {}", e))
+            error!(
+                "Error joining override extraction tasks for noriskpack: {}",
+                e
+            );
+            AppError::Other(format!(
+                "Noriskpack override extraction tasks panicked: {}",
+                e
+            ))
         })?;
 
         for result in results {
-            result?; 
+            result?;
         }
         info!("Successfully extracted all queued overrides for noriskpack.");
     } else {
@@ -507,11 +597,9 @@ pub async fn handle_noriskpack_file_paths<R: tauri::Runtime>(
         };
 
         if let Some(path) = path_candidate {
-            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("noriskpack") {
-                info!(
-                    "Found .noriskpack file to process: {}",
-                    path.display()
-                );
+            if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("noriskpack")
+            {
+                info!("Found .noriskpack file to process: {}", path.display());
                 noriskpack_to_import = Some(path);
                 break; // Handle the first .noriskpack file found
             }
@@ -520,10 +608,7 @@ pub async fn handle_noriskpack_file_paths<R: tauri::Runtime>(
 
     if let Some(file_path_to_import) = noriskpack_to_import {
         if let Some(file_path_str) = file_path_to_import.to_str() {
-            info!(
-                "Attempting to import profile from path: {}",
-                file_path_str
-            );
+            info!("Attempting to import profile from path: {}", file_path_str);
             let import_app_handle = app_handle.clone();
             let path_string_for_task = file_path_str.to_string();
 
@@ -531,10 +616,7 @@ pub async fn handle_noriskpack_file_paths<R: tauri::Runtime>(
             tauri::async_runtime::spawn(async move {
                 match crate::commands::profile_command::import_profile(path_string_for_task).await {
                     Ok(profile_id) => {
-                        info!(
-                            "Profile {} imported successfully.",
-                            profile_id
-                        );
+                        info!("Profile {} imported successfully.", profile_id);
                         // Attempt to bring the main window to the front and focus it.
                         if let Some(window) = import_app_handle.get_webview_window("main") {
                             if let Err(e) = window.unminimize() {
@@ -551,25 +633,32 @@ pub async fn handle_noriskpack_file_paths<R: tauri::Runtime>(
                     Err(e) => {
                         error!(
                             "Error importing profile from path ({}): {:?}",
-                            file_path_to_import.display(), e // Use {:?} for CommandError
+                            file_path_to_import.display(),
+                            e // Use {:?} for CommandError
                         );
                         // Optionally, send an event to the frontend to show an error toast/dialog
                         if let Some(window) = import_app_handle.get_webview_window("main") {
                             let error_message = format!(
                                 "Failed to import noriskpack ({}): {:?}",
-                                file_path_to_import.display(), e
+                                file_path_to_import.display(),
+                                e
                             );
                             /*if let Err(emit_err) = window.emit("show-error-toast", error_message) {
                                 warn!("Failed to emit show-error-toast event: {:?}", emit_err);
                             }*/
                         } else {
-                             warn!("Could not get main window to emit error toast for import failure.");
+                            warn!(
+                                "Could not get main window to emit error toast for import failure."
+                            );
                         }
                     }
                 }
             });
         } else {
-            error!("Failed to convert .noriskpack path to string: {}", file_path_to_import.display());
+            error!(
+                "Failed to convert .noriskpack path to string: {}",
+                file_path_to_import.display()
+            );
         }
     } else {
         info!("No .noriskpack file found in the provided paths.");

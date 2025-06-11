@@ -8,13 +8,13 @@ use crate::minecraft::JvmArguments;
 use crate::state::profile_state::{Profile, WindowSize};
 use crate::state::state_manager::State;
 use log::{debug, error, info, warn};
+use serde_json::Value;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use uuid::Uuid;
-use std::collections::HashMap;
 use std::time::Instant;
-use serde_json::Value;
 use tauri::Manager;
+use uuid::Uuid;
 
 pub struct MinecraftLaunchParameters {
     pub main_class: String,
@@ -170,7 +170,8 @@ impl MinecraftLauncher {
         // Program
         let program_os_str = command.get_program();
         let program_str = program_os_str.to_string_lossy();
-        if program_str.contains(' ') || program_str.contains('\"') { // Quote if contains space or quote
+        if program_str.contains(' ') || program_str.contains('\"') {
+            // Quote if contains space or quote
             parts.push(format!("\"{}\"", program_str.replace('\"', "\\\"")));
         } else {
             parts.push(program_str.into_owned());
@@ -193,7 +194,8 @@ impl MinecraftLauncher {
                 // Quote if contains space, is empty, or contains a double quote itself.
                 // The check for double quote in arg_str itself is important to ensure it gets quoted.
                 if arg_str.contains(' ') || arg_str.is_empty() || arg_str.contains('\"') {
-                    parts.push(format!("\"{}\"", arg_str.replace('\"', "\\\""))); // Escape inner quotes
+                    parts.push(format!("\"{}\"", arg_str.replace('\"', "\\\"")));
+                // Escape inner quotes
                 } else {
                     parts.push(arg_str);
                 }
@@ -327,13 +329,16 @@ impl MinecraftLauncher {
         }
 
         // Add Fabric specific mods folder argument if loader is Fabric
-        if let Some(p_ref) = &profile { 
+        if let Some(p_ref) = &profile {
             if p_ref.loader == crate::state::profile_state::ModLoader::Fabric {
                 match state.profile_manager.get_profile_mods_path(p_ref) {
                     Ok(mods_path) => {
                         let mods_path_str = mods_path.to_string_lossy().replace("\\", "/");
                         let fabric_mods_arg = format!("-Dfabric.modsFolder={}", mods_path_str);
-                        info!("Adding Fabric mods folder JVM argument: {}", fabric_mods_arg);
+                        info!(
+                            "Adding Fabric mods folder JVM argument: {}",
+                            fabric_mods_arg
+                        );
                         command.arg(fabric_mods_arg);
                     }
                     Err(e) => {

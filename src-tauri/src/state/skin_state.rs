@@ -4,11 +4,11 @@ use crate::state::post_init::PostInitializationHandler;
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 use tokio::sync::{Mutex, RwLock};
-use std::collections::HashMap;
 
 const SKINS_FILENAME: &str = "minecraft_skins.json";
 

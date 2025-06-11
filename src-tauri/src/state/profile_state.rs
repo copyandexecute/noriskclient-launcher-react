@@ -3,9 +3,9 @@ use crate::error::AppError;
 use crate::error::Result;
 use crate::integrations::modrinth::{self, ModrinthDependencyType, ModrinthVersion};
 use crate::state::post_init::PostInitializationHandler;
-use async_trait::async_trait;
 use crate::utils::hash_utils;
 use crate::utils::path_utils;
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures::future::BoxFuture;
 use log::{error, info, warn};
@@ -189,7 +189,7 @@ pub struct ProfileSettings {
     #[serde(default)]
     pub resolution: Option<WindowSize>, // Auflösung
     #[serde(default)]
-    pub fullscreen: bool,          // Vollbild
+    pub fullscreen: bool, // Vollbild
     #[serde(default)]
     pub extra_game_args: Vec<String>, // Zusätzliche Argumente für das Spiel
     #[serde(default)] // Für Abwärtskompatibilität
@@ -293,7 +293,7 @@ impl ProfileManager {
 
         // Calculate the absolute path for the new profile's instance directory
         let new_profile_instance_path = self.calculate_instance_path_for_profile(&profile)?;
-        
+
         info!(
             "Calculated absolute profile instance directory: {:?}",
             new_profile_instance_path
@@ -331,7 +331,9 @@ impl ProfileManager {
             // This assumes State::get() is available and NoriskVersionManager has get_profile_by_id
             match crate::state::state_manager::State::get().await {
                 Ok(state) => {
-                    if let Some(standard_profile) = state.norisk_version_manager.get_profile_by_id(id).await {
+                    if let Some(standard_profile) =
+                        state.norisk_version_manager.get_profile_by_id(id).await
+                    {
                         //info!("Found standard profile '{}' for ID {}", standard_profile.name, id);
                         Ok(standard_profile)
                     } else {
@@ -997,7 +999,7 @@ impl ProfileManager {
                 }
             }
         }
-        
+
         // Now update the mod
         let mod_to_update_index = profile.mods.iter().position(|m| m.id == mod_id);
 
@@ -1087,36 +1089,39 @@ impl ProfileManager {
         // Now install any missing dependencies
         let mut installed_deps = 0;
         let mut failed_deps = 0;
-        
+
         for (dep_project_id, dep_version_id_opt) in missing_deps {
             info!("Installing missing dependency: {}", dep_project_id);
-            
+
             // Get the profile's game version and loader for compatibility check
             let profile = self.get_profile(profile_id).await?;
             let profile_loader = profile.loader.as_str().to_string();
-            
+
             // First, try to find the specific version if one was specified
             if let Some(version_id) = dep_version_id_opt {
                 match modrinth::get_version_details(version_id.clone()).await {
                     Ok(dep_version) => {
                         if let Some(primary_file) = dep_version.files.iter().find(|f| f.primary) {
-                            match self.add_modrinth_mod(
-                                profile_id,
-                                dep_version.project_id.clone(),
-                                dep_version.id.clone(),
-                                primary_file.filename.clone(),
-                                primary_file.url.clone(),
-                                primary_file.hashes.sha1.clone(),
-                                Some(dep_version.name.clone()),
-                                Some(dep_version.version_number.clone()),
-                                Some(dep_version.loaders.clone()),
-                                Some(dep_version.game_versions.clone()),
-                                false, // don't recursively add dependencies here
-                            ).await {
+                            match self
+                                .add_modrinth_mod(
+                                    profile_id,
+                                    dep_version.project_id.clone(),
+                                    dep_version.id.clone(),
+                                    primary_file.filename.clone(),
+                                    primary_file.url.clone(),
+                                    primary_file.hashes.sha1.clone(),
+                                    Some(dep_version.name.clone()),
+                                    Some(dep_version.version_number.clone()),
+                                    Some(dep_version.loaders.clone()),
+                                    Some(dep_version.game_versions.clone()),
+                                    false, // don't recursively add dependencies here
+                                )
+                                .await
+                            {
                                 Ok(_) => {
                                     info!("Successfully added dependency: {}", dep_project_id);
                                     installed_deps += 1;
-                                },
+                                }
                                 Err(e) => {
                                     error!("Failed to add dependency {}: {}", dep_project_id, e);
                                     failed_deps += 1;
@@ -1124,40 +1129,45 @@ impl ProfileManager {
                             }
                             continue;
                         }
-                    },
+                    }
                     Err(e) => {
                         warn!("Failed to fetch version details for dependency {} ({}): {}. Trying to find compatible version.", 
                             dep_project_id, version_id, e);
                     }
                 }
             }
-            
+
             // If specific version not found or no version specified, find compatible version
             match modrinth::get_mod_versions(
                 dep_project_id.clone(),
                 Some(vec![profile_loader.clone()]),
                 Some(vec![profile.game_version.clone()]),
-            ).await {
+            )
+            .await
+            {
                 Ok(versions) => {
                     if let Some(best_version) = versions.iter().max_by_key(|v| &v.date_published) {
                         if let Some(primary_file) = best_version.files.iter().find(|f| f.primary) {
-                            match self.add_modrinth_mod(
-                                profile_id,
-                                best_version.project_id.clone(),
-                                best_version.id.clone(),
-                                primary_file.filename.clone(),
-                                primary_file.url.clone(),
-                                primary_file.hashes.sha1.clone(),
-                                Some(best_version.name.clone()),
-                                Some(best_version.version_number.clone()),
-                                Some(best_version.loaders.clone()),
-                                Some(best_version.game_versions.clone()),
-                                false, // don't recursively add dependencies here
-                            ).await {
+                            match self
+                                .add_modrinth_mod(
+                                    profile_id,
+                                    best_version.project_id.clone(),
+                                    best_version.id.clone(),
+                                    primary_file.filename.clone(),
+                                    primary_file.url.clone(),
+                                    primary_file.hashes.sha1.clone(),
+                                    Some(best_version.name.clone()),
+                                    Some(best_version.version_number.clone()),
+                                    Some(best_version.loaders.clone()),
+                                    Some(best_version.game_versions.clone()),
+                                    false, // don't recursively add dependencies here
+                                )
+                                .await
+                            {
                                 Ok(_) => {
                                     info!("Successfully added dependency: {}", dep_project_id);
                                     installed_deps += 1;
-                                },
+                                }
                                 Err(e) => {
                                     error!("Failed to add dependency {}: {}", dep_project_id, e);
                                     failed_deps += 1;
@@ -1168,18 +1178,27 @@ impl ProfileManager {
                             failed_deps += 1;
                         }
                     } else {
-                        error!("No compatible version found for dependency {}", dep_project_id);
+                        error!(
+                            "No compatible version found for dependency {}",
+                            dep_project_id
+                        );
                         failed_deps += 1;
                     }
-                },
+                }
                 Err(e) => {
-                    error!("Failed to fetch versions for dependency {}: {}", dep_project_id, e);
+                    error!(
+                        "Failed to fetch versions for dependency {}: {}",
+                        dep_project_id, e
+                    );
                     failed_deps += 1;
                 }
             }
         }
-        
-        info!("Dependency installation complete: {} installed, {} failed", installed_deps, failed_deps);
+
+        info!(
+            "Dependency installation complete: {} installed, {} failed",
+            installed_deps, failed_deps
+        );
 
         Ok(())
     }
@@ -1229,7 +1248,7 @@ impl ProfileManager {
             profile.path, // Log the raw profile.path string
             profile.game_version
         );
-        
+
         let base_path = default_profile_path();
         let mut final_path = base_path;
 
@@ -1237,11 +1256,12 @@ impl ProfileManager {
         // This ensures that segments like "noriskclient" and "new" from "noriskclient/new"
         // are appended individually. PathBuf::push is OS-aware.
         for segment in profile.path.split('/') {
-            if !segment.is_empty() { // Avoid creating empty segments if path has "//" or leading/trailing "/"
+            if !segment.is_empty() {
+                // Avoid creating empty segments if path has "//" or leading/trailing "/"
                 final_path.push(segment);
             }
         }
-        
+
         log::trace!(
             "Constructed final path for profile '{}': {:?}",
             profile.name,
@@ -1733,7 +1753,9 @@ impl ProfileManager {
 impl PostInitializationHandler for ProfileManager {
     async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
         info!("ProfileManager: on_state_ready called. Loading profiles...");
-        let loaded_profiles = self.load_profiles_internal(&self.profiles_path.clone()).await?;
+        let loaded_profiles = self
+            .load_profiles_internal(&self.profiles_path.clone())
+            .await?;
         let mut profiles_guard = self.profiles.write().await;
         *profiles_guard = loaded_profiles;
         drop(profiles_guard);

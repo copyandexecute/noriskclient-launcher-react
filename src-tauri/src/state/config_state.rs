@@ -106,7 +106,10 @@ pub struct ConfigManager {
 impl ConfigManager {
     pub fn new() -> Result<Self> {
         let config_path = LAUNCHER_DIRECTORY.root_dir().join(CONFIG_FILENAME);
-        info!("ConfigManager: Initializing with path: {:?} (config loading deferred)", config_path);
+        info!(
+            "ConfigManager: Initializing with path: {:?} (config loading deferred)",
+            config_path
+        );
 
         Ok(Self {
             config: Arc::new(RwLock::new(LauncherConfig::default())),
@@ -181,8 +184,6 @@ impl ConfigManager {
     pub async fn is_experimental_mode(&self) -> bool {
         self.config.read().await.is_experimental
     }
-
-
 
     pub async fn set_config(&self, new_config: LauncherConfig) -> Result<()> {
         let should_save = {

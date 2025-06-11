@@ -1,8 +1,8 @@
-use log::{error, info, warn};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Emitter};
-use tauri_plugin_updater::UpdaterExt;
-use serde::Serialize;
 use crate::error::{AppError, Result as AppResult};
+use log::{error, info, warn};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri_plugin_updater::UpdaterExt;
 use tokio::time::{sleep, Duration};
 
 // Define the payload structure for updater status events
@@ -16,7 +16,12 @@ struct UpdaterStatusPayload {
 }
 
 // Helper function to emit status updates
-pub fn emit_status(app_handle: &AppHandle, status: &str, message: String, progress_info: Option<(u64, u64)>) {
+pub fn emit_status(
+    app_handle: &AppHandle,
+    status: &str,
+    message: String,
+    progress_info: Option<(u64, u64)>,
+) {
     let payload = UpdaterStatusPayload {
         message,
         status: status.to_string(),
@@ -42,8 +47,8 @@ pub async fn create_updater_window(app_handle: &AppHandle) -> tauri::Result<Webv
     info!("Creating updater window...");
     let window = WebviewWindowBuilder::new(
         app_handle,
-        "updater", // Unique label
-        WebviewUrl::App("updater.html".into()) // Load local HTML file
+        "updater",                              // Unique label
+        WebviewUrl::App("updater.html".into()), // Load local HTML file
     )
     .title("NoRiskClient Updater")
     .inner_size(325.0, 400.0)
@@ -60,17 +65,25 @@ pub async fn create_updater_window(app_handle: &AppHandle) -> tauri::Result<Webv
 }
 
 /// Versucht, ein gefundenes Update herunterzuladen, zu installieren und ggf. die App neu zu starten.
-async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHandle) -> AppResult<()> {
+async fn handle_update(
+    update: tauri_plugin_updater::Update,
+    app_handle: AppHandle,
+) -> AppResult<()> {
     info!("Attempting to automatically download and install update...");
-    emit_status(&app_handle, "pending", "Update found, preparing download...".to_string(), None);
+    emit_status(
+        &app_handle,
+        "pending",
+        "Update found, preparing download...".to_string(),
+        None,
+    );
 
-    // --- Debug Delay 1 --- 
+    // --- Debug Delay 1 ---
     #[cfg(debug_assertions)]
     {
         info!("DEBUG: Pausing after 'pending' status...");
         sleep(Duration::from_secs(2)).await;
     }
-    // --- End Debug Delay --- 
+    // --- End Debug Delay ---
 
     let app_handle_progress = app_handle.clone();
     let mut total_downloaded: u64 = 0; // Track total downloaded bytes
@@ -83,11 +96,19 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
 
         if let Some(total_u64) = total_u64_opt {
             // Use total_downloaded for the message and progress calculation
-            let msg = format!("Downloading update: {} / {} bytes", total_downloaded, total_u64);
+            let msg = format!(
+                "Downloading update: {} / {} bytes",
+                total_downloaded, total_u64
+            );
             // Log the cumulative progress
-            info!("{}", msg); 
+            info!("{}", msg);
             // Pass the cumulative total_downloaded to emit_status
-            emit_status(&app_handle_progress, "downloading", msg, Some((total_downloaded, total_u64)));
+            emit_status(
+                &app_handle_progress,
+                "downloading",
+                msg,
+                Some((total_downloaded, total_u64)),
+            );
         } else {
             // Handle download without total size known
             let msg = format!("Downloading update: {} bytes", total_downloaded); // Show accumulated bytes
@@ -102,13 +123,13 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
             if let Err(e) = app_handle_progress.emit("updater_status", payload) {
                 error!("Failed to emit updater status event (no total): {}", e);
             }
-        } 
+        }
     };
     let on_download_finish = || {
         info!("Download complete. Preparing installation...");
     };
 
-    // --- Step 1: Download the update --- 
+    // --- Step 1: Download the update ---
     info!("Starting update download...");
     let bytes = update
         .download(on_chunk, on_download_finish) // Use the download method
@@ -118,17 +139,20 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
             // Convert updater::Error to AppError::Other for download step
             AppError::Other(format!("Updater download error: {}", e))
         })?;
-    info!("Update download finished successfully ({} bytes).", bytes.len());
+    info!(
+        "Update download finished successfully ({} bytes).",
+        bytes.len()
+    );
 
-    // --- Debug Delay 2 --- 
+    // --- Debug Delay 2 ---
     #[cfg(debug_assertions)]
     {
         info!("DEBUG: Pausing after download completed...");
         sleep(Duration::from_secs(2)).await;
     }
-    // --- End Debug Delay --- 
+    // --- End Debug Delay ---
 
-    // --- Step 2: Install the update --- 
+    // --- Step 2: Install the update ---
     // This block can be commented out for testing to prevent actual installation
     /* START INSTALL BLOCK */
     info!("Starting update installation...");
@@ -141,7 +165,8 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
         })?;
     // Simulate install time if commented out
     #[cfg(debug_assertions)]
-    if true { // Change to check if install block IS commented out if needed
+    if true {
+        // Change to check if install block IS commented out if needed
         info!("DEBUG: Simulating installation time...");
         sleep(Duration::from_secs(2)).await;
         info!("DEBUG: Simulated installation finished.");
@@ -149,12 +174,22 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
         info!("DEBUG: Installation block active (no extra delay added here).");
     }
     // Remove the line below if install block is active
-    info!("Skipping actual installation (commented out)."); 
+    info!("Skipping actual installation (commented out).");
     /* END INSTALL BLOCK */
 
     // Emit final statuses after successful install (or after download if install is commented out)
-    emit_status(&app_handle, "installing", "Installation complete.".to_string(), None);
-    emit_status(&app_handle, "finished", "Update installed successfully!".to_string(), None);
+    emit_status(
+        &app_handle,
+        "installing",
+        "Installation complete.".to_string(),
+        None,
+    );
+    emit_status(
+        &app_handle,
+        "finished",
+        "Update installed successfully!".to_string(),
+        None,
+    );
 
     #[cfg(not(target_os = "windows"))]
     {
@@ -173,9 +208,9 @@ async fn handle_update(update: tauri_plugin_updater::Update, app_handle: AppHand
 /// * `is_beta_channel` - `true` to check the beta channel, `false` for stable.
 /// * `updater_window` - An optional WebviewWindow handle to show the updater window.
 pub async fn check_for_updates(
-    app_handle: AppHandle, 
-    is_beta_channel: bool, 
-    updater_window: Option<WebviewWindow>
+    app_handle: AppHandle,
+    is_beta_channel: bool,
+    updater_window: Option<WebviewWindow>,
 ) {
     let current_version = app_handle.package_info().version.to_string();
     let channel = if is_beta_channel { "Beta" } else { "Stable" };
@@ -186,7 +221,12 @@ pub async fn check_for_updates(
         "Checking for updates (Current: {}). Channel: {}",
         current_version, channel
     );
-    emit_status(&app_handle, "checking", format!("Checking for {} updates...", channel), None);
+    emit_status(
+        &app_handle,
+        "checking",
+        format!("Checking for {} updates...", channel),
+        None,
+    );
 
     // Determine the base part of the URL and the platform-specific segment template
     let base_repo_url = if is_beta_channel {
@@ -206,7 +246,7 @@ pub async fn check_for_updates(
             // The server must be configured to serve a .deb manifest for this specific target string.
             // IMPORTANT: "debian" is a placeholder. Confirm with your backend/server team
             // what target string they expect for .deb packages (e.g., "debian", "linux-deb").
-            let deb_target_identifier = "debian"; 
+            let deb_target_identifier = "debian";
             info!(
                 "Linux non-AppImage (e.g., .deb) detected. Modifying manifest URL to use target: {}",
                 deb_target_identifier
@@ -221,8 +261,7 @@ pub async fn check_for_updates(
     // Otherwise, our specific target (e.g., "debian") is used directly.
     let update_url_str = format!(
         "{}/{}/{{{{arch}}}}/{{{{current_version}}}}",
-        base_repo_url,
-        platform_specific_target
+        base_repo_url, platform_specific_target
     );
 
     info!("Using update endpoint template: {}", update_url_str);
@@ -284,7 +323,12 @@ pub async fn check_for_updates(
                 warn!("Update found, but no updater window handle available to show.");
             }
 
-            emit_status(&app_handle, "pending", format!("Update {} found!", update_version), None);
+            emit_status(
+                &app_handle,
+                "pending",
+                format!("Update {} found!", update_version),
+                None,
+            );
 
             match handle_update(update, app_handle.clone()).await {
                 Ok(_) => {
@@ -314,5 +358,8 @@ pub async fn check_for_updates(
 
     //TODO: Remove this line when the updater is fully implemented
     emit_status(&app_handle, "close", final_message.clone(), None);
-    info!("Update check process fully completed (Status: {}). Final Message: {}", final_status, final_message);
+    info!(
+        "Update check process fully completed (Status: {}). Final Message: {}",
+        final_status, final_message
+    );
 }

@@ -171,8 +171,7 @@ impl ModDownloadService {
         let profile_name = "Target Profile";
         info!(
             "Syncing resolved mods to profile mods directory '{:?}' for '{}'...",
-            profile_mods_dir,
-            profile_name
+            profile_mods_dir, profile_name
         );
 
         if !profile_mods_dir.exists() {
