@@ -9,6 +9,7 @@ import { VirtuosoGrid } from "react-virtuoso";
 import React, { useState } from "react";
 import { toast } from "react-hot-toast";
 import { ExportProfileModal } from "../profiles/ExportProfileModal";
+import { ProfileSettings } from "../profiles/ProfileSettings";
 
 interface ProfileSelectionModalProps {
   onVersionChange: (versionId: string) => void;
@@ -26,6 +27,10 @@ export function ProfileSelectionModal({
   // Export modal state
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [profileToExport, setProfileToExport] = useState<Profile | null>(null);
+  
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+  const [profileToEdit, setProfileToEdit] = useState<Profile | null>(null);
 
   const handleVersionSelect = (versionId: string) => {
     setSelectedVersion(versionId);
@@ -45,7 +50,7 @@ export function ProfileSelectionModal({
       });
 
       // Refresh profiles after successful deletion
-      await fetchProfiles();
+      //await fetchProfiles();
     } catch (error) {
       console.error("Error during profile deletion in modal:", error);
     }
@@ -55,6 +60,16 @@ export function ProfileSelectionModal({
     console.log("Export requested for profile:", profile.name);
     setProfileToExport(profile);
     setIsExportModalOpen(true);
+  };
+
+  const handleEditProfile = (profile: Profile) => {
+    console.log("Edit requested for profile:", profile.name);
+    if (profile.is_standard_version) {
+      console.log("Attempted to edit standard profile, returning.");
+      return;
+    }
+    setProfileToEdit(profile);
+    setShowSettings(true);
   };
 
   if (!isModalOpen) return null;
@@ -117,7 +132,7 @@ export function ProfileSelectionModal({
                   key={profile.id}
                   profile={profile}
                   onClick={() => handleVersionSelect(profile.id)}
-                  onEdit={() => { console.log("Edit clicked in modal for", profile.name); }}
+                  onEdit={() => handleEditProfile(profile)}
                   onProfileCloned={fetchProfiles}
                   onDelete={handleDeleteProfile}
                   onShouldExport={handleShouldExportProfile}
@@ -138,6 +153,18 @@ export function ProfileSelectionModal({
           onClose={() => {
             setIsExportModalOpen(false);
             setProfileToExport(null);
+          }}
+        />
+      )}
+      
+      {/* Profile Settings Modal */}
+      {showSettings && profileToEdit && !profileToEdit.is_standard_version && (
+        <ProfileSettings
+          profile={profileToEdit}
+          onClose={() => {
+            console.log("ProfileSettings onClose called in ProfileSelectionModal");
+            setShowSettings(false);
+            setProfileToEdit(null);
           }}
         />
       )}
