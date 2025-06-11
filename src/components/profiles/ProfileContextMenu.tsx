@@ -27,6 +27,41 @@ interface ProfileContextMenuProps {
   onOpenSettings: () => void;
 }
 
+// Helper function to calculate optimal menu position
+const calculateMenuPosition = (x: number, y: number, menuWidth: number, menuHeight: number) => {
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  };
+  
+  const padding = 16; // Distance from viewport edges
+  
+  let adjustedX = x;
+  let adjustedY = y;
+  
+  // Adjust horizontal position
+  if (x + menuWidth + padding > viewport.width) {
+    adjustedX = x - menuWidth; // Show menu to the left of cursor
+    if (adjustedX < padding) {
+      adjustedX = viewport.width - menuWidth - padding; // Align with right edge
+    }
+  }
+  
+  // Adjust vertical position
+  if (y + menuHeight + padding > viewport.height) {
+    adjustedY = y - menuHeight; // Show menu above cursor
+    if (adjustedY < padding) {
+      adjustedY = viewport.height - menuHeight - padding; // Align with bottom edge
+    }
+  }
+  
+  // Ensure minimum padding from edges
+  adjustedX = Math.max(padding, Math.min(adjustedX, viewport.width - menuWidth - padding));
+  adjustedY = Math.max(padding, Math.min(adjustedY, viewport.height - menuHeight - padding));
+  
+  return { x: adjustedX, y: adjustedY };
+};
+
 export const ProfileContextMenu = forwardRef<
   HTMLDivElement,
   ProfileContextMenuProps
@@ -47,12 +82,27 @@ export const ProfileContextMenu = forwardRef<
 ) {
   const accentColor = useThemeStore((state) => state.accentColor);
   const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
+  const [adjustedPosition, setAdjustedPosition] = useState({ x, y });
   const { confirm, confirmDialog } = useConfirmDialog();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPortalNode(document.body);
   }, []);
+
+  // Calculate and set adjusted position when coordinates change
+  useEffect(() => {
+    if (visible && menuRef.current) {
+      // Use a rough estimate for menu dimensions or measure actual dimensions
+      const menuWidth = 220; // Approximate width based on content
+      const menuHeight = profile.is_standard_version ? 140 : 240; // Approximate height based on menu items
+      
+      const newPosition = calculateMenuPosition(x, y, menuWidth, menuHeight);
+      setAdjustedPosition(newPosition);
+    } else {
+      setAdjustedPosition({ x, y });
+    }
+  }, [x, y, visible, profile.is_standard_version]);
 
   useEffect(() => {
     if (visible && menuRef.current) {
@@ -117,8 +167,8 @@ export const ProfileContextMenu = forwardRef<
       }}
       className="fixed z-[9999] rounded-md shadow-xl border-2 border-b-4 overflow-hidden"
       style={{
-        top: y,
-        left: x,
+        top: adjustedPosition.y,
+        left: adjustedPosition.x,
         backgroundColor: accentColor.value + "20",
         borderColor: accentColor.value + "90",
         borderBottomColor: accentColor.value,
