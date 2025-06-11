@@ -7,6 +7,7 @@ import type { Profile } from "../../types/profile";
 import { ProfileCard } from "../profiles/ProfileCard";
 import { VirtuosoGrid } from "react-virtuoso";
 import React from "react";
+import { toast } from "react-hot-toast";
 
 interface ProfileSelectionModalProps {
   onVersionChange: (versionId: string) => void;
@@ -19,12 +20,30 @@ export function ProfileSelectionModal({
 }: ProfileSelectionModalProps) {
   const { setSelectedVersion, isModalOpen, closeModal } =
     useVersionSelectionStore();
-  const { profiles, loading: profilesLoading, error: profilesError } = useProfileStore();
+  const { profiles, loading: profilesLoading, error: profilesError, fetchProfiles, deleteProfile } = useProfileStore();
 
   const handleVersionSelect = (versionId: string) => {
     setSelectedVersion(versionId);
     onVersionChange(versionId);
     closeModal();
+  };
+
+  const handleDeleteProfile = async (profileId: string, profileName: string) => {
+    try {
+      const deletePromise = deleteProfile(profileId);
+      
+      await toast.promise(deletePromise, {
+        loading: `Deleting profile '${profileName}'...`,
+        success: `Profile '${profileName}' deleted successfully!`,
+        error: (err) =>
+          `Failed to delete profile: ${err instanceof Error ? err.message : String(err.message)}`,
+      });
+
+      // Refresh profiles after successful deletion
+      await fetchProfiles();
+    } catch (error) {
+      console.error("Error during profile deletion in modal:", error);
+    }
   };
 
   if (!isModalOpen) return null;
@@ -88,8 +107,8 @@ export function ProfileSelectionModal({
                   profile={profile}
                   onClick={() => handleVersionSelect(profile.id)}
                   onEdit={() => { console.log("Edit clicked in modal for", profile.name); }}
-                  onProfileCloned={() => { console.log("Cloned in modal for", profile.name); }}
-                  onDelete={() => { console.log("Delete in modal for", profile.name); }}
+                  onProfileCloned={fetchProfiles}
+                  onDelete={handleDeleteProfile}
                   onShouldExport={() => { console.log("Export in modal for", profile.name); }}
                   interactionMode="settings"
                   onSettingsNavigation={closeModal}
