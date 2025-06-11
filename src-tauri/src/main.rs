@@ -320,6 +320,12 @@ async fn main() {
                         }
                     });
                 });
+
+                // --- Handle window close request (from taskbar, etc.) ---
+                main_window.listen("tauri://close-requested", move |_event| {
+                    info!("Window close requested via system (taskbar, etc.). Exiting application.");
+                    std::process::exit(0);
+                });
             } else {
                 error!("Could not get main window handle to attach focus listener!");
             }
