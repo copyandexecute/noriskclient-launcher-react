@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NoRisk Launcher",
-  "version": "0.0.4-beta.55",
+  "version": "0.0.4-beta.56",
   "identifier": "gg.norisk.NoRiskClientLauncherV3",
   "build": {
     "beforeDevCommand": "yarn dev",
@@ -40,11 +40,7 @@
     ],
     "security": {
       "csp": {
-        "default-src": [
-          "'self'",
-          "ipc:",
-          "http://ipc.localhost"
-        ],
+        "default-src": ["'self'", "ipc:", "http://ipc.localhost"],
         "connect-src": [
           "'self'",
           "https://api.iconify.design",
@@ -97,32 +93,31 @@
           "width": 660
         }
       }
-    }
-  },
-  "active": true,
-  "targets": [
-    "app",
-    "dmg",
-    "deb",
-    "appimage",
-    "nsis"
-  ],
-  "icon": [
-    "icons/32x32.png",
-    "icons/128x128.png",
-    "icons/128x128@2x.png",
-    "icons/icon.icns",
-    "icons/icon.ico"
-  ],
-  "createUpdaterArtifacts": true,
-  "fileAssociations": [
-    {
-      "ext": [
-        "noriskpack"
-      ],
-      "name": "NoriskPack File",
-      "description": "NoRiskClient Modpack File"
-    }
-  ]
-}
+    },
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "deb",
+      "appimage",
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "fileAssociations": [
+      {
+        "ext": [
+          "noriskpack"
+        ],
+        "name": "NoriskPack File",
+        "description": "NoRiskClient Modpack File"
+      }
+    ]
+  }
 }
