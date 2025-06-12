@@ -7,6 +7,7 @@ import { cn } from "../../lib/utils";
 import { Logo } from "../ui/Logo";
 import { NavButton } from "../ui/nav/NavButton";
 import { NavTooltip } from "../ui/nav/NavTooltip";
+import { CreditsModal } from "../modals/CreditsModal";
 import * as ConfigService from "../../services/launcher-config-service";
 import { useThemeStore } from "../../store/useThemeStore";
 import { createPortal } from "react-dom";
@@ -32,8 +33,7 @@ export function VerticalNavbar({
   activeItem,
   onItemClick,
   version = "v0.5.22",
-}: VerticalNavbarProps) {
-  const [active, setActive] = useState(activeItem || items[0]?.id);
+}: VerticalNavbarProps) {  const [active, setActive] = useState(activeItem || items[0]?.id);
   const navRef = useRef<HTMLDivElement>(null);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -42,6 +42,7 @@ export function VerticalNavbar({
   const accentColor = useThemeStore((state) => state.accentColor);
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
   const [isMounted, setIsMounted] = useState(false);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -131,9 +132,8 @@ export function VerticalNavbar({
           borderLeft: `2px solid ${accentColor.value}60`,
           boxShadow: `0 0 10px ${accentColor.value}30 inset`,
         }}
-      >
-        <div className="mb-12">
-          <Logo size="sm" />
+      >        <div className="mb-12">
+          <Logo size="sm" onClick={() => setShowCreditsModal(true)} />
         </div>
 
         <div className="flex-1 flex flex-col items-center space-y-4 min-h-[400px]">
@@ -154,9 +154,7 @@ export function VerticalNavbar({
             </div>
           ))}
         </div>
-      </div>
-
-      {isMounted &&
+      </div>      {isMounted &&
         showTooltip &&
         document.body &&
         createPortal(
@@ -175,6 +173,11 @@ export function VerticalNavbar({
           </div>,
           document.body,
         )}
+
+      <CreditsModal
+        isOpen={showCreditsModal}
+        onClose={() => setShowCreditsModal(false)}
+      />
     </>
   );
 }
