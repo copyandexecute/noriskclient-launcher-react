@@ -126,7 +126,9 @@ async fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             info!("SingleInstance plugin: Second instance triggered with args: {:?}", argv);
             if let Some(win) = app.get_webview_window("main") {
-                let _ = win.set_focus();
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
             }
             // Focus the main window on second instance
             /*if let Some(window) = app.get_webview_window("main") {
