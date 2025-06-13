@@ -211,6 +211,8 @@ interface ThemeState {
   staticBackground: boolean;
   toggleStaticBackground: () => void;
   toggleBackgroundAnimation: () => void;
+  hasAcceptedTermsOfService: boolean;
+  acceptTermsOfService: () => void;
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -221,6 +223,7 @@ export const useThemeStore = create<ThemeState>()(
       isDetailViewSidebarOnLeft: true,
       profileGroupingCriterion: "none",
       staticBackground: true,
+      hasAcceptedTermsOfService: false,
 
       setAccentColor: (color: AccentColor) => {
         set({ accentColor: color });
@@ -263,6 +266,10 @@ export const useThemeStore = create<ThemeState>()(
 
       toggleStaticBackground: () => {
         set((state) => ({ staticBackground: !state.staticBackground }));
+      },
+
+      acceptTermsOfService: () => {
+        set({ hasAcceptedTermsOfService: true });
       },
 
       applyAccentColorToDOM: () => {
