@@ -20,7 +20,7 @@ export function TermsOfServiceModal({ isOpen }: TermsOfServiceModalProps) {
 
   const handleOpenPrivacyPolicy = async () => {
     try {
-      await openExternalUrl('https://blog.norisk.gg/privacy-policy/');
+      await openExternalUrl('https://blog.norisk.gg/en/privacy-policy/');
       toast.success("Privacy Policy opened in your browser!");
     } catch (error) {
       console.error("Failed to open Privacy Policy URL:", error);
