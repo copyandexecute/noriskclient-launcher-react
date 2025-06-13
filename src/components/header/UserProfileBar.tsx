@@ -64,7 +64,7 @@ export function UserProfileBar({ className }: UserProfileBarProps) {
         </div>
 
         <IconButton 
-          icon={<Icon icon="fluent:people-community-20-filled" className="w-5 h-5" />}
+          icon={<Icon icon="solar:link-linear" className="w-5 h-5" />}
           onClick={openSocialsModal}
           variant="flat"
           size="sm"
