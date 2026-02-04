@@ -138,7 +138,7 @@ jobs:
           credential_id: ${{ secrets.CREDENTIAL_ID }}
           totp_secret: ${{ secrets.ES_TOTP_SECRET }}
           file_path: ${{ steps.find_exe.outputs.EXE_PATH }}
-          environment_name: PROD
+          environment_name: TEST
           malware_block: false
           override: true
 
