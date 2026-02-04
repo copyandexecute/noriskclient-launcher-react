@@ -140,6 +140,7 @@ jobs:
           file_path: ${{ steps.find_exe.outputs.EXE_PATH }}
           environment_name: PROD
           malware_block: false
+          override: true
 
       # --- Umbenennen und Artefakte vorbereiten ---
       - name: Rename Linux Artifacts
