@@ -138,7 +138,7 @@ jobs:
           file_path: ${{ steps.find_exe.outputs.EXE_PATH }}
           output_path: ${{ matrix.output_path }}/nsis
           override: true
-          environment_name: TEST  # Ändern zu PROD für echte Signierung
+          environment_name: PROD  # Ändern zu PROD für echte Signierung
           malware_block: false
 
       # --- Umbenennen und Artefakte vorbereiten ---
