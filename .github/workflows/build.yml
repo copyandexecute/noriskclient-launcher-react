@@ -121,8 +121,10 @@ jobs:
         if: matrix.platform == 'windows-latest'
         id: find_exe
         run: |
-          $ExeFile = Get-ChildItem -Path "${{ matrix.output_path }}\nsis" -Filter "*.exe" | Where-Object { $_.Name -notlike "*.sig" } | Select-Object -First 1
+          $NsisDir = "${{ github.workspace }}\src-tauri\target\release\bundle\nsis"
+          $ExeFile = Get-ChildItem -Path $NsisDir -Filter "*.exe" | Where-Object { $_.Name -notlike "*.sig" } | Select-Object -First 1
           echo "EXE_PATH=$($ExeFile.FullName)" >> $env:GITHUB_OUTPUT
+          echo "NSIS_DIR=$NsisDir" >> $env:GITHUB_OUTPUT
           echo "Found EXE: $($ExeFile.FullName)"
         shell: pwsh
 
@@ -136,9 +138,9 @@ jobs:
           credential_id: ${{ secrets.CREDENTIAL_ID }}
           totp_secret: ${{ secrets.ES_TOTP_SECRET }}
           file_path: ${{ steps.find_exe.outputs.EXE_PATH }}
-          output_path: ${{ matrix.output_path }}/nsis
+          output_path: ${{ steps.find_exe.outputs.NSIS_DIR }}
           override: true
-          environment_name: PROD  # Ändern zu PROD für echte Signierung
+          environment_name: PROD
           malware_block: false
 
       # --- Umbenennen und Artefakte vorbereiten ---
