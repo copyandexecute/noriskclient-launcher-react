@@ -3,14 +3,19 @@ import type {
   CreateProfileParams,
   Profile,
   UpdateProfileParams,
+  AllProfilesAndLastPlayed,
 } from "../types/profile";
 import * as ProfileService from "../services/profile-service";
+import type { FileNode } from "../types/fileSystem";
 
 interface ProfileState {
   profiles: Profile[];
+  standardProfiles: Profile[];
   loading: boolean;
   error: string | null;
   selectedProfile: Profile | null;
+  lastPlayedProfileId: string | null;
+  importingPaths: Set<string>;
 
   fetchProfiles: () => Promise<void>;
   getProfile: (id: string) => Promise<Profile>;
@@ -25,6 +30,7 @@ interface ProfileState {
     sourceId: string,
     newName: string,
     includeFiles?: string[],
+    includeAll?: boolean,
   ) => Promise<string>;
   exportProfile: (
     profileId: string,
@@ -33,22 +39,42 @@ interface ProfileState {
     openFolder?: boolean,
   ) => Promise<string>;
   setSelectedProfile: (profile: Profile | null) => void;
+  refreshSingleProfileInStore: (profileData: Profile) => void;
+  addImportingPath: (path: string) => void;
+  removeImportingPath: (path: string) => void;
+  isPathImporting: (path: string) => boolean;
 }
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
   profiles: [],
-  loading: false,
+  standardProfiles: [],
+  loading: true,
   error: null,
   selectedProfile: null,
+  lastPlayedProfileId: null,
+  importingPaths: new Set<string>(),
 
   fetchProfiles: async () => {
     try {
-      set({ loading: true, error: null });
-      const profiles = await ProfileService.listProfiles();
-      set({ profiles, loading: false });
+      set({ error: null });
+      const response = await ProfileService.getAllProfilesAndLastPlayed();
+      const { all_profiles, last_played_profile_id } = response;
+
+      let newlySelectedProfile: Profile | null = null;
+      if (last_played_profile_id) {
+        newlySelectedProfile =
+          all_profiles.find((p) => p.id === last_played_profile_id) || null;
+      }
+
+      set({
+        profiles: all_profiles,
+        lastPlayedProfileId: last_played_profile_id,
+        selectedProfile: newlySelectedProfile,
+        loading: false,
+      });
     } catch (error) {
-      console.error("Failed to fetch profiles:", error);
-      set({ error: "Failed to load profiles", loading: false });
+      console.error("Failed to fetch all profiles and last played:", error);
+      set({ error: "Failed to load profiles data", loading: false });
     }
   },
 
@@ -68,10 +94,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   createProfile: async (params: CreateProfileParams) => {
     try {
       const id = await ProfileService.createProfile(params);
-      const newProfile = await ProfileService.getProfile(id);
-      set((state) => ({
-        profiles: [...state.profiles, newProfile],
-      }));
+      await get().fetchProfiles();
       return id;
     } catch (error) {
       console.error("Failed to create profile:", error);
@@ -158,14 +181,44 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     sourceId: string,
     newName: string,
     includeFiles?: string[],
+    includeAll?: boolean,
   ) => {
     try {
+      let filesToInclude = includeFiles;
+      if (includeAll) {
+        const profileDirectoryStructure = await ProfileService.getProfileDirectoryStructure(sourceId);
+        // Helper function to recursively get all file paths
+        const getAllFilePaths = (node: FileNode): string[] => {
+          let paths: string[] = [];
+          if (node.children && node.children.length > 0) {
+            for (const child of node.children) {
+              paths = paths.concat(getAllFilePaths(child));
+            }
+          } else if (!node.is_dir) {
+            // 'path' attribute holds the relative path of the file from the profile root
+            if (node.path) {
+              paths.push(node.path);
+            }
+          }
+          return paths;
+        };
+        filesToInclude = getAllFilePaths(profileDirectoryStructure);
+      }
+
+      console.log('[ProfileStore] Copying profile with filesToInclude:', filesToInclude);
+
       const params = {
         source_profile_id: sourceId,
         new_profile_name: newName,
-        include_files: includeFiles,
+        include_files: filesToInclude,
       };
       const newProfileId = await ProfileService.copyProfile(params);
+      let sourceProfile = await get().getProfile(sourceId);
+      if (sourceProfile.is_standard_version) {
+        await ProfileService.updateProfile(newProfileId, {
+          group: "CUSTOM",
+        });
+      }
       await get().fetchProfiles();
       return newProfileId;
     } catch (error) {
@@ -196,5 +249,39 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   setSelectedProfile: (profile: Profile | null) => {
     set({ selectedProfile: profile });
+  },
+
+  refreshSingleProfileInStore: (profileData: Profile) => {
+    set((state) => {
+      const updatedProfiles = state.profiles.map((p) =>
+        p.id === profileData.id ? profileData : p,
+      );
+      let updatedSelectedProfile = state.selectedProfile;
+      if (state.selectedProfile && state.selectedProfile.id === profileData.id) {
+        updatedSelectedProfile = profileData;
+      }
+      return {
+        profiles: updatedProfiles,
+        selectedProfile: updatedSelectedProfile,
+      };
+    });
+  },
+
+  addImportingPath: (path: string) => {
+    set((state) => ({
+      importingPaths: new Set(state.importingPaths).add(path),
+    }));
+  },
+
+  removeImportingPath: (path: string) => {
+    set((state) => {
+      const newSet = new Set(state.importingPaths);
+      newSet.delete(path);
+      return { importingPaths: newSet };
+    });
+  },
+
+  isPathImporting: (path: string) => {
+    return get().importingPaths.has(path);
   },
 }));

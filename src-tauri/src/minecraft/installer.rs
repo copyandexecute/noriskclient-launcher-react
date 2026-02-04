@@ -7,23 +7,22 @@ use crate::minecraft::downloads::mc_assets_download::MinecraftAssetsDownloadServ
 use crate::minecraft::downloads::mc_client_download::MinecraftClientDownloadService;
 use crate::minecraft::downloads::mc_libraries_download::MinecraftLibrariesDownloadService;
 use crate::minecraft::downloads::mc_natives_download::MinecraftNativesDownloadService;
-use crate::minecraft::downloads::{ModDownloadService, NoriskClientAssetsDownloadService};
 use crate::minecraft::downloads::NoriskPackDownloadService;
+use crate::minecraft::downloads::{ModDownloadService, NoriskClientAssetsDownloadService};
 use crate::minecraft::dto::JavaDistribution;
-use crate::minecraft::{
-    MinecraftLaunchParameters, MinecraftLauncher,
-};
+use crate::minecraft::{MinecraftLaunchParameters, MinecraftLauncher};
 use crate::state::event_state::{EventPayload, EventType};
 use crate::state::profile_state::{ModLoader, Profile};
 use crate::state::state_manager::State;
-use log::{error, info};
+use log::{error, info, warn};
+use rand::Rng;
 use uuid::Uuid;
 
 use super::minecraft_auth::Credentials;
 use super::modloader::ModloaderFactory;
-use crate::minecraft::downloads::{
-    MinecraftLoggingDownloadService,
-};
+use crate::minecraft::downloads::MinecraftLoggingDownloadService;
+use crate::utils::mc_utils;
+use tokio::fs as async_fs;
 
 async fn emit_progress_event(
     state: &State,
@@ -52,6 +51,9 @@ pub async fn install_minecraft_version(
     modloader_str: &str,
     profile: &Profile,
     credentials: Option<Credentials>,
+    quick_play_singleplayer: Option<String>,
+    quick_play_multiplayer: Option<String>,
+    migration_info: Option<crate::utils::profile_utils::MigrationInfo>,
 ) -> Result<()> {
     // Convert string modloader to ModLoader enum
     let modloader_enum = match modloader_str {
@@ -88,6 +90,64 @@ pub async fn install_minecraft_version(
         launcher_config.concurrent_downloads
     );
 
+    // <--- HARDCODED TEST ERROR (50% CHANCE) --- >
+    let should_throw_error = {
+        let mut rng = rand::thread_rng(); // Create and use RNG in a tight scope
+        rng.gen_bool(0.5) // 0.5 means 50% probability
+    }; // rng goes out of scope here
+
+    if should_throw_error {
+        info!("[InstallTest] Randomly decided to throw test error.");
+        //return Err(AppError::Unknown("Testfehler (50% Chance) für das Error-Handling!".to_string()));
+    } else {
+        info!("[InstallTest] Randomly decided NOT to throw test error. Proceeding normally.");
+    }
+    // <--- END HARDCODED TEST ERROR --- >
+
+    // Execute migration if provided
+    if let Some(migration) = &migration_info {
+        info!("[Launch] Executing migration before installation: {:?}", migration);
+
+        // Execute the migration (detailed progress events are sent from within execute_group_migration)
+        match crate::utils::profile_utils::execute_group_migration(migration.clone(), Some(profile.id)).await {
+            Ok(_) => {
+                info!("[Launch] Migration completed successfully");
+            }
+            Err(e) => {
+                error!("[Launch] Migration failed: {:?}", e);
+
+                // Send migration failed event
+                let migration_failed_payload = crate::state::event_state::EventPayload {
+                    event_id: uuid::Uuid::new_v4(),
+                    event_type: crate::state::event_state::EventType::MigrationFailed,
+                    target_id: Some(profile.id),
+                    message: format!("Migration failed: {:?}", e),
+                    progress: Some(0.0),
+                    error: Some(format!("{:?}", e)),
+                };
+
+                if let Err(e) = state.event_state.emit(migration_failed_payload).await {
+                    warn!("[Launch] Failed to emit migration failed event: {}", e);
+                }
+
+                // Return the error to stop the launch process
+                return Err(e);
+            }
+        }
+    }
+
+    if let Some(world) = &quick_play_singleplayer {
+        info!(
+            "[Launch] Quick Play: Launching directly into singleplayer world: {}",
+            world
+        );
+    } else if let Some(server) = &quick_play_multiplayer {
+        info!(
+            "[Launch] Quick Play: Connecting directly to server: {}",
+            server
+        );
+    }
+
     let api_service = MinecraftApiService::new();
     let manifest = api_service.get_version_manifest().await?;
     let version = manifest
@@ -109,33 +169,116 @@ pub async fn install_minecraft_version(
         &state,
         EventType::InstallingJava,
         profile.id,
-        &format!("Java {} wird installiert...", java_version),
+        &format!("Installing Java {}...", java_version),
         0.0,
         None,
     )
     .await?;
 
-    // Download and setup Java
-    let java_service = JavaDownloadService::new();
-    let java_path = java_service
-        .get_or_download_java(
-            java_version,
-            &JavaDistribution::Zulu,
-            Some(&piston_meta.java_version.component),
+    // Check if profile uses a custom Java path
+    let mut custom_java_valid = false;
+    let java_path = if profile.settings.use_custom_java_path && profile.settings.java_path.is_some()
+    {
+        // Try to use the custom Java path
+        let custom_path = profile.settings.java_path.as_ref().unwrap();
+        info!("Using custom Java path from profile: {}", custom_path);
+
+        // Verify that the custom Java path exists and is valid
+        let path = std::path::PathBuf::from(custom_path);
+        if path.exists() {
+            // Check if it's a valid Java installation
+            use crate::utils::java_detector;
+            match java_detector::get_java_info(&path).await {
+                Ok(java_info) => {
+                    info!(
+                        "Verified custom Java: Version {}, Major version {}, 64-bit: {}",
+                        java_info.version, java_info.major_version, java_info.is_64bit
+                    );
+
+                    // Check if the Java version is compatible with the required one
+                    if java_info.major_version >= java_version {
+                        info!(
+                            "Custom Java version {} meets the required version {}",
+                            java_info.major_version, java_version
+                        );
+                        custom_java_valid = true;
+                        path
+                    } else {
+                        info!(
+                            "Custom Java version {} is lower than required version {}. Downloading Java...",
+                            java_info.major_version, java_version
+                        );
+                        // The custom Java is too old, we need to download a newer version
+                        custom_java_valid = false;
+                        // Will be set by the download code below
+                        std::path::PathBuf::new()
+                    }
+                }
+                Err(e) => {
+                    info!(
+                        "Custom Java path exists but is not valid: {}. Downloading Java...",
+                        e
+                    );
+                    // Will be set by the download code below
+                    std::path::PathBuf::new()
+                }
+            }
+        } else {
+            info!(
+                "Custom Java path does not exist: {}. Downloading Java...",
+                custom_path
+            );
+            // Will be set by the download code below
+            std::path::PathBuf::new()
+        }
+    } else {
+        // No custom path or not enabled, initialize with empty path
+        std::path::PathBuf::new()
+    };
+
+    // Download and setup Java if necessary
+    let java_path = if custom_java_valid {
+        info!("Using verified custom Java path: {:?}", java_path);
+
+        // Update progress to 100% since we're using a custom path
+        emit_progress_event(
+            &state,
+            EventType::InstallingJava,
+            profile.id,
+            "Using custom Java installation!",
+            1.0,
+            None,
         )
         .await?;
-    info!("Java installation path: {:?}", java_path);
 
-    // Update progress to 100%
-    emit_progress_event(
-        &state,
-        EventType::InstallingJava,
-        profile.id,
-        &format!("Java {} Installation abgeschlossen!", java_version),
-        1.0,
-        None,
-    )
-    .await?;
+        java_path
+    } else {
+        // Download Java since custom path is not valid or not set
+        info!("Downloading Java {}...", java_version);
+        let java_service = JavaDownloadService::new();
+        let downloaded_path = java_service
+            .get_or_download_java(
+                java_version,
+                &JavaDistribution::Zulu,
+                Some(&piston_meta.java_version.component),
+            )
+            .await?;
+
+        info!("Java installation path: {:?}", downloaded_path);
+
+        // Update progress to 100%
+        emit_progress_event(
+            &state,
+            EventType::InstallingJava,
+            profile.id,
+            &format!("Java {} installation completed!", java_version),
+            1.0,
+            None,
+        )
+        .await?;
+
+        downloaded_path
+    };
 
     // Create game directory
     let game_directory = state
@@ -143,12 +286,42 @@ pub async fn install_minecraft_version(
         .calculate_instance_path_for_profile(profile)?;
     std::fs::create_dir_all(&game_directory)?;
 
+    // --- NEW: Copy StartUpHelper data FIRST ---
+    info!("\nChecking for StartUpHelper data to import...");
+
+    // Load NoriskPackDefinition if a pack is selected
+    let norisk_pack = if let Some(pack_id) = &profile.selected_norisk_pack_id {
+        let config = state.norisk_pack_manager.get_config().await;
+        config.get_resolved_pack_definition(pack_id).ok()
+    } else {
+        None
+    };
+
+    if let Err(e) = mc_utils::copy_startup_helper_data(profile, &game_directory, norisk_pack.as_ref()).await {
+        // We will only log a warning because this is not a critical step for launching the game.
+        // The installation can proceed even if this fails.
+        warn!("Failed to import StartUpHelper data (non-critical error): {}", e);
+    }
+    info!("StartUpHelper data import check complete.");
+    // --- END NEW ---
+
+    // --- Copy initial data from default Minecraft installation ---
+    info!("\nChecking for user data to import...");
+    if let Err(e) =
+        mc_utils::copy_initial_data_from_default_minecraft(profile, &game_directory).await
+    {
+        // We will only log a warning because this is not a critical step for launching the game.
+        // The installation can proceed even if this fails.
+        warn!("Failed to import user data (non-critical error): {}", e);
+    }
+    info!("User data import check complete.");
+
     // Emit libraries download event
     let libraries_event_id = emit_progress_event(
         &state,
         EventType::DownloadingLibraries,
         profile.id,
-        "Libraries werden heruntergeladen...",
+        "Downloading libraries...",
         0.0,
         None,
     )
@@ -167,7 +340,7 @@ pub async fn install_minecraft_version(
         &state,
         EventType::DownloadingLibraries,
         profile.id,
-        "Libraries Download abgeschlossen!",
+        "Libraries download completed!",
         1.0,
         None,
     )
@@ -178,7 +351,7 @@ pub async fn install_minecraft_version(
         &state,
         EventType::ExtractingNatives,
         profile.id,
-        "Natives werden extrahiert...",
+        "Extracting natives...",
         0.0,
         None,
     )
@@ -195,7 +368,7 @@ pub async fn install_minecraft_version(
         &state,
         EventType::ExtractingNatives,
         profile.id,
-        "Natives Extraktion abgeschlossen!",
+        "Natives extraction completed!",
         1.0,
         None,
     )
@@ -211,15 +384,15 @@ pub async fn install_minecraft_version(
 
     // Download NoRiskClient assets if profile has a selected pack
     info!("\nDownloading NoRiskClient assets...");
-    
+
     let norisk_assets_service = NoriskClientAssetsDownloadService::new()
         .with_concurrent_downloads(launcher_config.concurrent_downloads);
-    
+
     // Download assets for this profile - progress events are now handled internally
     norisk_assets_service
         .download_nrc_assets_for_profile(&profile, credentials.as_ref(), is_experimental_mode)
         .await?;
-        
+
     info!("NoRiskClient Asset download completed!");
 
     // Emit client download event
@@ -227,7 +400,7 @@ pub async fn install_minecraft_version(
         &state,
         EventType::DownloadingClient,
         profile.id,
-        "Minecraft Client wird heruntergeladen...",
+        "Downloading Minecraft client...",
         0.0,
         None,
     )
@@ -244,29 +417,77 @@ pub async fn install_minecraft_version(
         &state,
         EventType::DownloadingClient,
         profile.id,
-        "Minecraft Client Download abgeschlossen!",
+        "Minecraft client download completed!",
         1.0,
         None,
     )
     .await?;
 
     // Create and use Minecraft launcher
-    let launcher = MinecraftLauncher::new(java_path.clone(), game_directory.clone(), credentials);
+    let launcher = MinecraftLauncher::new(
+        java_path.clone(),
+        game_directory.clone(),
+        credentials.clone(),
+    );
 
     info!("\nPreparing launch parameters...");
 
-    let mut launch_params = MinecraftLaunchParameters::new(profile.id, profile.settings.memory.max)
+    // Get memory settings (global for standard profiles, profile-specific for custom)
+    let memory_max = if profile.is_standard_version {
+        let state = State::get().await?;
+        let config = state.config_manager.get_config().await;
+        config.global_memory_settings.max
+    } else {
+        profile.settings.memory.max
+    };
+
+    let mut launch_params = MinecraftLaunchParameters::new(profile.id, memory_max)
         .with_old_minecraft_arguments(piston_meta.minecraft_arguments.clone())
+        .with_resolution(profile.settings.resolution.clone())
         .with_experimental_mode(is_experimental_mode);
+
+    // Add Quick Play parameters if provided
+    if let Some(world_name) = quick_play_singleplayer {
+        launch_params = launch_params.with_quick_play_singleplayer(world_name);
+    } else if let Some(server_address) = quick_play_multiplayer {
+        launch_params = launch_params.with_quick_play_multiplayer(server_address);
+    }
 
     // Install modloader using the factory
     if modloader_enum != ModLoader::Vanilla {
+        // Resolve loader version using the new modloader factory method
+        let mut install_profile = profile.clone();
+        let config_now: NoriskModpacksConfig = state.norisk_pack_manager.get_config().await;
+        let resolved_loader = crate::minecraft::modloader::ModloaderFactory::resolve_loader_version(
+            profile,
+            version_id,
+            Some(&config_now),
+        ).await;
+
+        if let Some(version) = resolved_loader.version {
+            let reason_str = match resolved_loader.reason {
+                crate::minecraft::modloader::LoaderVersionReason::NoriskPack => "Norisk pack policy",
+                crate::minecraft::modloader::LoaderVersionReason::UserOverwrite => "user overwrite",
+                crate::minecraft::modloader::LoaderVersionReason::ProfileDefault => "profile default",
+                crate::minecraft::modloader::LoaderVersionReason::NotResolved => "not resolved",
+            };
+            
+            info!(
+                "Applying loader version '{}' from {} for MC {} ({:?})",
+                version,
+                reason_str,
+                version_id,
+                modloader_enum
+            );
+            install_profile.loader_version = Some(version);
+        }
+
         let modloader_installer = ModloaderFactory::create_installer_with_config(
             &modloader_enum,
             java_path.clone(),
             launcher_config.concurrent_downloads,
         );
-        let modloader_result = modloader_installer.install(version_id, profile).await?;
+        let modloader_result = modloader_installer.install(version_id, &install_profile).await?;
 
         // Apply modloader specific parameters to launch parameters
         if let Some(main_class) = modloader_result.main_class {
@@ -303,18 +524,85 @@ pub async fn install_minecraft_version(
         launch_params = launch_params.with_main_class(&piston_meta.main_class);
     }
 
-    // --- Fetch Norisk Config Once if a pack is selected ---
-    let loaded_norisk_config: Option<NoriskModpacksConfig> =
-        if let Some(pack_id) = &profile.selected_norisk_pack_id {
+    // Add custom JVM arguments (global for standard profiles, profile-specific for custom)
+    let custom_jvm_args_str = if profile.is_standard_version {
+        let state = State::get().await?;
+        let config = state.config_manager.get_config().await;
+        config.global_custom_jvm_args.clone()
+    } else {
+        profile.settings.custom_jvm_args.clone()
+    };
+
+    if let Some(jvm_args_str) = custom_jvm_args_str {
+        if !jvm_args_str.trim().is_empty() {
+            let mut current_jvm_args = launch_params.additional_jvm_args.clone();
+            let custom_args: Vec<String> =
+                jvm_args_str.split_whitespace().map(String::from).collect();
             info!(
-                "Fetching Norisk config because pack '{}' is selected.",
-                pack_id
+                "Adding custom JVM arguments from {}: {:?}",
+                if profile.is_standard_version { "global settings" } else { "profile" },
+                custom_args
             );
-            // No need to clone state here, it's still valid in this scope
-            Some(state.norisk_pack_manager.get_config().await)
+            current_jvm_args.extend(custom_args);
+            launch_params = launch_params.with_additional_jvm_args(current_jvm_args);
+        }
+    }
+
+    // Combine Game arguments from modloader (if any) and profile settings (extra_game_args)
+    let mut final_game_args = launch_params.additional_game_args.clone();
+    final_game_args.extend(profile.settings.extra_game_args.clone());
+    launch_params = launch_params.with_additional_game_args(final_game_args);
+
+    // --- Fetch Norisk Config Once if a pack is selected ---
+    let loaded_norisk_config: Option<NoriskModpacksConfig> = if let Some(pack_id) =
+        &profile.selected_norisk_pack_id
+    {
+        info!(
+            "Fetching Norisk config because pack '{}' is selected. Attempting to refresh first.",
+            pack_id
+        );
+        if let Some(creds) = credentials.as_ref() {
+            match creds
+                .norisk_credentials
+                .get_token_for_mode(is_experimental_mode)
+            {
+                Ok(norisk_token_value) => {
+                    info!("Attempting to update Norisk pack configuration using obtained token for pack '{}'...", pack_id);
+                    if let Err(update_err) = state
+                        .norisk_pack_manager
+                        .fetch_and_update_config(&norisk_token_value, is_experimental_mode)
+                        .await
+                    {
+                        warn!(
+                                "Failed to update Norisk pack '{}' configuration: {}. Will proceed with cached version.",
+                                pack_id, update_err
+                            );
+                    } else {
+                        info!(
+                            "Successfully updated Norisk pack '{}' configuration from API.",
+                            pack_id
+                        );
+                    }
+                }
+                Err(token_err) => {
+                    warn!(
+                            "Could not obtain Norisk token for pack '{}' to update configuration: {}. Will proceed with cached version.",
+                            pack_id, token_err
+                        );
+                }
+            }
         } else {
-            None
-        };
+            error!(
+                    "A Norisk pack ('{}') is selected, but no credentials were provided. Cannot attempt to update pack configuration.",
+                    pack_id
+                );
+        }
+        // No need to clone state here, it's still valid in this scope
+        // Always attempt to get the config, which will be the latest if updated, or cached otherwise.
+        Some(state.norisk_pack_manager.get_config().await)
+    } else {
+        None
+    };
 
     // --- Step: Ensure profile-defined mods are downloaded/verified in cache ---
     let mods_event_id = emit_progress_event(
@@ -478,6 +766,20 @@ pub async fn install_minecraft_version(
     )
     .await?;
 
+    // --- Prototype: Provide managed mods via Fabric addMods meta file (Fabric only) ---
+    if modloader_enum == ModLoader::Fabric {
+        let add_mods_arg = crate::minecraft::downloads::mod_resolver::build_fabric_add_mods_arg(
+            profile.id,
+            version_id,
+            &target_mods,
+        )
+        .await?;
+        let mut current_jvm_args = launch_params.additional_jvm_args.clone();
+        current_jvm_args.push(add_mods_arg);
+        launch_params = launch_params.with_additional_jvm_args(current_jvm_args);
+        info!("Configured Fabric addMods meta file for profile '{}'", profile.name);
+    }
+
     // --- Step: Sync mods from cache to profile directory ---
     let sync_event_id = emit_progress_event(
         &state,
@@ -493,10 +795,23 @@ pub async fn install_minecraft_version(
         "Syncing mods from cache to profile directory for '{}'...",
         profile.name
     );
-    // Pass the resolved target_mods list to the sync function
-    mod_downloader_service
-        .sync_mods_to_profile(&target_mods, &game_directory)
-        .await?;
+
+    // Get the correct mods directory path for the profile
+    let profile_mods_path = state.profile_manager.get_profile_mods_path(profile)?;
+
+    // Ensure mods folder exists for all loaders before launch/sync
+    async_fs::create_dir_all(&profile_mods_path).await?;
+
+    // Pass the resolved target_mods list and the specific mods path to the sync function
+    if modloader_enum == ModLoader::Fabric {
+        info!(
+            "Skipping mods folder sync for Fabric (using addMods meta file instead)."
+        );
+    } else {
+        mod_downloader_service
+            .sync_mods_to_profile(&target_mods, &profile_mods_path)
+            .await?;
+    }
 
     info!("Mod sync completed for profile '{}'", profile.name);
     emit_progress_event(
@@ -529,25 +844,63 @@ pub async fn install_minecraft_version(
         launch_params = launch_params.with_additional_jvm_args(jvm_args);
     }
 
+    // --- Execute pre-launch hooks ---
+    let launcher_config = state.config_manager.get_config().await;
+    if let Some(hook) = &launcher_config.hooks.pre_launch {
+        info!("Executing pre-launch hook: {}", hook);
+        let hook_event_id = emit_progress_event(
+            &state,
+            EventType::LaunchingMinecraft,
+            profile.id,
+            "Executing pre-launch hook...",
+            0.0,
+            None,
+        )
+        .await?;
+
+        let mut cmd = hook.split(' ');
+        if let Some(command) = cmd.next() {
+            let result = std::process::Command::new(command)
+                .args(cmd.collect::<Vec<&str>>())
+                .current_dir(&game_directory)
+                .spawn()
+                .map_err(|e| AppError::Io(e))?
+                .wait()
+                .map_err(|e| AppError::Io(e))?;
+
+            if !result.success() {
+                let error_msg = format!(
+                    "Pre-launch hook failed with exit code: {}",
+                    result.code().unwrap_or(-1)
+                );
+                error!("{}", error_msg);
+                return Err(AppError::Other(error_msg));
+            }
+        }
+        info!("Pre-launch hook executed successfully");
+    }
+
     // --- Launch Minecraft ---
     // Emit launch event
     let launch_event_id = emit_progress_event(
         &state,
         EventType::LaunchingMinecraft,
         profile.id,
-        "Minecraft wird gestartet...",
+        "Starting Minecraft...",
         0.0,
         None,
     )
     .await?;
 
-    launcher.launch(&piston_meta, launch_params, Some(profile.clone())).await?;
+    launcher
+        .launch(&piston_meta, launch_params, Some(profile.clone()))
+        .await?;
 
     emit_progress_event(
         &state,
         EventType::LaunchingMinecraft,
         profile.id,
-        "Minecraft wurde gestartet!",
+        "Minecraft launched successfully!",
         1.0,
         None,
     )

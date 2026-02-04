@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use log::info;
-use crate::minecraft::dto::piston_meta::{GameArgument, ComplexArgument, ArgumentValue};
+use crate::minecraft::dto::piston_meta::{ArgumentValue, ComplexArgument, GameArgument};
 use crate::minecraft::rules::RuleProcessor;
+use log::info;
+use std::path::PathBuf;
 
 pub struct JvmArguments {
     natives_directory: PathBuf,
@@ -38,10 +38,13 @@ impl JvmArguments {
     }
 
     fn replace_variables(&self, arg: &str) -> String {
-        arg.replace("${natives_directory}", &self.natives_directory.to_string_lossy().replace("\\", "/"))
-            .replace("${launcher_name}", &self.launcher_name)
-            .replace("${launcher_version}", &self.launcher_version)
-            .replace("${classpath}", &self.classpath)
+        arg.replace(
+            "${natives_directory}",
+            &self.natives_directory.to_string_lossy().replace("\\", "/"),
+        )
+        .replace("${launcher_name}", &self.launcher_name)
+        .replace("${launcher_version}", &self.launcher_version)
+        .replace("${classpath}", &self.classpath)
     }
 
     pub fn process_arguments(&self, arguments: &[GameArgument]) -> Vec<String> {
@@ -75,4 +78,4 @@ impl JvmArguments {
 
         processed_args
     }
-} 
+}

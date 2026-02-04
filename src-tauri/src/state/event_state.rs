@@ -1,9 +1,11 @@
+use crate::error::Result;
+use crate::state::process_state::ProcessMetadata;
+use dashmap::DashMap;
+use log::info;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tauri::Emitter;
 use uuid::Uuid;
-use serde::{Serialize, Deserialize};
-use dashmap::DashMap;
-use crate::error::Result;
-use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -13,6 +15,7 @@ pub enum EventType {
     ExtractingNatives,
     DownloadingAssets,
     ReusingMinecraftAssets,
+    CopyingInitialData,
     CopyingNoRiskClientAssets,
     DownloadingNoRiskClientAssets,
     DownloadingClient,
@@ -26,12 +29,30 @@ pub enum EventType {
     LaunchingMinecraft,
     MinecraftOutput,
     AccountLogin,
+    AccountLoginStarted,
+    AccountLoginWaitingForBrowser,
+    AccountLoginExchangingToken,
+    AccountLoginExchangingXboxToken,
+    AccountLoginExchangingXstsToken,
+    AccountLoginGettingMinecraftToken,
+    AccountLoginCheckingEntitlements,
+    AccountLoginFetchingProfile,
+    AccountLoginCompleted,
     AccountRefresh,
     AccountLogout,
     ProfileUpdate,
     TriggerProfileUpdate,
     MinecraftProcessExited,
+    StarlightSkinUpdated,
     Error,
+    LaunchSuccessful,
+    CrashReportContentAvailable,
+    MigrationStarted,
+    MigrationCompleted,
+    MigrationFailed,
+    ExportingProfile,
+    ProcessMetricsUpdate,
+    TaskProgress,
 }
 
 #[derive(Serialize, Clone)]
@@ -50,6 +71,22 @@ pub struct MinecraftProcessExitedPayload {
     pub process_id: Uuid,
     pub exit_code: Option<i32>,
     pub success: bool,
+    pub process_metadata: Option<ProcessMetadata>,
+    pub crash_report_content: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CrashReportContentAvailablePayload {
+    pub process_id: Uuid,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProcessMetricsPayload {
+    pub process_id: Uuid,
+    pub memory_bytes: u64,
+    pub cpu_percent: f32,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Clone)]
@@ -67,10 +104,13 @@ pub struct EventState {
 
 impl EventState {
     pub fn new(app: Option<Arc<tauri::AppHandle>>) -> Self {
-        Self {
+        info!("Initializing EventState...");
+        let state = Self {
             app,
             active_events: DashMap::new(),
-        }
+        };
+        info!("Successfully initialized EventState.");
+        state
     }
 
     pub async fn emit(&self, payload: EventPayload) -> Result<()> {
@@ -119,4 +159,4 @@ impl EventState {
             .map(|entry| (entry.key().clone(), entry.value().clone()))
             .collect()
     }
-} 
+}

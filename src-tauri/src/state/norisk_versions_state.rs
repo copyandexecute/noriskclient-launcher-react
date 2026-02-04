@@ -2,6 +2,9 @@ use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
 use crate::integrations::norisk_versions::NoriskVersionsConfig;
 use crate::minecraft::api::norisk_api::NoRiskApi;
+use crate::state::post_init::PostInitializationHandler;
+use crate::state::state_manager::State;
+use async_trait::async_trait;
 use log::{debug, error, info};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,6 +18,16 @@ use super::profile_state::Profile;
 // Default filename for the Norisk versions configuration
 const NORISK_VERSIONS_FILENAME: &str = "norisk_versions.json";
 
+/// Returns the path for the norisk versions config depending on experimental mode
+pub fn norisk_versions_path_for(is_experimental: bool) -> PathBuf {
+    let filename = if is_experimental {
+        "norisk_versions_exp.json"
+    } else {
+        NORISK_VERSIONS_FILENAME
+    };
+    LAUNCHER_DIRECTORY.root_dir().join(filename)
+}
+
 pub struct NoriskVersionManager {
     config: Arc<RwLock<NoriskVersionsConfig>>,
     config_path: PathBuf,
@@ -24,19 +37,13 @@ pub struct NoriskVersionManager {
 impl NoriskVersionManager {
     /// Creates a new NoriskVersionManager instance, loading the configuration from the specified path.
     /// If the file doesn't exist, it initializes with a default empty configuration.
-    pub async fn new(config_path: PathBuf) -> Result<Self> {
+    pub fn new(config_path: PathBuf) -> Result<Self> {
         info!(
-            "Initializing NoriskVersionManager with path: {:?}",
+            "NoriskVersionManager: Initializing with path: {:?} (config loading deferred)",
             config_path
         );
-        // Load initial config. If loading fails critically (e.g., IO error other than NotFound),
-        // propagate the error. If parsing fails or file not found, use default.
-        let config = Self::load_config(&config_path).await.unwrap_or_else(|e| {
-            error!("Critical error loading norisk_versions.json (path: {:?}): {}. Using default empty config.", config_path, e);
-            NoriskVersionsConfig { profiles: vec![] }
-        });
         Ok(Self {
-            config: Arc::new(RwLock::new(config)),
+            config: Arc::new(RwLock::new(NoriskVersionsConfig::default())),
             config_path,
             save_lock: Mutex::new(()),
         })
@@ -89,7 +96,7 @@ impl NoriskVersionManager {
 
     /// Loads the Norisk versions configuration from a JSON file.
     /// Returns a default empty config if the file doesn't exist or cannot be parsed.
-    async fn load_config(path: &PathBuf) -> Result<NoriskVersionsConfig> {
+    async fn load_config_internal(&self, path: &PathBuf) -> Result<NoriskVersionsConfig> {
         if !path.exists() {
             info!(
                 "Norisk versions config file not found at {:?}, using default empty config.",
@@ -121,7 +128,15 @@ impl NoriskVersionManager {
             serde_json::to_string_pretty(&*config_guard)?
         };
 
-        if let Some(parent_dir) = self.config_path.parent() {
+        // Choose path based on experimental mode if available; fall back to manager's path
+        let path_to_write = if let Ok(state) = State::get().await {
+            let is_exp = state.config_manager.is_experimental_mode().await;
+            norisk_versions_path_for(is_exp)
+        } else {
+            self.config_path.clone()
+        };
+
+        if let Some(parent_dir) = path_to_write.parent() {
             if !parent_dir.exists() {
                 fs::create_dir_all(parent_dir).await?;
                 info!(
@@ -131,10 +146,10 @@ impl NoriskVersionManager {
             }
         }
 
-        fs::write(&self.config_path, config_data).await?;
+        fs::write(&path_to_write, config_data).await?;
         info!(
             "Successfully saved norisk versions config to {:?}",
-            self.config_path
+            path_to_write
         );
         Ok(())
     }
@@ -159,9 +174,9 @@ impl NoriskVersionManager {
     #[allow(dead_code)]
     pub async fn print_current_config(&self) {
         let config_guard = self.config.read().await;
-        println!("--- Current Norisk Versions Config ---");
-        println!("{:#?}", *config_guard);
-        println!("--- End Norisk Versions Config ---");
+        //println!("--- Current Norisk Versions Config ---");
+        //println!("{:#?}", *config_guard);
+        //println!("--- End Norisk Versions Config ---");
     }
 
     /// Returns a standard profile by ID if found
@@ -172,6 +187,36 @@ impl NoriskVersionManager {
 
     // Add more specific accessor methods if needed, e.g.:
     // pub async fn get_standard_profile(&self, profile_id: Uuid) -> Option<NoriskVersionProfile> { ... }
+}
+
+#[async_trait]
+impl PostInitializationHandler for NoriskVersionManager {
+    async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        info!("NoriskVersionManager: on_state_ready called. Loading configuration...");
+        // Load initial config. If loading fails critically (e.g., IO error other than NotFound), propagate the error.
+        // If parsing fails or file not found, use default. This logic is now effectively in load_config_internal.
+        let load_path = if let Ok(state) = State::get().await {
+            let is_exp = state.config_manager.is_experimental_mode().await;
+            norisk_versions_path_for(is_exp)
+        } else {
+            self.config_path.clone()
+        };
+        let loaded_config = self.load_config_internal(&load_path).await.unwrap_or_else(|e| {
+            error!(
+                "NoriskVersionManager: Critical error in on_state_ready loading config (path: {:?}): {}. Using default empty config.", 
+                load_path,
+                e
+            );
+            NoriskVersionsConfig::default()
+        });
+
+        let mut config_guard = self.config.write().await;
+        *config_guard = loaded_config;
+        drop(config_guard);
+
+        info!("NoriskVersionManager: Successfully processed configuration in on_state_ready.");
+        Ok(())
+    }
 }
 
 /// Returns the default path for the norisk_versions.json file within the launcher directory.

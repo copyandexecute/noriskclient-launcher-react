@@ -21,4 +21,4 @@ pub struct Version {
     pub time: String,
     #[serde(rename = "releaseTime")]
     pub release_time: String,
-} 
+}

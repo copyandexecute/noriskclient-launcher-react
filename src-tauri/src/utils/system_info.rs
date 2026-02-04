@@ -1,6 +1,6 @@
-use serde::Deserialize;
-use std::fmt::Display;
 use crate::error::{AppError, Result};
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 #[derive(Deserialize, PartialEq, Eq, Hash, Debug)]
 pub enum OperatingSystem {
@@ -14,7 +14,7 @@ pub enum OperatingSystem {
     UNKNOWN,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum Architecture {
     #[serde(rename = "x86")]
     X86,
@@ -117,4 +117,4 @@ pub const ARCHITECTURE: Architecture = if cfg!(target_arch = "x86") {
     Architecture::AARCH64
 } else {
     Architecture::UNKNOWN
-}; 
+};

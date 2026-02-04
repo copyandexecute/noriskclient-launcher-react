@@ -113,4 +113,4 @@ pub struct QuiltVersionInfo {
     pub intermediary: QuiltIntermediary,
     #[serde(rename = "launcherMeta")]
     pub launcher_meta: QuiltLauncherMeta,
-} 
+}

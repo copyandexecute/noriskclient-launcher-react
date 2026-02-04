@@ -1,6 +1,8 @@
-use thiserror::Error;
+use fastnbt::error::Error as FastNbtError;
+use fs_extra::error::Error as FsExtraError;
 use serde::Serialize;
 use std::io;
+use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
@@ -52,6 +54,9 @@ pub enum AppError {
 
     #[error("NeoForge error: {0}")]
     NeoForgeError(String),
+
+    #[error("Semaphore acquire error: {0}")]
+    Semaphore(#[from] tokio::sync::AcquireError),
 
     #[error("Profile not found: {0}")]
     ProfileNotFound(Uuid),
@@ -136,21 +141,63 @@ pub enum AppError {
 
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     #[error("Invalid Input: {0}")]
     InvalidInput(String),
 
     #[error("File not found: {0:?}")]
     FileNotFound(std::path::PathBuf),
 
+    #[error("NBT parsing error: {0}")]
+    Nbt(#[from] FastNbtError),
+
     #[error("Archive read error: {0}")]
     ArchiveReadError(String),
 
     #[error("PNG not found in archive: {0:?}")]
     PngNotFoundInArchive(std::path::PathBuf),
+
+    // --- World Copy Errors ---
+    #[error("World '{world_folder}' not found in profile {profile_id}.")]
+    WorldNotFound {
+        profile_id: Uuid,
+        world_folder: String,
+    },
+    #[error("World '{world_folder}' already exists in profile {profile_id}.")]
+    WorldAlreadyExists {
+        profile_id: Uuid,
+        world_folder: String,
+    },
+    #[error("World '{world_folder}' in profile {profile_id} is currently locked (in use).")]
+    WorldLocked {
+        profile_id: Uuid,
+        world_folder: String,
+    },
+    #[error("Filesystem operation error (fs_extra): {0}")]
+    FsExtra(#[from] FsExtraError),
+
+    #[error("Feature not implemented: {0}")]
+    NotImplemented(String),
+
+    #[error("Resource not found: {0}")]
+    NotFound(String),
+
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
+
+    #[error("Image processing error: {0}")]
+    ImageProcessingError(String),
+
+    #[error("Insufficient disk space on {path:?}. Required: {required_mb} MB, Available: {available_mb} MB, Shortfall: {shortfall_mb} MB")]
+    InsufficientDiskSpace {
+        path: std::path::PathBuf,
+        required_mb: u64,
+        available_mb: u64,
+        shortfall_mb: u64,
+    },
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct CommandError {
     pub message: String,
     pub kind: String,

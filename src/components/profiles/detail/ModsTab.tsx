@@ -1,26 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ModRow } from "./ModRow";
 import type { Mod, Profile } from "../../../types/profile";
 import * as ProfileService from "../../../services/profile-service";
-import { SearchInput } from "./common/SearchInput";
-import { ActionButton } from "./common/ActionButton";
-import { ContentTable } from "./common/ContentTable";
-import { LoadingState } from "./common/LoadingState";
-import { ErrorState } from "./common/ErrorState";
-import { EmptyState } from "./common/EmptyState";
+import { SearchInput } from "../../ui/SearchInput";
+import { LoadingState } from "../../ui/LoadingState";
+import { EmptyState } from "../../ui/EmptyState";
 import { Icon } from "@iconify/react";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   ModrinthBulkUpdateRequestBody,
   ModrinthHashAlgorithm,
   ModrinthVersion,
+  ModrinthProject,
 } from "../../../types/modrinth";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { ContentTable } from "../../ui/ContentTable";
+import { Button } from "../../ui/buttons/Button";
+import { ErrorMessage } from "../../ui/ErrorMessage";
+import { gsap } from "gsap";
+import { ModrinthService } from "../../../services/modrinth-service";
+import { AutoSizer } from "react-virtualized/dist/es/AutoSizer";
+import { List } from "react-virtualized/dist/es/List";
+import type { ListRowProps } from "react-virtualized";
 
 interface ModsTabProps {
   profile: Profile;
   onRefresh?: () => void;
+  isActive?: boolean;
+  searchQuery?: string;
+  onBrowse?: (contentType: string) => void;
 }
 
 interface ModSourceModrinth {
@@ -31,21 +41,87 @@ interface ModSourceModrinth {
   file_hash_sha1?: string;
 }
 
-export function ModsTab({ profile, onRefresh }: ModsTabProps) {
+export function ModsTab({
+  profile,
+  onRefresh,
+  isActive = false,
+  searchQuery = "",
+}: ModsTabProps) {
   const [mods, setMods] = useState<Mod[]>(profile.mods || []);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "enabled" | "version">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [error, setError] = useState<string | null>(null);
 
-  const [modUpdates, setModUpdates] = useState<Record<string, ModrinthVersion>>(
-    {},
-  );
+  const [modUpdates, setModUpdates] = useState<
+    Record<string, ModrinthVersion | null>
+  >({});
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updatingMods, setUpdatingMods] = useState<Set<string>>(new Set());
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [modrinthIcons, setModrinthIcons] = useState<Record<string, string | null>>({});
+
+  // Use parent's search query if provided
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (containerRef.current && isActive) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isActive]);
+
+  useEffect(() => {
+    const fetchAllModrinthIcons = async () => {
+      if (!mods || mods.length === 0) {
+        setModrinthIcons({});
+        return;
+      }
+
+      const modrinthProjectIds = mods
+        .filter(
+          (mod) => mod.source?.type === "modrinth" && mod.source.project_id,
+        )
+        .map((mod) => (mod.source as ModSourceModrinth).project_id!);
+
+      if (modrinthProjectIds.length > 0) {
+        try {
+          const projectDetailsList = await ModrinthService.getProjectDetails(modrinthProjectIds);
+
+          const icons: Record<string, string | null> = {};
+          projectDetailsList.forEach((detail) => {
+            if (detail?.id && detail.icon_url) {
+              icons[detail.id] = detail.icon_url;
+            }
+          });
+          setModrinthIcons(icons);
+        } catch (err) {
+          console.error("Failed to fetch Modrinth project details in bulk:", err);
+          // Optionally set an error state or handle partial failures
+        }
+      } else {
+        setModrinthIcons({});
+      }
+    };
+
+    fetchAllModrinthIcons();
+  }, [mods]); // Re-fetch if mods array changes
 
   const handleUpdateMod = async (mod: Mod, updateVersion: ModrinthVersion) => {
     if (
@@ -105,6 +181,29 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
         newSet.delete(mod.id);
         return newSet;
       });
+    }
+  };
+
+  const handleUpdateAllMods = async () => {
+    const modsToUpdate = mods.filter((mod) => {
+      if (
+        mod.source?.type !== "modrinth" ||
+        !(mod.source as ModSourceModrinth).file_hash_sha1
+      ) {
+        return false;
+      }
+      const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+      return hash in modUpdates;
+    });
+
+    if (modsToUpdate.length === 0) return;
+
+    for (const mod of modsToUpdate) {
+      const hash = (mod.source as ModSourceModrinth).file_hash_sha1!;
+      const updateVersion = modUpdates[hash];
+      if (updateVersion) {
+        await handleUpdateMod(mod, updateVersion);
+      }
     }
   };
 
@@ -305,18 +404,6 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     }
   };
 
-  const handleImportLocalMods = async () => {
-    try {
-      await ProfileService.importLocalMods(profile.id);
-      fetchMods();
-    } catch (error) {
-      console.error("Failed to import local mods:", error);
-      setError(
-        `Failed to import local mods: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  };
-
   const handleSort = (criteria: string) => {
     if (sortBy === criteria) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
@@ -338,11 +425,17 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
     return hash in modUpdates ? modUpdates[hash] : null;
   };
 
-  const filteredMods = mods.filter(
-    (mod) =>
-      mod.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      mod.id.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+
+  const filteredMods = mods.filter((mod) => {
+    const matchesSearch =
+      mod.display_name
+        ?.toLowerCase()
+        .includes(effectiveSearchQuery.toLowerCase()) ||
+      mod.id.toLowerCase().includes(effectiveSearchQuery.toLowerCase());
+
+    return matchesSearch;
+  });
 
   const sortedMods = [...filteredMods].sort((a, b) => {
     let comparison = 0;
@@ -369,120 +462,198 @@ export function ModsTab({ profile, onRefresh }: ModsTabProps) {
       (mod.source as ModSourceModrinth).file_hash_sha1! in modUpdates,
   ).length;
 
-  return (
-    <div className="h-full flex flex-col select-none">
-      <div className="flex items-center justify-between mb-5">
-        <SearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="search mods..."
-        />
+  const rowRenderer = ({ index, key, style }: ListRowProps) => {
+    const mod = sortedMods[index];
+    return (
+      <ModRow
+        key={mod.id}
+        style={style}
+        mod={mod}
+        isSelected={selectedMods.has(mod.id)}
+        onSelect={() => handleSelectMod(mod.id)}
+        onToggle={() => handleToggleMod(mod.id)}
+        onDelete={() => handleDeleteMod(mod.id)}
+        onUpdate={handleUpdateMod}
+        updateVersion={getModUpdateVersion(mod)}
+        checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
+        modrinthIconUrl={mod.source?.type === "modrinth" && mod.source.project_id ? modrinthIcons[(mod.source as ModSourceModrinth).project_id!] : null}
+      />
+    );
+  };
 
-        <div className="flex items-center gap-4">
-          <ActionButton
-            icon="pixel:upload-solid"
-            label="import"
-            onClick={handleImportLocalMods}
-          />
-          <ActionButton
-            icon="pixel:arrow-up"
-            label="check updates"
-            onClick={handleCheckUpdates}
-            disabled={checkingUpdates}
-          >
+  return (
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      {/* Action bar with transparent styling */}
+      <div
+        className="flex items-center justify-between mb-4 p-3 rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}30`,
+        }}
+      >
+        {/* Only show search if parent isn't providing it */}
+        {!searchQuery && (
+          <div className="w-full md:w-1/3">
+            <SearchInput
+              value={localSearchQuery}
+              onChange={setLocalSearchQuery}
+              placeholder="search mods..."
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            {/* Update All button */}
             {modsWithUpdates > 0 && (
-              <span className="bg-green-500/20 border border-green-500/30 text-green-400 text-xs px-1.5 py-0.5 rounded-sm font-sans ml-1">
-                {modsWithUpdates}
-              </span>
+              <Button
+                variant="success"
+                size="sm"
+                icon={
+                  checkingUpdates ? (
+                    <Icon icon="solar:refresh-bold" className="animate-spin" />
+                  ) : (
+                    <Icon icon="solar:arrow-up-bold" />
+                  )
+                }
+                onClick={handleUpdateAllMods}
+                disabled={checkingUpdates}
+              >
+                update all ({modsWithUpdates})
+              </Button>
             )}
-          </ActionButton>
-          <ActionButton
-            icon="pixel:trash-solid"
-            label="delete selected"
-            onClick={handleDeleteSelected}
-            disabled={selectedMods.size === 0}
-            danger
-          >
-            ({selectedMods.size})
-          </ActionButton>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={
+                checkingUpdates ? (
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:arrow-up-bold" />
+                )
+              }
+              onClick={handleCheckUpdates}
+              disabled={checkingUpdates}
+            >
+              check updates
+            </Button>
+
+            {/* Delete button only shown when mods are selected */}
+            {selectedMods.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                icon={<Icon icon="solar:trash-bin-trash-bold" />}
+                onClick={handleDeleteSelected}
+              >
+                delete ({selectedMods.size})
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {updateError && (
-        <div className="bg-red-900/50 border border-red-700/50 text-white p-3 mb-4 rounded">
-          <div className="flex items-center gap-2">
-            <Icon
-              icon="pixel:exclamation-triangle-solid"
-              className="w-5 h-5 text-red-400"
-            />
-            <span>Error checking for updates: {updateError}</span>
-          </div>
+        <div
+          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
+          style={{
+            backgroundColor: `rgba(220, 38, 38, 0.1)`,
+            borderColor: `rgba(220, 38, 38, 0.3)`,
+          }}
+        >
+          <Icon
+            icon="solar:danger-triangle-bold"
+            className="w-5 h-5 text-red-400"
+          />
+          <span className="text-white font-minecraft text-lg">
+            Error checking for updates: {updateError}
+          </span>
         </div>
       )}
 
-      <ContentTable
-        headers={[
-          {
-            key: "name",
-            label: "name",
-            sortable: true,
-            width: "flex-1",
-            className: "px-3",
-          },
-          { key: "version", label: "version", sortable: true, width: "w-28" },
-          {
-            key: "enabled",
-            label: "status",
-            sortable: true,
-            width: "w-28",
-            className: "text-center justify-center",
-          },
-          {
-            key: "actions",
-            label: "actions",
-            sortable: false,
-            width: "w-20",
-            className: "text-center",
-          },
-        ]}
-        sortKey={sortBy}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        selectedCount={selectedMods.size}
-        totalCount={mods.length}
-        filteredCount={filteredMods.length}
-        enabledCount={filteredMods.filter((m) => m.enabled).length}
-        onSelectAll={handleSelectAll}
-        contentType="mod"
-        searchQuery={searchQuery}
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
       >
         {isLoading ? (
           <LoadingState message="loading mods..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={fetchMods} />
-        ) : sortedMods.length > 0 ? (
-          sortedMods.map((mod) => (
-            <ModRow
-              key={mod.id}
-              mod={mod}
-              isSelected={selectedMods.has(mod.id)}
-              onSelect={() => handleSelectMod(mod.id)}
-              onToggle={() => handleToggleMod(mod.id)}
-              onDelete={() => handleDeleteMod(mod.id)}
-              onUpdate={handleUpdateMod}
-              updateVersion={getModUpdateVersion(mod)}
-              checkingUpdates={checkingUpdates || updatingMods.has(mod.id)}
-            />
-          ))
+          <ErrorMessage message={error} />
         ) : (
-          <EmptyState
-            icon="pixel:grid-solid"
-            message={
-              searchQuery ? "no mods match your search" : "no mods installed"
-            }
-          />
+          <ContentTable
+            headers={[
+              {
+                key: "name",
+                label: "mod name",
+                sortable: true,
+                width: "flex-1",
+                className: "px-3",
+              },
+              {
+                key: "version",
+                label: "version",
+                sortable: true,
+                width: "w-32",
+              },
+              {
+                key: "enabled",
+                label: "status",
+                sortable: true,
+                width: "w-16",
+                className: "text-center",
+              },
+              {
+                key: "actions",
+                label: "actions",
+                sortable: false,
+                width: "w-24",
+                className: "text-center",
+              },
+            ]}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            selectedCount={selectedMods.size}
+            totalCount={mods.length}
+            filteredCount={filteredMods.length}
+            enabledCount={filteredMods.filter((m) => m.enabled).length}
+            onSelectAll={handleSelectAll}
+            contentType="mod"
+            searchQuery={effectiveSearchQuery}
+          >
+            {sortedMods.length > 0 ? (
+              // @ts-ignore TODO: Resolve react-virtualized type issue with React 18
+              <AutoSizer>
+                {({ height, width }) => (
+                  // @ts-ignore TODO: Resolve react-virtualized type issue with React 18
+                  <List
+                    width={width}
+                    height={height}
+                    rowCount={sortedMods.length}
+                    rowHeight={90}
+                    rowRenderer={rowRenderer}
+                    overscanRowCount={10}
+                  />
+                )}
+              </AutoSizer>
+            ) : (
+              <EmptyState
+                icon="solar:widget-bold"
+                message={
+                  effectiveSearchQuery
+                    ? "no mods match your search"
+                    : "no mods installed"
+                }
+                description="Drag and drop mod files here to install"
+              />
+            )}
+          </ContentTable>
         )}
-      </ContentTable>
+      </div>
     </div>
   );
 }

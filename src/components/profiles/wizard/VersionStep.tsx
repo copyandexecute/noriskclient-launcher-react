@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { VersionSelector } from "./VersionSelector";
-import type { VersionType } from "../../../data/versions-data.ts";
+import { useEffect, useRef, useState } from "react";
+import { Icon } from "@iconify/react";
 import type { Profile } from "../../../types/profile";
 import type { MinecraftVersion } from "../../../types/minecraft";
-import { SectionTitle } from "../../ui/SectionTitle";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { VersionSelector } from "./VersionSelector";
+import { Card } from "../../ui/Card";
+import { gsap } from "gsap";
+
+type VersionType = "release" | "snapshot" | "old-beta" | "old-alpha";
 
 interface VersionStepProps {
   profile: Partial<Profile>;
@@ -23,6 +27,43 @@ export function VersionStep({
   const [filteredVersions, setFilteredVersions] = useState<MinecraftVersion[]>(
     [],
   );
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
+  const selectorCardRef = useRef<HTMLDivElement>(null);
+  const summaryCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isBackgroundAnimationEnabled) {
+      if (selectorCardRef.current) {
+        gsap.fromTo(
+          selectorCardRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+          },
+        );
+      }
+
+      if (summaryCardRef.current && profile.game_version) {
+        gsap.fromTo(
+          summaryCardRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.4,
+            ease: "power2.out",
+            delay: 0.1,
+          },
+        );
+      }
+    }
+  }, [profile.game_version, isBackgroundAnimationEnabled]);
 
   useEffect(() => {
     const filtered = minecraftVersions.filter((v) => {
@@ -42,52 +83,68 @@ export function VersionStep({
     ) {
       updateProfile({ game_version: filtered[0].id });
     }
-  }, [selectedVersionType, minecraftVersions, profile.game_version]);
+  }, [
+    selectedVersionType,
+    minecraftVersions,
+    profile.game_version,
+    updateProfile,
+  ]);
 
   const handleVersionChange = (version: string) => {
     updateProfile({ game_version: version });
   };
 
   return (
-    <div className="space-y-10 select-none">
-      <SectionTitle
-        title="select minecraft version"
-        description="choose the minecraft version for your profile. this will determine which mod loaders are available."
-      />
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-3xl font-minecraft text-white mb-3 lowercase">
+          minecraft version
+        </h2>
+        <p className="text-xs text-white/70 font-minecraft-ten tracking-wide">
+          Select the Minecraft version for your profile. This will determine
+          which mod loaders are available.
+        </p>
+      </div>
 
-      <VersionSelector
-        selectedVersion={profile.game_version || ""}
-        onVersionSelect={handleVersionChange}
-        selectedVersionType={selectedVersionType}
-        onVersionTypeSelect={setSelectedVersionType}
-        versions={filteredVersions.map((v) => v.id)}
-        versionButton={(
-          version: string,
-          selectedVersion: string,
-          onVersionSelect: (version: string) => void,
-        ) => (
-          <button
-            key={version}
-            className={`py-4 px-5 font-minecraft text-center text-2xl lowercase tracking-wide rounded-md transition-all duration-200 ${
-              selectedVersion === version
-                ? "bg-white/30 text-white border-2 border-white/50 shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-                : "bg-black/20 text-white/70 border-2 border-white/20 hover:bg-black/30 hover:text-white hover:border-white/30"
-            }`}
-            onClick={() => onVersionSelect(version)}
-          >
-            {version}
-          </button>
-        )}
-        emptyState={() => (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-2xl text-white/70 font-minecraft tracking-wide select-none">
-              no versions available
-            </p>
+      <Card
+        ref={selectorCardRef}
+        variant="flat"
+        className="p-6 space-y-6 bg-black/20 border border-white/10"
+      >
+        <VersionSelector
+          selectedVersion={profile.game_version || ""}
+          onVersionSelect={handleVersionChange}
+          selectedVersionType={selectedVersionType}
+          onVersionTypeSelect={setSelectedVersionType}
+          versions={filteredVersions.map((v) => v.id)}
+        />
+      </Card>
+
+      {profile.game_version && (
+        <Card
+          ref={summaryCardRef}
+          variant="flat"
+          className="p-6 flex items-center gap-4 bg-black/20 border border-white/10"
+        >
+          <div className="w-12 h-12 flex items-center justify-center rounded-md bg-black/30 border border-white/20">
+            <Icon icon="solar:widget-bold" className="w-7 h-7 text-white" />
           </div>
-        )}
-      />
+          <div>
+            <div className="text-2xl text-white font-minecraft tracking-wide lowercase">
+              selected: minecraft {profile.game_version}
+            </div>
+            <div className="text-xs text-white/70 tracking-wide font-minecraft-ten">
+              {selectedVersionType === "release"
+                ? "stable release"
+                : selectedVersionType === "snapshot"
+                  ? "experimental snapshot"
+                  : selectedVersionType === "old-beta"
+                    ? "legacy beta version"
+                    : "legacy alpha version"}
+            </div>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
-
-export default VersionStep;

@@ -3,6 +3,7 @@
 import { Icon } from "@iconify/react";
 import { ProfileItem } from "./ProfileItem";
 import type { Profile } from "../../types/profile";
+import { useThemeStore } from "../../store/useThemeStore";
 
 interface ProfileGroupProps {
   loader: string;
@@ -21,6 +22,8 @@ export function ProfileGroup({
   compatibleProfiles,
   installedProfiles = {},
 }: ProfileGroupProps) {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
   const getLoaderIcon = (loaderName: string) => {
     const normalizedName = loaderName.toLowerCase();
     if (normalizedName.includes("fabric")) return "pixel:fabric";
@@ -31,14 +34,25 @@ export function ProfileGroup({
   };
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon icon={getLoaderIcon(loader)} className="w-5 h-5 text-white/70" />
-        <h4 className="text-white/70 font-minecraft text-sm tracking-wide lowercase select-none">
+    <div className="mb-4 px-3 pt-3">
+      <div
+        className="flex items-center gap-2 mb-3 p-2 rounded-md border-2"
+        style={{
+          backgroundColor: `${accentColor.value}15`,
+          borderColor: `${accentColor.value}30`,
+        }}
+      >
+        <div
+          className="w-7 h-7 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: `${accentColor.value}30` }}
+        >
+          <Icon icon={getLoaderIcon(loader)} className="w-4 h-4 text-white" />
+        </div>
+        <h4 className="text-white font-minecraft text-sm tracking-wide lowercase select-none">
           {loader}
         </h4>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 px-1">
         {profiles.map((profile) => (
           <ProfileItem
             key={profile.id}

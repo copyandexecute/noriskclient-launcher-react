@@ -1,58 +1,90 @@
-import { Icon } from "@iconify/react";
+"use client";
 
-type StatusType = "error" | "success" | "warning" | "info";
+import { useEffect, useRef } from "react";
+import { Icon } from "@iconify/react";
+import { cn } from "../../lib/utils";
+import { gsap } from "gsap";
+import { getBorderRadiusClass } from "./design-system";
 
 interface StatusMessageProps {
-  type: StatusType;
+  type: "success" | "error" | "warning" | "info";
   message: string;
   className?: string;
 }
 
-export function StatusMessage({ type = "info", message }: StatusMessageProps) {
-  if (!message) return null;
+export function StatusMessage({
+  type,
+  message,
+  className,
+}: StatusMessageProps) {
+  const messageRef = useRef<HTMLDivElement>(null);
+  const radiusClass = getBorderRadiusClass();
 
-  const typeConfig = {
-    info: {
-      bgColor: "bg-blue-900/20",
-      borderColor: "border-blue-500/40",
-      textColor: "text-blue-400",
-      icon: "pixel:info-circle-solid",
-    },
-    success: {
-      bgColor: "bg-green-900/20",
-      borderColor: "border-green-500/40",
-      textColor: "text-green-400",
-      icon: "pixel:check-circle-solid",
-    },
-    warning: {
-      bgColor: "bg-yellow-900/20",
-      borderColor: "border-yellow-500/40",
-      textColor: "text-yellow-400",
-      icon: "pixel:exclamation-triangle-solid",
-    },
-    error: {
-      bgColor: "bg-red-900/20",
-      borderColor: "border-red-500/40",
-      textColor: "text-red-400",
-      icon: "pixel:exclamation-circle-solid",
-    },
+  useEffect(() => {
+    if (messageRef.current) {
+      gsap.fromTo(
+        messageRef.current,
+        { opacity: 0, y: -10 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "back.out(1.7)",
+        },
+      );
+    }
+  }, []);
+
+  const getTypeStyles = () => {
+    switch (type) {
+      case "success":
+        return {
+          bg: "bg-green-500/20",
+          border: "border-green-500/40",
+          text: "text-green-400",
+          icon: "solar:check-circle-bold",
+        };
+      case "error":
+        return {
+          bg: "bg-red-500/20",
+          border: "border-red-500/40",
+          text: "text-red-400",
+          icon: "solar:danger-circle-bold",
+        };
+      case "warning":
+        return {
+          bg: "bg-yellow-500/20",
+          border: "border-yellow-500/40",
+          text: "text-yellow-400",
+          icon: "solar:danger-triangle-bold",
+        };
+      case "info":
+        return {
+          bg: "bg-blue-500/20",
+          border: "border-blue-500/40",
+          text: "text-blue-400",
+          icon: "solar:info-circle-bold",
+        };
+    }
   };
 
-  const config = typeConfig[type];
-
+  const styles = getTypeStyles();
   return (
     <div
-      className={`p-4 mb-6 ${config.bgColor} border ${config.borderColor} rounded-md flex items-start select-none`}
+      ref={messageRef}
+      className={cn(
+        "flex items-start p-4 mb-6 border-2 border-b-4",
+        radiusClass,
+        styles.bg,
+        styles.border,
+        styles.text,
+        className,
+      )}
+      role="alert"
+      aria-live="polite"
     >
-      <Icon
-        icon={config.icon}
-        className={`w-6 h-6 ${config.textColor} mr-3 mt-1 flex-shrink-0`}
-      />
-      <div
-        className={`${config.textColor} text-xl font-minecraft tracking-wide`}
-      >
-        {message}
-      </div>
+      <Icon icon={styles.icon} className="w-6 h-6 mr-3 flex-shrink-0 mt-1" aria-hidden="true" />
+      <div className="text-base font-minecraft-ten">{message}</div>
     </div>
   );
 }

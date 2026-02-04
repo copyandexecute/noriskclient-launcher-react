@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Profile } from "../../../types/profile";
 import type {
@@ -8,26 +8,29 @@ import type {
   ResourcePackInfo,
 } from "../../../types/modrinth";
 import { ContentPackRow } from "./ContentPackRow";
-import { SearchInput } from "./common/SearchInput";
-import { ActionButton } from "./common/ActionButton";
-import { ContentTable } from "./common/ContentTable";
-import { LoadingState } from "./common/LoadingState";
-import { ErrorState } from "./common/ErrorState";
-import { EmptyState } from "./common/EmptyState";
+import { SearchInput } from "../../ui/SearchInput";
+import { LoadingState } from "../../ui/LoadingState";
+import { EmptyState } from "../../ui/EmptyState";
 import { Icon } from "@iconify/react";
 import { formatFileSize } from "../../../utils/format-file-size";
-import { cn } from "../../../lib/utils";
+import { useThemeStore } from "../../../store/useThemeStore";
+import { ContentTable } from "../../ui/ContentTable";
+import { Button } from "../../ui/buttons/Button";
+import { gsap } from "gsap";
 
 interface ResourcePacksTabProps {
   profile: Profile;
   onRefresh?: () => void;
   isActive?: boolean;
+  searchQuery?: string;
+  onBrowse?: (contentType: string) => void;
 }
 
 export function ResourcePacksTab({
   profile,
   onRefresh,
   isActive = false,
+  searchQuery = "",
 }: ResourcePacksTabProps) {
   const [resourcePacks, setResourcePacks] = useState<ResourcePackInfo[]>([]);
   const [selectedPacks, setSelectedPacks] = useState<Set<string>>(new Set());
@@ -35,7 +38,7 @@ export function ResourcePacksTab({
   const [resourcePacksError, setResourcePacksError] = useState<string | null>(
     null,
   );
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearchQuery, setLocalSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "enabled">("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -46,6 +49,30 @@ export function ResourcePacksTab({
   >({});
   const [updatingPacks, setUpdatingPacks] = useState<Set<string>>(new Set());
   const [lastUpdateCheck, setLastUpdateCheck] = useState<number>(0);
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Use parent's search query if provided
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setLocalSearchQuery(searchQuery);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (containerRef.current && isActive) {
+      gsap.fromTo(
+        containerRef.current,
+        { opacity: 0, y: 20 },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.4,
+          ease: "power2.out",
+        },
+      );
+    }
+  }, [isActive]);
 
   const fetchResourcePacks = async () => {
     setLoadingResourcePacks(true);
@@ -558,8 +585,10 @@ export function ResourcePacksTab({
     }
   };
 
+  const effectiveSearchQuery = searchQuery || localSearchQuery;
+
   const filteredPacks = resourcePacks.filter((pack) =>
-    pack.filename.toLowerCase().includes(searchQuery.toLowerCase()),
+    pack.filename.toLowerCase().includes(effectiveSearchQuery.toLowerCase()),
   );
 
   const sortedPacks = [...filteredPacks].sort((a, b) => {
@@ -582,187 +611,220 @@ export function ResourcePacksTab({
     (p) => p.is_disabled !== true,
   ).length;
 
-  // Count packs with updates
   const packsWithUpdates = resourcePacks.filter((pack) =>
     hasResourcePackUpdate(pack),
   ).length;
 
   return (
-    <div className="h-full flex flex-col select-none">
-      <div className="flex items-center justify-between mb-5">
-        <SearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="search resource packs..."
-        />
+    <div ref={containerRef} className="h-full flex flex-col select-none p-4">
+      {/* Action bar with transparent styling */}
+      <div
+        className="flex items-center justify-between mb-4 p-3 rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}10`,
+          borderColor: `${accentColor.value}30`,
+        }}
+      >
+        {/* Only show search if parent isn't providing it */}
+        {!searchQuery && (
+          <div className="w-full md:w-1/3">
+            <SearchInput
+              value={localSearchQuery}
+              onChange={setLocalSearchQuery}
+              placeholder="search resource packs..."
+            />
+          </div>
+        )}
 
-        <div className="flex items-center gap-4">
-          {selectedPacks.size > 0 && (
-            <>
-              <ActionButton
-                icon="pixel:check"
-                label="enable selected"
-                onClick={enableSelectedPacks}
-                disabled={loadingOperation}
-              >
-                ({selectedPacks.size})
-              </ActionButton>
-              <ActionButton
-                icon="pixel:times"
-                label="disable selected"
-                onClick={disableSelectedPacks}
-                disabled={loadingOperation}
-              >
-                ({selectedPacks.size})
-              </ActionButton>
-            </>
-          )}
-          <ActionButton
-            icon="pixel:arrow-up"
-            label="check updates"
-            onClick={checkForResourcePackUpdates}
-            disabled={checkingUpdates || loadingOperation}
-          />
-          {packsWithUpdates > 0 && (
-            <ActionButton
-              icon="pixel:cloud-download-solid"
-              onClick={updateAllPacks}
-              disabled={loadingOperation}
-              className={cn(
-                loadingOperation && updatingPacks.size > 0
-                  ? "bg-green-500/20 border-green-500/30 text-green-400"
-                  : "",
-              )}
+        <div className="flex items-center gap-4 ml-auto">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={
+                checkingUpdates ? (
+                  <Icon icon="solar:refresh-bold" className="animate-spin" />
+                ) : (
+                  <Icon icon="solar:arrow-up-bold" />
+                )
+              }
+              onClick={checkForResourcePackUpdates}
+              disabled={checkingUpdates}
             >
-              {loadingOperation && updatingPacks.size > 0 ? (
-                <span className="flex items-center gap-1">
-                  <Icon
-                    icon="pixel:circle-notch-solid"
-                    className="w-4 h-4 animate-spin"
-                  />
-                  ({updatingPacks.size}/{packsWithUpdates})
+              check updates
+              {packsWithUpdates > 0 && (
+                <span className="text-xl px-1.5 py-0.5 rounded-sm ml-1">
+                  ({packsWithUpdates})
                 </span>
-              ) : (
-                `(${packsWithUpdates})`
               )}
-            </ActionButton>
-          )}
-          <ActionButton
-            icon="pixel:trash-solid"
-            label="delete selected"
-            onClick={deleteSelectedPacks}
-            disabled={selectedPacks.size === 0 || loadingOperation}
-            danger
-          >
-            ({selectedPacks.size})
-          </ActionButton>
+            </Button>
+
+            {packsWithUpdates > 0 && (
+              <Button
+                variant="success"
+                size="sm"
+                icon={
+                  loadingOperation && updatingPacks.size > 0 ? (
+                    <Icon icon="solar:refresh-bold" className="animate-spin" />
+                  ) : (
+                    <Icon icon="solar:download-bold" />
+                  )
+                }
+                onClick={updateAllPacks}
+                disabled={loadingOperation}
+              >
+                {loadingOperation && updatingPacks.size > 0
+                  ? `updating (${updatingPacks.size}/${packsWithUpdates})`
+                  : `update all (${packsWithUpdates})`}
+              </Button>
+            )}
+
+            {selectedPacks.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                icon={<Icon icon="solar:trash-bin-trash-bold" />}
+                onClick={deleteSelectedPacks}
+              >
+                delete ({selectedPacks.size})
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
       {updateError && (
-        <div className="bg-red-900/50 border border-red-700/50 text-white p-3 mb-4 rounded">
-          <div className="flex items-center gap-2">
-            <Icon
-              icon="pixel:exclamation-triangle-solid"
-              className="w-5 h-5 text-red-400"
-            />
-            <span>Error checking for updates: {updateError}</span>
-          </div>
+        <div
+          className="p-3 flex items-center gap-2 mb-4 rounded-lg border backdrop-blur-sm"
+          style={{
+            backgroundColor: `rgba(220, 38, 38, 0.1)`,
+            borderColor: `rgba(220, 38, 38, 0.3)`,
+          }}
+        >
+          <Icon
+            icon="solar:danger-triangle-bold"
+            className="w-5 h-5 text-red-400"
+          />
+          <span className="text-white font-minecraft text-lg">
+            Error checking for updates: {updateError}
+          </span>
         </div>
       )}
 
-      <ContentTable
-        headers={[
-          {
-            key: "name",
-            label: "name",
-            sortable: true,
-            width: "flex-1",
-            className: "px-3",
-          },
-          {
-            key: "enabled",
-            label: "status",
-            sortable: true,
-            width: "w-28",
-            className: "text-center justify-center",
-          },
-          {
-            key: "actions",
-            label: "actions",
-            sortable: false,
-            width: "w-20",
-            className: "text-center",
-          },
-        ]}
-        sortKey={sortBy}
-        sortDirection={sortDirection}
-        onSort={handleSort}
-        selectedCount={selectedPacks.size}
-        totalCount={resourcePacks.length}
-        filteredCount={filteredPacks.length}
-        enabledCount={enabledPacks}
-        onSelectAll={handleSelectAll}
-        contentType="resourcepack"
-        searchQuery={searchQuery}
+      <div
+        className="flex-1 min-h-0 overflow-hidden rounded-lg border backdrop-blur-sm"
+        style={{
+          backgroundColor: `${accentColor.value}08`,
+          borderColor: `${accentColor.value}20`,
+        }}
       >
         {loadingResourcePacks ? (
           <LoadingState message="loading resource packs..." />
         ) : resourcePacksError ? (
-          <ErrorState
-            message={resourcePacksError}
-            onRetry={fetchResourcePacks}
-          />
-        ) : sortedPacks.length > 0 ? (
-          sortedPacks.map((pack) => {
-            const hasUpdate = hasResourcePackUpdate(pack);
-            const updateVersion = hasUpdate
-              ? getResourcePackUpdateVersion(pack)
-              : null;
-            const isUpdating = updatingPacks.has(pack.filename);
-
-            return (
-              <ContentPackRow
-                key={pack.filename}
-                contentPack={{
-                  id: pack.filename,
-                  file_name: pack.filename,
-                  filename: pack.filename, // Ensure filename is passed
-                  enabled: !pack.is_disabled,
-                  path: pack.path,
-                  file_size: pack.file_size,
-                  modrinth_info: pack.modrinth_info,
-                  sha1_hash: pack.sha1_hash || "",
-                  is_disabled: pack.is_disabled,
-                  version: pack.modrinth_info?.version_number,
-                }}
-                isSelected={selectedPacks.has(pack.filename)}
-                onSelect={() => handleSelectPack(pack.filename)}
-                onToggle={() => togglePackEnabled(pack.filename)}
-                onDelete={() => deletePack(pack.filename)}
-                onOpenDirectory={
-                  pack.path ? () => openPackDirectory(pack.path!) : undefined
-                }
-                onUpdate={hasUpdate ? updatePack : undefined}
-                updateVersion={updateVersion}
-                checkingUpdates={checkingUpdates || isUpdating}
-                iconType="pixel:image-solid"
-                formatFileSize={formatFileSize}
-                onCheckForUpdates={checkForResourcePackUpdates}
-              />
-            );
-          })
+          <div className="p-4 text-red-400 bg-red-900/20 rounded border border-red-700/30">
+            <div className="flex items-center gap-2">
+              <Icon icon="solar:danger-bold" className="w-5 h-5" />
+              <span>{resourcePacksError}</span>
+            </div>
+            <button
+              className="mt-2 px-3 py-1 bg-red-800/30 hover:bg-red-800/50 border border-red-700/30 rounded text-sm transition-colors"
+              onClick={fetchResourcePacks}
+            >
+              Try Again
+            </button>
+          </div>
         ) : (
-          <EmptyState
-            icon="pixel:image-solid"
-            message={
-              searchQuery
-                ? "no resource packs match your search"
-                : "no resource packs installed"
-            }
-          />
+          <ContentTable
+            headers={[
+              {
+                key: "name",
+                label: "resource pack name",
+                sortable: true,
+                width: "flex-1",
+                className: "px-3",
+              },
+              {
+                key: "enabled",
+                label: "status",
+                sortable: true,
+                width: "w-16",
+                className: "text-center",
+              },
+              {
+                key: "actions",
+                label: "actions",
+                sortable: false,
+                width: "w-24",
+                className: "text-center",
+              },
+            ]}
+            sortKey={sortBy}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            selectedCount={selectedPacks.size}
+            totalCount={resourcePacks.length}
+            filteredCount={filteredPacks.length}
+            enabledCount={enabledPacks}
+            onSelectAll={handleSelectAll}
+            contentType="resource pack"
+            searchQuery={effectiveSearchQuery}
+          >
+            {sortedPacks.length > 0 ? (
+              sortedPacks.map((pack) => {
+                const hasUpdate = hasResourcePackUpdate(pack);
+                const updateVersion = hasUpdate
+                  ? getResourcePackUpdateVersion(pack)
+                  : null;
+                const isUpdating = updatingPacks.has(pack.filename);
+
+                return (
+                  <ContentPackRow
+                    key={pack.filename}
+                    contentPack={{
+                      id: pack.filename,
+                      file_name: pack.filename,
+                      filename: pack.filename,
+                      enabled: !pack.is_disabled,
+                      path: pack.path,
+                      file_size: pack.file_size,
+                      modrinth_info: pack.modrinth_info,
+                      curseforge_info: pack.curseforge_info,
+                      sha1_hash: pack.sha1_hash || "",
+                      is_disabled: pack.is_disabled,
+                      version: pack.modrinth_info?.version_number || pack.curseforge_info?.version_number,
+                    }}
+                    isSelected={selectedPacks.has(pack.filename)}
+                    onSelect={() => handleSelectPack(pack.filename)}
+                    onToggle={() => togglePackEnabled(pack.filename)}
+                    onDelete={() => deletePack(pack.filename)}
+                    onOpenDirectory={
+                      pack.path
+                        ? () => openPackDirectory(pack.path!)
+                        : undefined
+                    }
+                    onUpdate={hasUpdate ? updatePack : undefined}
+                    updateVersion={updateVersion}
+                    checkingUpdates={checkingUpdates || isUpdating}
+                    iconType="solar:image-gallery-bold"
+                    formatFileSize={formatFileSize}
+                    onCheckForUpdates={checkForResourcePackUpdates}
+                  />
+                );
+              })
+            ) : (
+              <EmptyState
+                icon="solar:gallery-bold"
+                message={
+                  effectiveSearchQuery
+                    ? "no resource packs match your search"
+                    : "no resource packs installed"
+                }
+                description="Drag and drop resource pack files here to install"
+              />
+            )}
+          </ContentTable>
         )}
-      </ContentTable>
+      </div>
     </div>
   );
 }

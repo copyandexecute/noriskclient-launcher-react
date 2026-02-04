@@ -1,15 +1,19 @@
-use std::path::PathBuf;
-use std::process::Command;
-use log::info;
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
 use crate::minecraft::dto::piston_meta::PistonMeta;
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
 use crate::minecraft::minecraft_auth::Credentials;
 use crate::minecraft::ClasspathBuilder;
 use crate::minecraft::GameArguments;
 use crate::minecraft::JvmArguments;
-use crate::state::profile_state::Profile;
+use crate::state::profile_state::{ImageSource, Profile, ProfileBanner, WindowSize};
 use crate::state::state_manager::State;
+use log::{debug, error, info, warn};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::Instant;
+use tauri::Manager;
 use uuid::Uuid;
 
 pub struct MinecraftLaunchParameters {
@@ -23,6 +27,9 @@ pub struct MinecraftLaunchParameters {
     pub profile_id: Uuid,
     pub memory_max_mb: u32,
     pub is_experimental_mode: bool,
+    pub resolution: Option<WindowSize>,
+    pub quick_play_singleplayer: Option<String>,
+    pub quick_play_multiplayer: Option<String>,
 }
 
 impl MinecraftLaunchParameters {
@@ -38,6 +45,9 @@ impl MinecraftLaunchParameters {
             profile_id,
             memory_max_mb,
             is_experimental_mode: false,
+            resolution: None,
+            quick_play_singleplayer: None,
+            quick_play_multiplayer: None,
         }
     }
 
@@ -85,6 +95,68 @@ impl MinecraftLaunchParameters {
         self.is_experimental_mode = is_experimental;
         self
     }
+
+    pub fn with_resolution(mut self, res: Option<WindowSize>) -> Self {
+        self.resolution = res;
+        self
+    }
+
+    pub fn with_quick_play_singleplayer(mut self, world_name: String) -> Self {
+        self.quick_play_singleplayer = Some(world_name);
+        self
+    }
+
+    pub fn with_quick_play_multiplayer(mut self, server_address: String) -> Self {
+        self.quick_play_multiplayer = Some(server_address);
+        self
+    }
+}
+
+/// Resolves a profile banner to an absolute file path or URL string.
+/// Returns None if the banner is None or cannot be resolved.
+fn resolve_profile_banner_path(
+    banner: &Option<ProfileBanner>,
+    profile_id: Uuid,
+    profile_path: &Path,
+) -> Option<String> {
+    let banner = banner.as_ref()?;
+
+    match &banner.source {
+        ImageSource::Url { url } => Some(url.clone()),
+        ImageSource::Base64 { data, mime_type } => {
+            let mime = mime_type.clone().unwrap_or_else(|| "image/png".to_string());
+            let clean_data = data.replace("\n", "").replace("\r", "").replace(" ", "");
+            Some(format!("data:{};base64,{}", mime, clean_data))
+        }
+        ImageSource::AbsolutePath { path } => {
+            let path_buf = PathBuf::from(path);
+            if path_buf.exists() {
+                Some(path_buf.to_string_lossy().to_string())
+            } else {
+                warn!("Profile banner absolute path does not exist: {:?}", path_buf);
+                None
+            }
+        }
+        ImageSource::RelativePath { path } => {
+            let launcher_dir = LAUNCHER_DIRECTORY.root_dir();
+            let full_path = launcher_dir.join(path);
+            if full_path.exists() {
+                Some(full_path.to_string_lossy().to_string())
+            } else {
+                warn!("Profile banner relative path does not exist: {:?}", full_path);
+                None
+            }
+        }
+        ImageSource::RelativeProfile { path } => {
+            let full_path = profile_path.join(path);
+            if full_path.exists() {
+                Some(full_path.to_string_lossy().to_string())
+            } else {
+                warn!("Profile banner profile-relative path does not exist: {:?}", full_path);
+                None
+            }
+        }
+    }
 }
 
 pub struct MinecraftLauncher {
@@ -94,7 +166,11 @@ pub struct MinecraftLauncher {
 }
 
 impl MinecraftLauncher {
-    pub fn new(java_path: PathBuf, game_directory: PathBuf, credentials: Option<Credentials>) -> Self {
+    pub fn new(
+        java_path: PathBuf,
+        game_directory: PathBuf,
+        credentials: Option<Credentials>,
+    ) -> Self {
         Self {
             java_path,
             game_directory,
@@ -102,7 +178,11 @@ impl MinecraftLauncher {
         }
     }
 
-    fn process_old_arguments(&self, minecraft_arguments: Option<String>, piston_meta: &PistonMeta) -> Option<Vec<String>> {
+    fn process_old_arguments(
+        &self,
+        minecraft_arguments: Option<String>,
+        piston_meta: &PistonMeta,
+    ) -> Option<Vec<String>> {
         minecraft_arguments.map(|args_string| {
             info!("\nProcessing old format arguments (with advanced splitting):");
 
@@ -130,11 +210,52 @@ impl MinecraftLauncher {
         })
     }
 
+    // Helper function to create a loggable string from a Command, redacting sensitive info.
+    fn create_loggable_command_string(command: &std::process::Command) -> String {
+        let mut parts: Vec<String> = Vec::new();
+
+        // Program
+        let program_os_str = command.get_program();
+        let program_str = program_os_str.to_string_lossy();
+        if program_str.contains(' ') || program_str.contains('\"') {
+            // Quote if contains space or quote
+            parts.push(format!("\"{}\"", program_str.replace('\"', "\\\"")));
+        } else {
+            parts.push(program_str.into_owned());
+        }
+
+        // Arguments
+        let mut args_iter = command.get_args().peekable();
+        while let Some(arg_os_str) = args_iter.next() {
+            let mut arg_str = arg_os_str.to_string_lossy().into_owned();
+
+            if arg_str.starts_with("-Dnorisk.token=") {
+                parts.push("-Dnorisk.token=*****".to_string());
+            } else if arg_str == "--accessToken" {
+                parts.push(arg_str); // Push "--accessToken"
+                if args_iter.peek().is_some() {
+                    args_iter.next(); // Consume the actual token value
+                    parts.push("*****".to_string()); // Push the redacted placeholder
+                }
+            } else {
+                // Quote if contains space, is empty, or contains a double quote itself.
+                // The check for double quote in arg_str itself is important to ensure it gets quoted.
+                if arg_str.contains(' ') || arg_str.is_empty() || arg_str.contains('\"') {
+                    parts.push(format!("\"{}\"", arg_str.replace('\"', "\\\"")));
+                // Escape inner quotes
+                } else {
+                    parts.push(arg_str);
+                }
+            }
+        }
+        parts.join(" ")
+    }
+
     pub async fn launch(
         &self,
         piston_meta: &PistonMeta,
         params: MinecraftLaunchParameters,
-        profile: Option<Profile>
+        profile: Option<Profile>,
     ) -> Result<()> {
         let state = State::get().await?;
         let process_manager = &state.process_manager;
@@ -143,12 +264,26 @@ impl MinecraftLauncher {
         // let profile = state.profile_manager.get_profile(params.profile_id).await?;
         // let settings = &profile.settings;
 
-        // 2. Java-Befehl initialisieren
-        let mut command = Command::new(&self.java_path);
+        // 2. Java-Befehl initialisieren (mit wrapper support)
+        let launcher_config = state.config_manager.get_config().await;
+        let mut command = match launcher_config.hooks.wrapper {
+            Some(wrapper) => {
+                info!("Using wrapper command: {}", wrapper);
+                // Exactly like Modrinth: use the whole wrapper string as command and add java path as arg
+                {
+                    let mut it = Command::new(wrapper);
+                    it.arg(&self.java_path);
+                    it
+                }
+            }
+            None => Command::new(&self.java_path),
+        };
         command.current_dir(&self.game_directory);
 
         // Define paths
-        let natives_path = LAUNCHER_DIRECTORY.meta_dir().join("natives").join(&piston_meta.id);
+        let natives_path = LAUNCHER_DIRECTORY.meta_dir()
+            .join("natives")
+            .join(&piston_meta.id);
 
         // Build classpath first as it's needed for JVM arguments
         let classpath = if let Some(client_jar) = params.custom_client_jar {
@@ -193,36 +328,103 @@ impl MinecraftLauncher {
         info!("Adding RAM JVM argument: -Xmx{}M", params.memory_max_mb);
         command.arg(format!("-Xmx{}M", params.memory_max_mb));
 
-        // Add recommended GC flags
-        command.arg("-XX:+UnlockExperimentalVMOptions");
-        command.arg("-XX:+UseG1GC");
-        // Add additional G1GC optimization flags like vanilla launcher
-        command.arg("-XX:G1NewSizePercent=20");
-        command.arg("-XX:G1ReservePercent=20");
-        command.arg("-XX:MaxGCPauseMillis=50");
-        command.arg("-XX:G1HeapRegionSize=32M");
+        // Check if custom JVM args contain a custom GC setting
+        //fix for https://github.com/NoRiskClient/issues/issues/2357
+        let custom_gc_patterns = [
+            "-XX:+UseZGC",
+            "-XX:+UseG1GC",
+            "-XX:+UseShenandoahGC",
+            "-XX:+UseParallelGC",
+            "-XX:+UseSerialGC",
+        ];
+        let has_custom_gc = params.additional_jvm_args.iter().any(|arg| {
+            custom_gc_patterns.iter().any(|pattern| arg.contains(pattern))
+        });
+
+        // Add recommended GC flags only if no custom GC is specified
+        if has_custom_gc {
+            info!("Custom GC detected in JVM arguments, skipping default G1GC flags");
+        } else {
+            command.arg("-XX:+UnlockExperimentalVMOptions");
+            command.arg("-XX:+UseG1GC");
+            // Add additional G1GC optimization flags like vanilla launcher
+            command.arg("-XX:G1NewSizePercent=20");
+            command.arg("-XX:G1ReservePercent=20");
+            command.arg("-XX:MaxGCPauseMillis=50");
+            command.arg("-XX:G1HeapRegionSize=32M");
+        }
 
         // Add NoRisk client specific parameters
-        if let Some(creds) = &self.credentials {
-            // Get the appropriate NoRisk token based on experimental mode setting
-            if let Some(norisk_token) = if params.is_experimental_mode {
-                info!("[NoRisk Launcher] Using experimental mode token");
-                creds.norisk_credentials.experimental.as_ref().map(|t| &t.value)
-            } else {
-                info!("[NoRisk Launcher] Using production mode token");
-                creds.norisk_credentials.production.as_ref().map(|t| &t.value)
-            } {
-                info!("[NoRisk Launcher] Adding NoRisk token to launch parameters");
-                command.arg(format!("-Dnorisk.token={}", norisk_token));
-            } else {
-                info!("[NoRisk Launcher] No NoRisk token available for the selected mode");
-            }
+        // Only add token if we have credentials AND a NoRisk pack is selected in the profile
+        let has_norisk_pack = profile.as_ref().and_then(|p| p.selected_norisk_pack_id.as_ref()).is_some();
 
-            // Add experimental mode parameter
-            info!("[NoRisk Launcher] Setting experimental mode: {}", params.is_experimental_mode);
-            command.arg(format!("-Dnorisk.experimental={}", params.is_experimental_mode));
+        // Add profile name for ingame display
+        if let Some(p) = &profile {
+            command.arg(format!("-Dnorisk.profile.name={}", p.name));
+        }
+
+        if let Some(creds) = &self.credentials {
+            if has_norisk_pack {
+                // Get the appropriate NoRisk token based on experimental mode setting
+                if let Some(norisk_token) = if params.is_experimental_mode {
+                    info!("[NoRisk Launcher] Using experimental mode token");
+                    creds
+                        .norisk_credentials
+                        .experimental
+                        .as_ref()
+                        .map(|t| &t.value)
+                } else {
+                    info!("[NoRisk Launcher] Using production mode token");
+                    creds
+                        .norisk_credentials
+                        .production
+                        .as_ref()
+                        .map(|t| &t.value)
+                } {
+                    info!("[NoRisk Launcher] Adding NoRisk token to launch parameters");
+                    command.arg(format!("-Dnorisk.token={}", norisk_token));
+                } else {
+                    info!("[NoRisk Launcher] No NoRisk token available for the selected mode");
+                }
+
+                // Add experimental mode parameter
+                info!(
+                    "[NoRisk Launcher] Setting experimental mode: {}",
+                    params.is_experimental_mode
+                );
+                command.arg(format!(
+                    "-Dnorisk.experimental={}",
+                    params.is_experimental_mode
+                ));
+            } else {
+                info!("[NoRisk Launcher] No NoRisk pack selected, skipping NoRisk token and experimental mode parameters");
+            }
         } else {
             info!("[NoRisk Launcher] No credentials available, skipping NoRisk parameters");
+        }
+
+        // Add Fabric specific mods folder argument if loader is Fabric
+        // Note: When using -Dfabric.addMods (prototype), this is still harmless and allows user mods in mods/.
+        if let Some(p_ref) = &profile {
+            if p_ref.loader == crate::state::profile_state::ModLoader::Fabric {
+                match state.profile_manager.get_profile_mods_path(p_ref) {
+                    Ok(mods_path) => {
+                        let mods_path_str = mods_path.to_string_lossy().replace("\\", "/");
+                        let fabric_mods_arg = format!("-Dfabric.modsFolder={}", mods_path_str);
+                        info!(
+                            "Adding Fabric mods folder JVM argument: {}",
+                            fabric_mods_arg
+                        );
+                        command.arg(fabric_mods_arg);
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Could not get Fabric mods path for profile '{}' (ID: {}): {}. Fabric mods folder argument will not be set.",
+                            p_ref.name, p_ref.id, e
+                        );
+                    }
+                }
+            }
         }
 
         // Add additional JVM arguments
@@ -232,14 +434,15 @@ impl MinecraftLauncher {
 
         // Add classpath if not already set
         if !has_classpath {
-            command
-                .arg("-cp")
-                .arg(&classpath);
+            command.arg("-cp").arg(&classpath);
         }
 
         // Add natives path if not already set
         if !has_natives {
-            command.arg(format!("-Djava.library.path={}", natives_path.to_string_lossy().replace("\\", "/")));
+            command.arg(format!(
+                "-Djava.library.path={}",
+                natives_path.to_string_lossy().replace("\\", "/")
+            ));
         }
 
         // Add main class
@@ -260,52 +463,101 @@ impl MinecraftLauncher {
             for arg in processed_args {
                 command.arg(arg);
             }
-        } else if let Some(processed_args) = self.process_old_arguments(params.old_minecraft_arguments, piston_meta) {
+        } else if let Some(processed_args) =
+            self.process_old_arguments(params.old_minecraft_arguments, piston_meta)
+        {
             for arg in processed_args {
                 command.arg(arg);
             }
         }
 
-        // Add additional game arguments
+        // Add resolution arguments if custom resolution is set
+        if let Some(res) = &params.resolution {
+            info!(
+                "Appending custom resolution arguments: --width {} --height {}",
+                res.width, res.height
+            );
+            command.arg("--width");
+            command.arg(res.width.to_string());
+            command.arg("--height");
+            command.arg(res.height.to_string());
+        }
+
+        // Add Quick Play arguments if specified
+        if let Some(world_name) = &params.quick_play_singleplayer {
+            info!(
+                "Adding quickPlaySingleplayer argument for world: {}",
+                world_name
+            );
+            command.arg("--quickPlaySingleplayer");
+            command.arg(world_name);
+        } else if let Some(server_address) = &params.quick_play_multiplayer {
+            info!(
+                "Adding quickPlayMultiplayer argument for server: {}",
+                server_address
+            );
+            command.arg("--quickPlayMultiplayer");
+            command.arg(server_address);
+        }
+
+        // Add additional game arguments (from profile's extra_game_args)
         for arg in params.additional_game_args {
             command.arg(arg);
         }
 
-        info!("Executing command: {:?}", command);
+        // Log the command before execution, with sensitive information redacted.
+        let loggable_command_view = Self::create_loggable_command_string(&command);
+        info!("Executing command: {}", loggable_command_view);
 
         // Extract account information from credentials
         let (account_uuid, account_name) = if let Some(creds) = &self.credentials {
-            (
-                Some(creds.id.to_string()),
-                Some(creds.username.clone())
-            )
+            (Some(creds.id.to_string()), Some(creds.username.clone()))
         } else {
             (None, None)
         };
 
         // Extract optional profile information for process metadata
-        let (profile_loader, profile_loader_version, profile_norisk_pack, profile_name) = match profile {
-            Some(p) => (
-                Some(p.loader.as_str().to_string()),
-                p.loader_version,
-                p.selected_norisk_pack_id,
-                Some(p.name)
-            ),
-            None => (None, None, None, None),
-        };
+        let (profile_loader, profile_loader_version, profile_norisk_pack, profile_name, profile_image_url) =
+            match profile {
+                Some(p) => {
+                    // Resolve profile banner image path
+                    let image_url = resolve_profile_banner_path(
+                        &p.banner,
+                        params.profile_id,
+                        &self.game_directory,
+                    );
+                    (
+                        Some(p.loader.as_str().to_string()),
+                        p.loader_version,
+                        p.selected_norisk_pack_id,
+                        Some(p.name),
+                        image_url,
+                    )
+                }
+                None => (None, None, None, None, None),
+            };
+
+        // Get post-exit hook from config at launch time (not at exit time)
+        let launcher_config = state.config_manager.get_config().await;
+        let post_exit_hook = launcher_config.hooks.post_exit.clone();
 
         // Start the process using ProcessManager with additional metadata
-        process_manager.start_process(
-            params.profile_id,
-            command,
-            account_uuid,
-            account_name,
-            Some(piston_meta.id.clone()),
-            profile_loader,
-            profile_loader_version,
-            profile_norisk_pack,
-            profile_name
-        ).await?;
+        process_manager
+            .start_process(
+                params.profile_id,
+                command,
+                account_uuid,
+                account_name,
+                Some(piston_meta.id.clone()),
+                profile_loader,
+                profile_loader_version,
+                profile_norisk_pack,
+                profile_name,
+                profile_image_url,
+                post_exit_hook,
+                params.memory_max_mb,
+            )
+            .await?;
 
         Ok(())
     }

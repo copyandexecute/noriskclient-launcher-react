@@ -8,7 +8,7 @@ class ProcessMonitor {
   startMonitoring(profileId: string) {
     this.currentProfileId = profileId;
     const store = useLaunchStateStore.getState();
-    store.addDebugLog(`Starting process monitoring for profile ${profileId}`);
+    console.debug(`Starting process monitoring for profile ${profileId}`);
 
     this.stopMonitoring();
 
@@ -16,7 +16,7 @@ class ProcessMonitor {
       try {
         const isRunning = await this.checkIfProcessIsRunning(profileId);
         if (!isRunning) {
-          store.addDebugLog(
+          console.debug(
             `Process for profile ${profileId} is no longer running`,
           );
           // @ts-ignore
@@ -24,7 +24,7 @@ class ProcessMonitor {
           this.stopMonitoring();
         }
       } catch (error) {
-        store.addDebugLog(`Error monitoring process: ${error}`);
+        console.debug(`Error monitoring process: ${error}`);
       }
     }, 5000) as unknown as number;
   }

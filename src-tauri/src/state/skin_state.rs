@@ -1,7 +1,10 @@
 use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::Result;
+use crate::state::post_init::PostInitializationHandler;
+use async_trait::async_trait;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
@@ -48,23 +51,20 @@ pub struct SkinManager {
 
 impl SkinManager {
     /// Create a new skin manager
-    pub async fn new(skins_path: PathBuf) -> Result<Self> {
-        info!("Initializing SkinManager with path: {:?}", skins_path);
-
-        let manager = Self {
+    pub fn new(skins_path: PathBuf) -> Result<Self> {
+        info!(
+            "SkinManager: Initializing with path: {:?} (skins loading deferred)",
+            skins_path
+        );
+        Ok(Self {
             skins: Arc::new(RwLock::new(SkinDatabase::default())),
             skins_path,
             save_lock: Mutex::new(()),
-        };
-
-        // Load skins if the file exists
-        manager.load_skins().await?;
-
-        Ok(manager)
+        })
     }
 
     /// Load skins from the database file
-    async fn load_skins(&self) -> Result<()> {
+    async fn load_skins_internal(&self) -> Result<()> {
         if !self.skins_path.exists() {
             info!("Skins database file not found, using empty database");
             // Save the empty database
@@ -77,12 +77,15 @@ impl SkinManager {
 
         match serde_json::from_str::<SkinDatabase>(&skins_data) {
             Ok(loaded_skins) => {
-                info!("Successfully loaded skins database with {} skins", loaded_skins.skins.len());
+                info!(
+                    "Successfully loaded skins database with {} skins",
+                    loaded_skins.skins.len()
+                );
 
                 // Update the stored skins
                 let mut skins = self.skins.write().await;
                 *skins = loaded_skins;
-            },
+            }
             Err(e) => {
                 error!("Failed to parse skins database file: {}", e);
                 warn!("Using empty skins database and saving it");
@@ -103,7 +106,10 @@ impl SkinManager {
         if let Some(parent_dir) = self.skins_path.parent() {
             if !parent_dir.exists() {
                 fs::create_dir_all(parent_dir).await?;
-                info!("Created directory for skins database file: {:?}", parent_dir);
+                info!(
+                    "Created directory for skins database file: {:?}",
+                    parent_dir
+                );
             }
         }
 
@@ -111,7 +117,10 @@ impl SkinManager {
         let skins_data = serde_json::to_string_pretty(&*skins)?;
 
         fs::write(&self.skins_path, skins_data).await?;
-        info!("Successfully saved skins database to: {:?}", self.skins_path);
+        info!(
+            "Successfully saved skins database to: {:?}",
+            self.skins_path
+        );
 
         Ok(())
     }
@@ -128,9 +137,7 @@ impl SkinManager {
     pub async fn get_skin_by_id(&self, id: &str) -> Option<MinecraftSkin> {
         debug!("Getting skin with ID: {}", id);
         let skins = self.skins.read().await;
-        let skin = skins.skins.iter()
-            .find(|skin| skin.id == id)
-            .cloned();
+        let skin = skins.skins.iter().find(|skin| skin.id == id).cloned();
 
         if skin.is_some() {
             debug!("Found skin with ID: {}", id);
@@ -185,7 +192,12 @@ impl SkinManager {
     }
 
     /// Update skin properties (name and variant)
-    pub async fn update_skin_properties(&self, id: &str, name: String, variant: String) -> Result<Option<MinecraftSkin>> {
+    pub async fn update_skin_properties(
+        &self,
+        id: &str,
+        name: String,
+        variant: String,
+    ) -> Result<Option<MinecraftSkin>> {
         debug!("Updating skin properties for ID: {}", id);
         debug!("New name: {}, New variant: {}", name, variant);
 
@@ -209,6 +221,16 @@ impl SkinManager {
             debug!("No skin found with ID: {}", id);
             Ok(None)
         }
+    }
+}
+
+#[async_trait]
+impl PostInitializationHandler for SkinManager {
+    async fn on_state_ready(&self, _app_handle: Arc<tauri::AppHandle>) -> Result<()> {
+        info!("SkinManager: on_state_ready called. Loading skins...");
+        self.load_skins_internal().await?;
+        info!("SkinManager: Successfully loaded skins in on_state_ready.");
+        Ok(())
     }
 }
 

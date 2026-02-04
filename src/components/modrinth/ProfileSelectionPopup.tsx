@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { CheckContentParams, Profile } from "../../types/profile";
 import { ProfileGroup } from "./ProfileGroup";
 import type { ModrinthVersion } from "../../types/modrinth";
 import { isContentInstalled } from "../../services/profile-service";
+import { useThemeStore } from "../../store/useThemeStore";
+import { Button } from "../ui/buttons/Button";
+import { Modal } from "../ui/Modal";
 
 interface ProfileSelectionPopupProps {
   profiles: Profile[];
@@ -33,7 +37,7 @@ export function ProfileSelectionPopup({
   const [isInstalling, setIsInstalling] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isCheckingInstalled, setIsCheckingInstalled] = useState(true);
-  const popupRef = useRef<HTMLDivElement>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
 
   // Group profiles by loader and check compatibility
   const profilesByLoader: Record<string, Profile[]> = {};
@@ -140,35 +144,6 @@ export function ProfileSelectionPopup({
   }, [contentVersion, profiles]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        popupRef.current &&
-        !popupRef.current.contains(event.target as Node)
-      ) {
-        onCancel();
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [onCancel]);
-
-  useEffect(() => {
-    function handleEscapeKey(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onCancel();
-      }
-    }
-
-    document.addEventListener("keydown", handleEscapeKey);
-    return () => {
-      document.removeEventListener("keydown", handleEscapeKey);
-    };
-  }, [onCancel]);
-
-  useEffect(() => {
     if (selectedProfileId && !compatibleProfiles[selectedProfileId]) {
       const firstCompatibleProfile = profiles.find(
         (p) => compatibleProfiles[p.id],
@@ -199,7 +174,10 @@ export function ProfileSelectionPopup({
     }
   }, [compatibleProfiles, selectedProfileId, profiles]);
 
-  const handleInstall = async () => {
+  const handleInstall = async (event: React.MouseEvent) => {
+    // Prevent default action that might cause page reload
+    event?.preventDefault?.();
+
     if (!selectedProfileId) return;
 
     setIsInstalling(true);
@@ -212,152 +190,172 @@ export function ProfileSelectionPopup({
         ...prev,
         [selectedProfileId]: true,
       }));
+
+      // Don't close the popup automatically
+      // The parent component will handle closing after successful installation
     } catch (error) {
       console.error("Installation failed:", error);
-    } finally {
       setIsInstalling(false);
+      // Keep popup open on error so user can try again
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-      <div
-        ref={popupRef}
-        className="bg-black/40 border-2 border-white/30 shadow-lg w-full max-w-md max-h-[80vh] flex flex-col"
+  const modalFooter = (
+    <div className="flex justify-end gap-3">
+      <Button
+        variant="secondary"
+        size="md"
+        onClick={(e) => {
+          e.preventDefault();
+          onCancel();
+        }}
       >
-        <div className="p-4 border-b border-white/20 flex justify-between items-center">
-          <h3 className="text-white font-minecraft text-3xl tracking-wide lowercase select-none">
-            {title}
-          </h3>
-          <button onClick={onCancel} className="text-white/60 hover:text-white">
-            <Icon icon="pixel:close" className="w-6 h-6" />
-          </button>
-        </div>
+        {isInstalled ? "Close" : "Cancel"}
+      </Button>
 
-        <div className="p-4">
-          <p className="text-white/70 font-minecraft text-sm mb-4 tracking-wide lowercase select-none">
-            {description}
-          </p>
-
-          {contentVersion && (
-            <div className="mb-4 p-3 bg-black/30 border border-white/10">
-              <h4 className="text-white font-minecraft text-base mb-1 tracking-wide lowercase select-none">
-                Content Details:
-              </h4>
-              <div className="text-white/70 font-minecraft-ten text-xs tracking-wide lowercase select-none">
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon icon="pixel:cube" className="w-4 h-4" />
-                  <span>
-                    Type: {contentVersion.search_hit?.project_type || "Unknown"}
-                  </span>
-                </div>
-                {contentVersion.game_versions &&
-                  contentVersion.game_versions.length > 0 && (
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon icon="pixel:gamepad-solid" className="w-4 h-4" />
-                      <span>
-                        Game Versions: {contentVersion.game_versions.join(", ")}
-                      </span>
-                    </div>
-                  )}
-                {(contentVersion.search_hit?.project_type === "mod" ||
-                  contentVersion.search_hit?.project_type === "modpack") &&
-                  contentVersion.loaders &&
-                  contentVersion.loaders.length > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Icon icon="pixel:cog-solid" className="w-4 h-4" />
-                      <span>Loaders: {contentVersion.loaders.join(", ")}</span>
-                    </div>
-                  )}
-              </div>
-            </div>
-          )}
-
-          {isCheckingInstalled ? (
-            <div className="flex justify-center items-center py-4">
-              <div className="animate-spin mr-2">
-                <Icon icon="pixel:loading" className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-white/70 font-minecraft text-sm tracking-wide lowercase select-none">
-                Checking installation status...
-              </span>
-            </div>
-          ) : (
-            <div className="max-h-[50vh] overflow-y-auto custom-scrollbar pr-2">
-              {Object.entries(profilesByLoader).map(
-                ([loader, loaderProfiles]) => (
-                  <ProfileGroup
-                    key={loader}
-                    loader={loader}
-                    profiles={loaderProfiles}
-                    selectedProfileId={selectedProfileId}
-                    onSelectProfile={setSelectedProfileId}
-                    compatibleProfiles={compatibleProfiles}
-                    installedProfiles={installedProfiles}
-                  />
-                ),
-              )}
-
-              {Object.keys(profilesByLoader).length === 0 && (
-                <EmptyProfilesMessage />
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-white/20 flex justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 bg-black/30 border border-white/10 text-white/70 font-minecraft text-sm tracking-wide lowercase select-none hover:bg-black/40 hover:text-white"
-          >
-            Cancel
-          </button>
-
-          {selectedProfileId && installedProfiles[selectedProfileId] ? (
-            <button
-              disabled
-              className="px-4 py-2 bg-green-600/30 border border-green-500/30 text-white font-minecraft text-sm tracking-wide lowercase select-none"
-            >
-              Installed
-            </button>
-          ) : (
-            <button
-              onClick={handleInstall}
-              disabled={
-                !selectedProfileId ||
-                (selectedProfileId && !compatibleProfiles[selectedProfileId]) ||
-                isInstalling ||
-                isInstalled ||
-                isCheckingInstalled
-              }
-              className={`px-4 py-2 border font-minecraft text-sm tracking-wide lowercase select-none ${
-                isInstalling
-                  ? "bg-blue-600/30 border-blue-500/30 text-white"
-                  : isInstalled
-                    ? "bg-green-600/30 border-green-500/30 text-white"
-                    : "bg-white/10 border-white/20 text-white hover:bg-white/20"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {isInstalling
-                ? "Installing..."
-                : isInstalled
-                  ? "Installed"
-                  : "Install"}
-            </button>
-          )}
-        </div>
-      </div>
+      {selectedProfileId && installedProfiles[selectedProfileId] ? (
+        <Button variant="success" size="md" disabled>
+          Installed
+        </Button>
+      ) : (
+        <Button
+          variant="default"
+          size="md"
+          onClick={handleInstall}
+          disabled={
+            !selectedProfileId ||
+            (selectedProfileId && !compatibleProfiles[selectedProfileId]) ||
+            isInstalling ||
+            isInstalled ||
+            isCheckingInstalled
+          }
+          icon={
+            isInstalling ? (
+              <Icon icon="pixel:circle-notch-solid" className="animate-spin" />
+            ) : undefined
+          }
+        >
+          {isInstalling
+            ? "Installing..."
+            : isInstalled
+              ? "Installed"
+              : "Install"}
+        </Button>
+      )}
     </div>
+  );
+
+  return (
+    <Modal title={title} onClose={onCancel} footer={modalFooter} width="md">
+      <div className="p-4">
+        <p className="text-white/70 font-minecraft text-sm mb-4 tracking-wide lowercase select-none">
+          {description}
+        </p>
+
+        {contentVersion && (
+          <div
+            className="mb-4 p-3 border-2 border-b-4 rounded-md shadow-inner"
+            style={{
+              backgroundColor: `${accentColor.value}20`,
+              borderColor: `${accentColor.value}30`,
+              borderBottomColor: `${accentColor.value}40`,
+            }}
+          >
+            <h4 className="text-white font-minecraft text-base mb-1 tracking-wide lowercase select-none">
+              Content Details:
+            </h4>
+            <div className="text-white/70 font-minecraft text-xs tracking-wide lowercase select-none">
+              <div className="flex items-center gap-2 mb-1">
+                <Icon icon="pixel:cube" className="w-4 h-4" />
+                <span>
+                  Type: {contentVersion.search_hit?.project_type || "Unknown"}
+                </span>
+              </div>
+              {contentVersion.game_versions &&
+                contentVersion.game_versions.length > 0 && (
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon icon="pixel:gamepad-solid" className="w-4 h-4" />
+                    <span>
+                      Game Versions: {contentVersion.game_versions.join(", ")}
+                    </span>
+                  </div>
+                )}
+              {(contentVersion.search_hit?.project_type === "mod" ||
+                contentVersion.search_hit?.project_type === "modpack") &&
+                contentVersion.loaders &&
+                contentVersion.loaders.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Icon icon="pixel:cog-solid" className="w-4 h-4" />
+                    <span>Loaders: {contentVersion.loaders.join(", ")}</span>
+                  </div>
+                )}
+            </div>
+          </div>
+        )}
+
+        {isCheckingInstalled ? (
+          <div className="flex justify-center items-center py-4">
+            <div
+              className="w-6 h-6 mr-2 rounded-full border-2 border-t-2 animate-spin"
+              style={{
+                borderColor: `${accentColor.value}40`,
+                borderTopColor: accentColor.value,
+              }}
+            ></div>
+            <span className="text-white/70 font-minecraft text-sm tracking-wide lowercase select-none">
+              Checking installation status...
+            </span>
+          </div>
+        ) : (
+          <div
+            className="max-h-[50vh] overflow-y-auto custom-scrollbar pr-2 rounded-md border-2"
+            style={{
+              borderColor: `${accentColor.value}30`,
+              scrollbarColor: `${accentColor.value}50 transparent`,
+            }}
+          >
+            {Object.entries(profilesByLoader).map(
+              ([loader, loaderProfiles]) => (
+                <ProfileGroup
+                  key={loader}
+                  loader={loader}
+                  profiles={loaderProfiles}
+                  selectedProfileId={selectedProfileId}
+                  onSelectProfile={setSelectedProfileId}
+                  compatibleProfiles={compatibleProfiles}
+                  installedProfiles={installedProfiles}
+                />
+              ),
+            )}
+
+            {Object.keys(profilesByLoader).length === 0 && (
+              <EmptyProfilesMessage />
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
 function EmptyProfilesMessage() {
+  const accentColor = useThemeStore((state) => state.accentColor);
+
   return (
     <div className="text-center py-8">
-      <Icon
-        icon="pixel:exclamation-triangle-solid"
-        className="w-14 h-14 text-white/30 mx-auto mb-4"
-      />
+      <div
+        className="w-14 h-14 mx-auto mb-4 rounded-full border-2 border-b-4 flex items-center justify-center"
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}30`,
+          borderBottomColor: `${accentColor.value}40`,
+        }}
+      >
+        <Icon
+          icon="pixel:exclamation-triangle-solid"
+          className="w-8 h-8 text-white/70"
+        />
+      </div>
       <p className="text-white/60 font-minecraft text-sm tracking-wide lowercase select-none">
         No profiles available
       </p>

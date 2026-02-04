@@ -15,7 +15,7 @@ export interface FileNode {
     is_dir: boolean;
     
     /** Child nodes (empty for files) */
-    children: FileNode[];
+    children?: FileNode[];
     
     /** File size in bytes (0 for directories) */
     size: number;
@@ -23,3 +23,30 @@ export interface FileNode {
     /** Last modified timestamp as seconds since UNIX epoch */
     last_modified: number | null;
 } 
+
+// --- NEW TYPES START HERE ---
+
+/**
+ * Payload for requesting an image preview.
+ * Maps to the Rust ImagePreviewPayload struct.
+ */
+export interface ImagePreviewPayload {
+  path: string;
+  width?: number;  // Target width for the preview
+  height?: number; // Target height for the preview
+  quality?: number; // Target quality (e.g., 1-100 for JPEG)
+}
+
+/**
+ * Response containing the image preview data.
+ * Maps to the Rust ImagePreviewResponse struct.
+ */
+export interface ImagePreviewResponse {
+  base64_image: string;
+  original_width: number;
+  original_height: number;
+  preview_width: number;
+  preview_height: number;
+}
+
+// --- NEW TYPES END HERE --- 

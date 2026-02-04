@@ -1,14 +1,16 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cn } from "../../lib/utils";
 import * as ProfileService from "../../services/profile-service";
-import { Card } from "../ui/Card";
+import { Button } from "../ui/buttons/Button";
+import { useThemeStore } from "../../store/useThemeStore";
 import {
   LaunchState,
   useLaunchStateStore,
 } from "../../store/launch-state-store";
+import { useProfileStore } from "../../store/profile-store";
+import { useNavigate } from "react-router-dom";
 
 interface VersionInfoProps {
   profileId: string;
@@ -17,106 +19,167 @@ interface VersionInfoProps {
 
 export function VersionInfo({ profileId, className }: VersionInfoProps) {
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const { accentColor } = useThemeStore();
 
   const { initializeProfile, getProfileState } = useLaunchStateStore();
-  const { launchState } = getProfileState(profileId);
+  const { launchState } = getProfileState(profileId || "");
 
-  useEffect(() => {
-    if (profileId) {
-      initializeProfile(profileId);
-    }
-  }, [profileId, initializeProfile]);
+  const { loading: initialDataLoading, error: initialDataError } = useProfileStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadProfile = async () => {
       if (!profileId) {
-        setLoading(false);
+        setProfileLoading(false);
+        setProfile(null);
         return;
       }
 
+      if (initialDataLoading) return;
+
       try {
-        setLoading(true);
+        setProfileLoading(true);
         const profileData = await ProfileService.getProfile(profileId);
         setProfile(profileData);
-        setError(null);
+        setProfileError(null);
+
+        initializeProfile(profileId);
       } catch (err) {
         console.error(`Error loading profile ${profileId}:`, err);
-        setError("Failed to load profile");
+        setProfileError("Failed to load profile details");
+        setProfile(null);
       } finally {
-        setLoading(false);
+        setProfileLoading(false);
       }
     };
 
     loadProfile();
-  }, [profileId]);
+  }, [profileId, initializeProfile, initialDataLoading]);
 
-  if (!profileId) {
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <div
-        className={cn(
-          "flex items-center text-white/70 font-minecraft",
-          className,
-        )}
-      >
-        <Icon
-          icon="pixel:spinner-solid"
-          className="w-5 h-5 animate-spin mr-2"
-        />
-        <span>Loading...</span>
-      </div>
-    );
-  }
-
-  if (error || !profile) {
-    return (
-      <div className={cn("text-red-400 font-minecraft", className)}>
-        <Icon
-          icon="pixel:exclamation-triangle-solid"
-          className="w-5 h-5 inline-block mr-2"
-        />
-        <span>{error || "Profile not found"}</span>
-      </div>
-    );
-  }
-
-  const getModLoaderIcon = (loader: string) => {
-    switch (loader.toLowerCase()) {
-      case "fabric":
-        return "pixel:fabric";
-      case "forge":
-        return "pixel:forge";
-      case "quilt":
-        return "pixel:quilt";
-      case "neoforge":
-        return "pixel:neoforge";
-      default:
-        return "pixel:minecraft";
+  const handleNavigateToProfiles = () => {
+    if (profile && !profile.is_standard_version) {
+      navigate(`/profilesv2/${profile.id}`);
+    } else {
+      // For standard profiles or if profile data isn't fully loaded,
+      // navigating to /profiles is a safe fallback.
+      // ProfilesTab will handle toast notifications for standard profiles.
+      navigate("/profiles");
     }
   };
 
-  const isLaunching = launchState === LaunchState.LAUNCHING;
+  if (initialDataLoading) {
+    return (
+      <Button
+        variant="default"
+        size="md"
+        disabled
+        icon={ <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" /> }
+        className={cn("font-minecraft", className)}
+      >
+        Loading initial data...
+      </Button>
+    );
+  }
+  
+  if (initialDataError && !initialDataLoading) {
+    return (
+      <Button
+        variant="destructive"
+        size="md"
+        disabled
+        icon={ <Icon icon="pixel:exclamation-triangle-solid" className="w-4 h-4" /> }
+        className={cn("font-minecraft", className)}
+      >
+        Error loading data
+      </Button>
+    );
+  }
 
-  return (
-    <Card className={cn("inline-flex items-center px-3 py-1.5", className)}>
-      <Icon
-        icon={getModLoaderIcon(profile.loader)}
-        className="w-5 h-5 mr-2 text-white/80"
-      />
-      <span className="font-minecraft text-white/90 text-sm">
+  if (!profileId && !initialDataLoading) {
+    return (
+      <Button
+        variant="default"
+        size="md"
+        disabled
+        icon={
+          <Icon icon="pixel:exclamation-triangle-solid" className="w-4 h-4" />
+        }
+        className={cn("font-minecraft", className)}
+      >
+        No profile selected
+      </Button>
+    );
+  }
+
+  if (profileLoading && !initialDataLoading) {
+    return (
+      <Button
+        variant="default"
+        size="md"
+        disabled
+        icon={ <Icon icon="pixel:spinner-solid" className="w-4 h-4 animate-spin" /> }
+        className={cn("font-minecraft", className)}
+      >
+        Loading profile...
+      </Button>
+    );
+  }
+
+  if ((profileError || !profile) && !initialDataLoading && !profileLoading) {
+    return (
+      <Button
+        variant="destructive"
+        size="md"
+        disabled
+        icon={
+          <Icon icon="pixel:exclamation-triangle-solid" className="w-4 h-4" />
+        }
+        className={cn("font-minecraft", className)}
+      >
+        {profileError || "Profile details not found"}
+      </Button>
+    );
+  }
+  
+  if (profile && !initialDataLoading && !profileLoading && !profileError) {
+    const getModLoaderIcon = (loader: string) => {
+      return `/icons/${loader.toLowerCase()}.png`;
+    };
+
+    const isLaunching = launchState === LaunchState.LAUNCHING;
+    const variant = isLaunching ? "info" : "default";
+
+    return (
+      <Button
+        variant={variant}
+        size="md"
+        disabled={isLaunching}
+        onClick={!isLaunching ? handleNavigateToProfiles : undefined}
+        icon={
+          <img
+            src={getModLoaderIcon(profile.loader) || "/placeholder.svg"}
+            alt={`${profile.loader} icon`}
+            className="w-5 h-5"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "/icons/minecraft.png";
+            }}
+          />
+        }
+        className={cn("font-minecraft", !isLaunching && "cursor-pointer", className)}
+        title={!isLaunching ? "Go to Profiles Tab" : undefined}
+      >
         {profile.name} ({profile.game_version})
-      </span>
-      {isLaunching && (
-        <Icon
-          icon="pixel:spinner-solid"
-          className="w-4 h-4 ml-2 text-red-400 animate-spin"
-        />
-      )}
-    </Card>
-  );
+        {isLaunching && (
+          <Icon
+            icon="pixel:spinner-solid"
+            className="w-4 h-4 ml-2 text-red-400 animate-spin"
+          />
+        )}
+      </Button>
+    );
+  }
+  
+  return null;
 }

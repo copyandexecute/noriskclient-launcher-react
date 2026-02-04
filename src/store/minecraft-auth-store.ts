@@ -1,6 +1,30 @@
 import { create } from "zustand";
 import { MinecraftAuthService } from "../services/minecraft-auth-service";
 import type { MinecraftAccount } from "../types/minecraft";
+import flagsmith from 'flagsmith';
+import { toast } from "react-hot-toast";
+import { getLauncherConfig } from "../services/launcher-config-service";
+
+// Helper function to identify the user with Flagsmith
+const identifyWithFlagsmith = (account: MinecraftAccount | null) => {
+  if (account && account.id) {
+    flagsmith.identify(account.id)
+      .then(() => {
+        console.log(`[AuthStore] Flagsmith user identified: ${account.id}`);
+      })
+      .catch((error) => {
+        console.error(`[AuthStore] Error identifying Flagsmith user ${account.id}:`, error);
+      });
+  } else {
+    flagsmith.logout()
+      .then(() => {
+        console.log("[AuthStore] Flagsmith user logged out (no active account).");
+      })
+      .catch((error) => {
+        console.error("[AuthStore] Error logging out Flagsmith user:", error);
+      });
+  }
+};
 
 interface MinecraftAuthState {
   accounts: MinecraftAccount[];
@@ -38,50 +62,119 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
         activeAccount,
         isLoading: false,
       });
+      identifyWithFlagsmith(activeAccount);
     } catch (error) {
       console.error("Failed to initialize accounts:", error);
       set({
-        error: `Failed to load accounts: ${error instanceof Error ? error.message : String(error)}`,
+        error: `Failed to load accounts: ${error instanceof Error ? error.message : String(error.message)}`,
         isLoading: false,
       });
+      identifyWithFlagsmith(null);
     }
   },
 
   addAccount: async () => {
-    try {
-      set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null });
 
+    // Check if browser-based login is enabled
+    const [config, isFlatpak] = await Promise.all([
+      getLauncherConfig().catch(() => ({ use_browser_based_login: false })),
+      MinecraftAuthService.isFlatpak().catch(() => false),
+    ]);
+    const useBrowserLogin = isFlatpak || config.use_browser_based_login;
+
+    const fullProcessPromise = (async () => {
+      // Step 1: Login
       const newAccount = await MinecraftAuthService.beginLogin();
-
-      if (newAccount) {
-        const accounts = await MinecraftAuthService.getAccounts();
-        const activeAccount = await MinecraftAuthService.getActiveAccount();
-
-        const updatedAccounts = accounts.map((account) => ({
-          ...account,
-          active: activeAccount ? account.id === activeAccount.id : false,
-        }));
-
-        set({
-          accounts: updatedAccounts,
-          activeAccount,
-          isLoading: false,
-        });
-      } else {
-        set({ isLoading: false });
+      if (!newAccount) {
+        // This will be caught by toast.promise and the try/catch block
+        throw new Error("Login cancelled by user.");
       }
-    } catch (error) {
-      console.error("Failed to add account:", error);
+
+      // Step 2: Get all data needed for the state update
+      const accounts = await MinecraftAuthService.getAccounts();
+      const activeAccount = await MinecraftAuthService.getActiveAccount();
+
+      identifyWithFlagsmith(activeAccount);
+
+      // Return a payload with all data needed for the success toast and the final state update
+      return { newAccount, accounts, activeAccount };
+    })();
+
+    // Use toast.promise only if NOT using browser-based login
+    if (!useBrowserLogin) {
+      toast.promise(
+        fullProcessPromise,
+        {
+          loading: "Please sign in via your browser...",
+          success: ({ newAccount }) =>
+            `Account '${newAccount.username}' added successfully.`,
+          error: (err) => err.message,
+        },
+        {
+          loading: {
+            duration: 50000,
+          },
+          success: {
+            duration: 1500,
+          },
+          error: {
+            duration: 1500,
+          },
+        },
+      );
+    }
+
+    // Handle promise completion
+    try {
+      const { newAccount, accounts, activeAccount } = await fullProcessPromise;
+
+      // Only show success toast if not using browser login (toast.promise already handles it)
+      if (useBrowserLogin) {
+        toast.success(`Account '${newAccount.username}' added successfully.`, {
+          duration: 1500,
+        });
+      }
+
+      // Update state with all accounts marked correctly
+      const updatedAccounts = accounts.map((account) => ({
+        ...account,
+        active: activeAccount ? account.id === activeAccount.id : false,
+      }));
+
       set({
-        error: `Failed to add account: ${error instanceof Error ? error.message : String(error)}`,
+        accounts: updatedAccounts,
+        activeAccount,
         isLoading: false,
+        error: null,
       });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error.message);
+      
+      // Only show error toast if using browser login (toast.promise already handles it)
+      if (useBrowserLogin && !errorMessage.includes("cancelled by user")) {
+        toast.error(errorMessage || "Login failed", {
+          duration: 1500,
+        });
+      }
+      
+      // The toast handles displaying the error. We just log it and set state if it's a critical error.
+      if (!errorMessage.includes("cancelled by user")) {
+        console.error("Failed to add account:", error);
+        set({ error: `Failed to add account: ${errorMessage}`, isLoading: false });
+      } else {
+        // Already handled by cancel button - ensure loading state is reset
+        console.log("Account add cancelled by user.");
+        set({ isLoading: false, error: "Login cancelled by user" });
+      }
     }
   },
 
   removeAccount: async (accountId: string) => {
     try {
       set({ isLoading: true, error: null });
+      const wasActive = get().activeAccount?.id === accountId;
 
       await MinecraftAuthService.removeAccount(accountId);
 
@@ -98,10 +191,13 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
         activeAccount,
         isLoading: false,
       });
+      if (wasActive) {
+        identifyWithFlagsmith(activeAccount);
+      }
     } catch (error) {
       console.error("Failed to remove account:", error);
       set({
-        error: `Failed to remove account: ${error instanceof Error ? error.message : String(error)}`,
+        error: `Failed to remove account: ${error instanceof Error ? error.message : String(error.message)}`,
         isLoading: false,
       });
     }
@@ -125,10 +221,11 @@ export const useMinecraftAuthStore = create<MinecraftAuthState>((set, get) => ({
         activeAccount,
         isLoading: false,
       });
+      identifyWithFlagsmith(activeAccount);
     } catch (error) {
       console.error("Failed to set active account:", error);
       set({
-        error: `Failed to set active account: ${error instanceof Error ? error.message : String(error)}`,
+        error: `Failed to set active account: ${error instanceof Error ? error.message : String(error.message)}`,
         isLoading: false,
       });
     }

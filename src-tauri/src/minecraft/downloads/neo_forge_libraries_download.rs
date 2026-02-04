@@ -2,13 +2,11 @@ use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::neo_forge_install_profile::NeoForgeInstallProfile;
 use crate::minecraft::dto::neo_forge_meta::NeoForgeVersion;
+use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
 use futures::stream::{iter, StreamExt};
 use log::info;
-use reqwest;
-use sha1::{Digest, Sha1};
 use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 
 const LIBRARIES_DIR: &str = "libraries";
 const DEFAULT_CONCURRENT_DOWNLOADS: usize = 10;
@@ -85,77 +83,19 @@ impl NeoForgeLibrariesDownload {
         }
 
         let target_path = self.get_library_path(download_info);
-
-        // Check if file exists and verify hash if available
-        if fs::try_exists(&target_path).await? {
-            if let Some(expected_sha1) = &download_info.sha1 {
-                let file_content = fs::read(&target_path).await?;
-                let mut hasher = Sha1::new();
-                hasher.update(&file_content);
-                let actual_sha1 = format!("{:x}", hasher.finalize());
-
-                if actual_sha1 == *expected_sha1 {
-                    info!(
-                        "📦 Library already exists and hash matches: {}",
-                        download_info.path
-                    );
-                    return Ok(());
-                } else {
-                    info!(
-                        "⚠️ Library exists but hash mismatch, redownloading: {}",
-                        download_info.path
-                    );
-                }
-            } else {
-                info!(
-                    "📦 Library already exists (no hash to verify): {}",
-                    download_info.path
-                );
-                return Ok(());
-            }
-        }
-
-        // Download the file
         info!("⬇️ Downloading: {}", download_info.path);
 
-        let response = reqwest::get(&download_info.url)
-            .await
-            .map_err(|e| AppError::Download(format!("Failed to download library: {}", e)))?;
+        // Use the new centralized download utility with SHA1 verification
+        let mut config = DownloadConfig::new()
+            .with_streaming(false)  // Libraries are typically small-medium files
+            .with_retries(3);  // Built-in retry logic
 
-        if !response.status().is_success() {
-            return Err(AppError::Download(format!(
-                "Failed to download library: Status {}",
-                response.status()
-            )));
+        // Add SHA1 verification if available
+        if let Some(sha1) = &download_info.sha1 {
+            config = config.with_sha1(sha1.clone());
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| AppError::Download(format!("Failed to download library: {}", e)))?;
-
-        // Verify hash if available
-        if let Some(expected_sha1) = &download_info.sha1 {
-            let mut hasher = Sha1::new();
-            hasher.update(&bytes);
-            let actual_sha1 = format!("{:x}", hasher.finalize());
-
-            if actual_sha1 != *expected_sha1 {
-                return Err(AppError::Download(format!(
-                    "Hash mismatch for {}: expected {}, got {}",
-                    download_info.path, expected_sha1, actual_sha1
-                )));
-            }
-        }
-
-        // Create parent directories if they don't exist
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-
-        // Save the file
-        let mut file = fs::File::create(&target_path).await?;
-        file.write_all(&bytes).await?;
+        DownloadUtils::download_file(&download_info.url, &target_path, config).await?;
 
         info!("💾 Saved: {}", download_info.path);
         Ok(())
@@ -327,29 +267,21 @@ impl NeoForgeLibrariesDownload {
                 info!("\n⬇️ Downloading: {}", maven_path);
                 info!("  📎 URL: {}", url);
 
-                let response = reqwest::get(&url).await.map_err(|e| {
-                    AppError::Download(format!("Failed to download library: {}", e))
-                })?;
+                // Use the new centralized download utility for legacy libraries
+                let config = DownloadConfig::new()
+                    .with_streaming(false)  // Legacy libraries are typically small-medium files
+                    .with_retries(2);  // Reduced retries for faster processing
 
-                if !response.status().is_success() {
-                    info!(
-                        "❌ Failed to download library '{}': Status {}",
-                        library.name,
-                        response.status()
-                    );
-                    return Ok(());
+                match DownloadUtils::download_file(&url, &target_path, config).await {
+                    Ok(()) => {
+                        info!("✅ Successfully downloaded: {}", maven_path);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        info!("❌ Failed to download library '{}': {}", library.name, e);
+                        Ok(()) // Continue with other downloads even if one fails
+                    }
                 }
-
-                let bytes = response.bytes().await.map_err(|e| {
-                    AppError::Download(format!("Failed to download library: {}", e))
-                })?;
-
-                // Speichere die Datei
-                let mut file = fs::File::create(&target_path).await?;
-                file.write_all(&bytes).await?;
-
-                info!("✅ Successfully downloaded: {}", maven_path);
-                Ok(())
             });
         }
 

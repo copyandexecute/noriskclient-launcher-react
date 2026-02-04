@@ -2,18 +2,11 @@
 
 import { TabHeader } from "../ui/TabHeader";
 import { TabContent } from "../ui/TabContent";
-import { EmptyState } from "../ui/EmptyState";
+// import { EmptyState } from "../ui/EmptyState"; // Replaced by CapeBrowser
+import { CapeBrowser } from '../capes/CapeBrowser';
 
 export function StoreTab() {
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <TabHeader title="Store" icon="pixel:shopping-cart-solid" />
-      <TabContent>
-        <EmptyState
-          icon="pixel:shopping-cart-solid"
-          message="Store Coming Soon"
-        />
-      </TabContent>
-    </div>
+    <CapeBrowser />
   );
 }

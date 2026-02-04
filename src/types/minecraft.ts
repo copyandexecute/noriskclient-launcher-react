@@ -1,11 +1,13 @@
 export interface MinecraftAccount {
-    id: string;
-    username: string;
-    minecraft_username: string;
-    active: boolean;
-    access_token: string;
-    refresh_token?: string;
-    expires_at?: string;
+  id: string;
+  username: string;
+  minecraft_username: string;
+  active: boolean;
+  access_token: string;
+  refresh_token?: string;
+  expires_at?: string;
+  /** If true, the UI should not show the child-protection multiplayer warning for this account */
+  ignore_child_protection_warning?: boolean;
 }
 
 /**
@@ -80,4 +82,46 @@ export interface MinecraftVersion {
     url: string;
     time: string;
     releaseTime: string;
+}
+
+export interface LatestVersions {
+    release: string;
+    snapshot: string;
+}
+
+export interface VersionManifest {
+    latest: LatestVersions;
+    versions: MinecraftVersion[];
+}
+
+export interface WorldInfo {
+  folder_name: string;
+  display_name: string | null;
+  last_played: number | null; // Assuming Rust i64 maps to number (epoch milliseconds)
+  icon_path: string | null; // Changed type from object to string | null
+  game_mode?: number | null; // Added GameType (0: Survival, 1: Creative, 2: Adventure, 3: Spectator)
+  difficulty?: number | null; // Rust i8 -> number (0: Peaceful, 1: Easy, 2: Normal, 3: Hard)
+  difficulty_locked?: boolean | null; // Rust bool -> boolean
+  is_hardcore?: boolean | null; // Rust bool -> boolean
+  version_name?: string | null; // Rust Option<String> -> string | null
+}
+
+export interface ServerInfo {
+    name: string | null;
+    address: string | null; // Matches Rust struct
+    icon_base64: string | null; // Base64 string for the icon
+    accepts_textures: number | null; // 0=prompt, 1=enabled, 2=disabled (Rust u8)
+    previews_chat: number | null; // Seems to be boolean 0/1 (Rust u8)
+}
+
+export interface ServerPingInfo {
+    description: string | null;
+    description_json: object | null; // Representing serde_json::Value
+    version_name: string | null;
+    version_protocol: number | null;
+    players_online: number | null;
+    players_max: number | null;
+    favicon_base64: string | null;
+    latency_ms: number | null;
+    error: string | null; // Optional error message
 }

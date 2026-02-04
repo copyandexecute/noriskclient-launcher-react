@@ -7,30 +7,38 @@
 mod commands;
 mod config;
 mod error;
+mod friends;
 pub mod integrations;
 mod logging;
 mod minecraft;
 mod state;
 mod utils;
+
 use crate::integrations::norisk_packs;
 use crate::integrations::norisk_versions;
-use log::{debug, error, info, warn};
-use rand::seq::SliceRandom;
+use log::{debug, error, info};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Listener;
+use tauri::Manager;
+use utils::debug_utils;
+use utils::updater_utils;
 
 use crate::commands::process_command::{
-    get_full_log, get_process, get_processes, get_processes_by_profile, open_log_window,
+    fetch_crash_report, focus_main_window, get_full_log, get_process, get_processes,
+    get_processes_by_profile, open_minecraft_log_window, open_single_log_window,
     set_discord_state, stop_process,
 };
 use commands::minecraft_auth_command::{
-    begin_login, get_accounts, get_active_account, remove_account, set_active_account,
+    begin_login, cancel_login, get_accounts, get_active_account, is_flatpak, remove_account, set_active_account
 };
 use commands::minecraft_command::{
     add_skin,
+    add_skin_locally,
     apply_skin_from_base64,
     // Local skin database commands
     get_all_skins,
+    get_crafatar_avatar,
     get_fabric_loader_versions,
     get_forge_versions,
     get_minecraft_versions,
@@ -39,6 +47,7 @@ use commands::minecraft_command::{
     get_skin_by_id,
     // Skin management commands
     get_user_skin_data,
+    ping_minecraft_server,
     remove_skin,
     reset_skin,
     update_skin_properties,
@@ -47,41 +56,90 @@ use commands::minecraft_command::{
 };
 use commands::profile_command::{
     abort_profile_launch, add_modrinth_content_to_profile, add_modrinth_mod_to_profile,
-    copy_profile, create_profile, delete_custom_mod, delete_mod_from_profile, delete_profile,
-    export_profile, get_custom_mods, get_local_resourcepacks, get_local_shaderpacks, get_local_datapacks,
-    get_norisk_packs, get_profile, get_profile_directory_structure, get_standard_profiles,
-    get_system_ram_mb, import_local_mods, import_profile_from_file, is_profile_launching,
-    launch_profile, list_profiles, open_profile_folder, refresh_norisk_packs,
-    refresh_standard_versions, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
-    set_profile_mod_enabled, update_modrinth_mod_version, update_profile,
-    update_resourcepack_from_modrinth, update_shaderpack_from_modrinth, update_datapack_from_modrinth, get_norisk_packs_resolved,
-    is_content_installed
+    batch_check_content_installed, check_for_group_migration_command, check_world_lock_status, copy_profile, copy_world,
+    create_profile, delete_custom_mod, delete_mod_from_profile, delete_profile, delete_world,
+    export_profile, get_all_profiles_and_last_played, get_custom_mods, get_local_content,
+    get_local_datapacks, get_local_resourcepacks, get_local_shaderpacks, get_log_file_content,
+    get_norisk_packs, get_norisk_packs_resolved, get_profile, get_profile_directory_structure,
+    get_profile_latest_log_content, get_profile_log_files, get_servers_for_profile,
+    get_standard_profiles, get_system_ram_mb, get_worlds_for_profile, import_local_mods,
+    import_profile, import_profile_from_file, import_world, is_content_installed, is_profile_launching,
+    launch_profile, list_profile_screenshots, list_profiles, open_profile_folder,
+    open_profile_latest_log, refresh_norisk_packs, refresh_standard_versions, repair_profile,
+    resolve_loader_version, search_profiles, set_custom_mod_enabled, set_norisk_mod_status,
+    set_profile_mod_enabled, update_datapack_from_modrinth, update_modrinth_mod_version,
+    update_profile, update_resourcepack_from_modrinth, update_shaderpack_from_modrinth,
 };
 
 // Use statements for registered commands only
+use commands::curseforge_commands::{get_curseforge_mods_by_ids, import_curseforge_pack, download_and_install_curseforge_modpack_command, get_curseforge_file_changelog_command, get_curseforge_mod_description_command};
+
 use commands::modrinth_commands::{
-    check_modrinth_updates, download_and_install_modrinth_modpack,
-    get_all_modrinth_versions_for_contexts, get_modrinth_mod_versions,
-    get_modrinth_project_details, search_modrinth_mods, search_modrinth_projects,
-}; // Remove or comment out if not needed
+    check_modrinth_updates, check_mod_updates_unified_command, download_and_install_modrinth_modpack,
+    get_all_modrinth_versions_for_contexts, get_modrinth_categories_command,
+    get_modrinth_game_versions_command, get_modrinth_loaders_command, get_modrinth_mod_versions,
+    get_modpack_versions_unified_command, get_modrinth_project_details, get_modrinth_project_members,
+    get_modrinth_versions_by_hashes, search_modrinth_mods,
+    search_modrinth_projects, search_mods_unified_command, get_mod_versions_unified_command,
+    switch_modpack_version_command
+};
 
 use commands::file_command::{
-    delete_file, get_icons_for_archives, get_icons_for_norisk_mods, open_file_directory,
+    delete_file, get_icons_for_archives, get_icons_for_norisk_mods, list_all_mc_logs,
+    list_crash_reports, list_launcher_logs, open_file, open_file_directory, read_file_bytes,
     set_file_enabled,
 };
 
 // Import config commands
-use commands::config_commands::{get_launcher_config, set_launcher_config};
+use commands::config_commands::{get_app_version, get_launcher_config, set_launcher_config};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+};
 
 // Import path commands
 use commands::path_commands::{get_launcher_directory, resolve_image_path};
 
 // Import cape commands
 use commands::cape_command::{
-    browse_capes, delete_cape, equip_cape, get_player_capes, unequip_cape, upload_cape,
+    browse_capes, delete_cape, download_template_and_open_explorer, equip_cape, get_player_capes,
+    unequip_cape, upload_cape, add_favorite_cape, remove_favorite_cape, get_capes_by_hashes,
 };
 
-use tauri::Manager;
+// Import vanilla cape commands
+use commands::vanilla_cape_command::{
+    get_owned_vanilla_capes, get_currently_equipped_vanilla_cape, equip_vanilla_cape,
+    get_vanilla_cape_info, refresh_vanilla_cape_data,
+};
+
+// Import Assets commands
+use commands::assets_command::get_or_download_asset_model;
+
+// Import NRC commands
+use commands::nrc_commands::{check_update_available_command, download_and_install_update_command, get_news_and_changelogs_command, get_advent_calendar_command, claim_advent_calendar_day_command};
+
+// Import Content commands
+use commands::content_command::{
+    bulk_toggle_mod_updates, install_content_to_profile, install_local_content_to_profile,
+    switch_content_version, toggle_content_from_profile, toggle_mod_updates,
+    uninstall_content_from_profile,
+};
+
+// Import Java commands
+use commands::java_command::{
+    detect_java_installations_command, find_best_java_for_minecraft_command, get_java_info_command,
+    invalidate_java_cache_command, validate_java_path_command,
+};
+
+use commands::friends_command::{
+    get_friends, get_pending_requests, get_friends_user, send_friend_request,
+    accept_friend_request, deny_friend_request, remove_friend, set_online_status,
+    toggle_friend_ping, update_privacy_setting, connect_friends_websocket,
+    disconnect_friends_websocket, is_friends_websocket_connected, get_or_create_chat,
+    get_private_chats, get_chat_messages, send_chat_message, edit_chat_message,
+    delete_chat_message, send_typing_indicator, add_message_reaction,
+    remove_message_reaction,
+};
 
 #[tokio::main]
 async fn main() {
@@ -89,133 +147,299 @@ async fn main() {
         eprintln!("FEHLER: Logging konnte nicht initialisiert werden: {}", e);
     }
 
-    /*info!("--- Running Test Modrinth Search --- DONT FORGET TO REMOVE");
-    let query = "fabric".to_string();
-    let game_version_filter = Some("1.20.1".to_string());
-    let loader_filter = Some("fabric".to_string());
-    let limit = Some(25u32);
-
-    match integrations::modrinth::search_mods(
-        query.clone(),
-        game_version_filter.clone(),
-        loader_filter.clone(),
-        limit,
-    )
-    .await
-    {
-        Ok(results) => {
-            info!(
-                "Modrinth search successful! Found {} results.",
-                results.len()
-            );
-
-            if !results.is_empty() {
-                let mut rng = rand::thread_rng();
-                if let Some(random_hit) = results.choose(&mut rng) {
-                    info!(
-                        "--- Getting versions for randomly chosen hit: '{}' (ID: {}) ---",
-                        random_hit.title, random_hit.project_id
-                    );
-
-                    match integrations::modrinth::get_mod_versions(
-                        random_hit.project_id.clone(),
-                        loader_filter.clone().map(|l| vec![l]),
-                        game_version_filter.clone().map(|gv| vec![gv]),
-                    )
-                    .await
-                    {
-                        Ok(versions) => {
-                            info!(
-                                "Found {} versions for '{}' matching filters:",
-                                versions.len(),
-                                random_hit.title
-                            );
-                            for (i, version) in versions.iter().take(10).enumerate() {
-                                let primary_file = version
-                                    .files
-                                    .iter()
-                                    .find(|f| f.primary)
-                                    .map(|f| f.filename.as_str())
-                                    .unwrap_or("N/A");
-                                info!(
-                                    "  Version {}: Name='{}', Number='{}', Type={:?}, File='{}'",
-                                    i + 1,
-                                    version.name,
-                                    version.version_number,
-                                    version.version_type,
-                                    primary_file
-                                );
-                            }
-                            if versions.len() > 10 {
-                                info!("  ... and {} more versions not shown.", versions.len() - 10);
-                            }
-                        }
-                        Err(e) => {
-                            error!("Failed to get versions for '{}': {:?}", random_hit.title, e);
-                        }
-                    }
-                } else {
-                    error!("Could not choose a random element, although search hits were found.");
-                }
-            } else {
-                info!("No mods found matching the search criteria.");
-            }
-        }
-        Err(e) => {
-            error!("Modrinth search failed: {:?}", e);
-        }
-    }
-    info!("--- Finished Test Modrinth Search --- DONT FORGET TO REMOVE");*/
-
-    match integrations::modrinth::get_multiple_projects(vec![
-        "AANobbMI".to_string(),
-        "P7dR8mSH".to_string(),
-    ])
-    .await
-    {
-        Ok(projects) => {
-            info!("Found {} projects.", projects.len());
-            for project in projects {
-                info!("Project: {}", project.title);
-            }
-        }
-        Err(e) => {
-            error!("Failed to get projects: {:?}", e);
-        }
-    }
-
     info!("Starting NoRiskClient Launcher...");
 
-    utils::file_utils::get_jar_icon_test().await;
-
     tauri::Builder::default()
-        //TODO .plugin(minecraft_auth_command::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            info!("SingleInstance plugin: Second instance triggered with args: {:?}", argv);
+
+            match app.get_webview_window("main") {
+                Some(window) => {
+                    if let Err(e) = window.show() {
+                        error!("SingleInstance: Failed to show main window: {}", e);
+                    }
+                    if let Err(e) = window.unminimize() {
+                        error!("SingleInstance: Failed to unminimize main window: {}", e);
+                    }
+                    if let Err(e) = window.set_focus() {
+                        error!("SingleInstance: Failed to focus main window: {}", e);
+                    }
+                    info!("SingleInstance: Brought existing window to front.");
+                }
+                None => {
+                    // Main window doesn't exist - first instance is a zombie
+                    error!("SingleInstance: CRITICAL - Main window does not exist!");
+                    error!("SingleInstance: First instance is a zombie. Exiting to release lock.");
+
+                    #[cfg(target_os = "windows")]
+                    {
+                        use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                        let _ = app
+                            .dialog()
+                            .message("The NoRisk Launcher encountered a critical error.\n\n\
+                                Please join our Discord for support:\n\
+                                https://discord.norisk.gg")
+                            .kind(MessageDialogKind::Error)
+                            .title("NoRisk Launcher - Critical Error")
+                            .blocking_show();
+                    }
+
+                    std::process::exit(1);
+                }
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
-            // Initialize the state asynchronously
-            let app_handle_for_state = Arc::new(app.handle().clone());
-            tauri::async_runtime::spawn(async move {
-                let _ = norisk_versions::load_dummy_versions().await;
-                let _ = norisk_packs::load_dummy_modpacks().await;
+            let app_handle = app.handle().clone();
 
-                if let Err(e) = state::state_manager::State::init(app_handle_for_state).await {
-                    error!("Failed to initialize state: {}", e);
-                    // Consider exiting or notifying the user if state init fails critically
+            // --- Initialize System Tray (Tauri 2.0) ---
+            let show_item = MenuItem::with_id(app, "show", "Show NoRisk Launcher", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            let _tray = TrayIconBuilder::new()
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .tooltip("NoRisk Client Launcher")
+                .icon(app.default_window_icon().unwrap().clone())
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        match app.get_webview_window("main") {
+                            Some(window) => {
+                                if let Err(e) = window.show() {
+                                    error!("Tray menu: Failed to show window: {}", e);
+                                }
+                                if let Err(e) = window.unminimize() {
+                                    error!("Tray menu: Failed to unminimize window: {}", e);
+                                }
+                                if let Err(e) = window.set_focus() {
+                                    error!("Tray menu: Failed to focus window: {}", e);
+                                }
+                            }
+                            None => {
+                                error!("Tray menu: Main window not found - application in inconsistent state");
+                            }
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| match event {
+                    TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } => {
+                        let app = tray.app_handle();
+                        match app.get_webview_window("main") {
+                            Some(window) => {
+                                let is_visible = window.is_visible().unwrap_or(false);
+                                let is_minimized = window.is_minimized().unwrap_or(false);
+
+                                if is_visible && !is_minimized {
+                                    if let Err(e) = window.hide() {
+                                        error!("Tray click: Failed to hide window: {}", e);
+                                    }
+                                } else {
+                                    if let Err(e) = window.show() {
+                                        error!("Tray click: Failed to show window: {}", e);
+                                    }
+                                    if let Err(e) = window.unminimize() {
+                                        error!("Tray click: Failed to unminimize window: {}", e);
+                                    }
+                                    if let Err(e) = window.set_focus() {
+                                        error!("Tray click: Failed to focus window: {}", e);
+                                    }
+                                }
+                            }
+                            None => {
+                                error!("Tray click: Main window not found - application in inconsistent state");
+                            }
+                        }
+                    }
+                    TrayIconEvent::DoubleClick {
+                        button: MouseButton::Left,
+                        ..
+                    } => {
+                        let app = tray.app_handle();
+                        match app.get_webview_window("main") {
+                            Some(window) => {
+                                if let Err(e) = window.show() {
+                                    error!("Tray double-click: Failed to show window: {}", e);
+                                }
+                                if let Err(e) = window.unminimize() {
+                                    error!("Tray double-click: Failed to unminimize window: {}", e);
+                                }
+                                if let Err(e) = window.set_focus() {
+                                    error!("Tray double-click: Failed to focus window: {}", e);
+                                }
+                            }
+                            None => {
+                                error!("Tray double-click: Main window not found - application in inconsistent state");
+                            }
+                        }
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
+            // --- Handle .noriskpack file opening on initial startup (all platforms) ---
+            // The single-instance plugin does not handle the *very first* launch with arguments.
+            // We still need to check std::env::args() here for that first launch.
+            /*info!("Checking for startup file arguments...");
+            let startup_args: Vec<String> = std::env::args().collect();
+            if startup_args.len() > 1 { // args[0] is exe path, check if there are more
+                let handle_clone = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    // Pass all startup_args; handle_noriskpack_file_paths will skip the exe path if needed
+                    norisk_packs::handle_noriskpack_file_paths(&handle_clone, startup_args).await;
+                });
+            }*/
+            // --- End .noriskpack handling on startup ---
+
+            // Task for State Init and Updater Window
+            let state_init_app_handle = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                // --- Create Updater Window (but keep hidden initially) ---
+                let updater_window = match updater_utils::create_updater_window(&state_init_app_handle).await {
+                    Ok(win) => {
+                        info!("Updater window created successfully (initially hidden).");
+                        Some(win)
+                    }
+                    Err(e) => {
+                        error!("Failed to create updater window: {}", e);
+                        None
+                    }
+                };
+
+                // --- State Initialization --- 
+                info!("Initiating state initialization...");
+                if let Err(e) = state::state_manager::State::init(Arc::new(state_init_app_handle.clone())).await {
+                    error!("CRITICAL: Failed to initialize state: {}. Update check and main window might not proceed correctly.", e);
+                    if let Some(win) = updater_window {
+                        updater_utils::emit_status(&state_init_app_handle, "close", "Closing due to state init error.".to_string(), None);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                        if let Err(close_err) = win.close() {
+                            error!("Failed to close updater window after state init error: {}", close_err);
+                        }
+                    }
+                    return;
                 }
+                info!("State initialization finished successfully.");
+
+                info!("Attempting to retrieve launcher configuration for update check...");
+                match state::state_manager::State::get().await {
+                    Ok(state_manager_instance) => {
+                        let config = state_manager_instance.config_manager.get_config().await;
+                        let check_beta_channel = config.check_beta_channel;
+                        let mut auto_check_updates_enabled = config.auto_check_updates;
+
+                        // Disable auto-updates when running in Flatpak
+                        if updater_utils::is_flatpak() {
+                            info!("Running in Flatpak environment - disabling automatic updates (Flatpak handles updates through its own mechanism).");
+                            auto_check_updates_enabled = false;
+                        }
+
+                        if auto_check_updates_enabled {
+                            info!("Initiating application update check (Channel determined by config: Beta={})...", check_beta_channel);
+                            updater_utils::check_for_updates(state_init_app_handle.clone(), check_beta_channel, updater_window.clone()).await;
+                            info!("Update check process has finished.");
+                        } else {
+                            info!("Auto-check for updates is disabled in settings. Skipping update check.");
+                            // Ensure the updater window (if created) is closed if we skip the check.
+                            if let Some(win) = updater_window {
+                                updater_utils::emit_status(&state_init_app_handle, "close", "Auto-update disabled.".to_string(), None);
+                                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await; // Give time for emit to process
+                                if let Err(close_err) = win.close() {
+                                    error!("Failed to close updater window when skipping updates: {}", close_err);
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to get global state for update check: {}.", e);
+                        if let Some(win) = updater_window { 
+                            updater_utils::emit_status(&state_init_app_handle, "close", "Closing due to state fetch error.".to_string(), None);
+                            tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                            if let Err(close_err) = win.close() {
+                                error!("Failed to close updater window after state fetch error: {}", close_err);
+                            }
+                        }
+                    }
+                }
+
+                info!("Updater process finished. Attempting to show main window...");
+                if let Some(main_window) = state_init_app_handle.get_webview_window("main") {
+                    match main_window.show() {
+                        Ok(_) => {
+                            info!("Main window shown successfully.");
+                            if let Err(e) = main_window.set_focus() {
+                                error!("Failed to focus main window (non-critical): {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("CRITICAL: Failed to show main window: {}", e);
+
+                            #[cfg(target_os = "windows")]
+                            {
+                                use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                                let _ = state_init_app_handle
+                                    .dialog()
+                                    .message("The NoRisk Launcher encountered a critical error.\n\n\
+                                        Please join our Discord for support:\n\
+                                        https://discord.norisk.gg")
+                                    .kind(MessageDialogKind::Error)
+                                    .title("NoRisk Launcher - Critical Error")
+                                    .blocking_show();
+                            }
+
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    error!("CRITICAL: Could not get main window handle!");
+
+                    #[cfg(target_os = "windows")]
+                    {
+                        use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                        let _ = state_init_app_handle
+                            .dialog()
+                            .message("The NoRisk Launcher encountered a critical error.\n\n\
+                                Please join our Discord for support:\n\
+                                https://discord.norisk.gg")
+                            .kind(MessageDialogKind::Error)
+                            .title("NoRisk Launcher - Critical Error")
+                            .blocking_show();
+                    }
+
+                    std::process::exit(1);
+                }
+
+                // --- Test Unified Mod Search ---
+                //debug_utils::debug_unified_mod_search().await;
+
+                // --- Test Unified Mod Versions ---
+                //debug_utils::debug_unified_mod_versions().await;
             });
 
             // --- Register Focus Event Listener for Discord RPC --- 
-            if let Some(main_window) = app.get_webview_window("main") { // Use get_webview_window
+            if let Some(main_window) = app.get_webview_window("main") { 
+                let focus_app_handle = app_handle.clone(); 
                 main_window.listen("tauri://focus", move |_event| {
+                    let listener_app_handle = focus_app_handle.clone(); 
                     tokio::spawn(async move {
                         debug!("Main window focus event received. Triggering DiscordManager handler.");
-                        // Get the global state using the static getter and call the handler
                         match state::state_manager::State::get().await {
-                            Ok(state) => {
-                                if let Err(e) = state.discord_manager.handle_focus_event().await {
-                                     error!("Error during DiscordManager focus handling: {}", e);
+                            Ok(state_manager_instance) => { 
+                                if let Err(e) = state_manager_instance.discord_manager.handle_focus_event().await {
+                                    error!("Error during DiscordManager focus handling: {}", e);
                                 }
                             }
                             Err(e) => {
@@ -224,10 +448,16 @@ async fn main() {
                         }
                     });
                 });
+
+                // --- Handle window close request (from taskbar, etc.) ---
+                main_window.listen("tauri://close-requested", move |_event| {
+                    info!("Window close requested via system (taskbar, etc.). Exiting application.");
+                    std::process::exit(0);
+                });
             } else {
                 error!("Could not get main window handle to attach focus listener!");
             }
-            // --- End Focus Event Listener ---
+
 
             Ok(())
         })
@@ -236,6 +466,8 @@ async fn main() {
             get_profile,
             update_profile,
             delete_profile,
+            repair_profile,
+            resolve_loader_version,
             list_profiles,
             search_profiles,
             get_minecraft_versions,
@@ -246,19 +478,33 @@ async fn main() {
             get_process,
             get_processes_by_profile,
             stop_process,
-            open_log_window,
+            open_minecraft_log_window,
+            open_single_log_window,
+            focus_main_window,
             begin_login,
+            cancel_login,
+            is_flatpak,
             remove_account,
             get_active_account,
             set_active_account,
             get_accounts,
             search_modrinth_mods,
             search_modrinth_projects,
+            search_mods_unified_command,
+            get_mod_versions_unified_command,
+            get_modpack_versions_unified_command,
+            get_curseforge_mods_by_ids,
+            import_curseforge_pack,
+            download_and_install_curseforge_modpack_command,
+            get_curseforge_file_changelog_command,
+            get_curseforge_mod_description_command,
             get_modrinth_mod_versions,
             add_modrinth_mod_to_profile,
             add_modrinth_content_to_profile,
             get_modrinth_project_details,
+            get_modrinth_project_members,
             check_modrinth_updates,
+            check_mod_updates_unified_command,
             get_icons_for_archives,
             set_profile_mod_enabled,
             delete_mod_from_profile,
@@ -268,6 +514,7 @@ async fn main() {
             update_modrinth_mod_version,
             get_all_modrinth_versions_for_contexts,
             get_full_log,
+            fetch_crash_report,
             get_custom_mods,
             get_local_resourcepacks,
             get_local_shaderpacks,
@@ -278,6 +525,7 @@ async fn main() {
             delete_custom_mod,
             open_profile_folder,
             import_profile_from_file,
+            import_profile, 
             upload_log_to_mclogs_command,
             get_fabric_loader_versions,
             get_forge_versions,
@@ -296,33 +544,148 @@ async fn main() {
             set_launcher_config,
             get_launcher_directory,
             resolve_image_path,
-            // Resource and Shader pack updates
+            commands::path_commands::upload_profile_images,
             update_resourcepack_from_modrinth,
             update_shaderpack_from_modrinth,
             update_datapack_from_modrinth,
-            // Skin management commands
             get_user_skin_data,
             upload_skin,
             reset_skin,
             apply_skin_from_base64,
-            // Local skin database commands
             get_all_skins,
             get_skin_by_id,
             add_skin,
             remove_skin,
             update_skin_properties,
             set_discord_state,
-            // Cape commands
             browse_capes,
             get_player_capes,
             equip_cape,
             delete_cape,
             upload_cape,
             unequip_cape,
+            add_favorite_cape,
+            remove_favorite_cape,
             refresh_norisk_packs,
             refresh_standard_versions,
-            is_content_installed
+            is_content_installed,
+            batch_check_content_installed,
+            check_for_group_migration_command,
+            open_profile_latest_log,
+            get_profile_latest_log_content,
+            detect_java_installations_command,
+            get_java_info_command,
+            find_best_java_for_minecraft_command,
+            invalidate_java_cache_command,
+            validate_java_path_command,
+            get_worlds_for_profile,
+            get_servers_for_profile,
+            copy_world,
+            import_world,
+            check_world_lock_status,
+            ping_minecraft_server,
+            delete_world,
+            get_profile_log_files,
+            get_log_file_content,
+            list_profile_screenshots,
+            list_launcher_logs,
+            list_crash_reports,
+            list_all_mc_logs,
+            open_file,
+            read_file_bytes,
+            get_app_version,
+            get_news_and_changelogs_command,
+            check_update_available_command,
+            download_and_install_update_command,
+            get_modrinth_categories_command,
+            get_modrinth_loaders_command,
+            get_modrinth_game_versions_command,
+            get_modrinth_versions_by_hashes,
+            switch_modpack_version_command,
+            uninstall_content_from_profile,
+            toggle_content_from_profile,
+            toggle_mod_updates,
+            bulk_toggle_mod_updates,
+            install_content_to_profile,
+            commands::minecraft_command::get_profile_by_name_or_uuid,
+            commands::minecraft_command::add_skin_locally,
+            commands::minecraft_command::get_base64_from_skin_source_command,
+            commands::file_command::get_image_preview,
+            download_template_and_open_explorer,
+            get_all_profiles_and_last_played,
+            get_local_content,
+            install_local_content_to_profile,
+            switch_content_version,
+            commands::minecraft_command::get_starlight_skin_render,
+            commands::minecraft_command::get_crafatar_avatar,
+            commands::nrc_commands::discord_auth_link,
+            commands::nrc_commands::discord_auth_status,
+            commands::nrc_commands::discord_auth_unlink,
+            commands::nrc_commands::github_auth_link,
+            commands::nrc_commands::github_auth_status,
+            commands::nrc_commands::github_auth_unlink,
+            commands::nrc_commands::submit_crash_log_command,
+            commands::nrc_commands::log_message_command,
+            commands::flagsmith_commands::set_blocked_mods_config,
+            commands::flagsmith_commands::get_blocked_mods_config,
+            commands::flagsmith_commands::is_filename_blocked,
+            commands::flagsmith_commands::is_mod_id_blocked,
+            commands::flagsmith_commands::is_modrinth_project_id_blocked,
+            commands::flagsmith_commands::refresh_blocked_mods_config,
+            commands::nrc_commands::get_mobile_app_token,
+            commands::nrc_commands::reset_mobile_app_token,
+            commands::nrc_commands::get_advent_calendar_command,
+            commands::nrc_commands::claim_advent_calendar_day_command,
+            commands::nrc_commands::get_referral_info,
+            commands::nrc_commands::get_notifications,
+            commands::nrc_commands::mark_all_notifications_read,
+            commands::nrc_commands::mark_notification_read,
+            get_capes_by_hashes,
+            get_owned_vanilla_capes,
+            get_currently_equipped_vanilla_cape,
+            equip_vanilla_cape,
+            get_vanilla_cape_info,
+            refresh_vanilla_cape_data,
+            commands::profile_command::add_profile_symlink,
+            commands::profile_command::remove_profile_symlink,
+            commands::profile_command::get_profile_symlinks,
+            commands::profile_command::get_profile_instance_path,
+            commands::profile_command::get_default_profile_path,
+            get_or_download_asset_model,
+            get_friends,
+            get_pending_requests,
+            get_friends_user,
+            send_friend_request,
+            accept_friend_request,
+            deny_friend_request,
+            remove_friend,
+            set_online_status,
+            toggle_friend_ping,
+            update_privacy_setting,
+            connect_friends_websocket,
+            disconnect_friends_websocket,
+            is_friends_websocket_connected,
+            get_or_create_chat,
+            get_private_chats,
+            get_chat_messages,
+            send_chat_message,
+            edit_chat_message,
+            delete_chat_message,
+            send_typing_indicator,
+            add_message_reaction,
+            remove_message_reaction
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(
+            #[allow(unused_variables)]
+            |app_handle, event| {
+                // Removed macOS/iOS specific Opened event handling as single-instance handles args now
+                // Keep other run event handling if needed, e.g., for window events, exit requested, etc.
+                if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                    info!("Exit requested, preventing default to allow async tasks to finish if any.");
+                    // api.prevent_exit(); // Example: if you need to do cleanup before exit
+                }
+            },
+        );
 }

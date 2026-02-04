@@ -1,31 +1,40 @@
+use crate::error::{AppError, Result};
+use crate::integrations::modrinth;
+use crate::state::event_state::{EventPayload, EventType};
+use crate::state::profile_state::{
+    Mod, ModLoader, ModSource, ModPackInfo, ModPackSource, Profile, ProfileSettings, ProfileState,
+};
+use crate::state::state_manager::State;
+use async_zip::tokio::read::seek::ZipFileReader;
+use chrono::Utc;
+use futures::future::try_join_all;
+use log::{debug, error, info, warn};
+use reqwest::Client;
+use sanitize_filename::sanitize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::error::{AppError, Result};
-use crate::state::profile_state::{ModLoader, Profile, ProfileSettings, ProfileState, Mod, ModSource};
-use async_zip::tokio::read::seek::ZipFileReader;
-use std::path::{PathBuf, Path};
-use tokio::fs::File;
-use tokio::io::BufReader;
-use uuid::Uuid;
-use chrono::Utc;
 use std::collections::HashSet;
-use log::{info, error, warn, debug};
-use sanitize_filename::sanitize;
-use crate::integrations::modrinth;
-use crate::state::state_manager::State;
-use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use std::path::{Path, PathBuf};
 use tempfile::tempdir;
-use reqwest::Client;
+use tokio::fs;
+use tokio::fs::File;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
+use tokio_util::compat::FuturesAsyncReadCompatExt;
+use uuid::Uuid;
+
+// Import the ModpackManifest trait from curseforge integration
+use crate::integrations::curseforge::ModpackManifest;
 
 /// Represents the overall structure of a modrinth.index.json file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")] // Modrinth uses camelCase for this file
 pub struct ModrinthIndex {
-    pub format_version: u32, // Usually 1
-    pub game: String,        // e.g., "minecraft"
-    pub version_id: String,  // Pack version identifier
-    pub name: String,        // Pack name
+    pub format_version: u32,     // Usually 1
+    pub game: String,            // e.g., "minecraft"
+    pub version_id: String,      // Pack version identifier
+    pub name: String,            // Pack name
     pub summary: Option<String>, // Optional description
     pub files: Vec<ModrinthIndexFile>,
     pub dependencies: HashMap<String, String>, // Key: dependency ID (e.g., "minecraft", "fabric-loader"), Value: version string
@@ -38,8 +47,8 @@ pub struct ModrinthIndexFile {
     pub path: String, // Target path within the instance (e.g., "mods/fabric-api.jar")
     pub hashes: HashMap<String, String>, // Key: hash algorithm ("sha1", "sha512"), Value: hash string
     pub env: Option<HashMap<String, String>>, // Environment constraints ("client", "server")
-    pub downloads: Vec<String>, // List of download URLs
-    pub file_size: u64, // File size in bytes
+    pub downloads: Vec<String>,          // List of download URLs
+    pub file_size: u64,                  // File size in bytes
 }
 
 // Constants for common dependency keys
@@ -50,7 +59,9 @@ pub const QUILT_LOADER_DEPENDENCY: &str = "quilt-loader";
 pub const NEOFORGE_DEPENDENCY: &str = "neoforge";
 
 /// Determines the ModLoader and its version from the manifest dependencies.
-fn determine_loader_from_dependencies(dependencies: &HashMap<String, String>) -> (ModLoader, Option<String>) {
+fn determine_loader_from_dependencies(
+    dependencies: &HashMap<String, String>,
+) -> (ModLoader, Option<String>) {
     if let Some(version) = dependencies.get(FABRIC_LOADER_DEPENDENCY) {
         (ModLoader::Fabric, Some(version.clone()))
     } else if let Some(version) = dependencies.get(QUILT_LOADER_DEPENDENCY) {
@@ -62,6 +73,30 @@ fn determine_loader_from_dependencies(dependencies: &HashMap<String, String>) ->
     } else {
         // No specific loader found, assume Vanilla
         (ModLoader::Vanilla, None)
+    }
+}
+
+impl ModpackManifest for ModrinthIndex {
+    fn get_minecraft_version(&self) -> Option<String> {
+        self.dependencies.get(MINECRAFT_DEPENDENCY).cloned()
+    }
+
+    fn get_loader(&self) -> Option<ModLoader> {
+        let (loader, _) = determine_loader_from_dependencies(&self.dependencies);
+        if loader == ModLoader::Vanilla {
+            None
+        } else {
+            Some(loader)
+        }
+    }
+
+    fn get_loader_version(&self) -> Option<String> {
+        let (_, version) = determine_loader_from_dependencies(&self.dependencies);
+        version
+    }
+
+    async fn get_mods_structs(&self) -> Result<Vec<Mod>> {
+        resolve_manifest_files(self).await
     }
 }
 
@@ -79,33 +114,51 @@ pub async fn process_mrpack(pack_path: PathBuf) -> Result<(Profile, ModrinthInde
     let mut buf_reader = BufReader::new(file);
 
     // 2. Create async zip reader using with_tokio
-    let mut zip = ZipFileReader::with_tokio(&mut buf_reader).await.map_err(|e| {
-        error!("Failed to read zip archive {:?} with tokio reader: {}", pack_path, e);
-        AppError::Other(format!("Failed to read mrpack zip with tokio reader: {}", e))
-    })?;
+    let mut zip = ZipFileReader::with_tokio(&mut buf_reader)
+        .await
+        .map_err(|e| {
+            error!(
+                "Failed to read zip archive {:?} with tokio reader: {}",
+                pack_path, e
+            );
+            AppError::Other(format!(
+                "Failed to read mrpack zip with tokio reader: {}",
+                e
+            ))
+        })?;
 
     // 3. Find and read modrinth.index.json
     let entries = zip.file().entries();
     let manifest_entry_index = entries
         .iter()
-        .position(|e| e.filename().as_str().map_or(false, |name| name == "modrinth.index.json"))
+        .position(|e| {
+            e.filename()
+                .as_str()
+                .map_or(false, |name| name == "modrinth.index.json")
+        })
         .ok_or_else(|| {
             error!("modrinth.index.json not found in archive: {:?}", pack_path);
             AppError::Other("modrinth.index.json not found in archive".into())
         })?;
 
     let manifest_content = {
-        let mut entry_reader = zip.reader_with_entry(manifest_entry_index).await.map_err(|e| {
-            error!("Failed to get entry reader for manifest: {}", e);
-            AppError::Other(format!("Failed to read manifest entry: {}", e))
-        })?;
-        
+        let mut entry_reader = zip
+            .reader_with_entry(manifest_entry_index)
+            .await
+            .map_err(|e| {
+                error!("Failed to get entry reader for manifest: {}", e);
+                AppError::Other(format!("Failed to read manifest entry: {}", e))
+            })?;
+
         let mut buffer = Vec::new();
-        entry_reader.read_to_end_checked(&mut buffer).await.map_err(|e| {
-            error!("Failed to read manifest content to buffer: {}", e);
-            AppError::Other(format!("Zip entry read error: {}", e)) 
-        })?;
-        
+        entry_reader
+            .read_to_end_checked(&mut buffer)
+            .await
+            .map_err(|e| {
+                error!("Failed to read manifest content to buffer: {}", e);
+                AppError::Other(format!("Zip entry read error: {}", e))
+            })?;
+
         String::from_utf8(buffer).map_err(|e| {
             error!("Failed to convert manifest buffer to string: {}", e);
             AppError::Other(format!("Manifest content is not valid UTF-8: {}", e))
@@ -124,15 +177,20 @@ pub async fn process_mrpack(pack_path: PathBuf) -> Result<(Profile, ModrinthInde
         .dependencies
         .get(MINECRAFT_DEPENDENCY)
         .ok_or_else(|| {
-            error!("Manifest for '{}' missing Minecraft dependency", manifest.name);
+            error!(
+                "Manifest for '{}' missing Minecraft dependency",
+                manifest.name
+            );
             AppError::Other("Missing Minecraft dependency in manifest".into())
         })?
         .clone();
 
     let (loader, loader_version) = determine_loader_from_dependencies(&manifest.dependencies);
-    
-    info!("Determined requirements: MC={}, Loader={:?}, LoaderVersion={:?}", 
-          game_version, loader, loader_version);
+
+    info!(
+        "Determined requirements: MC={}, Loader={:?}, LoaderVersion={:?}",
+        game_version, loader, loader_version
+    );
 
     // 6. Create a potential Profile object (not saved)
     let profile_name = manifest.name.clone();
@@ -143,7 +201,7 @@ pub async fn process_mrpack(pack_path: PathBuf) -> Result<(Profile, ModrinthInde
     let profile = Profile {
         id: placeholder_id,
         name: profile_name,
-        path: potential_path, 
+        path: potential_path,
         game_version,
         loader,
         loader_version,
@@ -155,11 +213,15 @@ pub async fn process_mrpack(pack_path: PathBuf) -> Result<(Profile, ModrinthInde
         selected_norisk_pack_id: None,
         disabled_norisk_mods_detailed: HashSet::new(),
         source_standard_profile_id: None,
-        group: Some("MODPACKS".to_string()),    
+        group: Some("MODPACKS".to_string()),
         is_standard_version: false,
+        use_shared_minecraft_folder: false,
         description: None,
         norisk_information: None,
         banner: None,
+        background: None,
+        modpack_info: None,
+        preferred_account_id: None,
     };
 
     info!("Prepared potential profile object for '{}'", profile.name);
@@ -170,46 +232,56 @@ pub async fn process_mrpack(pack_path: PathBuf) -> Result<(Profile, ModrinthInde
 /// Takes a parsed ModrinthIndex manifest and resolves the file entries
 /// against the Modrinth API (using hashes) to create a list of Mod structs.
 /// Determines the pack loader from the manifest dependencies.
-pub async fn resolve_manifest_files(
-    manifest: &ModrinthIndex 
-) -> Result<Vec<Mod>> {
+pub async fn resolve_manifest_files(manifest: &ModrinthIndex) -> Result<Vec<Mod>> {
     // Determine loader internally using the helper function
     let (pack_loader, _) = determine_loader_from_dependencies(&manifest.dependencies);
-    
-    info!("Resolving {} files from manifest '{}' against Modrinth API (Determined Loader: {:?})...", 
-        manifest.files.len(), manifest.name, pack_loader);
+
+    info!(
+        "Resolving {} files from manifest '{}' against Modrinth API (Determined Loader: {:?})...",
+        manifest.files.len(),
+        manifest.name,
+        pack_loader
+    );
 
     let game_version = manifest
         .dependencies
         .get(MINECRAFT_DEPENDENCY)
         .ok_or_else(|| {
-            error!("Manifest for '{}' missing Minecraft dependency", manifest.name);
+            error!(
+                "Manifest for '{}' missing Minecraft dependency",
+                manifest.name
+            );
             AppError::Other("Missing Minecraft dependency in manifest".into())
         })?
         .clone();
 
     let mut mods_to_add = Vec::new();
     let mut hashes_to_lookup = Vec::new();
-    let mut file_info_map: HashMap<String, &ModrinthIndexFile> = HashMap::new(); 
+    let mut file_info_map: HashMap<String, &ModrinthIndexFile> = HashMap::new();
 
     for file_data in &manifest.files {
-        let is_client_required = file_data.env.as_ref()
+        let is_client_required = file_data
+            .env
+            .as_ref()
             .and_then(|env| env.get("client"))
             .map_or(true, |req| req == "required" || req == "optional");
-            
+
         if !is_client_required {
             continue;
         }
 
         if let Some(hash) = file_data.hashes.get("sha1") {
-            if hash.len() == 40 { 
+            if hash.len() == 40 {
                 hashes_to_lookup.push(hash.clone());
                 file_info_map.insert(hash.clone(), file_data);
             } else {
                 warn!("Invalid sha1 hash found for {}: {}", file_data.path, hash);
             }
         } else {
-            warn!("No sha1 hash found for file: {}. Cannot resolve.", file_data.path);
+            warn!(
+                "No sha1 hash found for file: {}. Cannot resolve.",
+                file_data.path
+            );
         }
     }
 
@@ -219,33 +291,42 @@ pub async fn resolve_manifest_files(
     }
 
     // 2. Call Modrinth API (Batch Hash Lookup)
-    info!("Looking up Modrinth info for {} sha1 hashes...", hashes_to_lookup.len());
-    let versions_map = match modrinth::get_versions_by_hashes(hashes_to_lookup.clone(), "sha1").await {
-        Ok(map) => map,
-        Err(e) => {
-            error!("Failed to get version info by hashes: {}", e);
-            return Err(e);
-        }
-    };
+    info!(
+        "Looking up Modrinth info for {} sha1 hashes...",
+        hashes_to_lookup.len()
+    );
+    let versions_map =
+        match modrinth::get_versions_by_hashes(hashes_to_lookup.clone(), "sha1").await {
+            Ok(map) => map,
+            Err(e) => {
+                error!("Failed to get version info by hashes: {}", e);
+                return Err(e);
+            }
+        };
     info!("Received Modrinth info for {} hashes.", versions_map.len());
 
     // 3. Create Mod structs from the results
     for (hash, version_info) in versions_map {
         if let Some(original_file_info) = file_info_map.get(&hash) {
-            let primary_file = version_info.files.iter().find(|f| f.primary)
+            let primary_file = version_info
+                .files
+                .iter()
+                .find(|f| f.primary)
                 .or_else(|| version_info.files.first());
 
             if let Some(file_details) = primary_file {
                 if file_details.hashes.sha1.as_deref() != Some(hash.as_str()) {
-                     warn!("SHA1 hash mismatch for file {} (Manifest: {}, API: {:?}). Skipping.", 
-                           original_file_info.path, hash, file_details.hashes.sha1);
-                     continue;
+                    warn!(
+                        "SHA1 hash mismatch for file {} (Manifest: {}, API: {:?}). Skipping.",
+                        original_file_info.path, hash, file_details.hashes.sha1
+                    );
+                    continue;
                 }
 
                 let mod_source = ModSource::Modrinth {
                     project_id: version_info.project_id.clone(),
                     version_id: version_info.id.clone(),
-                    file_name: file_details.filename.clone(), 
+                    file_name: file_details.filename.clone(),
                     download_url: original_file_info.downloads.first().cloned().unwrap_or_else(|| {
                          warn!("Missing download URL in manifest for file: {}. Using API URL as fallback.", original_file_info.path);
                          file_details.url.clone()
@@ -254,172 +335,416 @@ pub async fn resolve_manifest_files(
                 };
 
                 let new_mod = Mod {
-                    id: Uuid::new_v4(), 
+                    id: Uuid::new_v4(),
                     source: mod_source,
-                    enabled: !original_file_info.path.ends_with(".disabled"), 
+                    enabled: !original_file_info.path.ends_with(".disabled"),
                     display_name: Some(version_info.name.clone()),
                     version: Some(version_info.version_number.clone()),
                     game_versions: Some(vec![game_version.clone()]),
-                    file_name_override: None, 
+                    file_name_override: None,
                     associated_loader: Some(pack_loader),
+                    modpack_origin: Some(format!("modrinth:{}", version_info.project_id)), // From modpack
+                    updates_enabled: false, // Disable updates for modpack mods (updated with pack)
                 };
 
-                info!("Prepared Mod struct for: {} (Enabled: {}, Loader: {:?})", 
-                    new_mod.display_name.as_deref().unwrap_or("Unknown"), 
+                info!(
+                    "Prepared Mod struct for: {} (Enabled: {}, Loader: {:?})",
+                    new_mod.display_name.as_deref().unwrap_or("Unknown"),
                     new_mod.enabled,
                     new_mod.associated_loader
                 );
                 mods_to_add.push(new_mod);
-
             } else {
                 error!("Could not find primary file details in API response for version {} (from hash {}). Cannot create Mod.", version_info.id, hash);
             }
         } else {
-            warn!("Internal inconsistency: Resolved hash {} not found in original file map.", hash);
+            warn!(
+                "Internal inconsistency: Resolved hash {} not found in original file map.",
+                hash
+            );
         }
     }
 
-    info!("Successfully resolved {} mods from the manifest.", mods_to_add.len());
+    info!(
+        "Successfully resolved {} mods from the manifest.",
+        mods_to_add.len()
+    );
     Ok(mods_to_add)
 }
 
-/// Extracts files from the "overrides" directory within a .mrpack archive
-/// into the specified target profile directory, strictly following the extract_data_folder pattern.
+/// Extracts files from the "overrides" or "client-overrides" directory within a .mrpack archive
+/// into the specified target profile directory, using concurrent streaming operations.
+/// If event_id is provided with progress_offset and progress_scale, progress events will be emitted.
 pub async fn extract_mrpack_overrides(
     pack_path: &Path,
     profile: &Profile,
+    event_id: Option<Uuid>,
+    progress_offset: f64,
+    progress_scale: f64,
 ) -> Result<()> {
-    info!("Extracting overrides for profile '{}' from {:?}", profile.name, pack_path);
-    // Get the state manager instance
-    let state_manager = State::get().await?;
-    // Use the new method that takes the profile directly
-    let target_dir = state_manager.profile_manager.calculate_instance_path_for_profile(profile)?;
+    info!(
+        "Extracting overrides for profile '{}' from {:?} using concurrent streaming...",
+        profile.name, pack_path
+    );
+    let state = State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
+    let target_dir = state
+        .profile_manager
+        .calculate_instance_path_for_profile(profile)?;
     info!("Target profile directory calculated as: {:?}", target_dir);
 
     if !target_dir.exists() {
-        info!("Target profile directory does not exist, creating: {:?}", target_dir);
+        info!(
+            "Target profile directory does not exist, creating: {:?}",
+            target_dir
+        );
         fs::create_dir_all(&target_dir).await.map_err(|e| {
-            error!("Failed to create target profile directory {:?}: {}", target_dir, e);
+            error!(
+                "Failed to create target profile directory {:?}: {}",
+                target_dir, e
+            );
             AppError::Io(e)
         })?;
     }
 
-    // Open the file and wrap in BufReader
-    let file = File::open(pack_path).await.map_err(|e| {
-        error!("Failed to open mrpack file {:?}: {}", pack_path, e);
+    let initial_file_for_listing = File::open(pack_path).await.map_err(|e| {
+        error!(
+            "Failed to open mrpack file for listing {:?}: {}",
+            pack_path, e
+        );
         AppError::Io(e)
     })?;
-    let mut buf_reader = BufReader::new(file);
+    let mut initial_buf_reader = BufReader::new(initial_file_for_listing);
+    let mut zip_lister = ZipFileReader::with_tokio(&mut initial_buf_reader)
+        .await
+        .map_err(|e| {
+            error!("Failed to read mrpack as ZIP for listing: {}", e);
+            AppError::Other(format!("Failed to read mrpack zip for listing: {}", e))
+        })?;
 
-    // Initialize ZipFileReader
-    let mut zip = ZipFileReader::with_tokio(&mut buf_reader).await.map_err(|e| {
-        error!("Failed to read mrpack as ZIP: {}", e);
-        AppError::Other(format!("Failed to read mrpack zip: {}", e))
-    })?;
+    let num_entries = zip_lister.file().entries().len();
+    info!(
+        "Found {} entries in the zip archive. Preparing concurrent streaming for overrides...",
+        num_entries
+    );
 
-    // Get length once
-    let num_entries = zip.file().entries().len();
-    info!("Found {} entries in the zip archive.", num_entries);
-
+    // Count override files for progress tracking
+    let mut override_file_count = 0usize;
     for index in 0..num_entries {
-        // --- Start of immutable borrow scope ---
-        let entry = match zip.file().entries().get(index) {
-             Some(e) => e,
-             None => { // This should ideally not happen if index is valid
-                 error!("Failed to get zip entry metadata for index {}", index);
-                 continue;
-            }
-        };
-        let original_file_name = match entry.filename().as_str() {
-             Ok(s) => s,
-             Err(_) => { error!("Non UTF-8 filename at index {}", index); continue; }
-        };
-
-        // Extract all needed metadata *now*
-        let is_override = original_file_name.starts_with("overrides/");
-        let is_directory = original_file_name.ends_with('/');
-        // Get size only if needed (i.e., it's a file)
-        let uncompressed_size = if is_override && !is_directory {
-            entry.uncompressed_size() as usize
-        } else {
-            0 // Default value, won't be used if it's a directory
-        };
-        // Clone the filename string to own it
-        let owned_filename = original_file_name.to_string();
-        // --- End of immutable borrow scope ---
-
-
-        // Now use the owned/copied metadata
-        if is_override {
-            let relative_path_in_overrides = match owned_filename.strip_prefix("overrides/") {
-                Some(p) if !p.is_empty() => p,
-                _ => continue,
-            };
-            let final_dest_path = target_dir.join(relative_path_in_overrides);
-
-            if is_directory {
-                // Directory Creation
-                if !final_dest_path.exists() {
-                    info!("Creating directory: {:?}", final_dest_path);
-                    fs::create_dir_all(&final_dest_path).await.map_err(|e| {
-                        error!("Failed to create directory {:?}: {}", final_dest_path, e);
-                        AppError::Io(e)
-                    })?;
+        if let Some(entry) = zip_lister.file().entries().get(index) {
+            if let Ok(name) = entry.filename().as_str() {
+                if (name.starts_with("overrides/") || name.starts_with("client-overrides/")) && !name.ends_with('/') {
+                    override_file_count += 1;
                 }
-            } else {
-                // File Extraction
-                info!("Extracting override file: '{}' -> {:?}", owned_filename, final_dest_path);
-                 if let Some(parent) = final_dest_path.parent() {
-                    if !fs::try_exists(parent).await? {
-                        info!("Creating parent directory: {:?}", parent);
-                        fs::create_dir_all(parent).await.map_err(|e| {
-                            error!("Failed to create parent directory {:?}: {}", parent, e);
-                            AppError::Io(e)
-                        })?;
-                    }
-                 }
-
-                // Get reader MUTABLY (should work now as 'entry' ref is out of scope)
-                let mut entry_reader = zip.reader_with_entry(index).await.map_err(|e| {
-                    error!("Failed to get reader for zip entry '{}': {}", owned_filename, e);
-                    AppError::Other(format!("Failed to read zip entry {}: {}", index, e))
-                })?;
-                let mut writer = fs::File::create(&final_dest_path).await.map_err(|e| {
-                    error!("Failed to create destination file {:?}: {}", final_dest_path, e);
-                    AppError::Io(e)
-                })?;
-
-                // Read/Write using the extracted 'uncompressed_size'
-                let mut buffer = Vec::with_capacity(uncompressed_size);
-                entry_reader.read_to_end_checked(&mut buffer).await.map_err(|e| {
-                    error!("Failed to read zip entry content '{}': {}", owned_filename, e);
-                    AppError::Other(format!("Failed to read zip entry content (checked): {}", e))
-                 })?;
-                writer.write_all(&buffer).await.map_err(|e| {
-                    error!("Failed to write content to {:?}: {}", final_dest_path, e);
-                    AppError::Io(e)
-                })?;
-                info!("Successfully extracted to: {}", final_dest_path.display());
             }
         }
     }
 
-    info!("Finished extracting overrides for profile '{}'.", profile.name);
+    // Create a counter for tracking extraction progress
+    let extraction_counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let total_files = override_file_count;
+
+    let mut extraction_tasks = Vec::new();
+
+    for index in 0..num_entries {
+        let entry_filename_str;
+        let is_entry_dir;
+        let entry_uncompressed_size;
+        {
+            let entry = match zip_lister.file().entries().get(index) {
+                Some(e) => e,
+                None => {
+                    error!(
+                        "Failed to get zip entry metadata for index {} during listing",
+                        index
+                    );
+                    continue;
+                }
+            };
+            entry_filename_str = match entry.filename().as_str() {
+                Ok(s) => s.to_string(),
+                Err(_) => {
+                    error!("Non UTF-8 filename at index {} during listing", index);
+                    continue;
+                }
+            };
+            is_entry_dir = entry.dir().unwrap_or_else(|_err| {
+                warn!("Failed to determine if '{}' is a directory from entry, falling back to path check.", entry_filename_str);
+                entry_filename_str.ends_with('/')
+            });
+            entry_uncompressed_size = entry.uncompressed_size();
+        }
+
+        let (is_override_type, path_prefix_to_strip) =
+            if entry_filename_str.starts_with("overrides/") {
+                (true, "overrides/")
+            } else if entry_filename_str.starts_with("client-overrides/") {
+                (true, "client-overrides/")
+            } else {
+                (false, "")
+            };
+
+        if is_override_type {
+            let path_after_prefix = match entry_filename_str.strip_prefix(path_prefix_to_strip) {
+                Some(p_str) if !p_str.is_empty() => p_str,
+                _ => continue, // Skip if path after prefix is empty (e.g. just "overrides/")
+            };
+
+            // Sanitize each component of the path to prevent directory traversal and invalid names
+            let sanitized_relative_path = PathBuf::from(path_after_prefix)
+                .components()
+                .filter_map(|comp| match comp {
+                    // Sanitize normal path components (filenames/directory names)
+                    std::path::Component::Normal(os_str) => {
+                        let sanitized_comp = sanitize_filename::sanitize(os_str.to_string_lossy().as_ref());
+                        // Ensure sanitized component is not empty (e.g. if original was just "..")
+                        if sanitized_comp.is_empty() {
+                            None
+                        } else {
+                            Some(sanitized_comp)
+                        }
+                    }
+                    // Disallow ParentDir components to prevent trivial directory traversal
+                    std::path::Component::ParentDir => {
+                        warn!("Parent directory component '..' found and removed in override path: {}", path_after_prefix);
+                        None 
+                    }
+                    // Ignore CurDir, RootDir, Prefix as they shouldn't be in relative archive paths or are handled by join
+                    std::path::Component::CurDir => None, 
+                    std::path::Component::RootDir => None, // Should not appear in relative paths
+                    std::path::Component::Prefix(_) => None, // Should not appear in relative paths
+                })
+                .collect::<PathBuf>();
+
+            // If sanitization results in an empty path (e.g., path was only ".." or similar), skip it.
+            if sanitized_relative_path.as_os_str().is_empty() {
+                warn!("Skipping empty sanitized relative path for override entry: {} (original relative: {})", entry_filename_str, path_after_prefix);
+                continue;
+            }
+
+            let final_dest_path = {
+                let relative_path_str = sanitized_relative_path.to_string_lossy();
+                // Check for both / and \ to be platform-agnostic for path separators within the string
+                if relative_path_str.starts_with("mods/") || relative_path_str.starts_with("mods\\")
+                {
+                    // Construct the new path by taking the part of the string *after* "mods"
+                    // e.g., if relative_path_str is "mods/foo.jar", then &relative_path_str["mods".len()..] is "/foo.jar"
+                    // We then prepend "custom_mods"
+                    let new_relative_path =
+                        format!("custom_mods{}", &relative_path_str["mods".len()..]);
+                    target_dir.join(new_relative_path)
+                } else {
+                    // If sanitized_relative_path is used again after this block, ensure it's cloned if needed.
+                    // Here, it seems it's only used for final_dest_path construction.
+                    target_dir.join(sanitized_relative_path)
+                }
+            };
+
+            let task_pack_path = pack_path.to_path_buf();
+            let task_io_semaphore = io_semaphore.clone();
+            let task_final_dest_path = final_dest_path.clone();
+            let original_entry_index = index;
+
+            if is_entry_dir {
+                extraction_tasks.push(tokio::spawn(async move {
+                    let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                        error!(
+                            "Failed to acquire semaphore permit for creating dir {}: {}",
+                            task_final_dest_path.display(),
+                            e
+                        );
+                        AppError::Other(format!(
+                            "Semaphore error for dir {}: {}",
+                            task_final_dest_path.display(),
+                            e
+                        ))
+                    })?;
+
+                    if !task_final_dest_path.exists() {
+                        debug!(
+                            "Creating directory (from override task): {:?}",
+                            task_final_dest_path
+                        );
+                        fs::create_dir_all(&task_final_dest_path)
+                            .await
+                            .map_err(|e| {
+                                error!(
+                                    "Failed to create directory {:?} in task: {}",
+                                    task_final_dest_path, e
+                                );
+                                AppError::Io(e)
+                            })?;
+                    }
+                    Ok::<(), AppError>(())
+                }));
+            } else {
+                info!(
+                    "Queueing concurrent streaming for override file: '{}' -> {:?} (Size: {} bytes)",
+                    entry_filename_str, final_dest_path, entry_uncompressed_size
+                );
+
+                let task_counter = extraction_counter.clone();
+                let task_total = total_files;
+                let task_state = state.clone();
+                let task_event_id = event_id;
+                let task_progress_offset = progress_offset;
+                let task_progress_scale = progress_scale;
+                extraction_tasks.push(tokio::spawn(async move {
+                    let _permit = task_io_semaphore.acquire().await.map_err(|e| {
+                        error!(
+                            "Failed to acquire semaphore permit for '{}': {}",
+                            task_final_dest_path.display(),
+                            e
+                        );
+                        AppError::Other(format!(
+                            "Semaphore error for '{}': {}",
+                            task_final_dest_path.display(),
+                            e
+                        ))
+                    })?;
+
+                    if let Some(parent) = task_final_dest_path.parent() {
+                        if !parent.exists() {
+                            fs::create_dir_all(parent).await.map_err(|e| {
+                                error!(
+                                    "Task: Failed to create parent directory {:?} for override: {}",
+                                    parent, e
+                                );
+                                AppError::Io(e)
+                            })?;
+                        }
+                    }
+
+                    let task_file = File::open(&task_pack_path).await.map_err(|e| {
+                        error!(
+                            "Task: Failed to open mrpack file {:?}: {}",
+                            task_pack_path, e
+                        );
+                        AppError::Io(e)
+                    })?;
+                    let mut task_buf_reader = BufReader::new(task_file);
+                    let mut task_zip_reader = ZipFileReader::with_tokio(&mut task_buf_reader)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Task: Failed to read mrpack as ZIP for '{}': {}",
+                                task_final_dest_path.display(),
+                                e
+                            );
+                            AppError::Other(format!(
+                                "Task: ZIP read error for {}: {}",
+                                task_final_dest_path.display(),
+                                e
+                            ))
+                        })?;
+
+                    let entry_reader_futures = task_zip_reader
+                        .reader_without_entry(original_entry_index)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Task: Failed to get entry reader for '{}' (index {}): {}",
+                                task_final_dest_path.display(),
+                                original_entry_index,
+                                e
+                            );
+                            AppError::Other(format!(
+                                "Task: Entry reader error for {}: {}",
+                                task_final_dest_path.display(),
+                                e
+                            ))
+                        })?;
+                    let mut entry_reader_tokio = entry_reader_futures.compat();
+
+                    let mut file_writer =
+                        fs::File::create(&task_final_dest_path).await.map_err(|e| {
+                            error!(
+                                "Task: Failed to create destination file {:?} for override: {}",
+                                task_final_dest_path, e
+                            );
+                            AppError::Io(e)
+                        })?;
+
+                    let bytes_copied = tokio::io::copy(&mut entry_reader_tokio, &mut file_writer)
+                        .await
+                        .map_err(|e| {
+                            error!(
+                                "Task: Failed to stream content for '{}' to {:?}: {}",
+                                task_final_dest_path.display(),
+                                task_final_dest_path,
+                                e
+                            );
+                            AppError::Io(e)
+                        })?;
+
+                    debug!(
+                        "Task: Successfully streamed {} bytes for override: {}",
+                        bytes_copied,
+                        task_final_dest_path.display()
+                    );
+
+                    // Increment counter and emit progress
+                    let completed = task_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                    if task_total > 0 {
+                        // Scale progress within the provided range
+                        let extraction_progress = completed as f64 / task_total as f64;
+                        let overall_progress = task_progress_offset + (extraction_progress * task_progress_scale);
+                        if let Some(id) = task_event_id {
+                            let _ = task_state.event_state.emit(EventPayload {
+                                event_id: id,
+                                event_type: EventType::TaskProgress,
+                                target_id: None,
+                                message: format!("Extracting files... ({}/{})", completed, task_total),
+                                progress: Some(overall_progress),
+                                error: None,
+                            }).await;
+                        }
+                    }
+
+                    Ok::<(), AppError>(())
+                }));
+            }
+        }
+    }
+
+    // Wait for all extraction tasks to complete
+    let results = try_join_all(extraction_tasks).await.map_err(|e| {
+        error!("Error joining override extraction tasks: {}", e);
+        AppError::Other(format!(
+            "One or more override extraction tasks panicked: {}",
+            e
+        ))
+    })?;
+
+    for result in results {
+        result?;
+    }
+
+    info!(
+        "Finished all concurrent streaming tasks for overrides for profile '{}'.",
+        profile.name
+    );
     Ok(())
 }
 
 pub async fn test_mrpack_processing() -> Result<()> {
-     println!("Starting full mrpack processing test.");
+    println!("Starting full mrpack processing test.");
 
     // --- Robuste Pfadberechnung ---
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let project_root = manifest_dir.parent().expect("Failed to get parent directory of CARGO_MANIFEST_DIR");
+    let project_root = manifest_dir
+        .parent()
+        .expect("Failed to get parent directory of CARGO_MANIFEST_DIR");
     println!("Calculated Project Root: {:?}", project_root);
 
     let relative_pack_path = "minecraft-data/modrinth/cc-community.mrpack"; // Relativ zum Projekt-Root
     let absolute_pack_path = project_root.join(relative_pack_path);
 
-    println!("Calculated absolute path for .mrpack: {:?}", absolute_pack_path);
+    println!(
+        "Calculated absolute path for .mrpack: {:?}",
+        absolute_pack_path
+    );
 
     // --- Existenzprüfung (optional, aber gut zur Fehlersuche) ---
     if !absolute_pack_path.exists() {
@@ -437,13 +762,22 @@ pub async fn test_mrpack_processing() -> Result<()> {
     // --- Datei verarbeiten: Profil-Basis und Manifest holen ---
     println!("Calling process_mrpack...");
     let (mut profile, manifest) = process_mrpack(absolute_pack_path.clone()).await?; // Klonen, falls Pfad nochmal gebraucht wird
-    println!("process_mrpack successful. Profile Name: '{}', MC Version: {}", profile.name, profile.game_version);
-    assert!(!profile.name.is_empty(), "Profile name should not be empty after process_mrpack");
+    println!(
+        "process_mrpack successful. Profile Name: '{}', MC Version: {}",
+        profile.name, profile.game_version
+    );
+    assert!(
+        !profile.name.is_empty(),
+        "Profile name should not be empty after process_mrpack"
+    );
 
     // --- Mods auflösen ---
     println!("Calling resolve_manifest_files...");
     let resolved_mods = resolve_manifest_files(&manifest).await?;
-    println!("resolve_manifest_files successful. Resolved {} mods.", resolved_mods.len());
+    println!(
+        "resolve_manifest_files successful. Resolved {} mods.",
+        resolved_mods.len()
+    );
 
     // --- Mods zuweisen und abschließende Prüfung ---
     profile.mods = resolved_mods;
@@ -457,27 +791,100 @@ pub async fn test_mrpack_processing() -> Result<()> {
     //println!("Final profile object: {:#?}", profile); // Use {:#?} for pretty-printing
 
     // Assertions
-    assert!(!profile.name.is_empty(), "Profile name should not be empty after process_mrpack");
-    assert!(!profile.mods.is_empty(), "Expected to resolve at least one mod.");
-    println!("Successfully processed mrpack and resolved mods for profile '{}'. Found {} mods.", profile.name, profile.mods.len());
+    assert!(
+        !profile.name.is_empty(),
+        "Profile name should not be empty after process_mrpack"
+    );
+    assert!(
+        !profile.mods.is_empty(),
+        "Expected to resolve at least one mod."
+    );
+    println!(
+        "Successfully processed mrpack and resolved mods for profile '{}'. Found {} mods.",
+        profile.name,
+        profile.mods.len()
+    );
 
-    extract_mrpack_overrides(&absolute_pack_path, &profile).await?;
+    extract_mrpack_overrides(&absolute_pack_path, &profile, None, 0.0, 1.0).await?;
 
-    return Ok(()); 
+    return Ok(());
 }
 
 /// Imports a profile from a .mrpack file, processing, resolving, extracting, and saving it.
-pub async fn import_mrpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
+/// If project_id and version_id are provided, detailed ModPackInfo will be created.
+/// If event_id is provided, progress events will be emitted.
+/// progress_offset and progress_scale can be used to adjust progress range (e.g. when called after a download phase).
+pub async fn import_mrpack_as_profile(
+    pack_path: PathBuf,
+    project_id: Option<String>,
+    version_id: Option<String>,
+    event_id: Option<Uuid>,
+    progress_offset: f64,
+    progress_scale: f64,
+) -> Result<Uuid> {
     info!("Starting full import process for mrpack: {:?}", pack_path);
+
+    let state = State::get().await?;
+
+    // Helper to emit progress if event_id is provided
+    // Progress is scaled: actual = offset + (progress * scale)
+    let emit_progress = |progress: f64, message: String| {
+        let state = state.clone();
+        let event_id = event_id;
+        let scaled_progress = progress_offset + (progress * progress_scale);
+        async move {
+            if let Some(id) = event_id {
+                let _ = state.event_state.emit(EventPayload {
+                    event_id: id,
+                    event_type: EventType::TaskProgress,
+                    target_id: None,
+                    message,
+                    progress: Some(scaled_progress),
+                    error: None,
+                }).await;
+            }
+        }
+    };
+
+    // Emit initial progress
+    emit_progress(0.05, "Parsing modpack manifest...".to_string()).await;
 
     // 1. Process mrpack to get base profile and manifest
     let (mut profile, manifest) = process_mrpack(pack_path.clone()).await?;
-    info!("Successfully processed mrpack manifest for '{}'.", profile.name);
+    info!(
+        "Successfully processed mrpack manifest for '{}'.",
+        profile.name
+    );
+
+    emit_progress(0.10, format!("Parsed manifest for '{}'", profile.name)).await;
+
+    emit_progress(0.15, format!("Resolving {} mods...", manifest.files.len())).await;
 
     // 2. Resolve mods from manifest files
     let resolved_mods = resolve_manifest_files(&manifest).await?;
-    info!("Successfully resolved {} mods from manifest.", resolved_mods.len());
+    info!(
+        "Successfully resolved {} mods from manifest.",
+        resolved_mods.len()
+    );
     profile.mods = resolved_mods;
+
+    emit_progress(0.40, format!("Resolved {} mods", profile.mods.len())).await;
+
+    // 2.5. Create ModPackInfo for this modpack (if we have the required parameters)
+    if let (Some(project_id), Some(version_id)) = (project_id, version_id) {
+        let modpack_info = ModPackInfo {
+            source: ModPackSource::Modrinth {
+                project_id,
+                version_id,
+            },
+            file_hash: None, // Could be added later if needed
+        };
+
+        profile.modpack_info = Some(modpack_info);
+        info!("Created ModPackInfo for Modrinth pack");
+    } else {
+        warn!("Missing project_id or version_id for Modrinth pack, skipping ModPackInfo creation");
+    }
 
     // 3. Determine unique profile path segment (similar to create_profile command)
     let base_profiles_dir = crate::state::profile_state::default_profile_path();
@@ -485,59 +892,123 @@ pub async fn import_mrpack_as_profile(pack_path: PathBuf) -> Result<Uuid> {
     if sanitized_base_name.is_empty() {
         // Handle potential empty name after sanitization (e.g., use default or error)
         let default_name = format!("imported-pack-{}", Utc::now().timestamp_millis());
-        warn!("Profile name '{}' became empty after sanitization. Using default: {}", profile.name, default_name);
+        warn!(
+            "Profile name '{}' became empty after sanitization. Using default: {}",
+            profile.name, default_name
+        );
         profile.name = default_name.clone(); // Use the default name for the profile name too
-        let unique_segment = crate::utils::path_utils::find_unique_profile_segment(&base_profiles_dir, &profile.name).await?;
+        let unique_segment = crate::utils::path_utils::find_unique_profile_segment(
+            &base_profiles_dir,
+            &profile.name,
+        )
+        .await?;
         profile.path = unique_segment;
     } else {
-        let unique_segment = crate::utils::path_utils::find_unique_profile_segment(&base_profiles_dir, &sanitized_base_name).await?;
+        let unique_segment = crate::utils::path_utils::find_unique_profile_segment(
+            &base_profiles_dir,
+            &sanitized_base_name,
+        )
+        .await?;
         profile.path = unique_segment; // Update the profile path
     }
-    info!("Determined unique profile directory segment: {}", profile.path);
-    
+    info!(
+        "Determined unique profile directory segment: {}",
+        profile.path
+    );
+
     // Ensure the target profile directory exists before extraction
     let target_dir = base_profiles_dir.join(&profile.path);
     if !target_dir.exists() {
         fs::create_dir_all(&target_dir).await.map_err(|e| {
-            error!("Failed to create target profile directory {:?}: {}", target_dir, e);
+            error!(
+                "Failed to create target profile directory {:?}: {}",
+                target_dir, e
+            );
             AppError::Io(e)
         })?;
     }
 
+    emit_progress(0.45, "Extracting files...".to_string()).await;
+
     // 4. Extract overrides to the *correct* final profile location
-    info!("Extracting overrides to profile directory: {:?}", target_dir);
+    info!(
+        "Extracting overrides to profile directory: {:?}",
+        target_dir
+    );
     // Use the absolute path to the pack file for extraction
-    extract_mrpack_overrides(&pack_path, &profile).await?; 
+    // Progress from 0.45 to 0.90 during extraction (45% of the remaining scale)
+    let extraction_progress_offset = progress_offset + (0.45 * progress_scale);
+    let extraction_progress_scale = 0.45 * progress_scale; // 45% of the total scale for extraction
+    extract_mrpack_overrides(&pack_path, &profile, event_id, extraction_progress_offset, extraction_progress_scale).await?;
     info!("Successfully extracted overrides.");
 
+    emit_progress(0.90, "Saving profile...".to_string()).await;
+
     // 5. Save the profile using ProfileManager via State
-    let state = State::get().await?;
-    info!("Saving the new profile '{}' (ID: {})...", profile.name, profile.id);
+    info!(
+        "Saving the new profile '{}' (ID: {})...",
+        profile.name, profile.id
+    );
     let profile_id = state.profile_manager.create_profile(profile).await?; // Use create_profile
-    info!("Successfully created and saved profile with ID: {}", profile_id);
+    info!(
+        "Successfully created and saved profile with ID: {}",
+        profile_id
+    );
+
+    emit_progress(1.0, "Import complete!".to_string()).await;
 
     Ok(profile_id) // Return the ID of the created profile
 }
 
 /// Downloads a modpack from a URL and returns the temporary file path
+/// For Modrinth packs, provide project_id and version_id to create ModPackInfo
+/// If event_id is provided, progress events will be emitted.
 pub async fn download_and_process_mrpack(
     download_url: &str,
     file_name: &str,
+    project_id: Option<String>,
+    version_id: Option<String>,
+    event_id: Option<Uuid>,
 ) -> Result<Uuid> {
     info!("Downloading modpack from URL: {}", download_url);
-    
+
+    let state = State::get().await?;
+
+    // Helper to emit progress if event_id is provided
+    let emit_progress = |progress: f64, message: String| {
+        let state = state.clone();
+        let event_id = event_id;
+        async move {
+            if let Some(id) = event_id {
+                let _ = state.event_state.emit(EventPayload {
+                    event_id: id,
+                    event_type: EventType::TaskProgress,
+                    target_id: None,
+                    message,
+                    progress: Some(progress),
+                    error: None,
+                }).await;
+            }
+        }
+    };
+
+    emit_progress(0.0, "Downloading modpack...".to_string()).await;
+
     // Create a temporary directory
     let temp_dir = tempdir().map_err(|e| {
         error!("Failed to create temporary directory: {}", e);
         AppError::Other(format!("Failed to create temporary directory: {}", e))
     })?;
-    
+
     let temp_file_path = temp_dir.path().join(file_name);
-    debug!("Temporary file path for downloaded modpack: {:?}", temp_file_path);
-    
+    debug!(
+        "Temporary file path for downloaded modpack: {:?}",
+        temp_file_path
+    );
+
     // Create HTTP client
     let client = Client::new();
-    
+
     // Download the file
     let response = client
         .get(download_url)
@@ -554,48 +1025,71 @@ pub async fn download_and_process_mrpack(
             error!("Failed to download modpack: {}", e);
             AppError::Download(format!("Failed to download modpack: {}", e))
         })?;
-    
+
     if !response.status().is_success() {
         return Err(AppError::Download(format!(
             "Failed to download modpack: HTTP {}",
             response.status()
         )));
     }
-    
+
+    emit_progress(0.10, "Downloading modpack...".to_string()).await;
+
     // Get the bytes
-    let bytes = response
-        .bytes()
-        .await
-        .map_err(|e| {
-            error!("Failed to read modpack bytes: {}", e);
-            AppError::Download(format!("Failed to read modpack bytes: {}", e))
-        })?;
-    
+    let bytes = response.bytes().await.map_err(|e| {
+        error!("Failed to read modpack bytes: {}", e);
+        AppError::Download(format!("Failed to read modpack bytes: {}", e))
+    })?;
+
+    emit_progress(0.18, "Saving downloaded file...".to_string()).await;
+
     // Write the file to temporary location
-    let mut file = File::create(&temp_file_path)
-        .await
-        .map_err(|e| {
-            error!("Failed to create temporary file: {}", e);
-            AppError::Io(e)
-        })?;
-    
-    file.write_all(&bytes)
-        .await
-        .map_err(|e| {
-            error!("Failed to write downloaded data to temporary file: {}", e);
-            AppError::Io(e)
-        })?;
-    
-    debug!("Successfully downloaded modpack to temporary file: {:?}", temp_file_path);
-    
+    let mut file = File::create(&temp_file_path).await.map_err(|e| {
+        error!("Failed to create temporary file: {}", e);
+        AppError::Io(e)
+    })?;
+
+    file.write_all(&bytes).await.map_err(|e| {
+        error!("Failed to write downloaded data to temporary file: {}", e);
+        AppError::Io(e)
+    })?;
+
+    // Ensure the file is fully written to disk before attempting to read it.
+    // This prevents potential "end of central directory record not found" errors with mrpack files
+    // that can occur if we try to read the file before the OS has flushed all write buffers.
+    file.sync_all().await.map_err(|e| {
+        error!("Failed to sync mrpack file: {}", e);
+        AppError::Io(e)
+    })?;
+    // Explicitly close the file by dropping the handle
+    drop(file);
+
+    emit_progress(0.20, "Download complete, processing...".to_string()).await;
+
+    debug!(
+        "Successfully downloaded modpack to temporary file: {:?}",
+        temp_file_path
+    );
+
     // Import the modpack and get profile ID
-    let profile_id = import_mrpack_as_profile(temp_file_path.clone()).await?;
-    info!("Successfully imported modpack as new profile with ID: {}", profile_id);
-    
+    // Use progress offset 0.20 and scale 0.80 to continue from download progress
+    let profile_id = import_mrpack_as_profile(
+        temp_file_path.clone(),
+        project_id,
+        version_id,
+        event_id,
+        0.20, // offset: download used 0-20%
+        0.80, // scale: import uses remaining 80%
+    ).await?;
+    info!(
+        "Successfully imported modpack as new profile with ID: {}",
+        profile_id
+    );
+
     // Keep the temp directory alive until we're done (will be cleaned up when it goes out of scope)
     // We intentionally drop the TempDir at the end of this function to clean up
-    drop(temp_dir); 
-    
+    drop(temp_dir);
+
     // Return the profile ID
     Ok(profile_id)
 }

@@ -1,14 +1,13 @@
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::neo_forge_install_profile::NeoForgeInstallProfile;
 use crate::minecraft::dto::neo_forge_meta::NeoForgeVersion;
+use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
 use async_zip::tokio::read::seek::ZipFileReader;
-use reqwest;
-use std::path::PathBuf;
 use log::info;
+use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use tokio::io::BufReader;
+use tokio::io::{AsyncWriteExt, BufReader};
 
 const LIBRARIES_DIR: &str = "libraries";
 
@@ -34,45 +33,20 @@ impl NeoForgeInstallerDownloadService {
         // Zielpfad für die JAR-Datei
         let jar_path = self.base_path.join(&maven_path);
 
-        // Prüfe ob die Datei bereits existiert
-        if fs::try_exists(&jar_path).await? {
-            info!("NeoForge installer already exists at: {}", jar_path.display());
-            return Ok(jar_path);
-        }
-
-        // Erstelle das Verzeichnis falls es nicht existiert
-        if let Some(parent) = jar_path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-
         // Konstruiere die Download-URL
         let url = format!("https://maven.neoforged.net/{}", maven_path);
 
-        // Lade die JAR herunter
         info!("Downloading from: {}", url);
-        let response = reqwest::get(&url).await.map_err(|e| {
-            AppError::Download(format!("Failed to download NeoForge installer: {}", e))
-        })?;
 
-        if !response.status().is_success() {
-            return Err(AppError::Download(format!(
-                "Failed to download NeoForge installer: Status {}",
-                response.status()
-            )));
-        }
+        // Use the new centralized download utility
+        let config = DownloadConfig::new()
+            .with_streaming(true)  // Installer JARs can be large
+            .with_retries(3)  // Built-in retry logic for network issues
+            .with_force_overwrite(false);  // Check if file exists
 
-        let bytes = response.bytes().await.map_err(|e| {
-            AppError::Download(format!("Failed to download NeoForge installer: {}", e))
-        })?;
+        DownloadUtils::download_file(&url, &jar_path, config).await?;
 
-        // Speichere die JAR-Datei
-        let mut file = fs::File::create(&jar_path).await?;
-        file.write_all(&bytes).await?;
-
-        info!(
-            "Successfully downloaded NeoForge installer to: {}",
-            jar_path.display()
-        );
+        info!("Successfully downloaded NeoForge installer to: {}", jar_path.display());
         Ok(jar_path)
     }
 
@@ -83,27 +57,32 @@ impl NeoForgeInstallerDownloadService {
             version, version
         );
         let jar_path = self.base_path.join(&maven_path);
-        
-        info!("Extracting version information from: {}", jar_path.display());
-        
+
+        info!(
+            "Extracting version information from: {}",
+            jar_path.display()
+        );
+
         // Öffne die JAR-Datei
         let mut file = BufReader::new(fs::File::open(jar_path).await?);
-        
+
         // Öffne die ZIP-Datei
         let mut zip = ZipFileReader::with_tokio(&mut file)
             .await
             .map_err(|e| AppError::Download(format!("Failed to read JAR as ZIP: {}", e)))?;
-        
+
         // Suche nach version.json oder install_profile.json
         let mut has_version_json = false;
         let mut has_install_profile = false;
-        
+
         info!("Scanning JAR contents for JSON files...");
         for index in 0..zip.file().entries().len() {
             let entry = &zip.file().entries().get(index).unwrap();
-            let file_name = entry.filename().as_str()
+            let file_name = entry
+                .filename()
+                .as_str()
                 .map_err(|e| AppError::Download(format!("Failed to get filename: {}", e)))?;
-            
+
             if file_name == "version.json" {
                 info!("Found version.json");
                 has_version_json = true;
@@ -112,67 +91,83 @@ impl NeoForgeInstallerDownloadService {
                 has_install_profile = true;
             }
         }
-        
-        info!("Scan results - version.json: {}, install_profile.json: {}", has_version_json, has_install_profile);
-        
+
+        info!(
+            "Scan results - version.json: {}, install_profile.json: {}",
+            has_version_json, has_install_profile
+        );
+
         // Bestimme welche Datei wir lesen sollen
         let (target_file, is_legacy) = if has_version_json {
             ("version.json", false)
         } else if has_install_profile {
             ("install_profile.json", true)
         } else {
-            return Err(AppError::Download("Neither version.json nor install_profile.json found in JAR".to_string()));
+            return Err(AppError::Download(
+                "Neither version.json nor install_profile.json found in JAR".to_string(),
+            ));
         };
-        
+
         info!("Using {} for version information", target_file);
-        
+
         // Suche den Index der Ziel-Datei
         let mut target_index = None;
         for index in 0..zip.file().entries().len() {
             let entry = &zip.file().entries().get(index).unwrap();
-            let file_name = entry.filename().as_str()
+            let file_name = entry
+                .filename()
+                .as_str()
                 .map_err(|e| AppError::Download(format!("Failed to get filename: {}", e)))?;
-            
+
             if file_name == target_file {
                 target_index = Some(index);
                 break;
             }
         }
-        
-        let target_index = target_index.ok_or_else(|| AppError::Download(format!("{} not found in JAR", target_file)))?;
-        
+
+        let target_index = target_index
+            .ok_or_else(|| AppError::Download(format!("{} not found in JAR", target_file)))?;
+
         // Lese den Inhalt der Ziel-Datei
-        let mut reader = zip.reader_with_entry(target_index)
-            .await
-            .map_err(|e| AppError::Download(format!("Failed to read {} entry: {}", target_file, e)))?;
-        
+        let mut reader = zip.reader_with_entry(target_index).await.map_err(|e| {
+            AppError::Download(format!("Failed to read {} entry: {}", target_file, e))
+        })?;
+
         let mut buffer = Vec::new();
-        reader.read_to_end_checked(&mut buffer)
-            .await
-            .map_err(|e| AppError::Download(format!("Failed to read {} content: {}", target_file, e)))?;
-        
-        let json_content = String::from_utf8(buffer)
-            .map_err(|e| AppError::Download(format!("Failed to convert {} to string: {}", target_file, e)))?;
-        
+        reader.read_to_end_checked(&mut buffer).await.map_err(|e| {
+            AppError::Download(format!("Failed to read {} content: {}", target_file, e))
+        })?;
+
+        let json_content = String::from_utf8(buffer).map_err(|e| {
+            AppError::Download(format!(
+                "Failed to convert {} to string: {}",
+                target_file, e
+            ))
+        })?;
+
         // Deserialisiere den JSON-Inhalt
         let forge_version = if is_legacy {
             info!("Parsing legacy format from install_profile.json");
             // Für legacy Format: Extrahiere versionInfo aus dem install_profile.json
-            let json_value: serde_json::Value = serde_json::from_str(&json_content)
-                .map_err(|e| AppError::Download(format!("Failed to parse install_profile.json: {}", e)))?;
-            
-            let version_info = json_value.get("versionInfo")
-                .ok_or_else(|| AppError::Download("versionInfo not found in install_profile.json".to_string()))?;
-            
-            serde_json::from_value(version_info.clone())
-                .map_err(|e| AppError::Download(format!("Failed to parse legacy versionInfo: {}", e)))?
+            let json_value: serde_json::Value =
+                serde_json::from_str(&json_content).map_err(|e| {
+                    AppError::Download(format!("Failed to parse install_profile.json: {}", e))
+                })?;
+
+            let version_info = json_value.get("versionInfo").ok_or_else(|| {
+                AppError::Download("versionInfo not found in install_profile.json".to_string())
+            })?;
+
+            serde_json::from_value(version_info.clone()).map_err(|e| {
+                AppError::Download(format!("Failed to parse legacy versionInfo: {}", e))
+            })?
         } else {
             info!("Parsing modern format from version.json");
             // Normales Format: Direkt als ForgeVersion parsen
             serde_json::from_str(&json_content)
                 .map_err(|e| AppError::Download(format!("Failed to parse version.json: {}", e)))?
         };
-        
+
         info!("Successfully extracted version information");
         Ok(forge_version)
     }

@@ -1,4 +1,3 @@
-use crate::minecraft::auth::minecraft_auth::NoRiskToken;
 use crate::{
     config::HTTP_CLIENT,
     error::{AppError, Result},
@@ -78,6 +77,22 @@ pub struct CapesBrowseResponse {
     pub capes: Vec<CosmeticCape>,
     /// Pagination information
     pub pagination: PaginationInfo,
+}
+
+
+
+/// Response struct for cape upload operations (serializable for Tauri)
+#[derive(Serialize, Debug)]
+pub struct CapeUploadResponse {
+    /// The hash/ID of the uploaded cape
+    #[serde(rename = "capeHash")]
+    pub cape_hash: String,
+    /// Whether the cape was resized to 512x256
+    #[serde(rename = "wasResized")]
+    pub was_resized: bool,
+    /// Original dimensions if the cape was resized (null if already correct size)
+    #[serde(rename = "originalDimensions")]
+    pub original_dimensions: Option<(u32, u32)>,
 }
 
 pub struct CapeApi;
@@ -193,79 +208,81 @@ impl CapeApi {
     /// Get capes for a specific player
     ///
     /// Parameters:
-    /// - player_uuid: UUID of the player
-    /// - page: Page number (default: 0)
-    /// - pageSize: Number of items per page (default: 20)
-    /// - filterAccepted: Filter by accepted status (default: true)
+    /// - norisk_token: Authentication token
+    /// - player_uuid: UUID of the player to get capes for
     /// - request_uuid: UUID for tracking the request
+    /// - is_experimental: Whether to use the experimental API endpoint
     pub async fn get_player_capes(
         &self,
         norisk_token: &str,
         player_uuid: &Uuid,
-        page: Option<u32>,
-        page_size: Option<u32>,
-        filter_accepted: Option<bool>,
         request_uuid: &str,
         is_experimental: bool,
-    ) -> Result<CapesBrowseResponse> {
-        let endpoint = format!("cape/browse/player/{}", player_uuid);
+    ) -> Result<Vec<CosmeticCape>> {
+        let endpoint = format!("cape/user/{}", player_uuid);
         let base_url = Self::get_api_base(is_experimental);
         let url = format!("{}/{}", base_url, endpoint);
 
         debug!(
-            "[Cape API] Making request to player capes endpoint for player: {}",
-            player_uuid
+            "[Cape API get_player_capes] Making request for player_uuid: {}. Full URL to be called: {}",
+            player_uuid, url
         );
-        debug!("[Cape API] Full URL: {}", url);
 
         let mut query_params = HashMap::new();
-
-        // Add request UUID for tracking
         query_params.insert("uuid", request_uuid.to_string());
 
-        if let Some(p) = page {
-            query_params.insert("page", p.to_string());
-        }
-
-        if let Some(ps) = page_size {
-            query_params.insert("pageSize", ps.to_string());
-        }
-
-        if let Some(fa) = filter_accepted {
-            query_params.insert("filterAccepted", fa.to_string());
-        }
-
         debug!(
-            "[Cape API] Sending GET request with parameters: {:?}",
+            "[Cape API get_player_capes] Authorization token (first/last 8 chars): {}...{}",
+            &norisk_token[..std::cmp::min(8, norisk_token.len())],
+            &norisk_token[std::cmp::max(0, norisk_token.len().saturating_sub(8))..]
+        );
+        debug!(
+            "[Cape API get_player_capes] Sending GET request with query parameters: {:?}",
             query_params
         );
 
         let response = HTTP_CLIENT
-            .get(url)
+            .get(&url)
             .header("Authorization", format!("Bearer {}", norisk_token))
             .query(&query_params)
             .send()
             .await
             .map_err(|e| {
-                error!("[Cape API] Request failed: {}", e);
-                AppError::RequestError(format!("Failed to send request to Cape API: {}", e))
+                error!("[Cape API get_player_capes] Request failed: {}", e);
+                AppError::RequestError(format!(
+                    "Failed to send request to Cape API for get_player_capes: {}",
+                    e
+                ))
             })?;
 
         let status = response.status();
-        debug!("[Cape API] Response status: {}", status);
+        debug!("[Cape API get_player_capes] Response status: {}", status);
 
         if !status.is_success() {
-            error!("[Cape API] Error response: Status {}", status);
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to read error body".to_string());
+            error!(
+                "[Cape API get_player_capes] Error response: Status {}, Body: {}",
+                status, error_body
+            );
             return Err(AppError::RequestError(format!(
-                "Cape API returned error status: {}",
-                status
+                "Cape API (get_player_capes) returned error status: {}. Details: {}",
+                status, error_body
             )));
         }
 
-        debug!("[Cape API] Parsing response body as JSON");
-        response.json::<CapesBrowseResponse>().await.map_err(|e| {
-            error!("[Cape API] Failed to parse response: {}", e);
-            AppError::ParseError(format!("Failed to parse Cape API response: {}", e))
+        debug!("[Cape API get_player_capes] Parsing response body as JSON");
+        response.json::<Vec<CosmeticCape>>().await.map_err(|e| {
+            error!(
+                "[Cape API get_player_capes] Failed to parse response: {}",
+                e
+            );
+            AppError::ParseError(format!(
+                "Failed to parse Cape API response for get_player_capes: {}",
+                e
+            ))
         })
     }
 
@@ -420,14 +437,14 @@ impl CapeApi {
     /// - is_experimental: Whether to use the experimental API endpoint
     ///
     /// Returns:
-    /// - Result containing the response text from the API (e.g., new cape hash or confirmation) on success.
+    /// - Result containing the CapeUploadResponse with hash and resize info on success.
     pub async fn upload_cape(
         &self,
         norisk_token: &str,
         player_uuid: &Uuid,
         image_path: &PathBuf,
         is_experimental: bool,
-    ) -> Result<String> {
+    ) -> Result<CapeUploadResponse> {
         let endpoint = "cape";
         let base_url = Self::get_api_base(is_experimental);
         let url = format!("{}/{}", base_url, endpoint);
@@ -439,14 +456,31 @@ impl CapeApi {
         debug!("[Cape API] Image path: {:?}", image_path);
         debug!("[Cape API] Full URL: {}", url);
 
-        // Read the image file content asynchronously
-        let image_data = fs::read(image_path).await.map_err(|e| {
+        // Read and resize the image file to ensure it's 512x256
+        let resize_result = crate::utils::file_utils::resize_cape_to_512x256(image_path).await.map_err(|e| {
             error!(
-                "[Cape API] Failed to read image file {:?}: {}",
+                "[Cape API] Failed to process image file {:?}: {}",
                 image_path, e
             );
-            AppError::Io(e)
+            e
         })?;
+
+        let image_data = resize_result.image_bytes;
+
+        // Log resize information
+        if resize_result.was_resized {
+            if let Some((orig_width, orig_height)) = resize_result.original_dimensions {
+                info!(
+                    "[Cape API] Cape was resized from {}x{} to 512x256 for player {}",
+                    orig_width, orig_height, player_uuid
+                );
+            }
+        } else {
+            debug!(
+                "[Cape API] Cape already had correct dimensions 512x256 for player {}",
+                player_uuid
+            );
+        }
 
         let mut query_params = HashMap::new();
         query_params.insert("uuid", player_uuid.to_string());
@@ -482,7 +516,11 @@ impl CapeApi {
                 "[Cape API] Cape uploaded successfully for player {}. Response: {}",
                 player_uuid, response_text
             );
-            Ok(response_text)
+            Ok(CapeUploadResponse {
+                cape_hash: response_text,
+                was_resized: resize_result.was_resized,
+                original_dimensions: resize_result.original_dimensions,
+            })
         } else {
             error!(
                 "[Cape API] Error uploading cape: Status {}, Response: {}",
@@ -490,6 +528,215 @@ impl CapeApi {
             );
             Err(AppError::RequestError(format!(
                 "Failed to upload cape. Status: {}, Details: {}",
+                status, response_text
+            )))
+        }
+    }
+
+    /// Fetch multiple capes by hashes (max 100)
+    pub async fn get_capes_by_hashes(
+        &self,
+        norisk_token: &str,
+        hashes: &[String],
+        is_experimental: bool,
+    ) -> Result<Vec<CosmeticCape>> {
+        let endpoint = "cape/many";
+        let base_url = Self::get_api_base(is_experimental);
+        let url = format!("{}/{}", base_url, endpoint);
+
+        let joined: String = hashes.iter().take(100).cloned().collect::<Vec<_>>().join(",");
+        debug!(
+            "[Cape API] Requesting multiple capes (count={}): {}",
+            hashes.len().min(100),
+            joined
+        );
+        debug!("[Cape API] Full URL: {}", url);
+
+        let response = HTTP_CLIENT
+            .get(url)
+            .header("Authorization", format!("Bearer {}", norisk_token))
+            .query(&[("hash", joined)])
+            .send()
+            .await
+            .map_err(|e| {
+                error!("[Cape API] Request failed: {}", e);
+                AppError::RequestError(format!(
+                    "Failed to send get capes by hashes request: {}",
+                    e
+                ))
+            })?;
+
+        let status = response.status();
+        debug!("[Cape API] Response status: {}", status);
+
+        if !status.is_success() {
+            let response_text = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("Error reading error response body: {}", e));
+            error!(
+                "[Cape API] Error getting capes by hashes: Status {}, Response: {}",
+                status, response_text
+            );
+            return Err(AppError::RequestError(format!(
+                "Failed to get capes by hashes. Status: {}, Details: {}",
+                status, response_text
+            )));
+        }
+
+        response.json::<Vec<CosmeticCape>>().await.map_err(|e| {
+            error!(
+                "[Cape API] Failed to parse get capes by hashes response body: {}",
+                e
+            );
+            AppError::ParseError(format!(
+                "Failed to parse get capes by hashes response body: {}",
+                e
+            ))
+        })
+    }
+
+    /// Add a cape to user's favorites
+    ///
+    /// Parameters:
+    /// - norisk_token: Authentication token
+    /// - cape_hash: Hash of the cape to favorite
+    /// - is_experimental: Whether to use the experimental API endpoint
+    ///
+    /// Returns: Updated list of favorite cape hashes
+    pub async fn add_favorite_cape(
+        &self,
+        norisk_token: &str,
+        cape_hash: &str,
+        is_experimental: bool,
+    ) -> Result<Vec<String>> {
+        let endpoint = format!("cape/favorite/{}", cape_hash);
+        let base_url = Self::get_api_base(is_experimental);
+        let url = format!("{}/{}", base_url, endpoint);
+
+        debug!(
+            "[Cape API] Making request to add favorite cape: {}",
+            cape_hash
+        );
+        debug!("[Cape API] Full URL: {}", url);
+
+        let response = HTTP_CLIENT
+            .put(url)
+            .header("Authorization", format!("Bearer {}", norisk_token))
+            .send()
+            .await
+            .map_err(|e| {
+                error!("[Cape API] Request failed: {}", e);
+                AppError::RequestError(format!(
+                    "Failed to send add favorite cape request: {}",
+                    e
+                ))
+            })?;
+
+        let status = response.status();
+        debug!("[Cape API] Response status: {}", status);
+
+        if status.is_success() {
+            let favorites = response.json::<Vec<String>>().await.map_err(|e| {
+                error!(
+                    "[Cape API] Failed to parse add favorite response body: {}",
+                    e
+                );
+                AppError::ParseError(format!(
+                    "Failed to parse add favorite cape response body: {}",
+                    e
+                ))
+            })?;
+            info!(
+                "[Cape API] Cape {} added to favorites successfully. Total favorites: {}",
+                cape_hash,
+                favorites.len()
+            );
+            Ok(favorites)
+        } else {
+            let response_text = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("Error reading error response body: {}", e));
+            error!(
+                "[Cape API] Error adding favorite cape: Status {}, Response: {}",
+                status, response_text
+            );
+            Err(AppError::RequestError(format!(
+                "Failed to add favorite cape. Status: {}, Details: {}",
+                status, response_text
+            )))
+        }
+    }
+
+    /// Remove a cape from user's favorites
+    ///
+    /// Parameters:
+    /// - norisk_token: Authentication token
+    /// - cape_hash: Hash of the cape to remove from favorites
+    /// - is_experimental: Whether to use the experimental API endpoint
+    ///
+    /// Returns: Updated list of favorite cape hashes
+    pub async fn remove_favorite_cape(
+        &self,
+        norisk_token: &str,
+        cape_hash: &str,
+        is_experimental: bool,
+    ) -> Result<Vec<String>> {
+        let endpoint = format!("cape/favorite/{}", cape_hash);
+        let base_url = Self::get_api_base(is_experimental);
+        let url = format!("{}/{}", base_url, endpoint);
+
+        debug!(
+            "[Cape API] Making request to remove favorite cape: {}",
+            cape_hash
+        );
+        debug!("[Cape API] Full URL: {}", url);
+
+        let response = HTTP_CLIENT
+            .delete(url)
+            .header("Authorization", format!("Bearer {}", norisk_token))
+            .send()
+            .await
+            .map_err(|e| {
+                error!("[Cape API] Request failed: {}", e);
+                AppError::RequestError(format!(
+                    "Failed to send remove favorite cape request: {}",
+                    e
+                ))
+            })?;
+
+        let status = response.status();
+        debug!("[Cape API] Response status: {}", status);
+
+        if status.is_success() {
+            let favorites = response.json::<Vec<String>>().await.map_err(|e| {
+                error!(
+                    "[Cape API] Failed to parse remove favorite response body: {}",
+                    e
+                );
+                AppError::ParseError(format!(
+                    "Failed to parse remove favorite cape response body: {}",
+                    e
+                ))
+            })?;
+            info!(
+                "[Cape API] Cape {} removed from favorites successfully. Total favorites: {}",
+                cape_hash,
+                favorites.len()
+            );
+            Ok(favorites)
+        } else {
+            let response_text = response
+                .text()
+                .await
+                .unwrap_or_else(|e| format!("Error reading error response body: {}", e));
+            error!(
+                "[Cape API] Error removing favorite cape: Status {}, Response: {}",
+                status, response_text
+            );
+            Err(AppError::RequestError(format!(
+                "Failed to remove favorite cape. Status: {}, Details: {}",
                 status, response_text
             )))
         }

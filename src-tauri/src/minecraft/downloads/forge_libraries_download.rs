@@ -1,14 +1,12 @@
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::forge_install_profile::ForgeInstallProfile;
 use crate::minecraft::dto::forge_meta::ForgeVersion;
+use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
 use futures::stream::{iter, StreamExt};
-use reqwest;
-use sha1::{Digest, Sha1};
-use std::path::PathBuf;
 use log::info;
+use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
 
 const LIBRARIES_DIR: &str = "libraries";
 const DEFAULT_CONCURRENT_DOWNLOADS: usize = 10;
@@ -59,17 +57,16 @@ impl ForgeLibrariesDownload {
             .await;
 
         // Check for errors
-        let errors: Vec<_> = results
-            .into_iter()
-            .filter_map(|r| r.err())
-            .collect();
+        let errors: Vec<_> = results.into_iter().filter_map(|r| r.err()).collect();
 
         if !errors.is_empty() {
             info!("\n⚠️ Some downloads failed:");
             for error in errors {
                 info!("  - {}", error);
             }
-            return Err(AppError::Download("Some library downloads failed".to_string()));
+            return Err(AppError::Download(
+                "Some library downloads failed".to_string(),
+            ));
         }
 
         Ok(())
@@ -86,77 +83,19 @@ impl ForgeLibrariesDownload {
         }
 
         let target_path = self.get_library_path(download_info);
-
-        // Check if file exists and verify hash if available
-        if fs::try_exists(&target_path).await? {
-            if let Some(expected_sha1) = &download_info.sha1 {
-                let file_content = fs::read(&target_path).await?;
-                let mut hasher = Sha1::new();
-                hasher.update(&file_content);
-                let actual_sha1 = format!("{:x}", hasher.finalize());
-
-                if actual_sha1 == *expected_sha1 {
-                    info!(
-                        "📦 Library already exists and hash matches: {}",
-                        download_info.path
-                    );
-                    return Ok(());
-                } else {
-                    info!(
-                        "⚠️ Library exists but hash mismatch, redownloading: {}",
-                        download_info.path
-                    );
-                }
-            } else {
-                info!(
-                    "📦 Library already exists (no hash to verify): {}",
-                    download_info.path
-                );
-                return Ok(());
-            }
-        }
-
-        // Download the file
         info!("⬇️ Downloading: {}", download_info.path);
 
-        let response = reqwest::get(&download_info.url)
-            .await
-            .map_err(|e| AppError::Download(format!("Failed to download library: {}", e)))?;
+        // Use the new centralized download utility with SHA1 verification
+        let mut config = DownloadConfig::new()
+            .with_streaming(false)  // Libraries are typically small-medium files
+            .with_retries(3);  // Built-in retry logic
 
-        if !response.status().is_success() {
-            return Err(AppError::Download(format!(
-                "Failed to download library: Status {}",
-                response.status()
-            )));
+        // Add SHA1 verification if available
+        if let Some(sha1) = &download_info.sha1 {
+            config = config.with_sha1(sha1.clone());
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| AppError::Download(format!("Failed to download library: {}", e)))?;
-
-        // Verify hash if available
-        if let Some(expected_sha1) = &download_info.sha1 {
-            let mut hasher = Sha1::new();
-            hasher.update(&bytes);
-            let actual_sha1 = format!("{:x}", hasher.finalize());
-
-            if actual_sha1 != *expected_sha1 {
-                return Err(AppError::Download(format!(
-                    "Hash mismatch for {}: expected {}, got {}",
-                    download_info.path, expected_sha1, actual_sha1
-                )));
-            }
-        }
-
-        // Create parent directories if they don't exist
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-
-        // Save the file
-        let mut file = fs::File::create(&target_path).await?;
-        file.write_all(&bytes).await?;
+        DownloadUtils::download_file(&download_info.url, &target_path, config).await?;
 
         info!("💾 Saved: {}", download_info.path);
         Ok(())
@@ -169,7 +108,11 @@ impl ForgeLibrariesDownload {
         self.base_path.join(&download_info.path)
     }
 
-    pub async fn get_library_paths(&self, forge_version: &ForgeVersion, is_legacy: bool) -> Result<Vec<PathBuf>> {
+    pub async fn get_library_paths(
+        &self,
+        forge_version: &ForgeVersion,
+        is_legacy: bool,
+    ) -> Result<Vec<PathBuf>> {
         let mut paths = Vec::new();
 
         for library in &forge_version.libraries {
@@ -187,19 +130,19 @@ impl ForgeLibrariesDownload {
 
                 // Spezialfall für Forge-Bibliotheken
                 let is_forge_lib = group == "net/minecraftforge" && artifact == "forge";
-                let suffix = if is_forge_lib { 
-                    info!("🔧 Detected Forge library, adding -universal suffix: {}", library.name);
-                    "-universal" 
-                } else { "" };
+                let suffix = if is_forge_lib {
+                    info!(
+                        "🔧 Detected Forge library, adding -universal suffix: {}",
+                        library.name
+                    );
+                    "-universal"
+                } else {
+                    ""
+                };
 
                 let maven_path = format!(
                     "{}/{}/{}/{}-{}{}.jar",
-                    group,
-                    artifact,
-                    version,
-                    artifact,
-                    version,
-                    suffix
+                    group, artifact, version, artifact, version, suffix
                 );
 
                 let target_path = self.base_path.join(&maven_path);
@@ -209,7 +152,10 @@ impl ForgeLibrariesDownload {
                 // Modernes Format: Verwende downloads.artifact
                 if let Some(downloads) = &library.downloads {
                     if let Some(artifact) = &downloads.artifact {
-                        info!("Adding Modern Library Path: {}", self.get_library_path(artifact).display());
+                        info!(
+                            "Adding Modern Library Path: {}",
+                            self.get_library_path(artifact).display()
+                        );
                         paths.push(self.get_library_path(artifact));
                     }
 
@@ -247,17 +193,16 @@ impl ForgeLibrariesDownload {
             .await;
 
         // Check for errors
-        let errors: Vec<_> = results
-            .into_iter()
-            .filter_map(|r| r.err())
-            .collect();
+        let errors: Vec<_> = results.into_iter().filter_map(|r| r.err()).collect();
 
         if !errors.is_empty() {
             info!("\n⚠️ Some installer library downloads failed:");
             for error in errors {
                 info!("  - {}", error);
             }
-            return Err(AppError::Download("Some installer library downloads failed".to_string()));
+            return Err(AppError::Download(
+                "Some installer library downloads failed".to_string(),
+            ));
         }
 
         Ok(())
@@ -269,7 +214,10 @@ impl ForgeLibrariesDownload {
         let mut invalid = 0;
 
         info!("\n🔍 Starting legacy library download:");
-        info!("📚 Total libraries to process: {}", forge_version.libraries.len());
+        info!(
+            "📚 Total libraries to process: {}",
+            forge_version.libraries.len()
+        );
 
         for library in &forge_version.libraries {
             // Erstelle den Maven-Pfad aus dem Namen
@@ -286,16 +234,15 @@ impl ForgeLibrariesDownload {
 
             let maven_path = format!(
                 "{}/{}/{}/{}-{}.jar",
-                group,
-                artifact,
-                version,
-                artifact,
-                version
+                group, artifact, version, artifact, version
             );
 
             // Erstelle die Download-URL
-            //digga wie random ist das alles bitte einfach dann von hier anstatt maven central 
-            let base_url = library.url.as_deref().unwrap_or("https://libraries.minecraft.net/");
+            //digga wie random ist das alles bitte einfach dann von hier anstatt maven central
+            let base_url = library
+                .url
+                .as_deref()
+                .unwrap_or("https://libraries.minecraft.net/");
             let url = format!("{}{}", base_url, maven_path);
 
             let target_path = self.base_path.join(&maven_path);
@@ -316,26 +263,22 @@ impl ForgeLibrariesDownload {
             downloads.push(async move {
                 info!("\n⬇️ Downloading: {}", maven_path);
                 info!("  📎 URL: {}", url);
-                
-                let response = reqwest::get(&url)
-                    .await
-                    .map_err(|e| AppError::Download(format!("Failed to download library: {}", e)))?;
 
-                if !response.status().is_success() {
-                    info!("❌ Failed to download library '{}': Status {}", library.name, response.status());
-                    return Ok(());
+                // Use the new centralized download utility for legacy libraries
+                let config = DownloadConfig::new()
+                    .with_streaming(false)  // Legacy libraries are typically small-medium files
+                    .with_retries(2);  // Reduced retries for faster processing
+
+                match DownloadUtils::download_file(&url, &target_path, config).await {
+                    Ok(()) => {
+                        info!("✅ Successfully downloaded: {}", maven_path);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        info!("❌ Failed to download library '{}': {}", library.name, e);
+                        Ok(()) // Continue with other downloads even if one fails
+                    }
                 }
-
-                let bytes = response.bytes()
-                    .await
-                    .map_err(|e| AppError::Download(format!("Failed to download library: {}", e)))?;
-
-                // Speichere die Datei
-                let mut file = fs::File::create(&target_path).await?;
-                file.write_all(&bytes).await?;
-
-                info!("✅ Successfully downloaded: {}", maven_path);
-                Ok(())
             });
         }
 
@@ -353,17 +296,16 @@ impl ForgeLibrariesDownload {
             .await;
 
         // Prüfe auf Fehler
-        let errors: Vec<_> = results
-            .into_iter()
-            .filter_map(|r| r.err())
-            .collect();
+        let errors: Vec<_> = results.into_iter().filter_map(|r| r.err()).collect();
 
         if !errors.is_empty() {
             info!("\n⚠️ Some legacy library downloads failed:");
             for error in errors {
                 info!("  - {}", error);
             }
-            return Err(AppError::Download("Some legacy library downloads failed".to_string()));
+            return Err(AppError::Download(
+                "Some legacy library downloads failed".to_string(),
+            ));
         }
 
         info!("\n✨ All legacy libraries processed successfully!");

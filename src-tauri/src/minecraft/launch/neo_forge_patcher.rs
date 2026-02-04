@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::minecraft::dto::neo_forge_install_profile::{NeoForgeInstallProfile, NeoForgeProcessor};
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::state::event_state::{EventPayload, EventType};
+use crate::state::state_manager::State;
 use async_zip::tokio::read::seek::ZipFileReader;
 use log::info;
 use tokio::fs::File;
 use tokio::io::BufReader;
-use crate::state::state_manager::State;
-use crate::state::event_state::{EventPayload, EventType};
 use uuid::Uuid;
 
 pub struct NeoForgePatcher {
@@ -72,10 +72,15 @@ impl NeoForgePatcher {
         None
     }
 
-    fn replace_tokens(&self, arg: &str, install_profile: &NeoForgeInstallProfile, is_client: bool) -> Result<String> {
+    fn replace_tokens(
+        &self,
+        arg: &str,
+        install_profile: &NeoForgeInstallProfile,
+        is_client: bool,
+    ) -> Result<String> {
         let mut result = String::new();
         let mut chars = arg.chars().peekable();
-        
+
         while let Some(c) = chars.next() {
             match c {
                 '\\' => {
@@ -83,14 +88,16 @@ impl NeoForgePatcher {
                     if let Some(next) = chars.next() {
                         result.push(next);
                     } else {
-                        return Err(AppError::NeoForgeError("Illegal pattern (Bad escape)".to_string()));
+                        return Err(AppError::NeoForgeError(
+                            "Illegal pattern (Bad escape)".to_string(),
+                        ));
                     }
                 }
                 '{' | '\'' => {
                     // Start of a token or quoted string
                     let mut key = String::new();
                     let mut found_end = false;
-                    
+
                     while let Some(d) = chars.next() {
                         match d {
                             '\\' => {
@@ -98,7 +105,9 @@ impl NeoForgePatcher {
                                 if let Some(next) = chars.next() {
                                     key.push(next);
                                 } else {
-                                    return Err(AppError::NeoForgeError("Illegal pattern (Bad escape)".to_string()));
+                                    return Err(AppError::NeoForgeError(
+                                        "Illegal pattern (Bad escape)".to_string(),
+                                    ));
                                 }
                             }
                             '}' if c == '{' => {
@@ -114,18 +123,25 @@ impl NeoForgePatcher {
                             _ => key.push(d),
                         }
                     }
-                    
+
                     if !found_end {
-                        return Err(AppError::NeoForgeError(format!("Illegal pattern (Unclosed {}): {}", c, arg)));
+                        return Err(AppError::NeoForgeError(format!(
+                            "Illegal pattern (Unclosed {}): {}",
+                            c, arg
+                        )));
                     }
-                    
+
                     if c == '\'' {
                         // Quoted string, use as is
                         result.push_str(&key);
                     } else {
                         // Token replacement
                         if let Some(value) = install_profile.data.get(&key) {
-                            let replacement = if is_client { &value.client } else { &value.server };
+                            let replacement = if is_client {
+                                &value.client
+                            } else {
+                                &value.server
+                            };
                             info!("Replacing {} with: {}", key, replacement);
                             result.push_str(replacement);
                         } else {
@@ -146,7 +162,12 @@ impl NeoForgePatcher {
                                     info!("Replacing {{ROOT}} with: {}", path);
                                     result.push_str(&path);
                                 }
-                                _ => return Err(AppError::NeoForgeError(format!("Missing key: {}", key))),
+                                _ => {
+                                    return Err(AppError::NeoForgeError(format!(
+                                        "Missing key: {}",
+                                        key
+                                    )))
+                                }
                             }
                         }
                     }
@@ -154,28 +175,28 @@ impl NeoForgePatcher {
                 _ => result.push(c),
             }
         }
-        
+
         Ok(result)
     }
 
     fn parse_arguments(
-        &self, 
-        install_profile: &NeoForgeInstallProfile, 
-        processor: &NeoForgeProcessor, 
+        &self,
+        install_profile: &NeoForgeInstallProfile,
+        processor: &NeoForgeProcessor,
         is_client: bool,
-        installer_path: &PathBuf
+        installer_path: &PathBuf,
     ) -> Result<Vec<String>> {
         let mut parsed_args = Vec::new();
-        
+
         if let Some(args) = &processor.args {
             info!("\nProcessing arguments for processor:");
             for arg in args {
                 info!("\nProcessing argument: {}", arg);
-                
+
                 // First handle token replacement
                 let processed = self.replace_tokens(arg, install_profile, is_client)?;
                 info!("After token replacement: {}", processed);
-                
+
                 // Then check if the result is an artifact or data path
                 let final_arg = if processed.starts_with('[') && processed.ends_with(']') {
                     let artifact_str = &processed[1..processed.len() - 1];
@@ -194,21 +215,21 @@ impl NeoForgePatcher {
                 } else if processed.starts_with("/data/") {
                     // Handle data paths by using the installer directory
                     info!("Found data path: {}", processed);
-                    
+
                     // Use the installer directory
                     let installer_dir = installer_path.parent().unwrap();
                     let full_path = installer_dir.join(&processed[1..]); // Remove leading slash
-                    
+
                     info!("Full data path: {}", full_path.display());
                     full_path.to_string_lossy().to_string()
                 } else {
                     processed
                 };
-                
+
                 parsed_args.push(final_arg);
             }
         }
-        
+
         info!("\nFinal parsed arguments: {:?}", parsed_args);
         Ok(parsed_args)
     }
@@ -227,7 +248,7 @@ impl NeoForgePatcher {
 
         let parts: Vec<&str> = library.split(':').collect();
         info!("Split parts: {:?}", parts);
-        
+
         if parts.len() < 3 {
             return Err(AppError::NeoForgeError("Invalid library name".to_string()));
         }
@@ -240,7 +261,7 @@ impl NeoForgePatcher {
             group.replace('.', "/")
         };
         info!("Group path: {}", group_path);
-        
+
         // Handle version with @zip
         let (version, extension) = if version.contains('@') {
             let (v, ext) = version.split_once('@').unwrap();
@@ -272,7 +293,8 @@ impl NeoForgePatcher {
         filename.push_str(&format!(".{}", extension));
         info!("Final filename: {}", filename);
 
-        let path = self.library_path
+        let path = self
+            .library_path
             .join(&group_path)
             .join(artifact)
             .join(version)
@@ -366,7 +388,7 @@ impl NeoForgePatcher {
         install_profile: &NeoForgeInstallProfile,
         minecraft_version: &str,
         is_client: bool,
-        installer_path: &PathBuf
+        installer_path: &PathBuf,
     ) -> Result<()> {
         info!(
             "\nApplying NeoForge processors for {}...",
@@ -393,14 +415,21 @@ impl NeoForgePatcher {
             if let Some(event_id) = self.event_id {
                 if let Some(profile_id) = self.profile_id {
                     let progress = (i as f64) / (total_processors as f64);
-                    state.emit_event(EventPayload {
-                        event_id,
-                        event_type: EventType::InstallingNeoForge,
-                        target_id: Some(profile_id),
-                        message: format!("NeoForge Processor: {} ({}/{})", processor.jar, i + 1, total_processors),
-                        progress: Some(progress),
-                        error: None,
-                    }).await?;
+                    state
+                        .emit_event(EventPayload {
+                            event_id,
+                            event_type: EventType::InstallingNeoForge,
+                            target_id: Some(profile_id),
+                            message: format!(
+                                "NeoForge Processor: {} ({}/{})",
+                                processor.jar,
+                                i + 1,
+                                total_processors
+                            ),
+                            progress: Some(progress),
+                            error: None,
+                        })
+                        .await?;
                 }
             }
 
@@ -434,7 +463,8 @@ impl NeoForgePatcher {
             classpath = format!("{}{}{}", classpath, separator, jar_path.display());
             info!("\nFull Classpath: {}", classpath);
 
-            let jvm_arguments = self.parse_arguments(install_profile, processor, is_client, installer_path)?;
+            let jvm_arguments =
+                self.parse_arguments(install_profile, processor, is_client, installer_path)?;
             info!("\nJVM Arguments: {:?}", jvm_arguments);
 
             // Execute the processor

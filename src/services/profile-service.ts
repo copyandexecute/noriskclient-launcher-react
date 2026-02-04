@@ -8,6 +8,14 @@ import type {
   ExportProfileParams,
   Profile,
   UpdateProfileParams,
+  AllProfilesAndLastPlayed,
+  BatchCheckContentParams,
+  BatchContentInstallStatus,
+  LoadItemsParams,
+  LocalContentItem,
+  MigrationInfo,
+  ImageSource,
+  UploadProfileIconPayload,
 } from "../types/profile";
 import type {
   DataPackInfo,
@@ -15,6 +23,8 @@ import type {
   ResourcePackInfo,
   ShaderPackInfo,
 } from "../types/modrinth";
+import { NoriskVersionsConfig } from "../types/noriskVersions";
+import { FileNode } from "../types/fileSystem";
 
 export async function listProfiles(): Promise<Profile[]> {
   return invoke<Profile[]>("list_profiles");
@@ -45,8 +55,20 @@ export async function deleteProfile(id: string): Promise<void> {
   return invoke<void>("delete_profile", { id });
 }
 
-export async function launchProfile(id: string): Promise<void> {
-  return invoke<void>("launch_profile", { id });
+export async function repairProfile(id: string): Promise<void> {
+  return invoke<void>("repair_profile", { id });
+}
+
+export async function launchProfile(
+  id: string,
+  quickPlaySingleplayer?: string, 
+  quickPlayMultiplayer?: string
+): Promise<void> {
+  return invoke<void>("launch_profile", { 
+    id, 
+    quickPlaySingleplayer, 
+    quickPlayMultiplayer 
+  });
 }
 
 export async function abortProfileLaunch(profileId: string): Promise<void> {
@@ -181,8 +203,8 @@ export async function openProfileFolder(profileId: string): Promise<void> {
 
 export async function getProfileDirectoryStructure(
   profileId: string,
-): Promise<any> {
-  return invoke<any>("get_profile_directory_structure", { profileId });
+): Promise<FileNode> {
+  return invoke<FileNode>("get_profile_directory_structure", { profileId });
 }
 
 export async function setNoriskModStatus(
@@ -269,6 +291,12 @@ export async function isContentInstalled(
   return invoke<ContentInstallStatus>("is_content_installed", { params });
 }
 
+export async function batchCheckContentInstalled(
+  params: BatchCheckContentParams,
+): Promise<BatchContentInstallStatus> {
+  return invoke<BatchContentInstallStatus>("batch_check_content_installed", { params });
+}
+
 export async function getNoriskPacks(): Promise<any> {
   return invoke<any>("get_norisk_packs");
 }
@@ -277,8 +305,8 @@ export async function getNoriskPacksResolved(): Promise<any> {
   return invoke<any>("get_norisk_packs_resolved");
 }
 
-export async function getStandardProfiles(): Promise<any> {
-  return invoke<any>("get_standard_profiles");
+export async function getStandardProfiles(): Promise<NoriskVersionsConfig> {
+  return invoke<NoriskVersionsConfig>("get_standard_profiles");
 }
 
 export async function refreshNoriskPacks(): Promise<void> {
@@ -287,4 +315,84 @@ export async function refreshNoriskPacks(): Promise<void> {
 
 export async function refreshStandardVersions(): Promise<void> {
   return invoke<void>("refresh_standard_versions");
+}
+
+export async function getProfileLatestLogContent(profileId: string): Promise<string> {
+  return invoke<string>("get_profile_latest_log_content", { profileId });
+}
+
+export async function getAllProfilesAndLastPlayed(): Promise<AllProfilesAndLastPlayed> {
+  return invoke<AllProfilesAndLastPlayed>("get_all_profiles_and_last_played");
+}
+
+export async function getLocalContent(
+  params: LoadItemsParams,
+): Promise<LocalContentItem[]> {
+  return invoke<LocalContentItem[]>("get_local_content", { params });
+}
+
+/// Checks if a group migration is needed for a profile
+export async function checkForGroupMigration(profileId: string): Promise<MigrationInfo> {
+  return invoke<MigrationInfo>("check_for_group_migration_command", { profileId });
+}
+
+export async function importProfileByPath(filePathStr: string, eventId?: string): Promise<string> {
+  return invoke<string>("import_profile", { filePathStr, eventId });
+}
+
+export async function resolveImagePath(
+  imageSource: ImageSource,
+  profileId?: string,
+): Promise<string> {
+  return invoke<string>("resolve_image_path", { imageSource, profileId });
+}
+
+export async function uploadProfileImages(
+  payload: UploadProfileIconPayload,
+): Promise<string> {
+  return invoke<string>("upload_profile_images", { payload });
+}
+
+export interface ToggleModUpdatesPayload {
+  profile_id: string;
+  mod_id: string;
+  updates_enabled: boolean;
+}
+
+export async function toggleModUpdates(
+  payload: ToggleModUpdatesPayload,
+): Promise<void> {
+  return invoke<void>("toggle_mod_updates", { payload });
+}
+
+// Symlink commands
+export async function getProfileInstancePath(profileId: string): Promise<string> {
+  return invoke<string>("get_profile_instance_path", { profileId });
+}
+export async function getDefaultProfilePath(): Promise<string> {
+  return invoke<string>("get_default_profile_path");
+}
+
+export interface AddSymlinkParams {
+  profile_id: string;
+  relative_path: string;
+  external_path: string;
+}
+
+export async function addProfileSymlink(params: AddSymlinkParams): Promise<void> {
+  return invoke<void>("add_profile_symlink", { params });
+}
+
+export async function removeProfileSymlink(
+  profileId: string,
+  relativePath: string,
+): Promise<void> {
+  return invoke<void>("remove_profile_symlink", { 
+    profileId, 
+    relativePath 
+  });
+}
+
+export async function getProfileSymlinks(profileId: string): Promise<import("../types/profile").SymlinkInfo[]> {
+  return invoke<import("../types/profile").SymlinkInfo[]>("get_profile_symlinks", { profileId });
 }

@@ -1,108 +1,197 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef } from "react";
-import { gsap } from "gsap";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
+import { cn } from "../../lib/utils";
+import { useThemeStore } from "../../store/useThemeStore";
+import { IconButton } from "./buttons/IconButton";
 
 interface ModalProps {
-  children: ReactNode;
   title: string;
+  titleIcon?: React.ReactNode;
+  titleSubtitle?: React.ReactNode;
   onClose: () => void;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  width?: "sm" | "md" | "lg" | "xl" | "full";
+  closeOnClickOutside?: boolean;
+  headerActions?: React.ReactNode;
+  variant?: "default" | "flat" | "3d";
   className?: string;
-  width?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl" | "full";
-  height?: string;
-  footer?: ReactNode;
+  contentClassName?: string;
 }
 
 export function Modal({
   title,
-  children,
+  titleIcon,
+  titleSubtitle,
   onClose,
+  children,
   footer,
   width = "md",
-  height,
+  closeOnClickOutside = true,
+  headerActions,
+  variant = "default",
+  className,
+  contentClassName,
 }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  const widthClasses = {
-    sm: "max-w-sm",
-    md: "max-w-md",
-    lg: "max-w-lg",
-    xl: "max-w-xl",
-    "2xl": "max-w-2xl",
-    "3xl": "max-w-3xl",
-    "4xl": "max-w-4xl",
-    "5xl": "max-w-5xl",
-    full: "max-w-full",
-  };
-
+  const contentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const mouseDownTargetRef = useRef<EventTarget | null>(null);
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
+  const [isClosing, setIsClosing] = useState(false);
   useEffect(() => {
-    if (modalRef.current) {
-      gsap.fromTo(
-        modalRef.current,
-        { opacity: 0, scale: 0.95 },
-        { opacity: 1, scale: 1, duration: 0.4, ease: "power2.out" },
-      );
-    }
-
-    // Add event listener to close modal when clicking outside
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
-        handleCloseWithAnimation();
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isClosing) {
+        handleClose();
       }
     };
-
-    document.addEventListener("mousedown", handleOutsideClick);
+    
+    if (closeOnClickOutside !== false) {
+      window.addEventListener("keydown", handleEscape);
+    }
 
     return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [closeOnClickOutside, isClosing]);
+
+  useEffect(() => {
+    const recordMouseDownTarget = (event: MouseEvent) => {
+      mouseDownTargetRef.current = event.target;
+    };
+
+    document.addEventListener('mousedown', recordMouseDownTarget, true);
+
+    return () => {
+      document.removeEventListener('mousedown', recordMouseDownTarget, true);
+      mouseDownTargetRef.current = null;
     };
   }, []);
 
-  const handleCloseWithAnimation = () => {
-    if (modalRef.current) {
-      gsap.to(modalRef.current, {
-        opacity: 0,
-        scale: 0.95,
-        duration: 0.3,
-        ease: "power2.in",
-        onComplete: onClose,
-      });
-    } else {
-      onClose();
+  const handleClose = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+    onClose();
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (
+      closeOnClickOutside &&
+      e.target === modalRef.current &&
+      mouseDownTargetRef.current === modalRef.current &&
+      !isClosing
+    ) {
+      e.stopPropagation();
+      handleClose();
     }
   };
 
+  const widthClasses = {
+    sm: "max-w-lg",
+    md: "max-w-2xl",
+    lg: "max-w-3xl",
+    xl: "max-w-5xl",
+    full: "max-w-[95vw] w-full",
+  };
+
+  const getBorderClasses = () => {
+    if (variant === "3d") {
+      return "border-2 border-b-4";
+    }
+    return "border border-b-2";
+  };
+
+  const getBoxShadow = () => {
+    if (variant === "3d") {
+      return `0 10px 0 rgba(0,0,0,0.3), 0 15px 25px rgba(0,0,0,0.5), inset 0 1px 0 ${accentColor.value}40, inset 0 0 0 1px ${accentColor.value}20`;
+    }
+    return "none";
+  };
   return (
     <div
-      ref={overlayRef}
-      className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center"
+      ref={modalRef}
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md-anyos"
+      onClick={handleBackdropClick}
     >
       <div
-        ref={modalRef}
-        className={`bg-black/20 backdrop-blur-lg border-2 border-white/30 w-full ${
-          widthClasses[width]
-        } flex flex-col shadow-[0_0_30px_rgba(0,0,0,0.5)]`}
-        style={{ height: height || "auto", maxHeight: "90vh" }}
+        className={cn(
+          "relative flex flex-col w-full rounded-lg overflow-hidden max-h-[90vh]",
+          getBorderClasses(),
+          variant === "3d" ? "shadow-2xl" : "",
+          widthClasses[width],
+          className,
+        )}
+        style={{
+          backgroundColor: `${accentColor.value}20`,
+          borderColor: `${accentColor.value}80`,
+          borderBottomColor: accentColor.value,
+          boxShadow: getBoxShadow(),
+        }}
       >
-        <div className="flex items-center justify-between p-5 border-b border-white/20 bg-black/20">
-          <h2 className="text-2xl font-minecraft text-white lowercase tracking-wider select-none">
-            {title}
-          </h2>
-          <button
-            className="text-white/70 hover:text-white transition-colors"
-            onClick={onClose}
-          >
-            <Icon icon="pixel:window-close-solid" className="w-6 h-6" />
-          </button>
+        {variant === "3d" && (
+          <span
+            className="absolute inset-x-0 top-0 h-[2px] rounded-t-sm"
+            style={{ backgroundColor: `${accentColor.value}80` }}
+          />
+        )}
+
+        <div
+          ref={headerRef}
+          className="flex items-center justify-between px-6 py-4 border-b-2 flex-shrink-0"
+          style={{
+            borderColor: `${accentColor.value}60`,
+            backgroundColor: `${accentColor.value}30`,
+          }}
+        >
+          <div className="flex items-start space-x-3">
+            {titleIcon && (
+              <span className="text-white flex-shrink-0 pt-1.5">
+                {titleIcon}
+              </span>
+            )}
+            <div className="flex flex-col">
+              <h2 className="text-3xl font-minecraft text-white lowercase">
+                {title}
+              </h2>
+              {titleSubtitle && <div className="mt-0.5">{titleSubtitle}</div>}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {headerActions}
+            <IconButton
+              ref={closeButtonRef}
+              icon={<Icon icon="solar:close-circle-bold" />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              variant="ghost"
+              size="sm"
+              aria-label="Close modal"
+            />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-auto custom-scrollbar">{children}</div>
+        <div
+          ref={contentRef}
+          className={cn("flex-1 overflow-y-auto custom-scrollbar", contentClassName)}
+        >
+          {children}
+        </div>
 
         {footer && (
-          <div className="p-5 border-t border-white/20 bg-black/20">
-            {footer}
+          <div className="flex-shrink-0">
+            <div className="border-t border-white/10 mx-6 mt-4 mb-4"></div>
+            <div className="px-6 pb-4">
+              {footer}
+            </div>
           </div>
         )}
       </div>

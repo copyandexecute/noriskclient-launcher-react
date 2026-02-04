@@ -30,4 +30,15 @@ export interface ProcessMetadata {
   modloader_version?: string | null;
   norisk_pack?: string | null;
   profile_name?: string | null;
+  profile_image_url?: string | null;
+  memory_max_mb: number; // u32 - Max RAM allocated for the process
+}
+
+/**
+ * DTO for submitting crash logs.
+ * Corresponds to the Rust struct `CrashlogDto`.
+ */
+export interface CrashlogDto {
+  mcLogsUrl: string;
+  metadata: ProcessMetadata | null;
 }

@@ -1,117 +1,241 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { gsap } from "gsap";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { Card, CardContent, CardHeader } from "../ui/Card";
-
-interface NewsItem {
-  id: number;
-  title: string;
-  content: string;
-  date: string;
-  image: string;
-}
+import { fetchNewsAndChangelogs } from "../../services/nrc-service";
+import { openExternalUrl } from "../../services/tauri-service";
+import type { BlogPost } from "../../types/wordPress";
+import { cn } from "../../lib/utils";
+import { NewsCard } from "../ui/NewsCard";
+import { useThemeStore } from "../../store/useThemeStore";
+import { useNewsStore } from "../../store/useNewsStore";
 
 interface NewsSectionProps {
-  items: NewsItem[];
   className?: string;
-  onRefresh?: () => void;
 }
 
-export function NewsSection({ items, className, onRefresh }: NewsSectionProps) {
+export function NewsSection({ className }: NewsSectionProps) {
   const newsRef = useRef<HTMLDivElement>(null);
+  const [isResizing, setIsResizing] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
+  const accentColor = useThemeStore((state) => state.accentColor);
+  const newsSectionWidth = useThemeStore((state) => state.newsSectionWidth);
+  const setNewsSectionWidth = useThemeStore((state) => state.setNewsSectionWidth);
 
+  // News Store
+  const {
+    posts,
+    isLoading,
+    error,
+    setPosts,
+    setLoading,
+    setError,
+    isCacheValid,
+  } = useNewsStore();
+
+  // Fade strength configuration (0-100%)
+  const fadeStrength = 90; // 90% opacity at bottom
+
+  const loadNews = useCallback(async () => {
+    // Setze nur Error zurück, aber zeige keine Loading-Animation
+    // Das alte wird weiter angezeigt während wir neu laden
+    setError(null);
+
+    try {
+      const fetchedPosts = await fetchNewsAndChangelogs();
+      setPosts(fetchedPosts);
+      console.log("[NewsSection] News data updated");
+    } catch (err) {
+      console.error("[NewsSection] Error fetching news:", err);
+      // Bei Fehler zeige alten Cache falls verfügbar
+      if (!isCacheValid() || posts.length === 0) {
+        setError(
+          err instanceof Error ? err.message : "An unknown error occurred",
+        );
+      }
+    }
+  }, [isCacheValid, posts.length, setError, setPosts]);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    setIsResizing(true);
+    setStartX(e.clientX);
+    setStartWidth(newsSectionWidth);
+    e.preventDefault();
+  }, [newsSectionWidth]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!isResizing) return;
+
+    const deltaX = e.clientX - startX;
+    const newWidth = Math.max(120, Math.min(500, startWidth - deltaX)); // Min 120px, Max 500px
+    setNewsSectionWidth(newWidth);
+  }, [isResizing, startX, startWidth, setNewsSectionWidth]);
+
+  // Initial load effect - zeige Cache falls verfügbar, dann lade neu
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      gsap.from(".news-item", {
-        opacity: 0,
-        y: 20,
-        stagger: 0.1,
-        duration: 0.5,
-        delay: 0.2,
-        ease: "power3.out",
-      });
-    }, newsRef);
+    // Bei ersten Laden: zeige Cache sofort falls verfügbar
+    if (posts.length === 0 && isCacheValid()) {
+      console.log("[NewsSection] Showing cached news on initial load");
+    }
 
-    return () => ctx.revert();
-  }, [items]);
+    // Lade immer neu (auch wenn Cache vorhanden)
+    loadNews();
+  }, [loadNews]); // loadNews ändert sich nur wenn sich die Dependencies ändern
 
-  return (
-    <div ref={newsRef} className={className}>
-      <Card className="h-full">
-        <CardHeader
-          // @ts-ignore
-          actions={
-            <div className="flex items-center">
-              <button
-                className="text-white/70 hover:text-white transition-colors p-1"
-                onClick={onRefresh}
-              >
-                <Icon icon="pixel:refresh-solid" className="w-7 h-7" />
-              </button>
-            </div>
+  // Auto-refresh effect - alle 5 Minuten neu laden
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("[NewsSection] Auto-refreshing news...");
+      loadNews();
+    }, 5 * 60 * 1000); // 5 Minuten
+
+    return () => clearInterval(interval);
+  }, [loadNews]);
+
+  // Global mouse event listeners for resize functionality
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener("mousemove", handleResizeMove);
+      document.addEventListener("mouseup", handleResizeEnd);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleResizeMove);
+      document.removeEventListener("mouseup", handleResizeEnd);
+    };
+  }, [isResizing, handleResizeMove, handleResizeEnd]);
+
+
+  const renderContent = () => {
+    // Bei Fehler und keinen gecachten Daten
+    if (error && posts.length === 0) {
+      return (
+        <div className="text-center p-2">
+          <Icon
+            icon="pixel:exclamation-triangle-solid"
+            className="w-8 h-8 text-red-400 mx-auto mb-2"
+          />
+          <p className="text-red-400">Error: {error}</p>
+        </div>
+      );
+    }
+
+    // Bei keinen Daten überhaupt
+    if (posts.length === 0) {
+      return (
+        <div className="text-center p-2">
+          <Icon
+            icon="pixel:newspaper-solid"
+            className="w-8 h-8 text-white/50 mx-auto mb-2"
+          />
+          <p className="text-white/70">No news available at the moment.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col space-y-1 w-full">
+        {posts.map((post) => {
+          const rawTitle = post.yoast_head_json?.title || "News Item";
+          const suffixToRemove = " - NoRisk Client Blog";
+          let displayTitle = rawTitle;
+          if (rawTitle.endsWith(suffixToRemove)) {
+            displayTitle = rawTitle.substring(
+              0,
+              rawTitle.length - suffixToRemove.length,
+            );
           }
-        >
-          <h3 className="text-2xl flex items-center gap-3 uppercase text-shadow">
-            <Icon icon="pixel:newspaper-solid" className="w-7 h-7" />
-            NEUIGKEITEN
-          </h3>
-        </CardHeader>
 
-        <CardContent className="flex-1 overflow-y-auto space-y-4 custom-scrollbar p-5">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="news-item relative overflow-hidden cursor-pointer border-2 border-white/40 backdrop-blur-md"
-              onClick={() => {
-                gsap.to(`#news-item-${item.id}`, {
-                  scale: 0.98,
-                  duration: 0.1,
-                  yoyo: true,
-                  repeat: 1,
-                });
-              }}
-              onMouseEnter={(e) => {
-                gsap.to(e.currentTarget, {
-                  y: -4,
-                  boxShadow: "0 8px 16px rgba(0,0,0,0.3)",
-                  duration: 0.3,
-                });
-              }}
-              onMouseLeave={(e) => {
-                gsap.to(e.currentTarget, {
-                  y: 0,
-                  boxShadow: "0 0 0 rgba(0,0,0,0)",
-                  duration: 0.3,
-                });
-              }}
-              id={`news-item-${item.id}`}
-            >
-              <div className="w-full" style={{ height: "250px" }}>
-                <img
-                  src={item.image || "/placeholder.svg"}
-                  alt={item.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
+          const imageUrl =
+            post.yoast_head_json?.og_image?.[0]?.url || "/placeholder.svg";
+          const postUrl = post.yoast_head_json?.og_url || "#";
+
+          return (
+            <div key={post.id} className="news-item w-full flex flex-col">
+              <p
+                className="font-minecraft text-2xl text-white/70 truncate"
+                title={displayTitle}
+              >
+                {displayTitle.toLowerCase()}
+              </p>
+              <div className="relative w-full pt-[56.25%]">
+                <NewsCard
+                  id={`news-item-card-${post.id}`}
+                  className="absolute top-0 left-0 w-full h-full news-item-card"
+                  title={displayTitle}
+                  imageUrl={imageUrl}
+                  postUrl={postUrl}
+                  onClick={() => {
+                    if (postUrl !== "#") {
+                      openExternalUrl(postUrl).catch((err) =>
+                        console.error("Failed to open URL:", err),
+                      );
+                    }
+                  }}
                 />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t">
-                <h4 className="font-minecraft text-white text-lg uppercase">
-                  {item.title}
-                </h4>
-                <p className="text-sm text-gray-300 mt-2">{item.content}</p>
-                <div className="flex justify-between items-center mt-3">
-                  <span className="text-xs text-white/70">{item.date}</span>
-                  <button className="text-xs text-white bg-white/20 backdrop-blur-sm px-3 py-1.5 border border-white/40 hover:bg-white/30 transition-colors uppercase">
-                    READ MORE
-                  </button>
-                </div>
-              </div>
             </div>
-          ))}
-        </CardContent>
-      </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      ref={newsRef}
+      className={cn("h-full flex flex-col !p-3 z-0 relative", className)}
+      style={{
+        width: `${newsSectionWidth}px`,
+        borderLeft: `2px solid ${accentColor.value}60`,
+        borderRight: `2px solid ${accentColor.value}60`,
+        boxShadow: `0 0 15px ${accentColor.value}30 inset`,
+      }}
+    >
+      {/* Resize handle */}
+      <div
+        className={cn(
+          "absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize z-10",
+          isResizing && "bg-white/20"
+        )}
+        style={{
+          backgroundColor: isResizing ? `${accentColor.value}40` : 'transparent',
+        }}
+        onMouseDown={handleResizeStart}
+      />
+      <div className="pb-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Icon icon="pixel:newspaper-solid" className="w-7 h-7 text-white" />
+            <h2 className="text-2xl font-minecraft lowercase text-white">NEWS</h2>
+          </div>
+        </div>
+        <hr
+          className="mt-2 border-t-2"
+          style={{ borderColor: `${accentColor.value}40` }}
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto no-scrollbar relative">
+        {renderContent()}
+
+        {/* Fade overlay at bottom - sticky positioned */}
+        <div
+          className="sticky bottom-0 left-0 right-0 h-20 pointer-events-none z-10"
+          style={{
+            background: `linear-gradient(to top,
+              rgba(0, 0, 0, ${(fadeStrength * 0.01)}) 0%,
+              rgba(0, 0, 0, ${(fadeStrength * 0.0075)}) 25%,
+              rgba(0, 0, 0, ${(fadeStrength * 0.005)}) 50%,
+              rgba(0, 0, 0, ${(fadeStrength * 0.0025)}) 75%,
+              rgba(0, 0, 0, 0) 100%)`,
+          }}
+        />
+      </div>
     </div>
   );
 }

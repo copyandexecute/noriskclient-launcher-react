@@ -1,14 +1,11 @@
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
 use crate::error::{AppError, Result};
 use crate::integrations::norisk_packs::{self, NoriskModSourceDefinition, NoriskModpacksConfig};
+use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
 use futures::stream::{iter, StreamExt};
-use hex;
-use log::{debug, error, info, warn};
-use reqwest;
-use sha1::{Digest, Sha1};
+use log::{error, info, warn};
 use std::path::PathBuf;
 use tokio::fs;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const DEFAULT_CONCURRENT_MOD_DOWNLOADS: usize = 4;
 const MOD_CACHE_DIR_NAME: &str = "mod_cache"; // Reuse the same cache directory
@@ -52,11 +49,7 @@ impl NoriskPackDownloadService {
             fs::create_dir_all(&mod_cache_dir).await?;
         }
 
-        let pack_definition = config.packs.get(pack_id).ok_or_else(|| {
-            let msg = format!("Norisk pack definition not found for ID: '{}'", pack_id);
-            error!("{}", msg);
-            AppError::Other(msg)
-        })?;
+        let pack_definition = config.get_resolved_pack_definition(pack_id)?;
 
         let mut download_futures = Vec::new();
 
@@ -85,17 +78,20 @@ impl NoriskPackDownloadService {
             let display_name_opt = mod_entry.display_name.clone();
             let target_clone = compatibility_target.clone();
 
-            // --- Determine filename using the new helper function --- 
-            let filename_result = norisk_packs::get_norisk_pack_mod_filename(
-                &source, 
-                &target_clone, 
-                &mod_id
-            );
-
             download_futures.push(async move {
                 let display_name = display_name_opt.unwrap_or_else(|| mod_id.clone());
-                let identifier = target_clone.identifier; // Keep identifier for version/URL
-                
+                let identifier = target_clone.identifier.clone(); // Keep identifier for version/URL
+
+                // --- Proceed with download logic using derived/provided filename & identifier ---
+                // Use source override from target if available, otherwise use the original source
+                let effective_source = target_clone.source.as_ref().unwrap_or(&source);
+                // Use the identifier from target (already cloned above as `identifier`)
+                let effective_identifier = identifier;
+
+                // --- Determine filename using the effective source ---
+                let filename_result =
+                    norisk_packs::get_norisk_pack_mod_filename(effective_source, &target_clone, &mod_id);
+
                 // Check if filename retrieval was successful
                 let filename = match filename_result {
                     Ok(fname) => fname,
@@ -108,56 +104,81 @@ impl NoriskPackDownloadService {
 
                 let target_path = cache_dir_clone.join(&filename);
 
-                // --- Proceed with download logic using derived/provided filename & identifier ---
-                match source { // Use the original source variable
-                    NoriskModSourceDefinition::Modrinth { project_id, project_slug } => { // Extract both IDs
+                match effective_source {
+                    NoriskModSourceDefinition::Modrinth {
+                        project_id: _project_id,
+                        project_slug,
+                    } => {
                         let group_id = "maven.modrinth".to_string();
-                        let artifact_id = project_slug; 
-                        let version = identifier; 
+                        let artifact_id = project_slug;
+                        let version = effective_identifier;
 
                         Self::download_maven_mod(
                             MODRINTH_MAVEN_URL.to_string(),
                             group_id,
-                            artifact_id, // Pass the corrected slug
+                            artifact_id.clone(),
                             version,
-                            filename, 
+                            filename,
                             target_path,
                             None,
-                        ).await.map_err(|e| {
-                             error!("Failed cache Modrinth (as Maven) mod '{}': {}", display_name, e);
-                             e
-                        })
-                    }
-                    NoriskModSourceDefinition::Maven { repository_ref, group_id, artifact_id } => {
-                        let repo_url = config.repositories.get(&repository_ref).ok_or_else(|| {
-                             AppError::Download(format!("Repository reference '{}' not found for mod '{}'", repository_ref, display_name))
-                        })?.trim_end_matches('/').to_string();
+                        )
+                        .await
+                        .map_err(|e| {
+                            error!("Failed to download Modrinth mod '{}': {}", display_name, e);
+                            e
+                        })?;
 
-                        // Use gid and aid directly as they are String now
-                        let version = identifier; 
+                        Ok(())
+                    }
+                    NoriskModSourceDefinition::Maven {
+                        repository_ref,
+                        group_id,
+                        artifact_id,
+                    } => {
+                        // Get the repository URL
+                        let repo_url = config
+                            .repositories
+                            .get(repository_ref)
+                            .ok_or_else(|| {
+                                AppError::Download(format!(
+                                    "Repository reference '{}' not found for mod '{}'",
+                                    repository_ref, display_name
+                                ))
+                            })?
+                            .trim_end_matches('/')
+                            .to_string();
 
                         Self::download_maven_mod(
                             repo_url,
-                            group_id.clone(), // Clone if needed, or use reference
+                            group_id.clone(),
                             artifact_id.clone(),
-                            version,
-                            filename, 
+                            effective_identifier,
+                            filename,
                             target_path,
-                            None, 
-                        ).await.map_err(|e| {
-                            error!("Failed cache Maven mod '{}': {}", display_name, e);
+                            None,
+                        )
+                        .await
+                        .map_err(|e| {
+                            error!("Failed to download Maven mod '{}': {}", display_name, e);
                             e
-                        })
+                        })?;
+
+                        Ok(())
                     }
                     NoriskModSourceDefinition::Url => {
-                        let download_url = identifier; 
+                        // For URL mods, use the identifier as direct URL
+                        info!(
+                            "Downloading URL mod for cache: {} ({}) from {}",
+                            display_name, filename, effective_identifier
+                        );
 
-                        info!("Preparing URL mod for cache: {} ({})", display_name, filename);
-                        Self::download_and_verify_file(&download_url, &target_path, None).await
+                        Self::download_and_verify_file(&effective_identifier, &target_path, None).await
                             .map_err(|e| {
-                                error!("Failed cache URL mod {}: {}", display_name, e);
+                                error!("Failed to download URL mod '{}': {}", display_name, e);
                                 e
-                            })
+                            })?;
+
+                        Ok(())
                     }
                 }
             });
@@ -165,7 +186,8 @@ impl NoriskPackDownloadService {
 
         info!(
             "Executing {} Norisk pack mod cache tasks for pack '{}'...",
-            download_futures.len(), pack_id
+            download_futures.len(),
+            pack_id
         );
         let results: Vec<Result<()>> = iter(download_futures)
             .buffer_unordered(self.concurrent_downloads)
@@ -222,126 +244,24 @@ impl NoriskPackDownloadService {
         target_path: &PathBuf,
         expected_sha1: Option<&str>,
     ) -> Result<()> {
-        debug!("Checking file: {:?}", target_path);
+        // Use the new centralized download utility with optional SHA1 verification
+        let mut config = DownloadConfig::new()
+            .with_streaming(true)  // Use streaming for potentially large mod files
+            .with_retries(3);
 
-        if target_path.exists() {
-            if let Some(expected_hash) = expected_sha1 {
-                debug!("File exists, verifying SHA1 hash...");
-                let current_hash = Self::calculate_sha1(target_path).await?;
-                if current_hash.eq_ignore_ascii_case(expected_hash) {
-                    info!("File already exists and hash matches: {:?}", target_path);
-                    return Ok(());
-                } else {
-                    warn!(
-                        "Hash mismatch (Expected: {}, Found: {}). Redownloading: {:?}",
-                        expected_hash, current_hash, target_path
-                    );
-                    fs::remove_file(target_path)
-                        .await
-                        .map_err(|e| {
-                            AppError::Download(format!(
-                                "Failed to remove {:?}: {}",
-                                target_path, e
-                            ))
-                        })?;
-                }
-            } else {
-                info!("File exists, skipping (no hash check): {:?}", target_path);
-                return Ok(());
-            }
+        // Only add SHA1 verification if hash is provided
+        if let Some(hash) = expected_sha1 {
+            config = config.with_sha1(hash.to_string());
         }
 
-        info!("Downloading from {} to {:?}", url, target_path);
-        let response = reqwest::get(url)
-            .await
-            .map_err(|e| AppError::Download(format!("Request failed for {}: {}", url, e)))?;
-
-        if !response.status().is_success() {
-            if response.status() == reqwest::StatusCode::NOT_FOUND {
-                error!("Maven artifact not found (404): {}", url);
-                return Err(AppError::Download(format!(
-                    "Maven artifact not found: {}",
-                    url
-                )));
-            } else {
-                 return Err(AppError::Download(format!(
-                    "Download failed: Status {} for {}",
-                    response.status(),
-                    url
-                 )));
-            }
-        }
-
-        if let Some(parent) = target_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).await?;
-            }
-        }
-        let mut file = fs::File::create(target_path).await.map_err(|e| {
-            AppError::Download(format!("Failed to create file {:?}: {}", target_path, e))
-        })?;
-        let mut stream = response.bytes_stream();
-
-        while let Some(chunk_result) = stream.next().await {
-            let chunk =
-                chunk_result.map_err(|e| AppError::Download(format!("Stream error: {}", e)))?;
-            file.write_all(&chunk)
-                .await
-                .map_err(|e| AppError::Download(format!("Write error: {}", e)))?;
-        }
-
-        debug!("Finished writing file: {:?}", target_path);
-
-        if let Some(expected_hash) = expected_sha1 {
-            debug!("Verifying SHA1 after download...");
-            let downloaded_hash = Self::calculate_sha1(target_path).await?;
-            if !downloaded_hash.eq_ignore_ascii_case(expected_hash) {
-                error!(
-                    "Hash mismatch after download! Expected: {}, Found: {}. Deleting: {:?}",
-                    expected_hash, downloaded_hash, target_path
-                );
-                fs::remove_file(target_path)
-                    .await
-                    .map_err(|e| {
-                        AppError::Download(format!(
-                            "Failed to remove invalid file {:?}: {}",
-                            target_path, e
-                        ))
-                    })?;
-                return Err(AppError::Download(
-                    "Hash mismatch after download".to_string(),
-                ));
-            } else {
-                info!("Hash verified: {:?}", target_path);
-            }
-        }
-
-        Ok(())
+        DownloadUtils::download_file(url, target_path, config).await
     }
 
-    /// Calculates the SHA1 hash of a file asynchronously.
-    async fn calculate_sha1(file_path: &PathBuf) -> Result<String> {
-        let mut file = fs::File::open(file_path)
-            .await
-            .map_err(|e| AppError::Io(e))?;
-        let mut hasher = Sha1::new();
-        let mut buffer = [0; 1024];
 
-        loop {
-            let n = file.read(&mut buffer).await.map_err(|e| AppError::Io(e))?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buffer[..n]);
-        }
-
-        let hash_bytes = hasher.finalize();
-        Ok(hex::encode(hash_bytes))
-    }
 }
 
 // Note: Syncing logic (like `sync_mods_to_profile` from ModDownloadService)
 // is not included here as it depends on a specific Profile's mod list,
 // not directly on the Norisk Pack definition. Syncing would still use
 // ModDownloadService after the Profile's mod list has been potentially
-// updated based on a selected Norisk Pack. 
+// updated based on a selected Norisk Pack.

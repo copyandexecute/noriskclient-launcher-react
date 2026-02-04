@@ -1,16 +1,14 @@
-use crate::state::profile_state::{Profile, ModSource, self};
-use crate::error::{Result, AppError};
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::error::{AppError, Result};
+use crate::minecraft::downloads::mod_resolver::TargetMod;
+use crate::state::profile_state::{self, ModSource, Profile};
+use crate::utils::download_utils::{DownloadConfig, DownloadUtils};
+use futures::stream::{iter, StreamExt};
+use log::{debug, error, info, warn};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use tokio::fs::{self, read_dir};
-use reqwest;
-use log::{info, warn, error, debug};
-use sha1::{Sha1, Digest};
-use hex;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use futures::stream::{StreamExt, iter};
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
-use std::collections::{HashSet, HashMap};
-use crate::minecraft::downloads::mod_resolver::TargetMod;
+use tokio::io::AsyncWriteExt;
 
 const DEFAULT_CONCURRENT_MOD_DOWNLOADS: usize = 4;
 const MOD_CACHE_DIR_NAME: &str = "mod_cache";
@@ -36,8 +34,10 @@ impl ModDownloadService {
     /// Creates the cache directory if it doesn't exist.
     /// Verifies SHA1 hashes for Modrinth downloads if available.
     pub async fn download_mods_to_cache(&self, profile: &Profile) -> Result<()> {
-        info!("Checking/Downloading mods to cache for profile: '{}' (Concurrency: {})", 
-             profile.name, self.concurrent_downloads);
+        info!(
+            "Checking/Downloading mods to cache for profile: '{}' (Concurrency: {})",
+            profile.name, self.concurrent_downloads
+        );
 
         let mod_cache_dir = LAUNCHER_DIRECTORY.meta_dir().join(MOD_CACHE_DIR_NAME);
         if !mod_cache_dir.exists() {
@@ -64,31 +64,64 @@ impl ModDownloadService {
                     Ok(fname) => fname,
                     Err(e) => {
                         error!(
-                            "Skipping download for mod '{}': {}", 
-                            display_name_opt.as_deref().unwrap_or("?"), e
+                            "Skipping download for mod '{}': {}",
+                            display_name_opt.as_deref().unwrap_or("?"),
+                            e
                         );
                         return Err(e);
                     }
                 };
                 let display_name = display_name_opt.as_deref().unwrap_or(&filename);
                 let target_path = cache_dir_clone.join(&filename);
-                
+
                 match source_clone {
-                    ModSource::Modrinth { download_url, file_hash_sha1, .. } => {
-                        info!("Preparing Modrinth mod for cache: {} ({})", display_name, filename);
+                    ModSource::Modrinth {
+                        download_url,
+                        file_hash_sha1,
+                        ..
+                    } => {
+                        info!(
+                            "Preparing Modrinth mod for cache: {} ({})",
+                            display_name, filename
+                        );
                         Self::download_and_verify_file(
-                            &download_url, 
+                            &download_url,
                             &target_path,
-                            file_hash_sha1.as_deref()
-                        ).await.map_err(|e| {
+                            file_hash_sha1.as_deref(),
+                        )
+                        .await
+                        .map_err(|e| {
+                            error!("Failed cache mod {}: {}", display_name, e);
+                            e
+                        })
+                    }
+                    ModSource::CurseForge {
+                        download_url,
+                        file_hash_sha1,
+                        ..
+                    } => {
+                        info!(
+                            "Preparing CurseForge mod for cache: {} ({})",
+                            display_name, filename
+                        );
+                        Self::download_and_verify_file(
+                            &download_url,
+                            &target_path,
+                            file_hash_sha1.as_deref(),
+                        )
+                        .await
+                        .map_err(|e| {
                             error!("Failed cache mod {}: {}", display_name, e);
                             e
                         })
                     }
                     ModSource::Url { url, file_name, .. } => {
                         let fname = file_name.as_deref().unwrap_or("unknown");
-                        debug!("Skipping URL mod source (cache): {} from {}", 
-                               display_name_opt.as_deref().unwrap_or(fname), url);
+                        debug!(
+                            "Skipping URL mod source (cache): {} from {}",
+                            display_name_opt.as_deref().unwrap_or(fname),
+                            url
+                        );
                         Ok(())
                     }
                     ModSource::Local { file_name } => {
@@ -96,15 +129,21 @@ impl ModDownloadService {
                         Ok(())
                     }
                     ModSource::Maven { .. } => {
-                        warn!("Skipping Maven mod source (cache check - not implemented): {:?}", display_name_opt);
+                        warn!(
+                            "Skipping Maven mod source (cache check - not implemented): {:?}",
+                            display_name_opt
+                        );
                         Ok(())
                     }
                     ModSource::Embedded { name } => {
                         debug!("Skipping embedded mod (cache check): {}", name);
                         Ok(())
                     }
-                    _ => { 
-                        debug!("Skipping non-downloadable mod source type after filename check: {}", display_name);
+                    _ => {
+                        debug!(
+                            "Skipping non-downloadable mod source type after filename check: {}",
+                            display_name
+                        );
                         Ok(())
                     }
                 }
@@ -125,10 +164,17 @@ impl ModDownloadService {
         }
 
         if errors.is_empty() {
-            info!("Mod cache check/download process completed successfully for profile: '{}'", profile.name);
+            info!(
+                "Mod cache check/download process completed successfully for profile: '{}'",
+                profile.name
+            );
             Ok(())
         } else {
-            error!("Mod cache check/download process completed with {} errors for profile: '{}'", errors.len(), profile.name);
+            error!(
+                "Mod cache check/download process completed with {} errors for profile: '{}'",
+                errors.len(),
+                profile.name
+            );
             Err(errors.remove(0))
         }
     }
@@ -138,13 +184,13 @@ impl ModDownloadService {
     pub async fn sync_mods_to_profile(
         &self,
         target_mods: &[TargetMod],
-        game_directory: &PathBuf,
+        profile_mods_dir: &PathBuf,
     ) -> Result<()> {
         let profile_name = "Target Profile";
-        info!("Syncing resolved mods to profile mods directory '{:?}' for '{}'...", 
-             game_directory.join("mods"), profile_name);
-
-        let profile_mods_dir = game_directory.join("mods");
+        info!(
+            "Syncing resolved mods to profile mods directory '{:?}' for '{}'...",
+            profile_mods_dir, profile_name
+        );
 
         if !profile_mods_dir.exists() {
             debug!("Creating profile mods directory: {:?}", profile_mods_dir);
@@ -159,24 +205,39 @@ impl ModDownloadService {
 
         debug!("Required mods for sync: {:?}", required_filenames);
 
-        let mut existing_filenames = HashSet::new();
-        if profile_mods_dir.exists() { 
+        let mut valid_existing_filenames = HashSet::new();
+        if profile_mods_dir.exists() {
             let mut dir_entries = read_dir(&profile_mods_dir).await?;
             while let Some(entry) = dir_entries.next_entry().await? {
                 let path = entry.path();
                 if path.is_file() {
                     if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                        existing_filenames.insert(filename.to_string());
+                        // Check if file is valid by comparing with cache version
+                        if let Some(cache_path) = required_mods.get(filename) {
+                            if Self::is_file_valid(&path, cache_path).await {
+                                valid_existing_filenames.insert(filename.to_string());
+                            } else {
+                                info!("Found corrupt/invalid mod file, will replace: {}", filename);
+                            }
+                        } else {
+                            // File not in required_mods, will be removed anyway
+                            valid_existing_filenames.insert(filename.to_string());
+                        }
                     }
                 }
             }
         }
-        debug!("Existing mods in profile directory: {:?}", existing_filenames);
+        debug!(
+            "Valid existing mods in profile directory: {:?}",
+            valid_existing_filenames
+        );
 
-        let mods_to_remove: HashSet<String> = existing_filenames.difference(&required_filenames)
+        let mods_to_remove: HashSet<String> = valid_existing_filenames
+            .difference(&required_filenames)
             .cloned()
             .collect();
-        let mods_to_add: HashSet<String> = required_filenames.difference(&existing_filenames)
+        let mods_to_add: HashSet<String> = required_filenames
+            .difference(&valid_existing_filenames)
             .cloned()
             .collect();
 
@@ -193,105 +254,130 @@ impl ModDownloadService {
             if let Some(cache_path) = required_mods.get(filename) {
                 let target_path = profile_mods_dir.join(filename);
                 info!("Copying mod to '{}': {}", profile_name, filename);
-                fs::copy(cache_path, &target_path).await.map_err(|e| {
-                    error!("Failed to copy {:?} to {:?}: {}", cache_path, target_path, e);
-                    AppError::Io(e)
+                Self::robust_copy_file(cache_path, &target_path).await.map_err(|e| {
+                    error!(
+                        "Failed to copy {:?} to {:?}: {}",
+                        cache_path, target_path, e
+                    );
+                    e
                 })?;
             } else {
-                error!("Cache path not found for required mod '{}'! This indicates an internal error.", filename);
-                return Err(AppError::Other(format!("Cache path not found for required mod '{}'", filename)));
+                error!(
+                    "Cache path not found for required mod '{}'! This indicates an internal error.",
+                    filename
+                );
+                return Err(AppError::Other(format!(
+                    "Cache path not found for required mod '{}'",
+                    filename
+                )));
             }
         }
 
-        info!("Mod sync completed for '{}' -> {:?}", profile_name, profile_mods_dir);
+        info!(
+            "Mod sync completed for '{}' -> {:?}",
+            profile_name, profile_mods_dir
+        );
         Ok(())
     }
 
     /// Downloads a file from a URL to a target path, optionally verifying its SHA1 hash.
-    async fn download_and_verify_file(url: &str, target_path: &PathBuf, expected_sha1: Option<&str>) -> Result<()> {
-        debug!("Checking file: {:?}", target_path);
+    async fn download_and_verify_file(
+        url: &str,
+        target_path: &PathBuf,
+        expected_sha1: Option<&str>,
+    ) -> Result<()> {
+        // Use the new centralized download utility with SHA1 verification
+        let mut config = DownloadConfig::new()
+            .with_streaming(true)  // Mods can be large files
+            .with_retries(3);      // Built-in retry logic for network issues
 
-        if target_path.exists() {
-            if let Some(expected_hash) = expected_sha1 {
-                debug!("File exists, verifying SHA1 hash...");
-                let current_hash = Self::calculate_sha1(target_path).await?;
-                if current_hash.eq_ignore_ascii_case(expected_hash) {
-                    info!("File already exists and hash matches: {:?}", target_path);
-                    return Ok(());
-                } else {
-                    warn!("Hash mismatch (Expected: {}, Found: {}). Redownloading: {:?}", 
-                           expected_hash, current_hash, target_path);
-                    fs::remove_file(target_path).await.map_err(|e| 
-                        AppError::Download(format!("Failed to remove {:?}: {}", target_path, e))
-                    )?;
-                }
-            } else {
-                info!("File exists, skipping (no hash check): {:?}", target_path);
-                return Ok(());
-            }
+        // Add SHA1 verification if provided
+        if let Some(sha1) = expected_sha1 {
+            config = config.with_sha1(sha1);
         }
 
-        info!("Downloading from {} to {:?}", url, target_path);
-        let response = reqwest::get(url)
-            .await
-            .map_err(|e| AppError::Download(format!("Request failed for {}: {}", url, e)))?;
+        DownloadUtils::download_file(url, target_path, config).await
+    }
 
-        if !response.status().is_success() {
-            return Err(AppError::Download(format!("Download failed: Status {}", response.status())));
-        }
-
+    /// fix for https://github.com/NoRiskClient/issues/issues/1487
+    /// Robust file copy operation with explicit disk sync to prevent corruption
+    /// Fixes issue where JAR files appear complete but are actually corrupt due to unflushed buffers
+    async fn robust_copy_file(source_path: &PathBuf, target_path: &PathBuf) -> Result<()> {
+        
+        debug!("Starting robust copy: {:?} -> {:?}", source_path, target_path);
+        
+        // Read the entire source file into memory
+        let source_data = fs::read(source_path).await.map_err(|e| {
+            AppError::Io(e)
+        })?;
+        
+        // Create parent directories if they don't exist
         if let Some(parent) = target_path.parent() {
-             if !parent.exists() {
-                 fs::create_dir_all(parent).await?;
-             }
-        }
-        let mut file = fs::File::create(target_path).await.map_err(|e| 
-            AppError::Download(format!("Failed to create file {:?}: {}", target_path, e))
-        )?;
-        let mut stream = response.bytes_stream();
-
-        while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.map_err(|e| AppError::Download(format!("Stream error: {}", e)))?;
-            file.write_all(&chunk).await.map_err(|e| AppError::Download(format!("Write error: {}", e)))?;
+            fs::create_dir_all(parent).await.map_err(|e| {
+                AppError::Io(e)
+            })?;
         }
         
-        debug!("Finished writing file: {:?}", target_path);
-
-        if let Some(expected_hash) = expected_sha1 {
-            debug!("Verifying SHA1 after download...");
-            let downloaded_hash = Self::calculate_sha1(target_path).await?;
-            if !downloaded_hash.eq_ignore_ascii_case(expected_hash) {
-                 error!("Hash mismatch after download! Expected: {}, Found: {}. Deleting: {:?}", 
-                         expected_hash, downloaded_hash, target_path);
-                 fs::remove_file(target_path).await.map_err(|e| 
-                     AppError::Download(format!("Failed to remove invalid file {:?}: {}", target_path, e))
-                 )?;
-                return Err(AppError::Download("Hash mismatch after download".to_string()));
-            } else {
-                 info!("Hash verified: {:?}", target_path);
-            }
-        }
-
+        // Create target file and write data
+        let mut target_file = fs::File::create(target_path).await.map_err(|e| {
+            AppError::Io(e)
+        })?;
+        
+        target_file.write_all(&source_data).await.map_err(|e| {
+            AppError::Io(e)
+        })?;
+        
+        // CRITICAL: Ensure file is fully written to disk - prevents corruption
+        target_file.sync_all().await.map_err(|e| {
+            AppError::Io(e)
+        })?;
+        
+        // Explicitly close the file handle
+        drop(target_file);
+        
+        debug!("Robust copy completed: {} bytes", source_data.len());
         Ok(())
     }
 
-    /// Calculates the SHA1 hash of a file asynchronously.
-    async fn calculate_sha1(file_path: &PathBuf) -> Result<String> {
-        let mut file = fs::File::open(file_path).await
-            .map_err(|e| AppError::Io(e))?; 
-        let mut hasher = Sha1::new();
-        let mut buffer = [0; 1024];
-
-        loop {
-            let n = file.read(&mut buffer).await
-                .map_err(|e| AppError::Io(e))?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buffer[..n]);
+    /// fix for https://github.com/NoRiskClient/issues/issues/1487
+    /// Validates if a file in the profile directory is valid by comparing with cache version
+    /// Checks file size and basic ZIP header for JAR files to detect corruption
+    async fn is_file_valid(profile_file: &PathBuf, cache_file: &PathBuf) -> bool {
+        // Check if both files exist
+        if !profile_file.exists() || !cache_file.exists() {
+            debug!("File validation failed: one or both files don't exist");
+            return false;
         }
 
-        let hash_bytes = hasher.finalize();
-        Ok(hex::encode(hash_bytes))
+        // Compare file sizes - quick corruption detection
+        match (fs::metadata(profile_file).await, fs::metadata(cache_file).await) {
+            (Ok(profile_meta), Ok(cache_meta)) => {
+                if profile_meta.len() != cache_meta.len() {
+                    debug!(
+                        "File size mismatch: profile={} vs cache={} for {:?}",
+                        profile_meta.len(), cache_meta.len(), profile_file
+                    );
+                    return false;
+                }
+            }
+            _ => {
+                debug!("Failed to read file metadata for validation: {:?}", profile_file);
+                return false;
+            }
+        }
+
+        // For JAR files, check ZIP integrity (header + end record) to detect corruption
+        if let Some(extension) = profile_file.extension() {
+            if extension == "jar" {
+                if !DownloadUtils::is_zip_file_complete(profile_file).await {
+                    debug!("JAR file failed ZIP integrity check: {:?}", profile_file);
+                    return false;
+                }
+            }
+        }
+
+        debug!("File validation passed: {:?}", profile_file);
+        true
     }
-} 
+
+}

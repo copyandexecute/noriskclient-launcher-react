@@ -8,33 +8,54 @@ import { GeneralSettingsTab } from "./settings/GeneralSettingsTab";
 import { InstallationSettingsTab } from "./settings/InstallationSettingsTab";
 import { JavaSettingsTab } from "./settings/JavaSettingsTab";
 import { WindowSettingsTab } from "./settings/WindowSettingsTab";
+import { NRCTab } from "./settings/NRCTab";
+import { SymlinkSettingsTab } from "./settings/SymlinkSettingsTab";
+
 import { useProfileStore } from "../../store/profile-store";
 import * as ProfileService from "../../services/profile-service";
-import { Modal } from ".././ui/Modal";
-import { Button } from ".././ui/Button";
-import { StatusMessage } from ".././ui/StatusMessage";
+import { Modal } from "../ui/Modal";
+import { Button } from "../ui/buttons/Button";
+import { useThemeStore } from "../../store/useThemeStore";
+import { toast } from "react-hot-toast";
+import { useFlags } from 'flagsmith/react';
+import { DesignerSettingsTab } from './settings/DesignerSettingsTab';
+import { cn } from "../../lib/utils";
 
 interface ProfileSettingsProps {
   profile: Profile;
   onClose: () => void;
 }
 
-type SettingsTab = "general" | "installation" | "java" | "window" | "export";
+type SettingsTab =
+  | "general"
+  | "installation"
+  | "java"
+  | "window"
+  | "nrc"
+  | "designer"
+  | "symlinks";
+
+const DESIGNER_FEATURE_FLAG_NAME = "show_keep_local_assets";
 
 export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   const { updateProfile, deleteProfile } = useProfileStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [editedProfile, setEditedProfile] = useState<Profile>({ ...profile });
+  const [currentProfile, setCurrentProfile] = useState<Profile>({ ...profile });
   const [isSaving, setIsSaving] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isCloning, setIsCloning] = useState(false);
-  const [exportFilename, setExportFilename] = useState(profile.name);
-  const [exportIncludeFiles, setExportIncludeFiles] = useState(true);
-  const [exportOpenFolder, setExportOpenFolder] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [systemRam, setSystemRam] = useState<number>(8192);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const { accentColor } = useThemeStore();
+  const isBackgroundAnimationEnabled = useThemeStore(
+    (state) => state.isBackgroundAnimationEnabled,
+  );
+
+  const flags = useFlags([DESIGNER_FEATURE_FLAG_NAME]);
+  const showDesignerTab = flags[DESIGNER_FEATURE_FLAG_NAME]?.enabled === true;
+  const [tempRamMb, setTempRamMb] = useState(profile.settings?.memory?.max ?? 3072);
 
   useEffect(() => {
     ProfileService.getSystemRamMb()
@@ -45,50 +66,84 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
   }, []);
 
   useEffect(() => {
-    if (contentRef.current) {
+    if (isBackgroundAnimationEnabled && contentRef.current) {
       gsap.fromTo(
         contentRef.current,
         { opacity: 0, y: 20 },
         { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" },
       );
     }
-  }, [activeTab]);
+  }, [activeTab, isBackgroundAnimationEnabled]);
 
   useEffect(() => {
-    setError(null);
-    setSuccessMessage(null);
-  }, [activeTab]);
+    if (isBackgroundAnimationEnabled && sidebarRef.current) {
+      gsap.fromTo(
+        sidebarRef.current,
+        { opacity: 0, x: -20 },
+        { opacity: 1, x: 0, duration: 0.4, ease: "power2.out" },
+      );
+    }
+  }, [isBackgroundAnimationEnabled]);
+
+  useEffect(() => {
+    setTempRamMb(profile.settings?.memory?.max ?? 3072);
+  }, [profile]);
 
   const updateProfileData = (updates: Partial<Profile>) => {
     setEditedProfile((prev) => ({ ...prev, ...updates }));
   };
 
+  const handleRefresh = async () => {
+    try {
+      const updatedProfile = await ProfileService.getProfile(profile.id);
+      setCurrentProfile(updatedProfile);
+      setEditedProfile(updatedProfile);
+      
+      // Update the global store as well to sync with ProfilesTab
+      useProfileStore.getState().refreshSingleProfileInStore(updatedProfile);
+      
+      return updatedProfile;
+    } catch (error) {
+      console.error("Failed to refresh profile:", error);
+      throw error;
+    }
+  };
+
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      setError(null);
-      setSuccessMessage(null);
-
       await updateProfile(profile.id, {
         name: editedProfile.name,
         game_version: editedProfile.game_version,
         loader: editedProfile.loader,
         loader_version: editedProfile.loader_version || null || undefined,
-        settings: editedProfile.settings,
-        selected_norisk_pack_id:
-          editedProfile.selected_norisk_pack_id || null || undefined,
+        settings: {
+          ...editedProfile.settings,
+          // Only save memory settings for custom profiles
+          // Standard profiles save memory to global settings directly via JavaSettingsTab
+          ...(profile.is_standard_version ? {} : {
+            memory: {
+              ...editedProfile.settings?.memory,
+              max: tempRamMb,
+            },
+          }),
+        },
+        selected_norisk_pack_id: editedProfile.selected_norisk_pack_id,
+        clear_selected_norisk_pack: !editedProfile.selected_norisk_pack_id,
         group: editedProfile.group,
+        clear_group: !editedProfile.group,
         description: editedProfile.description,
+        norisk_information: editedProfile.norisk_information,
+        use_shared_minecraft_folder: editedProfile.use_shared_minecraft_folder,
+        preferred_account_id: editedProfile.preferred_account_id,
+        clear_preferred_account: !editedProfile.preferred_account_id,
       });
 
-      setSuccessMessage("Profile saved successfully!");
-
-      setTimeout(() => {
-        onClose();
-      }, 1500);
+      toast.success("Profile saved successfully!");
+      setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       console.error("Failed to save profile:", err);
-      setError("Failed to save profile. Please try again.");
+      toast.error("Failed to save profile. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -96,210 +151,66 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
 
   const handleDelete = async () => {
     try {
-      setIsSaving(true);
-      setError(null);
-      setSuccessMessage(null);
+      setIsDeleting(true);
+      const deletePromise = deleteProfile(profile.id);
 
-      await deleteProfile(profile.id);
-      onClose();
+      toast
+        .promise(deletePromise, {
+          loading: `Deleting profile '${profile.name}'...`,
+          success: () => {
+            onClose();
+            return `Profile '${profile.name}' deleted successfully!`;
+          },
+          error: (err) => {
+            const errorMessage =
+              err instanceof Error ? err.message : String(err.message);
+            return `Failed to delete profile: ${errorMessage}`;
+          },
+        })
+        .finally(() => {
+          setIsDeleting(false);
+        });
     } catch (err) {
-      console.error("Failed to delete profile:", err);
-      setError("Failed to delete profile. Please try again.");
-    } finally {
-      setIsSaving(false);
+      console.error("Error during delete initiation:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to initiate profile deletion: ${errorMessage}`);
+      setIsDeleting(false);
     }
   };
 
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const exportParams = {
-        profile_id: profile.id,
-        file_name: exportFilename || profile.name,
-        include_files: exportIncludeFiles ? undefined : [],
-        open_folder: exportOpenFolder,
-      };
-
-      const exportPath = await ProfileService.exportProfile(exportParams);
-      console.log("Profile exported to:", exportPath);
-
-      setSuccessMessage(`Profile successfully exported to: ${exportPath}`);
-
-      setExportFilename(profile.name);
-      setExportIncludeFiles(true);
-      setExportOpenFolder(true);
-    } catch (err) {
-      console.error("Failed to export profile:", err);
-      setError("Failed to export profile. Please try again.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleCloneProfile = async () => {
-    try {
-      setIsCloning(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const copyParams = {
-        source_profile_id: profile.id,
-        new_profile_name: `${profile.name} (Copy)`,
-        include_files: undefined,
-      };
-
-      const newProfileId = await ProfileService.copyProfile(copyParams);
-      console.log("Profile cloned with ID:", newProfileId);
-
-      setSuccessMessage(`Profile successfully cloned!`);
-
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (err) {
-      console.error("Failed to clone profile:", err);
-      setError("Failed to clone profile. Please try again.");
-    } finally {
-      setIsCloning(false);
-    }
-  };
-
-  const tabConfig = [
-    { id: "general", label: "General", icon: "pixel:cog-solid" },
-    { id: "installation", label: "Installation", icon: "pixel:download-solid" },
-    { id: "java", label: "Java", icon: "pixel:code-solid" },
-    { id: "window", label: "Window", icon: "pixel:grid-solid" },
-    { id: "export", label: "Export", icon: "pixel:file-import-solid" },
+  const baseTabConfig = [
+    { id: "general", label: "General", icon: "solar:settings-bold" },
+    { id: "installation", label: "Installation", icon: "solar:download-bold" },
+    { id: "java", label: "JAVA & Memory", icon: "solar:code-bold" },
+    { id: "window", label: "Window", icon: "solar:widget-bold" },
+    { id: "nrc", label: "NRC", icon: "solar:gamepad-bold" },
+    { id: "symlinks", label: "Symlinks", icon: "solar:link-bold" },
   ];
 
-  const renderExportTab = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-2xl font-minecraft text-white mb-5 lowercase">
-          export profile
-        </h3>
-        <p className="text-xl text-white/70 mb-6 font-minecraft tracking-wide">
-          Export your profile to share with others or back it up. You can
-          include all files or just the profile configuration.
-        </p>
-      </div>
+  const tabConfig = showDesignerTab
+    ? [
+        ...baseTabConfig,
+        { id: "designer", label: "Designer", icon: "solar:palette-bold" },
+      ]
+    : baseTabConfig;
 
-      <div className="space-y-4 bg-black/20 backdrop-blur-md border-2 border-white/20 p-5">
-        <div className="space-y-2">
-          <label
-            htmlFor="exportFilename"
-            className="block text-2xl text-white font-minecraft mb-3 lowercase"
-          >
-            export filename
-          </label>
-          <input
-            type="text"
-            id="exportFilename"
-            value={exportFilename}
-            onChange={(e) => setExportFilename(e.target.value)}
-            className="w-full bg-black/30 backdrop-blur-md border-2 border-white/30 px-5 py-4 text-2xl text-white font-minecraft"
-            placeholder="Enter filename without extension"
-          />
-          <p className="mt-2 text-base text-white/50 font-minecraft tracking-wide">
-            The .noriskpack extension will be added automatically
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={exportIncludeFiles}
-              onChange={(e) => setExportIncludeFiles(e.target.checked)}
-              className="w-5 h-5 rounded bg-black/20 border-white/30"
-            />
-            <span className="text-2xl text-white font-minecraft lowercase">
-              include profile files
-            </span>
-          </label>
-          <p className="mt-1 text-white/50 font-minecraft text-sm ml-6">
-            Include mods, resource packs, and other files in the export
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={exportOpenFolder}
-              onChange={(e) => setExportOpenFolder(e.target.checked)}
-              className="w-5 h-5 rounded bg-black/20 border-white/30"
-            />
-            <span className="text-white font-minecraft text-base lowercase">
-              open folder after export
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-4 pt-4">
-        <Button
-          variant="primary"
-          onClick={handleExport}
-          disabled={isExporting || !exportFilename}
-          icon={<Icon icon="pixel:file-export-solid" className="w-5 h-5" />}
-          className="text-2xl py-3 px-6"
-        >
-          {isExporting ? (
-            <>
-              <Icon
-                icon="pixel:spinner-solid"
-                className="w-5 h-5 animate-spin"
-              />
-              <span>exporting...</span>
-            </>
-          ) : (
-            "export profile"
-          )}
-        </Button>
-
-        <Button
-          variant="primary"
-          onClick={handleCloneProfile}
-          disabled={isCloning}
-          icon={<Icon icon="pixel:copy-solid" className="w-4 h-4" />}
-        >
-          {isCloning ? (
-            <>
-              <Icon
-                icon="pixel:spinner-solid"
-                className="w-4 h-4 animate-spin"
-              />
-              <span>cloning...</span>
-            </>
-          ) : (
-            "clone profile"
-          )}
-        </Button>
-      </div>
-    </div>
-  );
+  useEffect(() => {
+    if (activeTab === "designer" && !showDesignerTab) {
+      setActiveTab("general");
+    }
+  }, [activeTab, showDesignerTab]);
 
   const renderTabContent = () => {
-    if (error) {
-      return <StatusMessage type="error" message={error} />;
-    }
-
-    if (successMessage) {
-      return <StatusMessage type="success" message={successMessage} />;
-    }
-
     switch (activeTab) {
       case "general":
         return (
           <GeneralSettingsTab
-            profile={profile}
+            profile={currentProfile}
             editedProfile={editedProfile}
             updateProfile={updateProfileData}
             onDelete={handleDelete}
+            isDeleting={isDeleting}
+            onRefresh={handleRefresh}
           />
         );
       case "installation":
@@ -308,6 +219,7 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             profile={profile}
             editedProfile={editedProfile}
             updateProfile={updateProfileData}
+            refreshTrigger={refreshTrigger}
           />
         );
       case "java":
@@ -316,6 +228,8 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             editedProfile={editedProfile}
             updateProfile={updateProfileData}
             systemRam={systemRam}
+            tempRamMb={tempRamMb}
+            setTempRamMb={setTempRamMb}
           />
         );
       case "window":
@@ -325,8 +239,34 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
             updateProfile={updateProfileData}
           />
         );
-      case "export":
-        return renderExportTab();
+      case "nrc":
+        return (
+          <NRCTab
+            profile={profile}
+            editedProfile={editedProfile}
+            updateProfile={updateProfileData}
+            onRefresh={handleRefresh}
+          />
+        );
+
+      case "designer":
+        if (showDesignerTab) {
+          return (
+            <DesignerSettingsTab
+              editedProfile={editedProfile}
+              updateProfile={updateProfileData}
+            />
+          );
+        }
+        return null;
+      case "symlinks":
+        return (
+          <SymlinkSettingsTab
+            editedProfile={editedProfile}
+            updateProfile={updateProfileData}
+            allProfiles={useProfileStore.getState().profiles}
+          />
+        );
       default:
         return null;
     }
@@ -337,19 +277,24 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
       <Button
         variant="secondary"
         onClick={onClose}
-        className="text-2xl py-3 px-6"
+        size="md"
+        className="text-2xl"
       >
         cancel
       </Button>
       <Button
-        variant="primary"
+        variant="default"
         onClick={handleSave}
         disabled={isSaving}
-        className="text-2xl py-3 px-6"
+        size="md"
+        className="text-2xl"
       >
         {isSaving ? (
           <div className="flex items-center gap-3">
-            <Icon icon="pixel:spinner-solid" className="w-5 h-5 animate-spin" />
+            <Icon
+              icon="solar:refresh-bold"
+              className="w-6 h-6 animate-spin text-white"
+            />
             <span>saving...</span>
           </div>
         ) : (
@@ -359,46 +304,99 @@ export function ProfileSettings({ profile, onClose }: ProfileSettingsProps) {
     </div>
   );
 
+  const handleTabClick = (tabId: string) => {
+    if (activeTab !== tabId) {
+      if (isBackgroundAnimationEnabled && contentRef.current) {
+        gsap.to(contentRef.current, {
+          opacity: 0,
+          y: 20,
+          duration: 0.2,
+          ease: "power2.in",
+          onComplete: () => setActiveTab(tabId as SettingsTab),
+        });
+      } else {
+        setActiveTab(tabId as SettingsTab);
+      }
+    }
+  };
+
   return (
     <Modal
       title={`profile settings: ${profile.name}`}
       onClose={onClose}
-      width="5xl"
-      height="650px"
+      width="xl"
       footer={renderFooter()}
+      className="h-[650px] min-h-[550px] flex flex-col"
     >
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-64 border-r border-white/20 bg-black/20 overflow-y-auto">
-          <div className="p-4 space-y-2">
-            {tabConfig.map((tab) => (
-              <button
-                key={tab.id}
-                className={`w-full text-left py-4 px-5 font-minecraft text-2xl lowercase transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? "bg-white/20 text-white border-l-4 border-l-white"
-                    : "text-white/70 hover:text-white hover:bg-white/10"
-                }`}
-                onClick={() => setActiveTab(tab.id as SettingsTab)}
-              >
-                <div className="flex items-center">
-                  <Icon icon={tab.icon} className="w-6 h-6 mr-4" />
-                  <span>{tab.label}</span>
+      <div className="flex h-full">
+        <div
+          ref={sidebarRef}
+          className="w-64 flex flex-col"
+        >
+          <div className="space-y-0 flex-1">
+            {tabConfig.map((tab) => {
+              const isActive = activeTab === tab.id;
+
+              return (
+                <div key={tab.id} className="w-full">
+                  <button
+                    className={cn(
+                      "w-full text-left p-3 transition-all duration-200 rounded-none relative border-0 outline-none",
+                      isActive
+                        ? "border-l-2 shadow-sm text-white"
+                        : "bg-transparent border-transparent text-white/70 hover:text-white",
+                    )}
+                    style={
+                      isActive
+                        ? {
+                            backgroundColor: `${accentColor.value}10`, // 60% opacity
+                            borderLeftColor: accentColor.value,
+                            color: "white"
+                          }
+                        : {
+                            "--hover-bg": `${accentColor.value}33` // 20% opacity for hover
+                          } as any
+                    }
+                    onClick={() => handleTabClick(tab.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon
+                        icon={tab.icon}
+                        className={cn(
+                          "w-6 h-6 transition-colors duration-200",
+                          isActive ? "" : "text-white/50",
+                        )}
+                        style={isActive ? { color: accentColor.value } : {}}
+                      />
+                      <span
+                        className={cn(
+                          "font-minecraft text-3xl lowercase transition-colors duration-200",
+                          isActive ? "font-medium" : "",
+                        )}
+                        style={isActive ? { color: accentColor.value } : {}}
+                      >
+                        {tab.label}
+                      </span>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col">
+        {/* Vertical separator line */}
+        <div className="flex items-center">
+          <div className="border-l border-white/10 mx-4 my-3 h-[85%]"></div>
+        </div>
+
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div
-            className="flex-1 p-6 overflow-y-auto custom-scrollbar"
+            className="flex-1 py-2 pl-0 pr-4 overflow-y-auto overflow-x-hidden custom-scrollbar min-w-0"
             ref={contentRef}
+            style={{ maxWidth: '100%', boxSizing: 'border-box' }}
           >
-            {error && <StatusMessage type="error" message={error} />}
-            {successMessage && (
-              <StatusMessage type="success" message={successMessage} />
-            )}
-            {!error && !successMessage && renderTabContent()}
+            {renderTabContent()}
           </div>
         </div>
       </div>

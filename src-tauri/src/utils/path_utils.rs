@@ -1,13 +1,19 @@
+use crate::config::{ProjectDirsExt, LAUNCHER_DIRECTORY};
+use crate::error::{AppError, Result}; // Dein Result- und Fehlertyp
+use crate::integrations::norisk_packs::{get_norisk_pack_mod_filename, NoriskModEntryDefinition};
+use crate::state::State;
+use crate::utils::download_utils; // Added for DownloadUtils
+use futures::future::try_join_all; // Added for joining futures
+use log::{error, info, warn};
 use std::path::{Path, PathBuf};
+use std::sync::Arc; // Added for Arc<Semaphore>
 use tokio::fs; // Verwende tokio::fs für async checks
-use crate::error::{Result, AppError}; // Dein Result- und Fehlertyp
-use log::{info, error, warn};
+use tokio::sync::Semaphore; // Added for io_semaphore
 use uuid::Uuid;
-use crate::config::{LAUNCHER_DIRECTORY, ProjectDirsExt};
-use crate::integrations::norisk_packs::{NoriskModSourceDefinition, NoriskModEntryDefinition, get_norisk_pack_mod_filename};
 
 /// Findet einen eindeutigen Verzeichnisnamen (Segment) in einem Basisverzeichnis.
 /// Wenn "desired_segment" schon existiert, werden Suffixe wie "(1)", "(2)" usw. angehängt.
+/// Stellt zusätzlich sicher, dass keine problematischen Character enthalten sind.
 /// Gibt den eindeutigen Segmentnamen als String zurück.
 pub async fn find_unique_profile_segment(
     base_profiles_dir: &Path,
@@ -15,15 +21,24 @@ pub async fn find_unique_profile_segment(
 ) -> Result<String> {
     info!(
         "Finding unique profile segment for '{}' in base dir '{}'",
-        desired_segment, base_profiles_dir.display()
+        desired_segment,
+        base_profiles_dir.display()
+    );
+
+    // Problematische Character durch '_' ersetzen
+    let sanitized_segment = desired_segment.replace(
+        ['/', '\\', '?', '!', '<', '>', '*', ':', '\'', '\"', '|'],
+        "_",
     );
 
     // Bereinigen und sicherstellen, dass der Segmentname nicht leer ist
-    let clean_segment = desired_segment.trim();
+    let clean_segment = sanitized_segment.trim();
     if clean_segment.is_empty() {
         error!("Desired segment name cannot be empty.");
         // Erwäge, hier einen Standardnamen oder einen eindeutigen Zeitstempel zu generieren
-        return Err(AppError::Other("Desired profile segment name is empty".to_string()));
+        return Err(AppError::Other(
+            "Desired profile segment name is empty".to_string(),
+        ));
     }
 
     let initial_path = base_profiles_dir.join(clean_segment);
@@ -41,7 +56,8 @@ pub async fn find_unique_profile_segment(
         Err(e) => {
             error!(
                 "Error checking existence of path '{}': {}",
-                initial_path.display(), e
+                initial_path.display(),
+                e
             );
             return Err(AppError::Io(e)); // Fehler beim Prüfen weitergeben
         }
@@ -57,31 +73,37 @@ pub async fn find_unique_profile_segment(
 
         match fs::try_exists(&candidate_path).await {
             Ok(false) => {
-                 info!("Found unique segment: '{}'", suffixed_segment);
+                info!("Found unique segment: '{}'", suffixed_segment);
                 return Ok(suffixed_segment); // Eindeutigen Namen gefunden
             }
             Ok(true) => {
                 // Dieser Name ist auch belegt, erhöhe den Zähler
                 counter = counter.checked_add(1).ok_or_else(|| {
-                    error!("Counter overflow while finding unique segment for '{}'", clean_segment);
+                    error!(
+                        "Counter overflow while finding unique segment for '{}'",
+                        clean_segment
+                    );
                     AppError::Other(format!("Counter overflow for segment '{}'", clean_segment))
                 })?;
 
                 // Sicherheitslimit, um Endlosschleifen zu verhindern
-                if counter > 1000 { // Oder ein anderer sinnvoller Wert
+                if counter > 1000 {
+                    // Oder ein anderer sinnvoller Wert
                     error!(
                         "Could not find unique segment for '{}' after {} attempts.",
-                         clean_segment, counter
+                        clean_segment, counter
                     );
                     return Err(AppError::Other(format!(
-                        "Too many profiles with similar names starting with '{}'", clean_segment
+                        "Too many profiles with similar names starting with '{}'",
+                        clean_segment
                     )));
                 }
             }
-             Err(e) => {
+            Err(e) => {
                 error!(
                     "Error checking existence of candidate path '{}': {}",
-                     candidate_path.display(), e
+                    candidate_path.display(),
+                    e
                 );
                 return Err(AppError::Io(e));
             }
@@ -94,38 +116,54 @@ pub async fn find_unique_profile_segment(
 pub async fn copy_as_custom_mod(
     src_path_buf: &PathBuf,
     custom_mods_dir: &PathBuf,
-    profile_id: Uuid, // Keep profile_id for logging context
+    profile_id: Uuid,             // Keep profile_id for logging context
     custom_added_count: &mut u64, // Assuming usize or u64 is better here
     skipped_count: &mut u64,      // Assuming usize or u64 is better here
 ) {
-     // Check extension (optional, but good safeguard)
-    if src_path_buf.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("jar")) {
-         if let Some(filename) = src_path_buf.file_name() {
+    // Check extension (optional, but good safeguard)
+    if src_path_buf
+        .extension()
+        .map_or(false, |ext| ext.eq_ignore_ascii_case("jar"))
+    {
+        if let Some(filename) = src_path_buf.file_name() {
             let dest_path = custom_mods_dir.join(filename);
 
             if dest_path.exists() {
-                 warn!("Skipping custom import: File '{}' already exists in custom_mods for profile {}.", filename.to_string_lossy(), profile_id);
-                 *skipped_count += 1;
-                 return;
+                warn!("Skipping custom import: File '{}' already exists in custom_mods for profile {}.", filename.to_string_lossy(), profile_id);
+                *skipped_count += 1;
+                return;
             }
 
-            match fs::copy(&src_path_buf, &dest_path).await { // Use fs::copy directly
-                 Ok(_) => {
-                    info!("Successfully imported '{}' as custom mod to profile {}.", filename.to_string_lossy(), profile_id);
+            match fs::copy(&src_path_buf, &dest_path).await {
+                // Use fs::copy directly
+                Ok(_) => {
+                    info!(
+                        "Successfully imported '{}' as custom mod to profile {}.",
+                        filename.to_string_lossy(),
+                        profile_id
+                    );
                     *custom_added_count += 1;
-                 }
-                 Err(e) => {
-                    error!("Failed to copy file '{}' as custom mod for profile {}: {}", filename.to_string_lossy(), profile_id, e);
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to copy file '{}' as custom mod for profile {}: {}",
+                        filename.to_string_lossy(),
+                        profile_id,
+                        e
+                    );
                     *skipped_count += 1; // Count as skipped due to error
-                 }
+                }
             }
-         } else {
+        } else {
             warn!("Could not extract filename from path: {:?}", src_path_buf);
             *skipped_count += 1;
-         }
+        }
     } else {
-         warn!("Skipping custom import as it does not have a .jar extension: {:?}", src_path_buf);
-         *skipped_count += 1;
+        warn!(
+            "Skipping custom import as it does not have a .jar extension: {:?}",
+            src_path_buf
+        );
+        *skipped_count += 1;
     }
 }
 
@@ -149,34 +187,29 @@ pub struct FileNode {
 
 /// Gets a tree structure of all files and directories under the given path.
 /// This function traverses directories recursively and builds a hierarchical structure.
-/// 
+///
 /// # Arguments
 /// * `root_path` - The directory to scan
 /// * `include_hidden` - Whether to include hidden files and directories (those starting with `.`)
-/// 
+///
 /// # Returns
 /// A Result containing the root FileNode with all its children
-pub async fn get_directory_structure(
-    root_path: &Path,
-    include_hidden: bool,
-) -> Result<FileNode> {
+pub async fn get_directory_structure(root_path: &Path, include_hidden: bool) -> Result<FileNode> {
     // Get metadata for the root path
-    let metadata = fs::metadata(root_path)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-    
+    let metadata = fs::metadata(root_path).await.map_err(|e| AppError::Io(e))?;
+
     let name = root_path
         .file_name()
         .unwrap_or_else(|| root_path.as_os_str())
         .to_string_lossy()
         .to_string();
-    
+
     let last_modified = metadata
         .modified()
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs());
-    
+
     // If it's a file, return a leaf node
     if !metadata.is_dir() {
         return Ok(FileNode {
@@ -188,28 +221,23 @@ pub async fn get_directory_structure(
             last_modified,
         });
     }
-    
+
     // If it's a directory, read its entries and process each one
     let mut children = Vec::new();
-    let mut entries = fs::read_dir(root_path)
-        .await
-        .map_err(|e| AppError::Io(e))?;
-    
-    while let Some(entry) = entries
-        .next_entry()
-        .await
-        .map_err(|e| AppError::Io(e))?
-    {
+    let mut entries = fs::read_dir(root_path).await.map_err(|e| AppError::Io(e))?;
+
+    while let Some(entry) = entries.next_entry().await.map_err(|e| AppError::Io(e))? {
         let path = entry.path();
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .unwrap_or_else(|| path.as_os_str())
             .to_string_lossy();
-        
+
         // Skip hidden files/directories if not included
         if !include_hidden && file_name.starts_with('.') {
             continue;
         }
-        
+
         // Recursively process this entry - using Box::pin to handle recursion
         match Box::pin(get_directory_structure(&path, include_hidden)).await {
             Ok(node) => children.push(node),
@@ -219,16 +247,14 @@ pub async fn get_directory_structure(
             }
         }
     }
-    
+
     // Sort children: directories first, then files, both alphabetically
-    children.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    children.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
-    
+
     Ok(FileNode {
         name,
         path: root_path.to_path_buf(),
@@ -252,7 +278,7 @@ pub fn flatten_directory_structure(
     result: &mut Vec<(FileNode, usize)>,
 ) {
     result.push((node.clone(), depth));
-    
+
     for child in &node.children {
         flatten_directory_structure(child, depth + 1, result);
     }
@@ -275,18 +301,19 @@ pub fn filter_directory_structure(
     if excluded_paths.contains(&node.path.to_string_lossy().to_string()) {
         return None;
     }
-    
+
     // For files, simply return a clone if not excluded
     if !node.is_dir {
         return Some(node.clone());
     }
-    
+
     // For directories, filter children and keep the directory if it has any children left
-    let filtered_children: Vec<FileNode> = node.children
+    let filtered_children: Vec<FileNode> = node
+        .children
         .iter()
         .filter_map(|child| filter_directory_structure(child, excluded_paths))
         .collect();
-    
+
     // Only return the directory if it has children or is the root
     if !filtered_children.is_empty() || node.path.parent().is_none() {
         let mut filtered_node = node.clone();
@@ -313,18 +340,20 @@ pub fn filter_directory_structure_by_includes(
     // For directories, filter children and keep the directory if it has any children left
     if node.is_dir {
         // Process children first
-        let filtered_children: Vec<FileNode> = node.children
+        let filtered_children: Vec<FileNode> = node
+            .children
             .iter()
             .filter_map(|child| filter_directory_structure_by_includes(child, included_paths))
             .collect();
-        
+
         // Only return the directory if:
         // 1. It has remaining children after filtering, or
         // 2. It's explicitly included, or
         // 3. It's the root node (to maintain structure)
-        if !filtered_children.is_empty() || 
-           included_paths.contains(&node.path.to_string_lossy().to_string()) || 
-           node.path.parent().is_none() {
+        if !filtered_children.is_empty()
+            || included_paths.contains(&node.path.to_string_lossy().to_string())
+            || node.path.parent().is_none()
+        {
             let mut filtered_node = node.clone();
             filtered_node.children = filtered_children;
             Some(filtered_node)
@@ -361,50 +390,119 @@ pub async fn copy_profile_with_includes(
         source_root.display(),
         dest_root.display()
     );
-    
+
+    // Get the io_semaphore from global state
+    let state = crate::state::State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
     // Get the complete file structure
     let source_structure = get_directory_structure(source_root, false).await?;
-    
+
     // Convert included paths to strings for comparison
     let included_set: std::collections::HashSet<String> = include_paths
         .iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect();
-    
-    info!("Filtering directory structure with {} include paths", included_set.len());
-    
+
+    info!(
+        "Filtering directory structure with {} include paths",
+        included_set.len()
+    );
+
     // Filter the structure to keep only included paths
-    let filtered_structure = filter_directory_structure_by_includes(&source_structure, &included_set)
-        .ok_or_else(|| {
-            AppError::Other("No files matched the include criteria, nothing to copy".to_string())
-        })?;
-    
+    let filtered_structure = filter_directory_structure_by_includes(
+        &source_structure,
+        &included_set,
+    )
+    .ok_or_else(|| {
+        AppError::Other("No files matched the include criteria, nothing to copy".to_string())
+    })?;
+
     // Create the destination directory if it doesn't exist
     if !dest_root.exists() {
         fs::create_dir_all(dest_root)
             .await
             .map_err(|e| AppError::Io(e))?;
     }
-    
+
     // Copy the files according to the filtered structure
-    let files_copied = copy_profile_files(
-        &filtered_structure,
-        source_root,
-        dest_root
-    ).await?;
-    
+    let files_copied =
+        copy_profile_files(&filtered_structure, source_root, dest_root, io_semaphore).await?;
+
     info!("Profile copy completed. Copied {} files.", files_copied);
-    
+
     Ok(files_copied)
 }
 
+/// Helper function to recursively collect file copy operations and create directories.
+async fn collect_file_ops_and_create_dirs(
+    structure: &FileNode,
+    source_root: &Path,
+    dest_root: &Path,
+    file_ops: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<()> {
+    if structure.is_dir {
+        let rel_path = structure.path.strip_prefix(source_root).map_err(|e| {
+            AppError::Other(format!(
+                "Path prefix error (dir): {} for path {}",
+                e,
+                structure.path.display()
+            ))
+        })?;
+        let dest_dir_path = dest_root.join(rel_path);
+
+        if !dest_dir_path.exists() {
+            fs::create_dir_all(&dest_dir_path)
+                .await
+                .map_err(|e| AppError::Io(e))?;
+            info!("Created directory: {}", dest_dir_path.display());
+        }
+
+        for child in &structure.children {
+            Box::pin(collect_file_ops_and_create_dirs(
+                child,
+                source_root,
+                dest_root,
+                file_ops,
+            ))
+            .await?;
+        }
+    } else {
+        // It's a file, calculate source and dest paths
+        let rel_path = structure.path.strip_prefix(source_root).map_err(|e| {
+            AppError::Other(format!(
+                "Path prefix error (file): {} for path {}",
+                e,
+                structure.path.display()
+            ))
+        })?;
+        let dest_file_path = dest_root.join(rel_path);
+
+        // Ensure parent directory of the file exists (it should have been created by the dir part)
+        if let Some(parent_dir) = dest_file_path.parent() {
+            if !parent_dir.exists() {
+                fs::create_dir_all(parent_dir)
+                    .await
+                    .map_err(|e| AppError::Io(e))?;
+                info!(
+                    "Created parent directory for file: {}",
+                    parent_dir.display()
+                );
+            }
+        }
+        file_ops.push((structure.path.clone(), dest_file_path));
+    }
+    Ok(())
+}
+
 /// Copies files and directories from a source profile to a destination profile
-/// based on the filtered directory structure.
+/// based on the filtered directory structure, using a semaphore for parallelism.
 ///
 /// # Arguments
 /// * `structure` - The filtered directory structure to copy
 /// * `source_root` - The root directory of the source profile
 /// * `dest_root` - The root directory of the destination profile
+/// * `semaphore` - Semaphore to limit concurrent I/O operations
 ///
 /// # Returns
 /// Result with the number of files copied
@@ -412,62 +510,83 @@ pub async fn copy_profile_files(
     structure: &FileNode,
     source_root: &Path,
     dest_root: &Path,
+    semaphore: Arc<Semaphore>,
 ) -> Result<u64> {
     info!(
-        "Copying profile files from {} to {}",
+        "Collecting file operations and creating directories from {} to {}",
         source_root.display(),
         dest_root.display()
     );
-    
-    let mut files_copied = 0;
-    
-    // Create the directory if needed
-    if structure.is_dir {
-        // Get relative path from source_root
-        let rel_path = structure.path.strip_prefix(source_root)
-            .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?;
-        
-        let dest_path = dest_root.join(rel_path);
-        
-        if !dest_path.exists() {
-            fs::create_dir_all(&dest_path)
+
+    let mut file_ops: Vec<(PathBuf, PathBuf)> = Vec::new();
+    collect_file_ops_and_create_dirs(structure, source_root, dest_root, &mut file_ops).await?;
+
+    info!(
+        "Collected {} file copy operations. Starting parallel copy.",
+        file_ops.len()
+    );
+
+    let mut copy_tasks = Vec::new();
+
+    for (source_file, dest_file) in file_ops {
+        let sem_clone = semaphore.clone();
+        let task = tokio::spawn(async move {
+            let _permit = sem_clone
+                .acquire_owned()
                 .await
-                .map_err(|e| AppError::Io(e))?;
-            
-            info!("Created directory: {}", dest_path.display());
-        }
-        
-        // Process children
-        for child in &structure.children {
-            // Using Box::pin to handle recursion
-            files_copied += Box::pin(copy_profile_files(child, source_root, dest_root)).await?;
-        }
-    } else {
-        // This is a file, copy it
-        let rel_path = structure.path.strip_prefix(source_root)
-            .map_err(|e| AppError::Other(format!("Path prefix error: {}", e)))?;
-        
-        let dest_path = dest_root.join(rel_path);
-        
-        // Create parent directories if they don't exist
-        if let Some(parent) = dest_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| AppError::Io(e))?;
+                .map_err(|e| AppError::Other(format!("Semaphore acquire error: {}", e)))?;
+
+            // Ensure parent directory exists one last time (should be redundant if collect_file_ops_and_create_dirs worked)
+            if let Some(parent_dir) = dest_file.parent() {
+                if !parent_dir.exists() {
+                    fs::create_dir_all(parent_dir)
+                        .await
+                        .map_err(|e| AppError::Io(e))?;
+                }
             }
-        }
-        
-        // Copy the file
-        fs::copy(&structure.path, &dest_path)
-            .await
-            .map_err(|e| AppError::Io(e))?;
-        
-        info!("Copied file: {} to {}", structure.path.display(), dest_path.display());
-        files_copied += 1;
+
+            fs::copy(&source_file, &dest_file).await.map_err(|e| {
+                error!(
+                    "Failed to copy file {} to {}: {}",
+                    source_file.display(),
+                    dest_file.display(),
+                    e
+                );
+                AppError::Io(e)
+            })?;
+            info!(
+                "Copied file: {} to {}",
+                source_file.display(),
+                dest_file.display()
+            );
+            Ok::<_, AppError>(1u64) // Return 1 for one copied file
+        });
+        copy_tasks.push(task);
     }
-    
-    Ok(files_copied)
+
+    let results = try_join_all(copy_tasks).await.map_err(|e| {
+        error!("Error during parallel copy task execution: {:?}", e);
+        // If it's a JoinError, it means a task panicked. Otherwise, it's our AppError.
+        if e.is_panic() {
+            AppError::Other(format!("A file copy task panicked: {:?}", e))
+        } else {
+            // If we got an AppError from one of the tasks, it means fs::copy failed.
+            // The actual error was logged in the task. Here we just propagate a general error.
+            AppError::Other(format!(
+                "One or more file copy operations failed. See logs for details. Task error: {:?}",
+                e
+            ))
+        }
+    })?;
+
+    let total_files_copied = results.into_iter().filter_map(Result::ok).sum::<u64>();
+
+    info!(
+        "Successfully copied {} files in parallel.",
+        total_files_copied
+    );
+
+    Ok(total_files_copied)
 }
 
 /// Example function showing how to copy a profile with exclusions.
@@ -491,38 +610,42 @@ pub async fn copy_profile_with_exclusions(
         dest_profile_path.display(),
         excluded_paths.len()
     );
-    
+
+    // Get the io_semaphore from global state
+    let state = crate::state::State::get().await?;
+    let io_semaphore = state.io_semaphore.clone();
+
     // Convert excluded paths to strings and put them in a HashSet for efficient lookup
     let excluded_set: std::collections::HashSet<String> = excluded_paths
         .iter()
         .map(|p| p.to_string_lossy().to_string())
         .collect();
-    
+
     // First, get the complete directory structure
     let dir_structure = get_directory_structure(source_profile_path, false).await?;
-    
+
     // Filter the structure based on exclusions
     let filtered_structure = filter_directory_structure(&dir_structure, &excluded_set)
-        .ok_or_else(|| {
-            AppError::Other("All files were excluded, nothing to copy".to_string())
-        })?;
-    
+        .ok_or_else(|| AppError::Other("All files were excluded, nothing to copy".to_string()))?;
+
     // Create the destination directory if it doesn't exist
     if !dest_profile_path.exists() {
         fs::create_dir_all(dest_profile_path)
             .await
             .map_err(|e| AppError::Io(e))?;
     }
-    
+
     // Copy the files according to the filtered structure
     let files_copied = copy_profile_files(
         &filtered_structure,
         source_profile_path,
-        dest_profile_path
-    ).await?;
-    
+        dest_profile_path,
+        io_semaphore,
+    )
+    .await?;
+
     info!("Profile copy completed. Copied {} files.", files_copied);
-    
+
     Ok(files_copied)
 }
 
@@ -561,15 +684,234 @@ pub fn get_norisk_mod_cache_path(
         .clone();
 
     // Ermittle den Dateinamen mit der vorhandenen Hilfsfunktion
-    let filename = get_norisk_pack_mod_filename(
-        &mod_entry.source,
-        &compatibility_target,
-        &mod_entry.id
-    )?;
+    let filename =
+        get_norisk_pack_mod_filename(&mod_entry.source, &compatibility_target, &mod_entry.id)?;
 
     // Erstelle den vollständigen Pfad zum Cache-Verzeichnis
     let mod_cache_dir = LAUNCHER_DIRECTORY.meta_dir().join(MOD_CACHE_DIR_NAME);
-    
+
     // Gib den vollständigen Pfad zur .jar-Datei zurück
     Ok(mod_cache_dir.join(filename))
-} 
+}
+
+/// Helper function to recursively collect file copy operations.
+async fn collect_copy_operations(
+    src: &Path,
+    dst: &Path,
+    ops: &mut Vec<(PathBuf, PathBuf)>,
+) -> Result<()> {
+    if !src.exists() {
+        return Ok(());
+    }
+
+    if src.is_dir() {
+        fs::create_dir_all(dst).await.map_err(AppError::Io)?;
+        let mut entries = fs::read_dir(src).await.map_err(AppError::Io)?;
+        while let Some(entry) = entries.next_entry().await.map_err(AppError::Io)? {
+            let entry_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+            Box::pin(collect_copy_operations(&entry_path, &dst_path, ops)).await?;
+        }
+    } else if src.is_file() {
+        if let Some(parent) = dst.parent() {
+            fs::create_dir_all(parent).await.map_err(AppError::Io)?;
+        }
+        ops.push((src.to_path_buf(), dst.to_path_buf()));
+    }
+    Ok(())
+}
+
+/// Recursively copies a directory from a source to a destination, using a semaphore for parallelism.
+/// If the destination directory does not exist, it will be created.
+///
+/// # Arguments
+///
+/// * `src` - The source directory path.
+/// * `dst` - The destination directory path.
+/// * `semaphore` - Semaphore to limit concurrent I/O operations.
+///
+/// # Returns
+///
+/// A `Result` indicating success or failure.
+pub async fn copy_dir_recursively(src: &Path, dst: &Path, semaphore: Arc<Semaphore>) -> Result<()> {
+    info!(
+        "Recursively copying from {} to {} with parallelism",
+        src.display(),
+        dst.display()
+    );
+
+    let mut ops = Vec::new();
+    collect_copy_operations(src, dst, &mut ops).await?;
+
+    info!(
+        "Collected {} file copy operations. Starting parallel copy.",
+        ops.len()
+    );
+
+    let mut copy_futures = Vec::new();
+    for (source_file, dest_file) in ops {
+        let sem_clone = semaphore.clone();
+        let fut = async move {
+            let _permit = sem_clone
+                .acquire_owned()
+                .await
+                .map_err(|e| AppError::Other(format!("Semaphore acquire error: {}", e)))?;
+
+            fs::copy(&source_file, &dest_file).await.map_err(|e| {
+                error!(
+                    "Failed to copy file {} to {}: {}",
+                    source_file.display(),
+                    dest_file.display(),
+                    e
+                );
+                AppError::Io(e)
+            })?;
+            Ok::<(), AppError>(())
+        };
+        copy_futures.push(fut);
+    }
+
+    try_join_all(copy_futures).await?;
+
+    info!(
+        "Parallel copy from {} to {} completed.",
+        src.display(),
+        dst.display()
+    );
+
+    Ok(())
+}
+
+/// Counts files recursively in a directory
+pub async fn count_files_recursively(dir_path: &Path) -> Result<usize> {
+    let mut count = 0;
+    let mut dirs_to_check = vec![dir_path.to_path_buf()];
+
+    while let Some(current_dir) = dirs_to_check.pop() {
+        let mut entries = fs::read_dir(&current_dir).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let file_type = entry.file_type().await?;
+            if file_type.is_file() {
+                count += 1;
+            } else if file_type.is_dir() {
+                dirs_to_check.push(entry.path());
+            }
+        }
+    }
+
+    Ok(count)
+}
+
+/// Copies directory with progress events for each file
+pub async fn copy_dir_with_progress(
+    source: &Path,
+    target: &Path,
+    semaphore: Arc<Semaphore>,
+    progress_counter: Arc<tokio::sync::Mutex<usize>>,
+    state: &State,
+    profile_id: Uuid,
+    total_files: usize,
+) -> Result<()> {
+    use crate::utils::mc_utils::emit_copy_progress;
+
+    async fn copy_recursive(
+        src: &Path,
+        dst: &Path,
+        semaphore: Arc<Semaphore>,
+        progress_counter: Arc<tokio::sync::Mutex<usize>>,
+        state: &State,
+        profile_id: Uuid,
+        total_files: usize,
+    ) -> Result<()> {
+        // Create destination directory
+        fs::create_dir_all(dst).await?;
+
+        let mut entries = fs::read_dir(src).await?;
+        while let Some(entry) = entries.next_entry().await? {
+            let entry_path = entry.path();
+            let dest_path = dst.join(entry.file_name());
+
+            if entry.file_type().await?.is_dir() {
+                // Recursively copy directory (boxed to avoid recursion issues)
+                Box::pin(copy_recursive(&entry_path, &dest_path, semaphore.clone(), progress_counter.clone(), state, profile_id, total_files)).await?;
+            } else {
+                // Copy file with progress update
+                let _permit = semaphore.acquire().await?;
+                fs::copy(&entry_path, &dest_path).await?;
+
+                // Update progress
+                let mut counter = progress_counter.lock().await;
+                *counter += 1;
+                let progress = 0.2 + (*counter as f64 / total_files as f64) * 0.8;
+                let message = format!("({}/{}) {}", *counter, total_files, entry.file_name().to_string_lossy());
+
+                // Send progress event for this file
+                emit_copy_progress(state, profile_id, &message, progress, None).await?;
+            }
+        }
+        Ok(())
+    }
+
+    copy_recursive(source, target, semaphore, progress_counter, state, profile_id, total_files).await
+}
+
+/// Downloads and replaces a local mod file atomically.
+/// This function downloads a file from a URL to a temporary location,
+/// then atomically replaces the existing file.
+///
+/// # Arguments
+/// * `current_path_str` - Path to the file that should be replaced
+/// * `new_filename` - Name of the new file to create
+/// * `download_url` - URL to download the file from
+/// * `sha1_hash` - Optional SHA1 hash for verification
+///
+/// # Returns
+/// Result indicating success or failure
+pub async fn download_and_replace_file(
+    current_path_str: &str,
+    new_filename: &str,
+    download_url: &str,
+    sha1_hash: Option<&str>,
+) -> Result<()> {
+    let current_path = PathBuf::from(current_path_str);
+    let dir = current_path
+        .parent()
+        .ok_or_else(|| AppError::InvalidInput("Invalid current item path".to_string()))?;
+
+    let target_path = dir.join(new_filename);
+
+    // Ensure directory exists
+    fs::create_dir_all(dir).await.map_err(AppError::Io)?;
+
+    // Download to a temp path then atomically replace
+    let tmp_path = target_path.with_extension("jar.nrc_tmp");
+    let mut config = download_utils::DownloadConfig::new()
+        .with_streaming(true);
+    if let Some(sha1) = sha1_hash {
+        config = config.with_sha1(sha1);
+    }
+    download_utils::DownloadUtils::download_file(
+        download_url,
+        &tmp_path,
+        config,
+    )
+    .await?;
+
+    // Remove old file if it exists (either enabled or disabled variant)
+    if current_path.exists() {
+        let _ = fs::remove_file(&current_path).await; // ignore errors
+    }
+
+    // Move tmp -> target
+    fs::rename(&tmp_path, &target_path)
+        .await
+        .map_err(AppError::Io)?;
+
+    info!(
+        "Switched local mod '{}' -> '{}'",
+        current_path_str,
+        target_path.to_string_lossy()
+    );
+
+    Ok(())
+}

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use crate::utils::system_info::{ARCHITECTURE, OS};
 use crate::error::{AppError, Result};
+use crate::utils::system_info::{ARCHITECTURE, OS};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Clone, PartialEq)]
 #[serde(tag = "type", content = "value")]
@@ -50,7 +50,7 @@ impl JavaDistribution {
         } else {
             ARCHITECTURE.get_simple_name()?
         };
-        
+
         let archive_type = OS.get_archive_type()?;
 
         Ok(match self {
@@ -76,7 +76,9 @@ impl JavaDistribution {
                         os_name, os_arch, archive_type
                     )
                 } else {
-                    return Err(AppError::JavaDownload("GraalVM only supports Java 17+".to_string()));
+                    return Err(AppError::JavaDownload(
+                        "GraalVM only supports Java 17+".to_string(),
+                    ));
                 }
             }
             JavaDistribution::Zulu => {
@@ -85,17 +87,26 @@ impl JavaDistribution {
                     "x64" => "x64",
                     "aarch64" => "aarch64",
                     "arm" => "arm32-vfp-hflt",
-                    _ => return Err(AppError::JavaDownload(format!("Zulu does not support {} architecture", os_arch))),
+                    _ => {
+                        return Err(AppError::JavaDownload(format!(
+                            "Zulu does not support {} architecture",
+                            os_arch
+                        )))
+                    }
                 };
-                
+
                 // Map OS to Zulu format
                 let zulu_os = match OS {
                     crate::utils::system_info::OperatingSystem::WINDOWS => "win",
                     crate::utils::system_info::OperatingSystem::LINUX => "linux",
-                    crate::utils::system_info::OperatingSystem::OSX => "macosx", 
-                    _ => return Err(AppError::JavaDownload("Unsupported OS for Zulu Java".to_string())),
+                    crate::utils::system_info::OperatingSystem::OSX => "macosx",
+                    _ => {
+                        return Err(AppError::JavaDownload(
+                            "Unsupported OS for Zulu Java".to_string(),
+                        ))
+                    }
                 };
-                
+
                 // This is the API endpoint that returns JSON with the actual download URL
                 format!(
                     "https://api.azul.com/zulu/download/community/v1.0/bundles/latest/?jdk_version={}&bundle_type=jre&ext={}&arch={}&os={}",
@@ -127,7 +138,7 @@ impl JavaDistribution {
         match self {
             JavaDistribution::Temurin => true, // Supports 8, 11, 17, 21
             JavaDistribution::GraalVM => version >= 17, // Only supports 17+
-            JavaDistribution::Zulu => true, // Supports 7, 8, 11, 17, 21
+            JavaDistribution::Zulu => true,    // Supports 7, 8, 11, 17, 21
         }
     }
-} 
+}

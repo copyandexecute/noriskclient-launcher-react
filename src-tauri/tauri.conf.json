@@ -1,16 +1,24 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "noriskclient-launcher-v3",
-  "version": "0.1.0",
+  "productName": "NoRisk Launcher",
+  "version": "0.6.20-beta.1",
   "identifier": "gg.norisk.NoRiskClientLauncherV3",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "yarn dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../build"
+    "beforeBuildCommand": "yarn build",
+    "frontendDist": "../dist"
   },
   "plugins": {
-    "minecraft_auth": {
+    "minecraft_auth": {},
+    "updater": {
+      "active": true,
+      "endpoints": [],
+      "dialog": false,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk5QkZBNTBGNjhDQTBGOEYKUldTUEQ4cG9ENlcvbVpVTVdnVkNNSGlXWXVXRklqcGFxNnBuRW1LM3VDTXpKcXU2MmdCNVc5S2IK"
+    },
+    "singleInstance": {
+      "active": true
     }
   },
   "app": {
@@ -21,15 +29,75 @@
         "title": "NoRiskClient",
         "width": 1280,
         "height": 800,
-        "minWidth": 930,
-        "minHeight": 700,
+        "minWidth": 1080,
+        "minHeight": 690,
         "decorations": false,
         "transparent": true,
-        "center": true
+        "center": true,
+        "visible": false,
+        "shadow": false
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost",
+      "csp": {
+        "default-src": [
+          "'self'",
+          "ipc:",
+          "http://ipc.localhost"
+        ],
+        "connect-src": [
+          "'self'",
+          "asset:",
+          "http://asset.localhost",
+          "data:",
+          "https://api.iconify.design",
+          "https://*.modrinth.com",
+          "https://sessionserver.mojang.com",
+          "https://*.norisk.gg"
+        ],
+        "img-src": [
+          "'self'",
+          "asset:",
+          "http://asset.localhost",
+          "https://*.modrinth.com",
+          "https://cdn.modrinth.com",
+          "https://*.norisk.gg",
+          "https://textures.minecraft.net",
+          "http://textures.minecraft.net",
+          "https://crafatar.com",
+          "https://media.forgecdn.net",
+          "data:",
+          "https://qr-generator-putuwaw.vercel.app",
+          "https://i.ytimg.com",
+          "https://img.youtube.com",
+          "https://*.githubusercontent.com",
+          "https://raw.githubusercontent.com",
+          "https://i.imgur.com",
+          "https://*.imgur.com",
+          "https://discordapp.com",
+          "https://cdn.discordapp.com",
+          "https://*.gitlab.io",
+          "https://gitlab.com",
+          "https://mc-heads.net",
+          "https://*.mc-heads.net",
+          "https://wsrv.nl",
+          "https://i.ibb.co",
+          "https://media.githubusercontent.com",
+          "https://avatars.githubusercontent.com",
+          "https://pixelmonmod.com",
+          "https://avatars.cloudhaven.gg"
+        ],
+        "style-src": [
+          "'self'",
+          "'unsafe-inline'"
+        ],
+        "frame-src": [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+          "https://player.vimeo.com"
+        ]
+      },
       "assetProtocol": {
         "enable": true,
         "scope": {
@@ -42,14 +110,59 @@
     }
   },
   "bundle": {
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "./installer-hooks.nsi"
+      }
+    },
+    "macOS": {
+      "entitlements": "App.entitlements",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": "-",
+      "dmg": {
+        "background": "dmg/background.png",
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        },
+        "windowSize": {
+          "height": 400,
+          "width": 660
+        }
+      }
+    },
     "active": true,
-    "targets": "all",
+    "targets": [
+      "app",
+      "dmg",
+      "deb",
+      "appimage",
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "createUpdaterArtifacts": true,
+    "fileAssociations": [
+      {
+        "ext": [
+          "noriskpack"
+        ],
+        "name": "NoriskPack File",
+        "description": "NoRiskClient Modpack File"
+      }
     ]
   }
 }
