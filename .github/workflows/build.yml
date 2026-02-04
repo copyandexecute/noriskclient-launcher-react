@@ -116,7 +116,32 @@ jobs:
           
           echo "--- Fix Complete ---"
 
-      # --- Umbenennen und Artefakte vorbereiten --- 
+      # --- EV Code Signing (Windows) ---
+      - name: Find Windows EXE for Signing
+        if: matrix.platform == 'windows-latest'
+        id: find_exe
+        run: |
+          $ExeFile = Get-ChildItem -Path "${{ matrix.output_path }}\nsis" -Filter "*.exe" | Where-Object { $_.Name -notlike "*.sig" } | Select-Object -First 1
+          echo "EXE_PATH=$($ExeFile.FullName)" >> $env:GITHUB_OUTPUT
+          echo "Found EXE: $($ExeFile.FullName)"
+        shell: pwsh
+
+      - name: Sign Windows EXE with SSL.com EV Certificate
+        if: matrix.platform == 'windows-latest'
+        uses: sslcom/esigner-codesign@develop
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ steps.find_exe.outputs.EXE_PATH }}
+          output_path: ${{ matrix.output_path }}/nsis
+          override: true
+          environment_name: TEST  # Ändern zu PROD für echte Signierung
+          malware_block: false
+
+      # --- Umbenennen und Artefakte vorbereiten ---
       - name: Rename Linux Artifacts
         if: matrix.platform == 'ubuntu-22.04'
         run: |
