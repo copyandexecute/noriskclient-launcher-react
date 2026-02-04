@@ -138,8 +138,6 @@ jobs:
           credential_id: ${{ secrets.CREDENTIAL_ID }}
           totp_secret: ${{ secrets.ES_TOTP_SECRET }}
           file_path: ${{ steps.find_exe.outputs.EXE_PATH }}
-          output_path: ${{ steps.find_exe.outputs.NSIS_DIR }}
-          override: true
           environment_name: PROD
           malware_block: false
 
