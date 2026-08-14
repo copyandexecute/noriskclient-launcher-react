@@ -1,0 +1,61 @@
+name: Test Signing
+
+# Throwaway probe for the Azure Artifact Signing setup. Compiles a tiny exe and
+# signs it, so the OIDC login and the certificate profile can be verified in about
+# a minute instead of waiting out a full Tauri build.
+
+on:
+  workflow_dispatch: {}
+  push:
+    paths:
+      - '.github/workflows/test-signing.yml'
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    # Must match the federated credential subject, same as in build.yml.
+    environment: signing
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Add-Type -OutputAssembly only exists in Windows PowerShell 5.1, not pwsh.
+      - name: Compile a throwaway exe
+        shell: powershell
+        run: |
+          $src = 'public class Program { public static void Main() { System.Console.WriteLine("probe"); } }'
+          Add-Type -TypeDefinition $src -OutputAssembly "$env:RUNNER_TEMP\signing-probe.exe" -OutputType ConsoleApplication
+          Get-Item "$env:RUNNER_TEMP\signing-probe.exe" | Format-List Name, Length
+
+      - name: Azure login (OIDC federated credential)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign it
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.AZURE_CERT_PROFILE }}
+          files: ${{ runner.temp }}\signing-probe.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Show the resulting signature
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature "${{ runner.temp }}\signing-probe.exe"
+          $sig | Format-List Status, StatusMessage
+          $sig.SignerCertificate | Format-List Subject, Issuer, NotBefore, NotAfter, Thumbprint
+          if ($sig.Status -ne 'Valid') { throw "Signature status is $($sig.Status)" }
+
+      - name: Upload signed probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: signing-probe
+          path: ${{ runner.temp }}\signing-probe.exe
+          if-no-files-found: error
