@@ -6,9 +6,10 @@
 ///
 /// # Example
 /// ```
+/// use noriskclient_launcher_v3_lib::utils::string_utils::safe_truncate;
+///
 /// let korean = "안녕하세요"; // Korean greeting
-/// let truncated = safe_truncate(korean, 5);
-/// // Returns "안" (3 bytes) instead of panicking at byte 5
+/// assert_eq!(safe_truncate(korean, 5), "안"); // 3 bytes, instead of panicking at byte 5
 /// ```
 /// fix for https://github.com/NoRiskClient/issues/issues/2476
 pub fn safe_truncate(s: &str, max_bytes: usize) -> &str {
